@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { historyDB, type SyncLogEntry, type SyncLogOperation } from '../../../services/HistoryDatabase';
-import { useConfirm } from '../../../composables/useConfirm';
-import InlineEmptyState from '../../common/InlineEmptyState.vue';
+import { historyDB, type SyncLogEntry, type SyncLogOperation } from '@/services/HistoryDatabase';
+import { useConfirm } from '@/composables/useConfirm';
+import InlineEmptyState from '@/components/common/InlineEmptyState.vue';
 
 const entries = ref<SyncLogEntry[]>([]);
 const { confirm } = useConfirm();

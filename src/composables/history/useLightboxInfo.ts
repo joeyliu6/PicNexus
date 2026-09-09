@@ -1,7 +1,7 @@
 import { computed, type Ref } from 'vue';
-import type { HistoryItem } from '../../config/types';
-import { getServiceDisplayName } from '../../constants/serviceNames';
-import { formatFileSize, formatTime, getSuccessfulServices, truncateMiddle } from '../../utils/formatters';
+import type { HistoryItem } from '@/config/types';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { formatFileSize, formatTime, getSuccessfulServices, truncateMiddle } from '@/utils/formatters';
 
 export { formatFileSize, formatTime, truncateMiddle };
 

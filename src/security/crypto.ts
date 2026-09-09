@@ -1,7 +1,7 @@
 // 加密存储工具类，使用 Web Crypto API 进行 AES-GCM 加密
 // v3.0: 支持备份密码加密模式，可跨电脑恢复配置
 import { invoke } from '@tauri-apps/api/core';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('SecureStorage');
 

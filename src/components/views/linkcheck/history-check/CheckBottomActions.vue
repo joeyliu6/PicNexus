@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import CheckBatchMenu from './CheckBatchMenu.vue';
-import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
+import type { MoreMenuItem, MoreMenuKind } from '@/composables/link-check/useCheckStrategy';
 
 defineProps<{
   isChecking: boolean;

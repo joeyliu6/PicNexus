@@ -3,11 +3,11 @@ import { ref, computed } from 'vue';
 import Button from 'primevue/button';
 import RadioButton from 'primevue/radiobutton';
 import Dialog from 'primevue/dialog';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { serviceNameTooltip } from '../../../utils/serviceNameFit';
-import { smartTruncateUrl } from '../../../utils/mdParser';
-import { summarizeRepairStrategy } from '../../../composables/md-rescue/useRepairStrategy';
-import type { MdImageLinkWithFile, RepairStrategy } from '../../../composables/useMdRescue';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import { smartTruncateUrl } from '@/utils/mdParser';
+import { summarizeRepairStrategy } from '@/composables/md-rescue/useRepairStrategy';
+import type { MdImageLinkWithFile, RepairStrategy } from '@/composables/useMdRescue';
 
 const props = defineProps<{
   visible: boolean;

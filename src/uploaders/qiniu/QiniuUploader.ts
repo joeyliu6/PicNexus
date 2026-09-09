@@ -1,5 +1,5 @@
-import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import type { QiniuServiceConfig } from '../../config/types';
+import { BaseS3Uploader } from '@/uploaders/s3/BaseS3Uploader';
+import type { QiniuServiceConfig } from '@/config/types';
 
 export class QiniuUploader extends BaseS3Uploader<QiniuServiceConfig> {
   readonly serviceId = 'qiniu';

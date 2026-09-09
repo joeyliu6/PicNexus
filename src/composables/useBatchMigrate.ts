@@ -9,13 +9,13 @@
  */
 
 import { ref, computed, shallowRef } from 'vue';
-import { MultiServiceUploader } from '../core/MultiServiceUploader';
-import { historyDB } from '../services/HistoryDatabase';
-import { configStore } from '../store/instances';
-import { getServiceDisplayName } from '../constants/serviceNames';
-import { createLogger } from '../utils/logger';
-import type { HistoryItem, UserConfig } from '../config/types';
-import { DEFAULT_CONFIG } from '../config/types';
+import { MultiServiceUploader } from '@/core/MultiServiceUploader';
+import { historyDB } from '@/services/HistoryDatabase';
+import { configStore } from '@/store/instances';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { createLogger } from '@/utils/logger';
+import type { HistoryItem, UserConfig } from '@/config/types';
+import { DEFAULT_CONFIG } from '@/config/types';
 import type {
   MigratePhase,
   MigrateTargetService,
@@ -24,7 +24,7 @@ import type {
   MigrateStats,
   MigrateFailureDetail,
   MigrateScope,
-} from '../types/batchMigrate';
+} from '@/types/batchMigrate';
 import { processBatch } from './batchMigrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
 import { createRetry } from './batchMigrate/retryFailed';

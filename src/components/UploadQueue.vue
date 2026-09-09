@@ -2,14 +2,14 @@
 import { computed, ref } from 'vue';
 import VirtualScroller from 'primevue/virtualscroller';
 import { useElementSize } from '@vueuse/core';
-import { useQueueState } from '../composables/useQueueState';
-import type { QueueItem } from '../core/UploadQueue';
-import { deepClone, deepMerge } from '../utils/deepClone';
-import { useConfigManager } from '../composables/useConfig';
-import { useCopyLink } from '../composables/useCopyLink';
-import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../composables/useCopyBadgeFeedback';
-import type { LinkFormat } from '../utils/linkFormatter';
-import { UI_COPY } from '../constants/uiCopy';
+import { useQueueState } from '@/composables/useQueueState';
+import type { QueueItem } from '@/core/UploadQueue';
+import { deepClone, deepMerge } from '@/utils/deepClone';
+import { useConfigManager } from '@/composables/useConfig';
+import { useCopyLink } from '@/composables/useCopyLink';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import type { LinkFormat } from '@/utils/linkFormatter';
+import { UI_COPY } from '@/constants/uiCopy';
 import InlineEmptyState from './common/InlineEmptyState.vue';
 import QueueCard from './upload/QueueCard.vue';
 

@@ -10,9 +10,9 @@ import {
   saveLastRepair,
   undoLastRepair,
   isLastRepairRestorable,
-} from '../../../../composables/md-rescue/useMdRescueLastRepair';
-import { useToast } from '../../../../composables/useToast';
-import { formatRelativeTime } from '../../../../utils/formatters';
+} from '@/composables/md-rescue/useMdRescueLastRepair';
+import { useToast } from '@/composables/useToast';
+import { formatRelativeTime } from '@/utils/formatters';
 
 const { record } = useLastRepair();
 const toast = useToast();

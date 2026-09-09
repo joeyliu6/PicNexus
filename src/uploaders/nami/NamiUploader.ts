@@ -1,10 +1,10 @@
 // 纳米图床上传器实现
 
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { NamiServiceConfig } from '../../config/types';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { NamiServiceConfig } from '@/config/types';
 import { invoke } from '@tauri-apps/api/core';
-import { getErrorMessage } from '../../types/errors';
+import { getErrorMessage } from '@/types/errors';
 
 /**
  * 纳米动态 Headers（通过 Sidecar 获取）

@@ -3,9 +3,9 @@
  * 单个迁移目标卡片
  */
 import { computed } from 'vue';
-import { formatNumber, healthLabels } from '../utils';
-import { mayTruncateServiceName } from '../../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../../common/ServiceLogo.vue';
+import { formatNumber, healthLabels } from '@/components/views/linkcheck/migrate/utils';
+import { mayTruncateServiceName } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 const props = defineProps<{
   serviceId: string;

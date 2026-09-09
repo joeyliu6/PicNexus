@@ -1,8 +1,8 @@
-import type { CustomS3Profile, ServerServiceType, WebDAVStorageProfile } from '../../config/types';
-import { DEFAULT_WEBDAV_URL_TEMPLATE, getCustomS3ProfileId, getWebDAVProfileId, isCustomS3Id, isWebDAVId, makeCustomS3Id, makeWebDAVId } from '../../config/types';
-import { CUSTOM_S3_REQUIRED_FIELDS, SERVICE_REQUIRED_FIELDS, WEBDAV_REQUIRED_FIELDS, getRestChainRequiredFields } from '../../constants/serviceRequiredFields';
-import { extractNamiAuthToken } from '../../utils/namiAuthToken';
-import { secureStorage } from '../../security/crypto';
+import type { CustomS3Profile, ServerServiceType, WebDAVStorageProfile } from '@/config/types';
+import { DEFAULT_WEBDAV_URL_TEMPLATE, getCustomS3ProfileId, getWebDAVProfileId, isCustomS3Id, isWebDAVId, makeCustomS3Id, makeWebDAVId } from '@/config/types';
+import { CUSTOM_S3_REQUIRED_FIELDS, SERVICE_REQUIRED_FIELDS, WEBDAV_REQUIRED_FIELDS, getRestChainRequiredFields } from '@/constants/serviceRequiredFields';
+import { extractNamiAuthToken } from '@/utils/namiAuthToken';
+import { secureStorage } from '@/security/crypto';
 import type { SettingsFormShape } from './settingsFormTypes';
 
 export const EDITOR_UNSUPPORTED_SERVICES: Set<ServerServiceType> = new Set(['qiyu', 'nami']);

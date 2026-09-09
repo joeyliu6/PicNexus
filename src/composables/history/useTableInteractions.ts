@@ -6,22 +6,22 @@
 import { ref, shallowRef, computed, watch, nextTick, onUnmounted, onDeactivated, type Ref } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
-import type { HistoryItem } from '../../config/types';
-import { applyPrefixTemplate } from '../../utils/linkPrefixTemplate';
-import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
-import { getServiceDisplayName } from '../../constants/serviceNames';
-import { useHistoryViewState } from '../useHistoryViewState';
-import { useHistoryManager } from '../useHistory';
+import type { HistoryItem } from '@/config/types';
+import { applyPrefixTemplate } from '@/utils/linkPrefixTemplate';
+import { applyZhihuSourceFromConfig } from '@/utils/zhihuSource';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { useHistoryViewState } from '@/composables/useHistoryViewState';
+import { useHistoryManager } from '@/composables/useHistory';
 import { useGatedImageUrls } from './useGatedImageUrls';
-import { useConfigManager } from '../useConfig';
-import { useToast } from '../useToast';
-import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../useCopyBadgeFeedback';
-import { createLogger } from '../../utils/logger';
-import { motionDuration } from '../../utils/reducedMotion';
+import { useConfigManager } from '@/composables/useConfig';
+import { useToast } from '@/composables/useToast';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import { createLogger } from '@/utils/logger';
+import { motionDuration } from '@/utils/reducedMotion';
 import { HIDE_ANIMATION_DURATION, SHOW_ANIMATION_DURATION } from './usePhotoSwipeBridge';
 import type { PhotoSwipeCloseTargetMode } from './usePhotoSwipeBridge';
-import { useLightboxPreloader } from '../useLightboxPreloader';
-import { warmImages } from '../../utils/imagePreload';
+import { useLightboxPreloader } from '@/composables/useLightboxPreloader';
+import { warmImages } from '@/utils/imagePreload';
 
 const logger = createLogger('TableInteractions');
 

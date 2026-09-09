@@ -1,5 +1,5 @@
-import { getServiceDisplayName, getServiceAliases } from '../constants/serviceNames';
-import type { MigrateFailureDetail } from '../types/batchMigrate';
+import { getServiceDisplayName, getServiceAliases } from '@/constants/serviceNames';
+import type { MigrateFailureDetail } from '@/types/batchMigrate';
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

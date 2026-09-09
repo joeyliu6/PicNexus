@@ -8,8 +8,8 @@
  * 粒度按批而不是按条：`useTimelineDayPagination` 收到 history-updated 会无条件
  * `reloadAll()`（无防抖），逐条广播等于把整棵时间轴重刷 N 次。
  */
-import { invalidateCache } from '../useHistory';
-import { emitHistoryUpdated } from '../../events/cacheEvents';
+import { invalidateCache } from '@/composables/useHistory';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
 
 /**
  * 广播「这批历史记录已更新」

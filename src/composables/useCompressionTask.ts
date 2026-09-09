@@ -4,8 +4,8 @@
 import { ref, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
-import type { CompressionPreset } from '../config/types';
-import { getErrorMessage } from '../types/errors';
+import type { CompressionPreset } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
 
 /** Tauri 返回的压缩结果 */
 export interface CompressResult {

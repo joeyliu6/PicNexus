@@ -6,7 +6,7 @@
 import { ref, computed, type Ref } from 'vue';
 import type { VirtualTimelineOptions, FastModeItem } from './types';
 import { DEFAULT_OPTIONS } from './types';
-import type { TimelineLayoutResult } from '../../utils/justifiedLayout';
+import type { TimelineLayoutResult } from '@/utils/justifiedLayout';
 
 /**
  * 滚动速度检测 Composable

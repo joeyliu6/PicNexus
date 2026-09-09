@@ -8,15 +8,15 @@
 
 import type { Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { MultiServiceUploader, SingleServiceResult } from '../../core/MultiServiceUploader';
-import { historyDB } from '../../services/HistoryDatabase';
-import { needsFormatConversion } from '../../constants/serviceFormats';
-import { Semaphore } from '../../utils/semaphore';
-import { createLogger } from '../../utils/logger';
-import { cleanMigrateError, formatMigrateFailureSummary } from '../../utils/uploadFailureMessage';
-import { cleanupOwnedTempFile } from '../../utils/userFiles';
-import type { HistoryItem, UserConfig } from '../../config/types';
-import type { MigrateItemStatus, MigrateStats, MigrateFailureDetail } from '../../types/batchMigrate';
+import type { MultiServiceUploader, SingleServiceResult } from '@/core/MultiServiceUploader';
+import { historyDB } from '@/services/HistoryDatabase';
+import { needsFormatConversion } from '@/constants/serviceFormats';
+import { Semaphore } from '@/utils/semaphore';
+import { createLogger } from '@/utils/logger';
+import { cleanMigrateError, formatMigrateFailureSummary } from '@/utils/uploadFailureMessage';
+import { cleanupOwnedTempFile } from '@/utils/userFiles';
+import type { HistoryItem, UserConfig } from '@/config/types';
+import type { MigrateItemStatus, MigrateStats, MigrateFailureDetail } from '@/types/batchMigrate';
 import { getSourceCandidatesForStatus } from './sourceSelection';
 
 const log = createLogger('migrateCore');

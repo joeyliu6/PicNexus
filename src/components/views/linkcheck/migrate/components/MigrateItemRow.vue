@@ -8,9 +8,9 @@
  * - 复制 URL 入口下沉到可点击的服务徽章，单条重试用缩小版 24px 图标按钮
  */
 import { computed } from 'vue';
-import { makeCopyBadgeKey } from '../../../../../composables/useCopyBadgeFeedback';
-import { errorTooltipText } from '../composables/useErrorPresentation';
-import { getServiceDisplayName } from '../../../../../constants/serviceNames';
+import { makeCopyBadgeKey } from '@/composables/useCopyBadgeFeedback';
+import { errorTooltipText } from '@/components/views/linkcheck/migrate/composables/useErrorPresentation';
+import { getServiceDisplayName } from '@/constants/serviceNames';
 import MigrateServiceChip from './chips/MigrateServiceChip.vue';
 import type { MigrateRowItem } from './migrateRowTypes';
 

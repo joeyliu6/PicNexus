@@ -10,7 +10,7 @@
  * 散在两个组件里，修一处漏一处是必然的。
  */
 import { ref, computed, watch, watchEffect, onMounted, onUnmounted, type Ref } from 'vue';
-import { safeImageUrl } from '../security/networkPolicy';
+import { safeImageUrl } from '@/security/networkPolicy';
 import { reportThumbnailUrlFailed, reportThumbnailUrlLoaded } from './useThumbCache';
 
 /**

@@ -4,10 +4,10 @@
 import { copyFile, readDir, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { join, dirname, basename } from '@tauri-apps/api/path';
 import pLimit from 'p-limit';
-import type { ToastApi } from '../useToast';
-import { createLogger } from '../../utils/logger';
-import { formatTimestampCompact } from '../../utils/formatters';
-import { replaceImageLinks } from '../../utils/mdParser';
+import type { ToastApi } from '@/composables/useToast';
+import { createLogger } from '@/utils/logger';
+import { formatTimestampCompact } from '@/utils/formatters';
+import { replaceImageLinks } from '@/utils/mdParser';
 import { readUtf8TextFile, writeUtf8TextFile } from './mdTextIo';
 import { saveLastRepair, clearLastRepair, readLastRepair } from './useMdRescueLastRepair';
 import {

@@ -4,13 +4,13 @@
  * 负责 Dashboard Strip 和视图切换
  */
 import { ref, computed, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
-import type { ServiceType } from '../../config/types';
-import { useHistoryManager } from '../../composables/useHistory';
+import type { ServiceType } from '@/config/types';
+import { useHistoryManager } from '@/composables/useHistory';
 import HistoryTableView from './history/HistoryTableView.vue';
 import TimelineView from './TimelineView.vue';
 import FavoritesView from './FavoritesView.vue';
 import DashboardStrip, { type ViewMode } from './history/DashboardStrip.vue';
-import EmptyState from '../common/EmptyState.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
 import 'primeicons/primeicons.css';
 
 const historyManager = useHistoryManager();

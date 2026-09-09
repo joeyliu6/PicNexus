@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
+import type { MoreMenuItem, MoreMenuKind } from '@/composables/link-check/useCheckStrategy';
 
 withDefaults(defineProps<{
   items: MoreMenuItem[];

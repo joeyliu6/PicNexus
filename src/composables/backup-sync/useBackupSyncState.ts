@@ -1,11 +1,11 @@
 // 备份与同步 - 状态管理（同步状态持久化、菜单控制）
 
 import { ref, type Ref } from 'vue';
-import type { SyncStatus, ProfileSyncRecord, WebDAVProfile } from '../../config/types';
-import { syncStatusStore } from '../../store/instances';
-import { createLogger } from '../../utils/logger';
+import type { SyncStatus, ProfileSyncRecord, WebDAVProfile } from '@/config/types';
+import { syncStatusStore } from '@/store/instances';
+import { createLogger } from '@/utils/logger';
 import { getFullTimestamp } from './backupSyncUtils';
-import type { useToast } from '../useToast';
+import type { useToast } from '@/composables/useToast';
 
 const log = createLogger('BackupSync');
 

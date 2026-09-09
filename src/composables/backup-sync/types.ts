@@ -1,7 +1,7 @@
 // 备份与同步 - 类型定义
 
 import type { Ref } from 'vue';
-import type { SyncStatus, ProfileSyncRecord, WebDAVProfile } from '../../config/types';
+import type { SyncStatus, ProfileSyncRecord, WebDAVProfile } from '@/config/types';
 
 /** useBackupSync 返回值类型 */
 export interface UseBackupSyncReturn {

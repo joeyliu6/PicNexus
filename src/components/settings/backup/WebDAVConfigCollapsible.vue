@@ -2,14 +2,14 @@
 import { computed, ref, watch, onMounted } from 'vue';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import type { WebDAVConfig, WebDAVProfile } from '../../../config/types';
-import { useConfirm } from '../../../composables/useConfirm';
-import { useWebDAVProfileEditor } from '../../../composables/settings/useWebDAVProfileEditor';
-import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
-import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
-import { WebDAVClient } from '../../../utils/webdav';
-import { createLogger } from '../../../utils/logger';
-import SensitiveField from '../../common/SensitiveField.vue';
+import type { WebDAVConfig, WebDAVProfile } from '@/config/types';
+import { useConfirm } from '@/composables/useConfirm';
+import { useWebDAVProfileEditor } from '@/composables/settings/useWebDAVProfileEditor';
+import { useSensitiveDraft } from '@/composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '@/composables/settings/useSecretClearConfirm';
+import { WebDAVClient } from '@/utils/webdav';
+import { createLogger } from '@/utils/logger';
+import SensitiveField from '@/components/common/SensitiveField.vue';
 
 const log = createLogger('WebDAVBackupConfig');
 
@@ -273,7 +273,7 @@ function handleTest() {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 /* 可折叠容器 */
 .webdav-collapsible {

@@ -8,8 +8,8 @@ const openMenuId = createRef<number | null>(null);
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue';
 import Button from 'primevue/button';
-import { useClickOutside } from '../../../composables/useClickOutside';
-import type { ProfileSyncRecord } from '../../../config/types';
+import { useClickOutside } from '@/composables/useClickOutside';
+import type { ProfileSyncRecord } from '@/config/types';
 
 interface SyncStatusInfo {
   lastSync?: string | null;

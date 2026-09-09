@@ -175,8 +175,8 @@ import { ref, computed } from 'vue';
 import Dialog from 'primevue/dialog';
 import Password from 'primevue/password';
 import Button from 'primevue/button';
-import { validateBackupPassword } from '../../security/crypto';
-import { UI_COPY } from '../../constants/uiCopy';
+import { validateBackupPassword } from '@/security/crypto';
+import { UI_COPY } from '@/constants/uiCopy';
 import type { BackupPasswordConfirmPayload, BackupPasswordDialogMode } from './backupPasswordDialogTypes';
 
 interface Props {

@@ -1,18 +1,18 @@
 // 备份与同步 - 本地导入导出操作
 
 import type { Ref } from 'vue';
-import { historyDB } from '../../services/HistoryDatabase';
-import { invalidateCache } from '../useHistory';
-import { emitHistoryUpdated } from '../../events/cacheEvents';
-import type { useToast } from '../useToast';
-import { TOAST_MESSAGES } from '../../constants';
-import type { useConfirm } from '../useConfirm';
-import type { UserConfig } from '../../config/types';
-import { DEFAULT_CONFIG, isValidUserConfig } from '../../config/types';
-import { configStore } from '../../store/instances';
-import { secureStorage, isPasswordEncryptedData } from '../../security/crypto';
-import { createLogger } from '../../utils/logger';
-import { exportTextFile, importTextFile } from '../../utils/userFiles';
+import { historyDB } from '@/services/HistoryDatabase';
+import { invalidateCache } from '@/composables/useHistory';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
+import type { useToast } from '@/composables/useToast';
+import { TOAST_MESSAGES } from '@/constants';
+import type { useConfirm } from '@/composables/useConfirm';
+import type { UserConfig } from '@/config/types';
+import { DEFAULT_CONFIG, isValidUserConfig } from '@/config/types';
+import { configStore } from '@/store/instances';
+import { secureStorage, isPasswordEncryptedData } from '@/security/crypto';
+import { createLogger } from '@/utils/logger';
+import { exportTextFile, importTextFile } from '@/utils/userFiles';
 import { writeSyncLog } from './backupSyncUtils';
 
 const log = createLogger('BackupSync');

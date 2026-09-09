@@ -1,5 +1,5 @@
-import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import type { TencentServiceConfig } from '../../config/types';
+import { BaseS3Uploader } from '@/uploaders/s3/BaseS3Uploader';
+import type { TencentServiceConfig } from '@/config/types';
 
 export class TencentUploader extends BaseS3Uploader<TencentServiceConfig> {
   readonly serviceId = 'tencent';

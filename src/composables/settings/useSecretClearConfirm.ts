@@ -9,7 +9,7 @@
  * 挂着不返回，输入框卡在空态。三态版本把「叉叉关闭」也报出来，这里一律当成不删。
  */
 import { reactive } from 'vue';
-import { useConfirm } from '../useConfirm';
+import { useConfirm } from '@/composables/useConfirm';
 
 /** 确认框文案。删掉的东西拿不回来，所以要把「代价」写进去，不能只问「确定吗」 */
 const CLEAR_SECRET_MESSAGE =

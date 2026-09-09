@@ -1,7 +1,7 @@
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { SmmsServiceConfig } from '../../config/types';
-import { getErrorMessage } from '../../types/errors';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { SmmsServiceConfig } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
 
 interface SmmsRustResult {
   url: string;
@@ -59,7 +59,7 @@ export class SmmsUploader extends BaseUploader<SmmsServiceConfig> {
     return result.url;
   }
 
-  async testConnection(config?: SmmsServiceConfig): Promise<import('../base/types').ConnectionTestResult> {
+  async testConnection(config?: SmmsServiceConfig): Promise<import('@/uploaders/base/types').ConnectionTestResult> {
     if (!config) {
       return { success: false, error: '缺少 SM.MS 配置' };
     }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { FileHealth, MdImageLinkWithFile } from '../../../../composables/useMdRescue';
-import { smartTruncateUrl } from '../../../../utils/mdParser';
+import type { FileHealth, MdImageLinkWithFile } from '@/composables/useMdRescue';
+import { smartTruncateUrl } from '@/utils/mdParser';
 
 const props = defineProps<{
   fileHealthList: FileHealth[];

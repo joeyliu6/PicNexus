@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { TrayMenuItem } from '../../services/trayMenu';
-import type { ServiceHealthStatus } from '../../types/serviceHealth';
+import type { TrayMenuItem } from '@/services/trayMenu';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
 
 interface ServiceEntry {
   id: string;

@@ -10,8 +10,8 @@
  * - 写入 `globalProgress`（current/total/percent）
  */
 import type { Ref, ShallowRef } from 'vue';
-import type { MigrateItemStatus } from '../../types/batchMigrate';
-import { createRafScheduler } from '../../utils/rafScheduler';
+import type { MigrateItemStatus } from '@/types/batchMigrate';
+import { createRafScheduler } from '@/utils/rafScheduler';
 
 export interface RafThrottleDeps {
   itemStatuses: ShallowRef<MigrateItemStatus[]>;

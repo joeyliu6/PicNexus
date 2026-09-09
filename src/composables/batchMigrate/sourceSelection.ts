@@ -1,5 +1,5 @@
-import type { HistoryItem } from '../../config/types';
-import { isUsableMirror } from '../../utils/historyResults';
+import type { HistoryItem } from '@/config/types';
+import { isUsableMirror } from '@/utils/historyResults';
 
 export interface MigrateSourceCandidate {
   serviceId: string;

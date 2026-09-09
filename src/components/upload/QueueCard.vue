@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { UserConfig } from '../../config/types';
-import type { QueueItem } from '../../core/UploadQueue';
-import type { LinkFormat } from '../../utils/linkFormatter';
-import { getThumbnailCandidates } from '../../composables/useThumbCache';
-import { getConfirmedHttpHosts } from '../../security/networkPolicy';
-import { isStatusSuccess, isStatusError, isStatusUploading } from '../../utils/uploadStatus';
-import ThumbnailImage from '../common/ThumbnailImage.vue';
+import type { UserConfig } from '@/config/types';
+import type { QueueItem } from '@/core/UploadQueue';
+import type { LinkFormat } from '@/utils/linkFormatter';
+import { getThumbnailCandidates } from '@/composables/useThumbCache';
+import { getConfirmedHttpHosts } from '@/security/networkPolicy';
+import { isStatusSuccess, isStatusError, isStatusUploading } from '@/utils/uploadStatus';
+import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import ChannelCard from './ChannelCard.vue';
 
 interface StatusCounts {

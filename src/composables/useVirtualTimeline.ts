@@ -9,14 +9,14 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue';
-import { findGroupScrollPosition } from '../utils/justifiedLayout';
+import { findGroupScrollPosition } from '@/utils/justifiedLayout';
 import type {
   LayoutItem,
   TimelineLayoutResult,
   TimelineLayoutOptions,
   LayoutRow,
   TimelineGroupLayout,
-} from '../utils/justifiedLayout';
+} from '@/utils/justifiedLayout';
 
 // 子模块
 import { useTimelineLayout } from './timeline/useTimelineLayout';

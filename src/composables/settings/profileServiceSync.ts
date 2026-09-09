@@ -4,9 +4,9 @@
 // 删掉 profile 后如果不同步清理，availableServices 里就会留下指向空配置的幽灵图床。
 // 收敛到一处，避免 load / save 两条路径各写一遍再慢慢走样。
 
-import { syncCustomS3Uploaders, syncWebDAVUploaders } from '../../uploaders';
-import { isCustomS3Id, isWebDAVId, makeCustomS3Id, makeWebDAVId } from '../../config/types';
-import type { CustomS3Profile, WebDAVStorageProfile } from '../../config/types';
+import { syncCustomS3Uploaders, syncWebDAVUploaders } from '@/uploaders';
+import { isCustomS3Id, isWebDAVId, makeCustomS3Id, makeWebDAVId } from '@/config/types';
+import type { CustomS3Profile, WebDAVStorageProfile } from '@/config/types';
 
 export interface ProfileSources {
   custom_s3_profiles: CustomS3Profile[];

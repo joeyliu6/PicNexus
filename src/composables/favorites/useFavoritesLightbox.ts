@@ -5,12 +5,12 @@
  * 这里只关心收藏视图特有的「线性数组前后导航 + 分页加载」逻辑。
  */
 import { computed, type Ref } from 'vue';
-import { createLogger } from '../../utils/logger';
-import { getPrimaryImageUrl } from '../../utils/imageUrl';
-import type { ImageMeta } from '../../types/image-meta';
-import type { HistoryItem, UserConfig } from '../../config/types';
-import { useLightboxPreloader } from '../useLightboxPreloader';
-import { useLightboxCore, type LightboxCoreApi } from '../common/useLightboxCore';
+import { createLogger } from '@/utils/logger';
+import { getPrimaryImageUrl } from '@/utils/imageUrl';
+import type { ImageMeta } from '@/types/image-meta';
+import type { HistoryItem, UserConfig } from '@/config/types';
+import { useLightboxPreloader } from '@/composables/useLightboxPreloader';
+import { useLightboxCore, type LightboxCoreApi } from '@/composables/common/useLightboxCore';
 
 const log = createLogger('FavoritesLightbox');
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { CustomS3Profile, WebDAVStorageProfile } from '../../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService, makeCustomS3Id, makeWebDAVId } from '../../../config/types';
-import ServiceChipGrid from '../ServiceChipGrid.vue';
-import type { BatchTestProgress } from '../../../types/batchTest';
-import type { ServiceHealthStatus } from '../../../types/serviceHealth';
-import { useHealthCheck } from '../../../composables/settings/useHealthCheck';
-import type { ServiceCheckSession } from '../../../types/serviceCheck';
-import { useToast } from '../../../composables/useToast';
-import { useConfirm } from '../../../composables/useConfirm';
+import type { CustomS3Profile, WebDAVStorageProfile } from '@/config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService, makeCustomS3Id, makeWebDAVId } from '@/config/types';
+import ServiceChipGrid from '@/components/settings/ServiceChipGrid.vue';
+import type { BatchTestProgress } from '@/types/batchTest';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import { useHealthCheck } from '@/composables/settings/useHealthCheck';
+import type { ServiceCheckSession } from '@/types/serviceCheck';
+import { useToast } from '@/composables/useToast';
+import { useConfirm } from '@/composables/useConfirm';
 
 const props = defineProps<{
   healthStatusMap: Record<string, ServiceHealthStatus>;
@@ -287,7 +287,7 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .service-enable-section {
   padding: var(--space-md-lg);

@@ -1,8 +1,8 @@
 // Markdown 文件图片链接解析器
 
-import type { MdImageLink } from '../types/linkCheck';
-import type { UserConfig } from '../config/types';
-import { DEFAULT_LINK_PREFIXES } from '../config/types';
+import type { MdImageLink } from '@/types/linkCheck';
+import type { UserConfig } from '@/config/types';
+import { DEFAULT_LINK_PREFIXES } from '@/config/types';
 import { stripPrefixTemplate } from './linkPrefixTemplate';
 
 /** HTML img 标签: <img src="url" ... /> */

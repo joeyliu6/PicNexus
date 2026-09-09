@@ -3,16 +3,16 @@
  * 用于两个视图（表格/瀑布流）共享缩略图 URL 缓存
  */
 import { watch, effectScope, shallowRef } from 'vue';
-import type { HistoryItem, UserConfig } from '../config/types';
-import type { ImageMeta } from '../types/image-meta';
-import type { QueueItem } from '../core/UploadQueue';
-import { getActivePrefix } from '../config/types';
-import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
-import { applyZhihuSourceFromConfig, ZHIHU_SOURCE_DEFAULT_VALUE } from '../utils/zhihuSource';
+import type { HistoryItem, UserConfig } from '@/config/types';
+import type { ImageMeta } from '@/types/image-meta';
+import type { QueueItem } from '@/core/UploadQueue';
+import { getActivePrefix } from '@/config/types';
+import { applyPrefixTemplate } from '@/utils/linkPrefixTemplate';
+import { applyZhihuSourceFromConfig, ZHIHU_SOURCE_DEFAULT_VALUE } from '@/utils/zhihuSource';
 import { useConfigManager } from './useConfig';
-import { onCacheEventType } from '../events/cacheEvents';
-import type { HistoryEventData } from '../events/cacheEvents';
-import { createLogger } from '../utils/logger';
+import { onCacheEventType } from '@/events/cacheEvents';
+import type { HistoryEventData } from '@/events/cacheEvents';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ThumbCache');
 

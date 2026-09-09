@@ -1,8 +1,8 @@
 // 京东图床错误处理
 
-import type { StructuredError} from '../base/ErrorTypes';
-import { UploadErrorCode, createStructuredError } from '../base/ErrorTypes';
-import { getErrorMessage } from '../../types/errors';
+import type { StructuredError} from '@/uploaders/base/ErrorTypes';
+import { UploadErrorCode, createStructuredError } from '@/uploaders/base/ErrorTypes';
+import { getErrorMessage } from '@/types/errors';
 
 /**
  * 京东上传错误类

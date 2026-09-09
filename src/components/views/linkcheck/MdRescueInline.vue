@@ -8,12 +8,12 @@ import MdRepairDialog from './MdRepairDialog.vue';
 import RescueIdleZone from './rescue/RescueIdleZone.vue';
 import RescueBrokenGroups from './rescue/RescueBrokenGroups.vue';
 import RescueFixingCards from './rescue/RescueFixingCards.vue';
-import { useMdRescueManager } from '../../../composables/useMdRescue';
-import type { RepairStrategy } from '../../../composables/useMdRescue';
-import { useRescueScanHeader } from '../../../composables/md-rescue/useRescueScanHeader';
-import { removeMruEntry, type MruEntry } from '../../../composables/md-rescue/useMdRescueMru';
-import { useToast } from '../../../composables/useToast';
-import { allowUserPaths } from '../../../security/fsScope';
+import { useMdRescueManager } from '@/composables/useMdRescue';
+import type { RepairStrategy } from '@/composables/useMdRescue';
+import { useRescueScanHeader } from '@/composables/md-rescue/useRescueScanHeader';
+import { removeMruEntry, type MruEntry } from '@/composables/md-rescue/useMdRescueMru';
+import { useToast } from '@/composables/useToast';
+import { allowUserPaths } from '@/security/fsScope';
 import { exists } from '@tauri-apps/plugin-fs';
 
 const {

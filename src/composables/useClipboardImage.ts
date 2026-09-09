@@ -5,9 +5,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { useToast } from './useToast';
 import { useQueueState } from './useQueueState';
-import { createLogger } from '../utils/logger';
-import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
-import { isStatusError } from '../utils/uploadStatus';
+import { createLogger } from '@/utils/logger';
+import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
+import { isStatusError } from '@/utils/uploadStatus';
 
 const log = createLogger('useClipboardImage');
 

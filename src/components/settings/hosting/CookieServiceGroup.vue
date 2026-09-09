@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import HostingCard from '../HostingCard.vue';
-import SensitiveField from '../../common/SensitiveField.vue';
+import HostingCard from '@/components/settings/HostingCard.vue';
+import SensitiveField from '@/components/common/SensitiveField.vue';
 import WeiboLinkPrefixSection from './WeiboLinkPrefixSection.vue';
 import ZhihuSourceSection from './ZhihuSourceSection.vue';
-import type { ServiceHealthStatus } from '../../../types/serviceHealth';
-import type { LinkPrefixItem } from '../../../config/types';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import type { LinkPrefixItem } from '@/config/types';
 import { computed } from 'vue';
-import { hasNonEmptyFields } from '../../../utils/validators';
-import { extractNamiAuthToken } from '../../../utils/namiAuthToken';
-import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
-import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
+import { hasNonEmptyFields } from '@/utils/validators';
+import { extractNamiAuthToken } from '@/utils/namiAuthToken';
+import { useSensitiveDraft } from '@/composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '@/composables/settings/useSecretClearConfirm';
 
 interface CookieFormData {
   weibo: { cookie: string };
@@ -174,7 +174,7 @@ function helperHint(serviceId: CookieProviderId): string {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .cookie-field {
   font-family: var(--font-mono);

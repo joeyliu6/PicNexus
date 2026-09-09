@@ -1,12 +1,12 @@
 import { ref, shallowRef, computed, triggerRef } from 'vue';
-import type { HistoryItem, ServiceType } from '../config/types';
+import type { HistoryItem, ServiceType } from '@/config/types';
 import { useHistoryManager } from './useHistory';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem } from './useCopyLink';
-import { shiftSelect, type ShiftSelectAnchor } from '../utils/shiftSelect';
-import { historyDB } from '../services/HistoryDatabase';
-import { createLogger } from '../utils/logger';
-export type { LinkFormat } from '../utils/linkFormatter';
+import { shiftSelect, type ShiftSelectAnchor } from '@/utils/shiftSelect';
+import { historyDB } from '@/services/HistoryDatabase';
+import { createLogger } from '@/utils/logger';
+export type { LinkFormat } from '@/utils/linkFormatter';
 
 const log = createLogger('HistoryViewState');
 
@@ -69,7 +69,7 @@ export function useHistoryViewState() {
     clearSelection();
   }
 
-  async function bulkCopyFormatted(format?: import('../utils/linkFormatter').LinkFormat, serviceId?: string): Promise<void> {
+  async function bulkCopyFormatted(format?: import('@/utils/linkFormatter').LinkFormat, serviceId?: string): Promise<void> {
     const ids = selectedIdList.value;
     if (ids.length === 0) return;
 

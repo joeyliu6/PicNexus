@@ -6,15 +6,15 @@
  * 这里只负责时间轴特有的「日内 + 跨日」复杂导航与意图缓冲。
  */
 import { ref, computed, type Ref } from 'vue';
-import { createLogger } from '../../utils/logger';
-import { getPrimaryImageUrl } from '../../utils/imageUrl';
-import { getDayKey } from '../../utils/formatters';
-import { type HistoryItem, type UserConfig } from '../../config/types';
-import type { ImageMeta } from '../../types/image-meta';
-import { useLightboxPreloader } from '../useLightboxPreloader';
-import { useLightboxCore } from '../common/useLightboxCore';
-import { warmImages } from '../../utils/imagePreload';
-import { getMetaThumbnailUrl } from '../useThumbCache';
+import { createLogger } from '@/utils/logger';
+import { getPrimaryImageUrl } from '@/utils/imageUrl';
+import { getDayKey } from '@/utils/formatters';
+import { type HistoryItem, type UserConfig } from '@/config/types';
+import type { ImageMeta } from '@/types/image-meta';
+import { useLightboxPreloader } from '@/composables/useLightboxPreloader';
+import { useLightboxCore } from '@/composables/common/useLightboxCore';
+import { warmImages } from '@/utils/imagePreload';
+import { getMetaThumbnailUrl } from '@/composables/useThumbCache';
 
 const logger = createLogger('TimelineLightbox');
 

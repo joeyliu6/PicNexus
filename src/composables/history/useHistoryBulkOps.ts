@@ -1,15 +1,15 @@
 // 批量操作（导出/删除）从 useHistory.ts 抽离，降低主文件体积
 
 import type { Ref } from 'vue';
-import type { HistoryItem } from '../../config/types';
-import { historyDB } from '../../services/HistoryDatabase';
-import { useToast } from '../useToast';
-import { useConfirm } from '../useConfirm';
-import { TOAST_MESSAGES } from '../../constants';
-import { emitHistoryDeleted } from '../../events/cacheEvents';
-import { createLogger } from '../../utils/logger';
-import { exportTextFile } from '../../utils/userFiles';
-import type { useImageDetailCache } from '../useImageDetailCache';
+import type { HistoryItem } from '@/config/types';
+import { historyDB } from '@/services/HistoryDatabase';
+import { useToast } from '@/composables/useToast';
+import { useConfirm } from '@/composables/useConfirm';
+import { TOAST_MESSAGES } from '@/constants';
+import { emitHistoryDeleted } from '@/events/cacheEvents';
+import { createLogger } from '@/utils/logger';
+import { exportTextFile } from '@/utils/userFiles';
+import type { useImageDetailCache } from '@/composables/useImageDetailCache';
 
 const log = createLogger('History');
 

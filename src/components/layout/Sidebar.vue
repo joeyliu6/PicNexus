@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import Button from 'primevue/button';
-import { useAutoUpdate } from '../../composables/useAutoUpdate';
-import { UI_COPY } from '../../constants/uiCopy';
+import { useAutoUpdate } from '@/composables/useAutoUpdate';
+import { UI_COPY } from '@/constants/uiCopy';
 
 type ViewType = 'upload' | 'history' | 'link-check' | 'settings';
 

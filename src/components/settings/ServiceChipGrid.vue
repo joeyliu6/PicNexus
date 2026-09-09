@@ -3,8 +3,8 @@
 // 展示服务列表的芯片 UI，支持启用/禁用切换、健康状态着色、批量检测动画、筛选
 
 import { computed } from 'vue';
-import type { ServiceHealthStatus } from '../../types/serviceHealth';
-import { serviceNameTooltip } from '../../utils/serviceNameFit';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
 
 /** 与下方 `.toggle-label { max-width: 120px }` 保持一致 */
 const CHIP_LABEL_WIDTH = 120;

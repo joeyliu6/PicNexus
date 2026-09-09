@@ -1,9 +1,9 @@
 // 链接生成逻辑
 
-import type { UploadResult } from '../uploaders/base/types';
-import type { UserConfig} from '../config/types';
-import { getActivePrefix } from '../config/types';
-import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
+import type { UploadResult } from '@/uploaders/base/types';
+import type { UserConfig} from '@/config/types';
+import { getActivePrefix } from '@/config/types';
+import { applyPrefixTemplate } from '@/utils/linkPrefixTemplate';
 
 /**
  * 链接生成器

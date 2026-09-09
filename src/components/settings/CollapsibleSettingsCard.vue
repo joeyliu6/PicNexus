@@ -61,7 +61,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .collapsible-card {
   background: var(--bg-card);

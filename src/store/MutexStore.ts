@@ -16,10 +16,10 @@
  *    全部失真（P1-1，docs/audits/scan-config-mirror-2026-09-07.md）
  */
 
-import { Mutex } from '../utils/mutex';
-import { createLogger } from '../utils/logger';
-import { StoreError } from '../utils/storeErrors';
-import { BackupPasswordRequiredError } from '../security/crypto';
+import { Mutex } from '@/utils/mutex';
+import { createLogger } from '@/utils/logger';
+import { StoreError } from '@/utils/storeErrors';
+import { BackupPasswordRequiredError } from '@/security/crypto';
 import { CacheStore } from './CacheStore';
 import { EncryptedStore } from './EncryptedStore';
 import { type StoreData, type StoreOptions, toErrorMessage } from './types';

@@ -14,9 +14,9 @@
  * 图标交给 ServiceLogo（内置 SVG → 私有存储通用图标 → pi-cloud 兜底）。
  */
 import { computed } from 'vue';
-import { getServiceDisplayName } from '../../../../../../constants/serviceNames';
-import { serviceNameTooltip } from '../../../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../../../common/ServiceLogo.vue';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 interface Props {
   serviceId: string;

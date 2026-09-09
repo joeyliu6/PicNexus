@@ -9,7 +9,7 @@ import type {
   MigrateResult,
   MigrateStats,
   MigrateScope,
-} from '../../../../types/batchMigrate';
+} from '@/types/batchMigrate';
 
 export interface MigrateContext {
   phase: Ref<MigratePhase>;

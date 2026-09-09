@@ -4,9 +4,9 @@
  * 管理 composable 初始化 + 阶段切换 + provide 给子组件
  */
 import { watch, onActivated, onDeactivated, onUnmounted, provide } from 'vue';
-import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
-import { debounceWithError } from '../../../utils/debounce';
-import { useServiceHealth } from '../../../composables/useServiceHealth';
+import { useBatchMigrateManager } from '@/composables/useBatchMigrate';
+import { debounceWithError } from '@/utils/debounce';
+import { useServiceHealth } from '@/composables/useServiceHealth';
 import { MIGRATE_KEY } from './migrate/keys';
 import MigrateSelectPhase from './migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from './migrate/MigrateProgressPhase.vue';

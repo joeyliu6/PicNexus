@@ -7,7 +7,7 @@ import type {
   UserConfig,
   WebDAVProfile,
   WebDAVStorageProfile,
-} from '../../config/types';
+} from '@/config/types';
 
 /**
  * 设置页 formData 中会被子 composable 读取的最小字段集。
@@ -27,7 +27,7 @@ export interface SettingsFormShape {
   bilibili: { cookie: string };
   chaoxing: { cookie: string };
   smms: { token: string };
-  github: import('../../config/types').GithubServiceConfig;
+  github: import('@/config/types').GithubServiceConfig;
   imgur: { clientId: string; clientSecret?: string };
   editorServer: EditorServerConfig;
 }

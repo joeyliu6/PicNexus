@@ -7,19 +7,19 @@
  */
 import { computed, toRef, ref, watch } from 'vue';
 import 'photoswipe/style.css';
-import type { HistoryItem } from '../../../config/types';
-import { useConfigManager } from '../../../composables/useConfig';
-import { useHistoryManager } from '../../../composables/useHistory';
-import { usePhotoSwipeBridge } from '../../../composables/history/usePhotoSwipeBridge';
-import type { PhotoSwipeCloseTargetMode } from '../../../composables/history/usePhotoSwipeBridge';
-import { useLightboxActions } from '../../../composables/history/useLightboxActions';
-import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
-import { useMirrorFallback } from '../../../composables/history/useMirrorFallback';
-import { useToast } from '../../../composables/useToast';
-import { getPrimaryImageUrl } from '../../../utils/imageUrl';
-import { safeImageUrl } from '../../../security/networkPolicy';
-import { useThumbCache } from '../../../composables/useThumbCache';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
+import type { HistoryItem } from '@/config/types';
+import { useConfigManager } from '@/composables/useConfig';
+import { useHistoryManager } from '@/composables/useHistory';
+import { usePhotoSwipeBridge } from '@/composables/history/usePhotoSwipeBridge';
+import type { PhotoSwipeCloseTargetMode } from '@/composables/history/usePhotoSwipeBridge';
+import { useLightboxActions } from '@/composables/history/useLightboxActions';
+import { useLightboxInfo } from '@/composables/history/useLightboxInfo';
+import { useMirrorFallback } from '@/composables/history/useMirrorFallback';
+import { useToast } from '@/composables/useToast';
+import { getPrimaryImageUrl } from '@/utils/imageUrl';
+import { safeImageUrl } from '@/security/networkPolicy';
+import { useThumbCache } from '@/composables/useThumbCache';
+import { getServiceDisplayName } from '@/constants/serviceNames';
 import LightboxBottomBar from './LightboxBottomBar.vue';
 
 const props = withDefaults(defineProps<{

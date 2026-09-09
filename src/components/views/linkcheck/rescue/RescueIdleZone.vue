@@ -5,9 +5,9 @@ import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import RescueRecentList from './RescueRecentList.vue';
 import RescueLastRepairCard from './RescueLastRepairCard.vue';
-import { type MruEntry } from '../../../../composables/md-rescue/useMdRescueMru';
-import { useLastRepair } from '../../../../composables/md-rescue/useMdRescueLastRepair';
-import { createLogger } from '../../../../utils/logger';
+import { type MruEntry } from '@/composables/md-rescue/useMdRescueMru';
+import { useLastRepair } from '@/composables/md-rescue/useMdRescueLastRepair';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('MdRescue');
 

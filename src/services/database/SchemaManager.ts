@@ -9,7 +9,7 @@
  */
 
 import type Database from '@tauri-apps/plugin-sql';
-import { createLogger } from '../../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('SchemaManager');
 

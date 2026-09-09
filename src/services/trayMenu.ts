@@ -15,12 +15,12 @@ import {
   type ServiceType,
   type ThemeMode,
   type UserConfig,
-} from '../config/types';
-import { NO_CONFIG_SERVICES, SERVICE_REQUIRED_FIELDS, getRequiredFields } from '../constants/serviceRequiredFields';
-import { getServiceDisplayName } from '../constants/serviceNames';
-import { configStore } from '../store/instances';
-import type { ServiceHealthStatus } from '../types/serviceHealth';
-import { createLogger } from '../utils/logger';
+} from '@/config/types';
+import { NO_CONFIG_SERVICES, SERVICE_REQUIRED_FIELDS, getRequiredFields } from '@/constants/serviceRequiredFields';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { configStore } from '@/store/instances';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import { createLogger } from '@/utils/logger';
 
 export const MAIN_TRAY_ID = 'main-tray';
 export const TRAY_MENU_WINDOW_LABEL = 'tray-menu';

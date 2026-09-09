@@ -11,13 +11,13 @@ import {
   ref, shallowRef, computed, watch, onUnmounted,
   type Ref, type ComputedRef, type ShallowRef,
 } from 'vue';
-import { historyDB, type DayStats, type DayStatsFilter } from '../../services/HistoryDatabase';
-import type { AspectRatioRow } from '../../services/database/TimelineQueryService';
-import { onCacheEventType, type HistoryEventData } from '../../events/cacheEvents';
-import { createLogger } from '../../utils/logger';
-import { getDayKey } from '../../utils/formatters';
-import type { ImageMeta } from '../../types/image-meta';
-import type { ServiceType } from '../../config/types';
+import { historyDB, type DayStats, type DayStatsFilter } from '@/services/HistoryDatabase';
+import type { AspectRatioRow } from '@/services/database/TimelineQueryService';
+import { onCacheEventType, type HistoryEventData } from '@/events/cacheEvents';
+import { createLogger } from '@/utils/logger';
+import { getDayKey } from '@/utils/formatters';
+import type { ImageMeta } from '@/types/image-meta';
+import type { ServiceType } from '@/config/types';
 import type { PhotoGroup } from './types';
 
 const log = createLogger('DayPagination');

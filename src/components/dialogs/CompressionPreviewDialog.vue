@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, toRef } from 'vue';
-import type { CompressionPreset } from '../../config/types';
-import { useImageZoom } from '../../composables/useImageZoom';
-import { useCompressionTask } from '../../composables/useCompressionTask';
+import type { CompressionPreset } from '@/config/types';
+import { useImageZoom } from '@/composables/useImageZoom';
+import { useCompressionTask } from '@/composables/useCompressionTask';
 import CompressionPreviewHeader from './compression-preview/CompressionPreviewHeader.vue';
 import CompressionPreviewInfoBar from './compression-preview/CompressionPreviewInfoBar.vue';
 import CompressionPreviewState from './compression-preview/CompressionPreviewState.vue';

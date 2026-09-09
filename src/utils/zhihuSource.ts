@@ -5,7 +5,7 @@
 //
 // 此值非永久保证——若某天失效，用户可在「图床设置 → 知乎」里自行填入新值。
 
-import type { UserConfig } from '../config/types';
+import type { UserConfig } from '@/config/types';
 
 export const ZHIHU_SOURCE_DEFAULT_VALUE = '172ae18b';
 

@@ -1,5 +1,5 @@
-import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import type { UpyunServiceConfig } from '../../config/types';
+import { BaseS3Uploader } from '@/uploaders/s3/BaseS3Uploader';
+import type { UpyunServiceConfig } from '@/config/types';
 
 /**
  * 又拍云 S3 兼容端点

@@ -2,11 +2,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize, monitorFromPoint, PhysicalPosition } from '@tauri-apps/api/window';
-import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '../../config/types';
-import { readFreshConfig } from '../../store/instances';
-import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '../../security/crypto';
-import { createLogger } from '../../utils/logger';
-import { useServiceHealth } from '../../composables/useServiceHealth';
+import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '@/config/types';
+import { readFreshConfig } from '@/store/instances';
+import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
+import { createLogger } from '@/utils/logger';
+import { useServiceHealth } from '@/composables/useServiceHealth';
 import {
   applyTrayTheme,
   buildTrayMenuItems,
@@ -14,7 +14,7 @@ import {
   openPublicServiceRiskSettings,
   toggleTrayService,
   toggleTrayTheme,
-} from '../../services/trayMenu';
+} from '@/services/trayMenu';
 import {
   TRAY_LAYOUT,
   TRAY_SERVICE_SUBMENU_ID,
@@ -27,7 +27,7 @@ import {
   resolveFlyoutTop,
   type AnchorPosition,
   type WorkAreaFrame,
-} from '../../services/trayMenuLayout';
+} from '@/services/trayMenuLayout';
 import TrayMenuList from './TrayMenuList.vue';
 import TrayServiceFlyout from './TrayServiceFlyout.vue';
 

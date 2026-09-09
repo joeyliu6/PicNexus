@@ -1,10 +1,10 @@
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback, ConnectionTestResult } from '../base/types';
-import type { WebDAVStorageProfile } from '../../config/types';
-import { DEFAULT_WEBDAV_URL_TEMPLATE } from '../../config/types';
-import { secureStorage } from '../../security/crypto';
-import { assertAllowedWebDAVStorageUrl } from '../../security/networkPolicy';
-import { getErrorMessage, isLanHttpUnconfirmedError } from '../../types/errors';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback, ConnectionTestResult } from '@/uploaders/base/types';
+import type { WebDAVStorageProfile } from '@/config/types';
+import { DEFAULT_WEBDAV_URL_TEMPLATE } from '@/config/types';
+import { secureStorage } from '@/security/crypto';
+import { assertAllowedWebDAVStorageUrl } from '@/security/networkPolicy';
+import { getErrorMessage, isLanHttpUnconfirmedError } from '@/types/errors';
 import { invoke } from '@tauri-apps/api/core';
 
 interface WebDAVRustResult {

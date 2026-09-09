@@ -1,5 +1,5 @@
-import type { AppErrorType } from '../types/errors';
-import { isAppError } from '../types/errors';
+import type { AppErrorType } from '@/types/errors';
+import { isAppError } from '@/types/errors';
 
 interface NormalizedError {
   type?: AppErrorType | string;

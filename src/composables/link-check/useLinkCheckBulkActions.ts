@@ -1,8 +1,8 @@
 import { ref } from 'vue';
-import type { LinkCheckRow } from '../../types/linkCheck';
-import { useToast } from '../useToast';
-import { useConfigManager } from '../useConfig';
-import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
+import type { LinkCheckRow } from '@/types/linkCheck';
+import { useToast } from '@/composables/useToast';
+import { useConfigManager } from '@/composables/useConfig';
+import { applyZhihuSourceFromConfig } from '@/utils/zhihuSource';
 
 const COPY_LIMIT = 1000;
 

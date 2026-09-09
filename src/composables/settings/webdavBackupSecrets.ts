@@ -9,9 +9,9 @@
 // 明文，结果是用户每存一次设置，备份密码就被静默清掉一次。
 // 单测把这两个不存在的命令 mock 成存在的，所以测试全绿、生产全挂。
 
-import type { WebDAVProfile } from '../../config/types';
-import { WebDAVClient } from '../../utils/webdav';
-import { createLogger } from '../../utils/logger';
+import type { WebDAVProfile } from '@/config/types';
+import { WebDAVClient } from '@/utils/webdav';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('WebDAVSecrets');
 

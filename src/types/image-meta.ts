@@ -3,7 +3,7 @@
  * 用于时间轴视图的轻量级数据加载
  */
 
-import type { ServiceType, HistoryItem } from '../config/types';
+import type { ServiceType, HistoryItem } from '@/config/types';
 
 /**
  * 图片元数据（轻量级）

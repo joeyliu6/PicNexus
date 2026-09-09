@@ -1,12 +1,12 @@
 // S3 兼容存储上传器基类
 // 支持：腾讯云 COS、阿里云 OSS、七牛云、又拍云、Cloudflare R2、自定义 S3
 
-import { BaseUploader } from '../base/BaseUploader';
-import type { IUploader } from '../base/IUploader';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { IUploader } from '@/uploaders/base/IUploader';
 import type { S3BaseConfig } from './types';
 import { buildObjectKey } from './objectKey';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { HttpDomainConfirmable } from '../../config/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { HttpDomainConfirmable } from '@/config/types';
 
 interface S3RustResult {
   url: string;

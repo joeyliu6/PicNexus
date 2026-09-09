@@ -5,10 +5,10 @@
  */
 
 import type Database from '@tauri-apps/plugin-sql';
-import type { HistoryItem } from '../../config/types';
+import type { HistoryItem } from '@/config/types';
 import { type HistoryItemRow, COLUMNS_SQL, rowToItem } from './DataTransformer';
-import { createLogger } from '../../utils/logger';
-import type { MigrateScope } from '../../types/batchMigrate';
+import { createLogger } from '@/utils/logger';
+import type { MigrateScope } from '@/types/batchMigrate';
 
 const log = createLogger('MigrationQuery');
 

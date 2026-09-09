@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
-import { useConfigManager } from '../../composables/useConfig';
-import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
-import { getServiceDisplayName } from '../../constants/serviceNames';
-import { isStatusSuccess, isStatusError, getStatusType, getStatusLabel } from '../../utils/uploadStatus';
-import { buildUploadFailureTooltip } from '../../utils/uploadFailureMessage';
-import { serviceNameTooltip } from '../../utils/serviceNameFit';
-import ServiceLogo from '../common/ServiceLogo.vue';
+import { useConfigManager } from '@/composables/useConfig';
+import { LINK_FORMAT_OPTIONS, type LinkFormat } from '@/utils/linkFormatter';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { isStatusSuccess, isStatusError, getStatusType, getStatusLabel } from '@/utils/uploadStatus';
+import { buildUploadFailureTooltip } from '@/utils/uploadFailureMessage';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 export interface ChannelCopyPayload {
   url: string;

@@ -4,13 +4,13 @@
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { Semaphore } from '../../utils/semaphore';
-import { useToast } from '../useToast';
-import { createLogger } from '../../utils/logger';
-import { extractImageLinks } from '../../utils/mdParser';
+import { Semaphore } from '@/utils/semaphore';
+import { useToast } from '@/composables/useToast';
+import { createLogger } from '@/utils/logger';
+import { extractImageLinks } from '@/utils/mdParser';
 import { readUtf8TextFile, describeReadError } from './mdTextIo';
 import { recordMruEntry } from './useMdRescueMru';
-import type { MdImageLink } from '../../types/linkCheck';
+import type { MdImageLink } from '@/types/linkCheck';
 import {
   type MdImageLinkWithFile,
   type RustScanProgress,

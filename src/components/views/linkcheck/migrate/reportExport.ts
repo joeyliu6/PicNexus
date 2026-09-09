@@ -4,8 +4,8 @@
  * 从 MigrateProgressPhase.vue 抽出来的纯函数，让面板只负责调用 save dialog。
  * 状态文案保持和原实现一致（"成功/跳过/失败/转换中"）。
  */
-import type { MigrateItemStatus, MigrateResult } from '../../../../types/batchMigrate';
-import { getServiceDisplayName } from '../../../../constants/serviceNames';
+import type { MigrateItemStatus, MigrateResult } from '@/types/batchMigrate';
+import { getServiceDisplayName } from '@/constants/serviceNames';
 import { formatSpeed, formatTime, getErrorInfo } from './utils';
 
 function getFailedTargets(item: MigrateItemStatus): string[] {

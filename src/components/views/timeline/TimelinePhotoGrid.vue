@@ -5,9 +5,9 @@
  */
 import { computed } from 'vue';
 import TimelinePhotoItem from './TimelinePhotoItem.vue';
-import type { ImageMeta } from '../../../types/image-meta';
-import type { HistoryItem } from '../../../config/types';
-import type { PhotoGroup } from '../../../composables/useVirtualTimeline';
+import type { ImageMeta } from '@/types/image-meta';
+import type { HistoryItem } from '@/config/types';
+import type { PhotoGroup } from '@/composables/useVirtualTimeline';
 
 export interface VisibleItem {
   meta: ImageMeta;

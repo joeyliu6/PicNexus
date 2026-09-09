@@ -3,7 +3,7 @@
  * E1 选择阶段 — 左栏来源 + 右栏目标（双列网格）
  */
 import { computed, inject } from 'vue';
-import EmptyState from '../../../common/EmptyState.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
 import { formatNumber, isPublicService } from './utils';
 import { MIGRATE_KEY } from './keys';

@@ -1,6 +1,6 @@
-import type { Store } from '../store';
-import type { UserConfig, ThemeMode } from '../config/types';
-import { createLogger } from '../utils/logger';
+import type { Store } from '@/store';
+import type { UserConfig, ThemeMode } from '@/config/types';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ThemeManager');
 

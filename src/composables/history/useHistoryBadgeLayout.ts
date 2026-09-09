@@ -5,10 +5,10 @@
  * 通过 ResizeObserver 监控表格列宽度，动态计算可显示的 badge 数量
  */
 import { ref, onUnmounted, type Ref } from 'vue';
-import type { HistoryItem } from '../../config/types';
-import { getServiceDisplayName } from '../../constants/serviceNames';
-import { getSuccessfulServices } from '../../utils/formatters';
-import { COMPACT_LABEL_WIDTH, estimateServiceNameWidth } from '../../utils/serviceNameFit';
+import type { HistoryItem } from '@/config/types';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { getSuccessfulServices } from '@/utils/formatters';
+import { COMPACT_LABEL_WIDTH, estimateServiceNameWidth } from '@/utils/serviceNameFit';
 
 const MORE_BTN_WIDTH = 26;
 const BADGE_GAP = 4;

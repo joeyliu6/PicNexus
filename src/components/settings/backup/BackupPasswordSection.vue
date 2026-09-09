@@ -3,20 +3,20 @@ import { ref, onMounted } from 'vue';
 import Button from 'primevue/button';
 import { invoke } from '@tauri-apps/api/core';
 import { emit as emitTauriEvent } from '@tauri-apps/api/event';
-import { useToast } from '../../../composables/useToast';
-import { TOAST_MESSAGES } from '../../../constants';
-import type { ToastMessageConfig } from '../../../constants/toastMessages';
-import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '../../../security/crypto';
-import { rekeyFieldSecrets, type RekeyReport } from '../../../security/fieldSecrets';
-import { configStore, syncStatusStore } from '../../../store/instances';
-import type { UserConfig } from '../../../config/types';
-import type { StoreData } from '../../../store/types';
-import BackupPasswordDialog from '../../dialogs/BackupPasswordDialog.vue';
+import { useToast } from '@/composables/useToast';
+import { TOAST_MESSAGES } from '@/constants';
+import type { ToastMessageConfig } from '@/constants/toastMessages';
+import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
+import { rekeyFieldSecrets, type RekeyReport } from '@/security/fieldSecrets';
+import { configStore, syncStatusStore } from '@/store/instances';
+import type { UserConfig } from '@/config/types';
+import type { StoreData } from '@/store/types';
+import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
 import type {
   BackupPasswordConfirmPayload,
   BackupPasswordDialogMode,
-} from '../../dialogs/backupPasswordDialogTypes';
-import { createLogger } from '../../../utils/logger';
+} from '@/components/dialogs/backupPasswordDialogTypes';
+import { createLogger } from '@/utils/logger';
 
 const emit = defineEmits<{
   'restore-confirm': [password: string];

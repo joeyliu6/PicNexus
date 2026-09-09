@@ -10,12 +10,12 @@
  * 后失败列表大部分条目不会被清除。
  */
 import { ref, type Ref } from 'vue';
-import type { MultiServiceUploader } from '../../core/MultiServiceUploader';
-import type { UserConfig } from '../../config/types';
-import type { MigrateItemStatus, MigrateResult, MigrateStats } from '../../types/batchMigrate';
-import { historyDB } from '../../services/HistoryDatabase';
-import { createLogger } from '../../utils/logger';
-import { Semaphore } from '../../utils/semaphore';
+import type { MultiServiceUploader } from '@/core/MultiServiceUploader';
+import type { UserConfig } from '@/config/types';
+import type { MigrateItemStatus, MigrateResult, MigrateStats } from '@/types/batchMigrate';
+import { historyDB } from '@/services/HistoryDatabase';
+import { createLogger } from '@/utils/logger';
+import { Semaphore } from '@/utils/semaphore';
 import { migrateOneItem } from './migrateCore';
 import { notifyMigrationPersisted } from './historyRefresh';
 

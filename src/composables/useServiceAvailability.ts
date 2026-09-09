@@ -4,14 +4,14 @@
 
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { SyncStatus } from '../config/types';
-import { syncStatusStore } from '../store/instances';
+import type { SyncStatus } from '@/config/types';
+import { syncStatusStore } from '@/store/instances';
 import { useServiceHealth } from './useServiceHealth';
 import { isUploading } from './uploadState';
 import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from './useServiceCheckRunner';
-import type { ServiceCheckMode } from '../types/serviceCheck';
-import type { ServiceHealthStatus } from '../types/serviceHealth';
-import { createLogger } from '../utils/logger';
+import type { ServiceCheckMode } from '@/types/serviceCheck';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ServiceAvailability');
 

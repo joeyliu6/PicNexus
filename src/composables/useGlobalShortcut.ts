@@ -14,27 +14,27 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import { listen } from '@tauri-apps/api/event';
 import { basename, resolveResource } from '@tauri-apps/api/path';
 
-import { readFreshConfig } from '../store/instances';
+import { readFreshConfig } from '@/store/instances';
 import {
   DEFAULT_CONFIG
-} from '../config/types';
+} from '@/config/types';
 import type { ServiceType ,
   UserConfig,
-  GlobalShortcutConfig} from '../config/types';
-import type { SingleServiceResult } from '../core/MultiServiceUploader';
-import { MultiServiceUploader } from '../core/MultiServiceUploader';
+  GlobalShortcutConfig} from '@/config/types';
+import type { SingleServiceResult } from '@/core/MultiServiceUploader';
+import { MultiServiceUploader } from '@/core/MultiServiceUploader';
 import { useHistorySaver } from './useHistorySaver';
 import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
 import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from './upload/FileValidator';
-import { buildUploadSummaryToast, type UploadCopySummary } from '../utils/uploadSummary';
-import { createLogger } from '../utils/logger';
-import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
+import { buildUploadSummaryToast, type UploadCopySummary } from '@/utils/uploadSummary';
+import { createLogger } from '@/utils/logger';
+import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 import {
   getFileExtension,
   getSupportedServicesForFormat,
   getUnsupportedServicesForFormat,
-} from '../constants/serviceFormats';
-import { getServiceDisplayName } from '../constants/serviceNames';
+} from '@/constants/serviceFormats';
+import { getServiceDisplayName } from '@/constants/serviceNames';
 
 const log = createLogger('GlobalShortcut');
 

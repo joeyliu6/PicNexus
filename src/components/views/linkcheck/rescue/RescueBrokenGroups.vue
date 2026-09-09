@@ -6,18 +6,18 @@ import { computed, toRef } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { dirname } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
-import EmptyState from '../../../common/EmptyState.vue';
-import { useToast } from '../../../../composables/useToast';
-import { useConfigManager } from '../../../../composables/useConfig';
-import { applyConfiguredUrlWithConfig } from '../../../../composables/useCopyLink';
-import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import type { MdImageLinkWithFile } from '../../../../composables/useMdRescue';
-import { useFlatBrokenRows } from '../../../../composables/md-rescue/useFlatBrokenRows';
+import EmptyState from '@/components/common/EmptyState.vue';
+import { useToast } from '@/composables/useToast';
+import { useConfigManager } from '@/composables/useConfig';
+import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import type { MdImageLinkWithFile } from '@/composables/useMdRescue';
+import { useFlatBrokenRows } from '@/composables/md-rescue/useFlatBrokenRows';
 import {
   getStatusDisplay, statusBadgeLabel, statusDotColor, statusTooltip,
   extractHost, isDefunctHost, extractFilenameFromUrl,
-} from '../../../../composables/useLinkStatusDisplay';
-import { openUserExternalUrl } from '../../../../security/shellOpen';
+} from '@/composables/useLinkStatusDisplay';
+import { openUserExternalUrl } from '@/security/shellOpen';
 
 const props = defineProps<{
   imageLinks: MdImageLinkWithFile[];

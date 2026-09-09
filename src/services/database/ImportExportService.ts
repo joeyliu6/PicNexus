@@ -9,9 +9,9 @@
  */
 
 import type Database from '@tauri-apps/plugin-sql';
-import type { HistoryItem } from '../../config/types';
-import { isImportableHistoryItem } from '../../config/types';
-import { createLogger } from '../../utils/logger';
+import type { HistoryItem } from '@/config/types';
+import { isImportableHistoryItem } from '@/config/types';
+import { createLogger } from '@/utils/logger';
 import {
   COLUMN_COUNT,
   COLUMNS_SQL,

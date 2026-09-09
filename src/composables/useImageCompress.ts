@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { CompressionPreset } from '../config/types';
-import { createLogger } from '../utils/logger';
+import type { CompressionPreset } from '@/config/types';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ImageCompress');
 

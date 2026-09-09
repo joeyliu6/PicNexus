@@ -3,20 +3,20 @@
 
 import { ref, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { configStore } from '../../store/instances';
-import { useToast } from '../useToast';
-import { useConfigManager } from '../useConfig';
-import { useServiceHealth } from '../useServiceHealth';
-import { TOAST_MESSAGES } from '../../constants';
-import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
+import { configStore } from '@/store/instances';
+import { useToast } from '@/composables/useToast';
+import { useConfigManager } from '@/composables/useConfig';
+import { useServiceHealth } from '@/composables/useServiceHealth';
+import { TOAST_MESSAGES } from '@/constants';
+import { SERVICE_DISPLAY_NAMES } from '@/constants/serviceNames';
 import { filterOrphanProfileServices, syncProfileUploaders } from './profileServiceSync';
 import { encryptBackupProfiles } from './webdavBackupSecrets';
 import { useStorageProfiles } from './useStorageProfiles';
-import { useConfirm } from '../useConfirm';
-import { createLogger } from '../../utils/logger';
-import { isAnyEncryptedData } from '../../security/crypto';
-import { extractNamiAuthToken } from '../../utils/namiAuthToken';
-import { extractErrorMessage } from '../../utils/serviceHealthMessage';
+import { useConfirm } from '@/composables/useConfirm';
+import { createLogger } from '@/utils/logger';
+import { isAnyEncryptedData } from '@/security/crypto';
+import { extractNamiAuthToken } from '@/utils/namiAuthToken';
+import { extractErrorMessage } from '@/utils/serviceHealthMessage';
 import type {
   UserConfig,
   ServiceType,
@@ -26,8 +26,8 @@ import type {
   CustomS3Profile,
   WebDAVStorageProfile,
   LinkPrefixItem,
-} from '../../config/types';
-import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id, makeWebDAVId } from '../../config/types';
+} from '@/config/types';
+import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id, makeWebDAVId } from '@/config/types';
 import { applyConfigToForm } from './settingsFormSnapshot';
 import type { SettingsFormData } from './settingsFormTypes';
 import { validateS3Config } from './s3ConfigValidation';
@@ -94,7 +94,7 @@ export function useSettingsForm() {
     bilibili: { cookie: '' },
     chaoxing: { cookie: '' },
     smms: { token: '' },
-    github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' } as import('../../config/types').GithubServiceConfig,
+    github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' } as import('@/config/types').GithubServiceConfig,
     imgur: { clientId: '', clientSecret: '' },
     webdav: { profiles: [] as WebDAVProfile[], activeId: null as string | null },
     linkPrefixEnabled: true,
@@ -103,7 +103,7 @@ export function useSettingsForm() {
     analyticsEnabled: true,
     appBehavior: { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true },
     linkOutput: {
-      defaultFormat: 'url' as import('../../utils/linkFormatter').LinkFormat,
+      defaultFormat: 'url' as import('@/utils/linkFormatter').LinkFormat,
       customTemplate: '{url}',
       autoCopy: true,
     },

@@ -1,4 +1,4 @@
-import type { HistoryItem } from '../../config/types';
+import type { HistoryItem } from '@/config/types';
 
 interface FavoriteVersion {
   isFavorited: boolean;

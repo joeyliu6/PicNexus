@@ -5,7 +5,7 @@
  */
 import { ref } from 'vue';
 import Menu from 'primevue/menu';
-import StatePill, { type StatePill as StatePillType } from '../../common/StatePill.vue';
+import StatePill, { type StatePill as StatePillType } from '@/components/views/linkcheck/common/StatePill.vue';
 
 interface Props {
   mode: 'migrating' | 'done';

@@ -2,8 +2,8 @@
  * 图床服务显示名称映射
  */
 
-import type { ServiceType, UserConfig } from '../config/types';
-import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../config/types';
+import type { ServiceType, UserConfig } from '@/config/types';
+import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '@/config/types';
 
 export const SERVICE_DISPLAY_NAMES: Record<ServiceType, string> = {
   weibo: '微博',

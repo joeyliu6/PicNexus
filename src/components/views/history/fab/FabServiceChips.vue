@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
-import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import { serviceNameTooltip } from '../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../common/ServiceLogo.vue';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 defineProps<{
   services: { serviceId: string; count: number }[];

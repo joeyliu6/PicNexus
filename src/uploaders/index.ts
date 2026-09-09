@@ -20,8 +20,8 @@ import { QiniuUploader } from './qiniu/QiniuUploader';
 import { UpyunUploader } from './upyun/UpyunUploader';
 import { CustomS3Uploader } from './custom-s3/CustomS3Uploader';
 import { WebDAVUploader } from './webdav/WebDAVUploader';
-import type { CustomS3Profile, WebDAVStorageProfile } from '../config/types';
-import { createLogger } from '../utils/logger';
+import type { CustomS3Profile, WebDAVStorageProfile } from '@/config/types';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Uploaders');
 

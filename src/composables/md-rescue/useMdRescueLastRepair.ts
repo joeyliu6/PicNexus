@@ -4,7 +4,7 @@
 import { ref, onMounted, onActivated } from 'vue';
 import { copyFile, exists } from '@tauri-apps/plugin-fs';
 import pLimit from 'p-limit';
-import { createLogger } from '../../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('MdRescue:LastRepair');
 

@@ -1,8 +1,8 @@
 /**
  * 批量迁移面板 — 共享工具函数
  */
-import { PUBLIC_SERVICES } from '../../../../config/types';
-import type { ServiceType } from '../../../../config/types';
+import { PUBLIC_SERVICES } from '@/config/types';
+import type { ServiceType } from '@/config/types';
 
 export function formatTime(ms: number | null): string {
   if (!ms || ms <= 0) return '--';

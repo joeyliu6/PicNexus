@@ -3,13 +3,13 @@
  * 管理分组数据、缩略图 URL、选中服务、悬停详情等
  */
 import { computed, shallowRef, type Ref, type ComputedRef } from 'vue';
-import { getMetaThumbnailUrl, getMetaThumbnailCandidates } from '../../composables/useThumbCache';
-import { createLogger } from '../../utils/logger';
-import { getPrimaryImageUrl } from '../../utils/imageUrl';
-import { warmImages } from '../../utils/imagePreload';
-import { type HistoryItem, type ServiceType, type UserConfig } from '../../config/types';
-import type { ImageMeta } from '../../types/image-meta';
-import type { PhotoGroup } from '../useVirtualTimeline';
+import { getMetaThumbnailUrl, getMetaThumbnailCandidates } from '@/composables/useThumbCache';
+import { createLogger } from '@/utils/logger';
+import { getPrimaryImageUrl } from '@/utils/imageUrl';
+import { warmImages } from '@/utils/imagePreload';
+import { type HistoryItem, type ServiceType, type UserConfig } from '@/config/types';
+import type { ImageMeta } from '@/types/image-meta';
+import type { PhotoGroup } from '@/composables/useVirtualTimeline';
 
 const logger = createLogger('TimelineData');
 

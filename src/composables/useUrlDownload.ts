@@ -3,8 +3,8 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from './useToast';
-import { createLogger } from '../utils/logger';
-import { TOAST_MESSAGES } from '../constants';
+import { createLogger } from '@/utils/logger';
+import { TOAST_MESSAGES } from '@/constants';
 
 const log = createLogger('useUrlDownload');
 

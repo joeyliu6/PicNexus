@@ -4,10 +4,10 @@
 // 更新时按 id 就地替换。收敛到一处，避免每加一种 profile 图床就把 useSettingsForm 撑大一圈。
 
 import type { Ref } from 'vue';
-import type { CustomS3Profile, WebDAVStorageProfile, ServerServiceType } from '../../config/types';
-import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '../../config/types';
+import type { CustomS3Profile, WebDAVStorageProfile, ServerServiceType } from '@/config/types';
+import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '@/config/types';
 import type { SettingsFormData } from './settingsFormTypes';
-import type { ToastMessageConfig } from '../../constants/toastMessages';
+import type { ToastMessageConfig } from '@/constants/toastMessages';
 import { nextProfileName } from './profileNaming';
 
 interface ToastLike {

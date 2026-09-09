@@ -11,8 +11,8 @@
  * 这里只负责"防抖 + 并发触发 new Image()"两件事。
  */
 import { watch, onUnmounted, getCurrentInstance, type Ref } from 'vue';
-import { createLogger } from '../utils/logger';
-import { warmImage } from '../utils/imagePreload';
+import { createLogger } from '@/utils/logger';
+import { warmImage } from '@/utils/imagePreload';
 
 const log = createLogger('LightboxPreload');
 

@@ -16,8 +16,8 @@
 // 本模块也不得从另一侧把它绕开。
 
 import { ref } from 'vue';
-import { createLogger } from '../../utils/logger';
-import { useCopyBadgeFeedback } from '../useCopyBadgeFeedback';
+import { createLogger } from '@/utils/logger';
+import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 
 const log = createLogger('SensitiveDraft');
 

@@ -2,8 +2,8 @@
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputNumber from 'primevue/inputnumber';
 
-import type { CompressionPreset } from '../../../config/types';
-import { OUTPUT_FORMAT_OPTIONS } from '../../../composables/settings/useCompressionPresets';
+import type { CompressionPreset } from '@/config/types';
+import { OUTPUT_FORMAT_OPTIONS } from '@/composables/settings/useCompressionPresets';
 
 interface Props {
   activePreset: CompressionPreset;
@@ -124,7 +124,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .settings-row {
   border-bottom: 1px solid var(--border-subtle);

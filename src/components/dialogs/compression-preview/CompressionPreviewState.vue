@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CompressionStatus } from '../../../composables/useCompressionTask';
+import type { CompressionStatus } from '@/composables/useCompressionTask';
 
 interface Props {
   /** 父侧 v-if 已保证仅在 'compressing' | 'error' 下渲染本组件 */

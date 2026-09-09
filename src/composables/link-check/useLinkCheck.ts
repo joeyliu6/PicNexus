@@ -3,14 +3,14 @@
 
 /* eslint-disable max-lines -- singleton state machine kept together for link monitor behavior */
 import { ref, shallowRef, computed, getCurrentScope, onScopeDispose, type Ref, type ComputedRef } from 'vue';
-import { createRafScheduler } from '../../utils/rafScheduler';
+import { createRafScheduler } from '@/utils/rafScheduler';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { HistoryItem } from '../../config/types';
-import { useConfigManager } from '../useConfig';
-import { historyDB } from '../../services/HistoryDatabase';
-import { useToast } from '../useToast';
-import { createLogger } from '../../utils/logger';
+import type { HistoryItem } from '@/config/types';
+import { useConfigManager } from '@/composables/useConfig';
+import { historyDB } from '@/services/HistoryDatabase';
+import { useToast } from '@/composables/useToast';
+import { createLogger } from '@/utils/logger';
 import {
   SEVERITY,
   type StatusFilter,
@@ -21,7 +21,7 @@ import {
   type LinkCheckRow,
   type CheckLinkResult,
   type ServiceStat,
-} from '../../types/linkCheck';
+} from '@/types/linkCheck';
 import {
   linkCheckRowKey,
   liteRowToItem,
@@ -33,8 +33,8 @@ import {
   updateHistoryCheckStatus,
   exportCsv,
 } from './linkCheckPersistence';
-import { onCacheEvent, type HistoryEventData } from '../../events/cacheEvents';
-import { getConfirmedHttpHosts } from '../../security/networkPolicy';
+import { onCacheEvent, type HistoryEventData } from '@/events/cacheEvents';
+import { getConfirmedHttpHosts } from '@/security/networkPolicy';
 
 const log = createLogger('LinkCheck');
 

@@ -1,8 +1,8 @@
 // 纳米图床错误处理
 
-import type { StructuredError} from '../base/ErrorTypes';
-import { UploadErrorCode, createStructuredError } from '../base/ErrorTypes';
-import { getErrorMessage } from '../../types/errors';
+import type { StructuredError} from '@/uploaders/base/ErrorTypes';
+import { UploadErrorCode, createStructuredError } from '@/uploaders/base/ErrorTypes';
+import { getErrorMessage } from '@/types/errors';
 
 /**
  * 纳米上传错误类

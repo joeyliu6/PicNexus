@@ -6,9 +6,9 @@
  * - primaryReason: 合并去重后的友好大类文案（"网络中断 / 权限不足"）
  * - errorTooltipText: 多目标分行的原始技术错误（给复制/反馈用）
  */
-import { getServiceDisplayName } from '../../../../../constants/serviceNames';
-import { categorizeMigrateError } from '../../../../../utils/uploadFailureMessage';
-import type { MigrateFailureDetail } from '../../../../../types/batchMigrate';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { categorizeMigrateError } from '@/utils/uploadFailureMessage';
+import type { MigrateFailureDetail } from '@/types/batchMigrate';
 
 export interface ErrorPresentable {
   error?: string;

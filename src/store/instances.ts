@@ -1,8 +1,8 @@
 // 共享 Store 实例
 // 解决多个 composable 各自创建 Store 实例导致的状态不一致问题
 
-import { Store } from '../store';
-import type { UserConfig } from '../config/types';
+import { Store } from '@/store';
+import type { UserConfig } from '@/config/types';
 
 /**
  * 配置存储实例（单例）

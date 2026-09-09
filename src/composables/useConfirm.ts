@@ -1,7 +1,7 @@
 // 确认对话框 Composable
 
 import { useConfirm as usePrimeConfirm } from 'primevue/useconfirm';
-import { UI_COPY } from '../constants/uiCopy';
+import { UI_COPY } from '@/constants/uiCopy';
 
 export interface ConfirmOptions {
   /** 对话框标题 */

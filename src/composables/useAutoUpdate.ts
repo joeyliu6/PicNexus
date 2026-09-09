@@ -1,7 +1,7 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('AutoUpdate');
 

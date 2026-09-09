@@ -1,4 +1,4 @@
-import type { CustomS3Profile, HttpDomainConfirmable, WebDAVStorageProfile } from '../config/types';
+import type { CustomS3Profile, HttpDomainConfirmable, WebDAVStorageProfile } from '@/config/types';
 
 /** 内置的 S3 系图床（都有 publicDomain，都适用明文 HTTP 确认） */
 const S3_BUILTIN_SERVICE_IDS = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'] as const;

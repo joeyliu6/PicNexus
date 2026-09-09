@@ -3,15 +3,15 @@
 // v3.0: 视图状态已移至 useHistoryViewState.ts
 
 import { ref, shallowRef, type Ref } from 'vue';
-import type { HistoryItem, ServiceType } from '../config/types';
+import type { HistoryItem, ServiceType } from '@/config/types';
 import {
   historyDB,
   type PageResult, type SearchResult, type SearchOptions,
   type TimePeriodStats,
-} from '../services/HistoryDatabase';
+} from '@/services/HistoryDatabase';
 import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
-import { TOAST_MESSAGES } from '../constants';
+import { TOAST_MESSAGES } from '@/constants';
 import { useConfirm } from './useConfirm';
 import { useUndoToast } from './useUndoToast';
 import {
@@ -21,9 +21,9 @@ import {
   WINDOW_SESSION_ID,
   type CacheEventPayload,
   type HistoryEventData
-} from '../events/cacheEvents';
-import { createLogger } from '../utils/logger';
-import { debounce } from '../utils/debounce';
+} from '@/events/cacheEvents';
+import { createLogger } from '@/utils/logger';
+import { debounce } from '@/utils/debounce';
 import { createBulkOps } from './history/useHistoryBulkOps';
 import { createResultOps } from './history/useHistoryResultOps';
 

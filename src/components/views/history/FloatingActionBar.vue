@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { onClickOutside } from '@vueuse/core';
-import type { LinkFormat } from '../../../utils/linkFormatter';
+import type { LinkFormat } from '@/utils/linkFormatter';
 import { useFabCopyFormat } from './fab/useFabCopyFormat';
 import FabStatusBar from './fab/FabStatusBar.vue';
 import FabCopySection from './fab/FabCopySection.vue';

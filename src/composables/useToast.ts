@@ -1,8 +1,8 @@
 // Toast 通知 Composable - 增强版
 
 import { useToast as usePrimeToast } from 'primevue/usetoast';
-import type { ToastMessageConfig } from '../constants/toastMessages';
-import { createLogger } from '../utils/logger';
+import type { ToastMessageConfig } from '@/constants/toastMessages';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Toast');
 

@@ -4,12 +4,12 @@
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useConfigManager } from './useConfig';
 import { useToast } from './useToast';
-import { getActivePrefix } from '../config/types';
-import type { UserConfig } from '../config/types';
-import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
-import { applyZhihuSourceFromConfig } from '../utils/zhihuSource';
-import { formatLink, FORMAT_NAMES, type LinkFormat } from '../utils/linkFormatter';
-import { createLogger } from '../utils/logger';
+import { getActivePrefix } from '@/config/types';
+import type { UserConfig } from '@/config/types';
+import { applyPrefixTemplate } from '@/utils/linkPrefixTemplate';
+import { applyZhihuSourceFromConfig } from '@/utils/zhihuSource';
+import { formatLink, FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('CopyLink');
 

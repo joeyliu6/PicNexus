@@ -8,8 +8,8 @@ import {
   useMdRescueMru,
   clearAllMruEntries,
   type MruEntry,
-} from '../../../../composables/md-rescue/useMdRescueMru';
-import { formatRelativeTime } from '../../../../utils/formatters';
+} from '@/composables/md-rescue/useMdRescueMru';
+import { formatRelativeTime } from '@/utils/formatters';
 
 defineProps<{ disabled?: boolean }>();
 

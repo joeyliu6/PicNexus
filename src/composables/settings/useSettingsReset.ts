@@ -1,11 +1,11 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { useToast } from '../useToast';
-import { useConfirm } from '../useConfirm';
-import { useThemeManager } from '../useTheme';
-import { useAnalytics } from '../useAnalytics';
-import { DEFAULT_CONFIG } from '../../config/types';
-import type { EditorServerConfig, UserConfig } from '../../config/types';
+import { useToast } from '@/composables/useToast';
+import { useConfirm } from '@/composables/useConfirm';
+import { useThemeManager } from '@/composables/useTheme';
+import { useAnalytics } from '@/composables/useAnalytics';
+import { DEFAULT_CONFIG } from '@/config/types';
+import type { EditorServerConfig, UserConfig } from '@/config/types';
 
 type AppBehaviorState = NonNullable<UserConfig['appBehavior']>;
 

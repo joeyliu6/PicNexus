@@ -7,15 +7,15 @@
 
 /* eslint-disable max-lines -- central database facade intentionally groups delegated query APIs */
 import type Database from '@tauri-apps/plugin-sql';
-import type { HistoryItem, ServiceType } from '../../config/types';
-import type { MigrateScope } from '../../types/batchMigrate';
-import type { ImageMeta } from '../../types/image-meta';
-import { extractMirrorServices } from '../../types/image-meta';
-import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
-import { getHistoryDbPath } from '../../utils/appPaths';
-import { isUsableMirror } from '../../utils/historyResults';
-import { createLogger } from '../../utils/logger';
-import { getSyncDeviceId } from '../../utils/syncDeviceId';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import type { MigrateScope } from '@/types/batchMigrate';
+import type { ImageMeta } from '@/types/image-meta';
+import { extractMirrorServices } from '@/types/image-meta';
+import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
+import { getHistoryDbPath } from '@/utils/appPaths';
+import { isUsableMirror } from '@/utils/historyResults';
+import { createLogger } from '@/utils/logger';
+import { getSyncDeviceId } from '@/utils/syncDeviceId';
 
 // 子模块导入
 import {

@@ -11,7 +11,7 @@
 // 因此**新增字段级密文不需要来这里登记**，只要它走 `secureStorage.encrypt` 就自动被覆盖。
 
 import { secureStorage, isAnyEncryptedData } from './crypto';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('FieldSecrets');
 

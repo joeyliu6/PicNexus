@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { watch, nextTick } from 'vue';
 import Divider from 'primevue/divider';
-import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type CustomS3Profile, type WebDAVStorageProfile, type LinkPrefixItem } from '../../config/types';
+import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type CustomS3Profile, type WebDAVStorageProfile, type LinkPrefixItem } from '@/config/types';
 import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
 import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
 import BuiltinServiceGroup from './hosting/BuiltinServiceGroup.vue';
 import ServiceEnableSection from './hosting/ServiceEnableSection.vue';
-import type { BatchTestProgress } from '../../types/batchTest';
-import { useServiceHealth } from '../../composables/useServiceHealth';
-import type { ServiceCheckSession } from '../../types/serviceCheck';
+import type { BatchTestProgress } from '@/types/batchTest';
+import { useServiceHealth } from '@/composables/useServiceHealth';
+import type { ServiceCheckSession } from '@/types/serviceCheck';
 
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
 
@@ -259,7 +259,7 @@ watch(() => props.targetCardId, (val) => {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .hosting-settings-panel {
   width: 100%;

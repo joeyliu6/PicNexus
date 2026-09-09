@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { getServiceDisplayName } from '../../../../../constants/serviceNames';
-import { serviceNameTooltip } from '../../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../../common/ServiceLogo.vue';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 import MigrateStatusFilterChips, {
   type MigrateStatusFilter,
   type MigrateStatusCounts,
 } from './chips/MigrateStatusFilterChips.vue';
-import type { SourceServiceOption } from '../composables/useFilterBar';
+import type { SourceServiceOption } from '@/components/views/linkcheck/migrate/composables/useFilterBar';
 
 interface Props {
   counts: MigrateStatusCounts;

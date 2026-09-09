@@ -3,9 +3,9 @@
  * 管理时间轴侧边栏拖拽滚动、跳转期间 photo-item 灰底/shimmer、指示器定位与跳转
  */
 import { ref, computed, watch, nextTick, onUnmounted, type Ref, type ComputedRef } from 'vue';
-import { generateSkeletonLayout } from '../../utils/justifiedLayout';
-import { createLogger } from '../../utils/logger';
-import type { PhotoGroup } from '../useVirtualTimeline';
+import { generateSkeletonLayout } from '@/utils/justifiedLayout';
+import { createLogger } from '@/utils/logger';
+import type { PhotoGroup } from '@/composables/useVirtualTimeline';
 
 const log = createLogger('TimelineJump');
 

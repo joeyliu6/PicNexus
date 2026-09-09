@@ -3,20 +3,20 @@
 
 import { type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { useToast, suppressToasts } from '../useToast';
-import { useConfirm } from '../useConfirm';
-import { useServiceAvailability, probeBuiltinServiceAvailability } from '../useServiceAvailability';
-import { useServiceHealth } from '../useServiceHealth';
-import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from '../useServiceCheckRunner';
-import { TOAST_MESSAGES } from '../../constants';
-import type { ServiceType, CustomS3Profile, WebDAVStorageProfile } from '../../config/types';
-import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../../config/types';
-import { WebDAVUploader } from '../../uploaders/webdav/WebDAVUploader';
-import { extractNamiAuthToken } from '../../utils/namiAuthToken';
-import { normalizeHost } from '../../security/networkPolicy';
+import { useToast, suppressToasts } from '@/composables/useToast';
+import { useConfirm } from '@/composables/useConfirm';
+import { useServiceAvailability, probeBuiltinServiceAvailability } from '@/composables/useServiceAvailability';
+import { useServiceHealth } from '@/composables/useServiceHealth';
+import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from '@/composables/useServiceCheckRunner';
+import { TOAST_MESSAGES } from '@/constants';
+import type { ServiceType, CustomS3Profile, WebDAVStorageProfile } from '@/config/types';
+import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '@/config/types';
+import { WebDAVUploader } from '@/uploaders/webdav/WebDAVUploader';
+import { extractNamiAuthToken } from '@/utils/namiAuthToken';
+import { normalizeHost } from '@/security/networkPolicy';
 import { needsHttpDomainConsent } from './s3ConfigValidation';
 import type { SettingsFormShape } from './settingsFormTypes';
-import type { ServiceHealthStatus } from '../../types/serviceHealth';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
 
 interface UseConnectionTestOptions {
   formData: Ref<SettingsFormShape>;

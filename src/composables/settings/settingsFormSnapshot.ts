@@ -1,8 +1,8 @@
 import { nextTick, type Ref } from 'vue';
-import { DEFAULT_CONFIG, cloneDefaultPrefixes } from '../../config/types';
-import { syncCustomS3Uploaders, syncWebDAVUploaders } from '../../uploaders';
+import { DEFAULT_CONFIG, cloneDefaultPrefixes } from '@/config/types';
+import { syncCustomS3Uploaders, syncWebDAVUploaders } from '@/uploaders';
 import type { SettingsFormData } from './settingsFormTypes';
-import type { UserConfig } from '../../config/types';
+import type { UserConfig } from '@/config/types';
 
 interface ApplyConfigToFormOptions {
   formData: Ref<SettingsFormData>;

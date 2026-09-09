@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue';
-import { useConfigManager } from '../../../composables/useConfig';
-import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../../../composables/useCopyBadgeFeedback';
-import { useToast } from '../../../composables/useToast';
+import { useConfigManager } from '@/composables/useConfig';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import { useToast } from '@/composables/useToast';
 import CheckBottomBar from './history-check/CheckBottomBar.vue';
 import CheckFilterBar from './history-check/CheckFilterBar.vue';
 import CheckLinkList from './history-check/CheckLinkList.vue';
 import LinkCheckSkeleton from './history-check/LinkCheckSkeleton.vue';
 import type { StatePill } from './common/StatePill.vue';
-import { rowKey, useCheckFilter } from '../../../composables/link-check/useCheckFilter';
-import { useCheckStats, type CheckStatsResult } from '../../../composables/link-check/useCheckStats';
-import { useCheckStrategy } from '../../../composables/link-check/useCheckStrategy';
-import type { MoreMenuKind } from '../../../composables/link-check/useCheckStrategy';
-import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../../types/linkCheck';
-import { applyZhihuSourceFromConfig } from '../../../utils/zhihuSource';
+import { rowKey, useCheckFilter } from '@/composables/link-check/useCheckFilter';
+import { useCheckStats, type CheckStatsResult } from '@/composables/link-check/useCheckStats';
+import { useCheckStrategy } from '@/composables/link-check/useCheckStrategy';
+import type { MoreMenuKind } from '@/composables/link-check/useCheckStrategy';
+import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
+import { applyZhihuSourceFromConfig } from '@/utils/zhihuSource';
 
 const props = defineProps<{
   checkRows: LinkCheckRow[];

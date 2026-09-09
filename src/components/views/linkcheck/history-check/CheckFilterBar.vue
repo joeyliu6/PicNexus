@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import Skeleton from 'primevue/skeleton';
-import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
-import type { StatusFilter } from '../../../../types/linkCheck';
-import { serviceNameTooltip } from '../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../common/ServiceLogo.vue';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
+import type { StatusFilter } from '@/types/linkCheck';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 const props = defineProps<{
   stats: CheckStatsResult;

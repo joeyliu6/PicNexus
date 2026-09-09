@@ -1,9 +1,9 @@
 // 图片元信息处理模块 - 获取和缓存图片的宽高、大小等元信息
 
 import { invoke } from '@tauri-apps/api/core';
-import type { ImageMetadata } from '../config/types';
-import { Semaphore } from '../utils/semaphore';
-import { createLogger } from '../utils/logger';
+import type { ImageMetadata } from '@/config/types';
+import { Semaphore } from '@/utils/semaphore';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ImageMetadata');
 

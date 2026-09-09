@@ -7,4 +7,4 @@
 // 本文件只做 re-export：保持消费方 `import { Store } from './store'` 的写法不变，
 // 避免一次拆分波及 5 个消费方文件。
 export { MutexStore as Store } from './MutexStore';
-export { StoreError } from '../utils/storeErrors';
+export { StoreError } from '@/utils/storeErrors';

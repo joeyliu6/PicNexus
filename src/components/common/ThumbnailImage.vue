@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
-import { safeImageUrl } from '../../security/networkPolicy';
-import { reportThumbnailUrlFailed, reportThumbnailUrlLoaded } from '../../composables/useThumbCache';
-import { hasUrlListChanged } from '../../composables/useThumbnailFallbackChain';
+import { safeImageUrl } from '@/security/networkPolicy';
+import { reportThumbnailUrlFailed, reportThumbnailUrlLoaded } from '@/composables/useThumbCache';
+import { hasUrlListChanged } from '@/composables/useThumbnailFallbackChain';
 
 /**
  * Why 这里没复用 useThumbnailFallbackChain（时间轴/收藏页共用的那个）：

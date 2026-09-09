@@ -6,11 +6,11 @@
  */
 
 import type Database from '@tauri-apps/plugin-sql';
-import type { ImageMeta } from '../../types/image-meta';
-import { extractMirrorServices } from '../../types/image-meta';
+import type { ImageMeta } from '@/types/image-meta';
+import { extractMirrorServices } from '@/types/image-meta';
 import type { DayStats, DayStatsFilter, ServiceType } from './types';
-import type { HistoryItem } from '../../config/types';
-import { createLogger } from '../../utils/logger';
+import type { HistoryItem } from '@/config/types';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('TimelineQuery');
 

@@ -3,11 +3,11 @@ import { ref, computed, provide, onMounted, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
-import UploadView from '../views/UploadView.vue';
-import HistoryView from '../views/HistoryView.vue';
-import LinkCheckView from '../views/LinkCheckView.vue';
-import SettingsView from '../views/SettingsView.vue';
-import { setupTrayMenu, type TrayUploadAction } from '../../services/trayMenu';
+import UploadView from '@/components/views/UploadView.vue';
+import HistoryView from '@/components/views/HistoryView.vue';
+import LinkCheckView from '@/components/views/LinkCheckView.vue';
+import SettingsView from '@/components/views/SettingsView.vue';
+import { setupTrayMenu, type TrayUploadAction } from '@/services/trayMenu';
 
 type ViewType = 'upload' | 'history' | 'link-check' | 'settings';
 type TrayAction = TrayUploadAction;

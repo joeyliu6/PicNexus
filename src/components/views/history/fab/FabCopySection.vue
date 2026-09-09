@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue';
-import type { LinkFormat } from '../../../../utils/linkFormatter';
-import { LINK_FORMAT_OPTIONS, FORMAT_NAMES } from '../../../../utils/linkFormatter';
+import type { LinkFormat } from '@/utils/linkFormatter';
+import { LINK_FORMAT_OPTIONS, FORMAT_NAMES } from '@/utils/linkFormatter';
 import { useFabCopyFormat } from './useFabCopyFormat';
 
 const props = defineProps<{

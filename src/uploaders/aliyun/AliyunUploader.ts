@@ -1,5 +1,5 @@
-import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import type { AliyunServiceConfig } from '../../config/types';
+import { BaseS3Uploader } from '@/uploaders/s3/BaseS3Uploader';
+import type { AliyunServiceConfig } from '@/config/types';
 
 export class AliyunUploader extends BaseS3Uploader<AliyunServiceConfig> {
   readonly serviceId = 'aliyun';

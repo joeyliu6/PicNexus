@@ -1,8 +1,8 @@
 import { ref, readonly } from 'vue';
-import { ThemeManager } from '../theme/ThemeManager';
-import { DEFAULT_CONFIG, type UserConfig, type ThemeMode } from '../config/types';
-import { configStore } from '../store/instances';
-import { createLogger } from '../utils/logger';
+import { ThemeManager } from '@/theme/ThemeManager';
+import { DEFAULT_CONFIG, type UserConfig, type ThemeMode } from '@/config/types';
+import { configStore } from '@/store/instances';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ThemeManager');
 let themeManager: ThemeManager | null = null;

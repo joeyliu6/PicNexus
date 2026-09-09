@@ -3,7 +3,7 @@
 // 状态持久化到 syncStatusStore，支持上传失败联动
 
 import { ref, computed, triggerRef, type Ref, type ComputedRef } from 'vue';
-import type { ServiceType, UserConfig } from '../config/types';
+import type { ServiceType, UserConfig } from '@/config/types';
 import {
   isCustomS3Id,
   getCustomS3ProfileId,
@@ -11,26 +11,26 @@ import {
   isWebDAVId,
   getWebDAVProfileId,
   makeWebDAVId,
-} from '../config/types';
+} from '@/config/types';
 import type {
   ServiceHealthStatus,
   ServiceHealthRecord,
   ServiceHealthMap,
   PersistedHealthData,
-} from '../types/serviceHealth';
-import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
+} from '@/types/serviceHealth';
+import { AUTH_CONFIG_ERROR_CODES } from '@/types/serviceHealth';
 import {
   SERVICE_REQUIRED_FIELDS,
   NO_CONFIG_SERVICES,
   CUSTOM_S3_REQUIRED_FIELDS,
   WEBDAV_REQUIRED_FIELDS,
   getRequiredFields,
-} from '../constants/serviceRequiredFields';
-import { syncStatusStore } from '../store/instances';
-import type { StructuredError } from '../uploaders/base/ErrorTypes';
-import { formatRelativeTime } from '../utils/formatters';
-import { formatServiceHealthErrorMessage } from '../utils/serviceHealthMessage';
-import { createLogger } from '../utils/logger';
+} from '@/constants/serviceRequiredFields';
+import { syncStatusStore } from '@/store/instances';
+import type { StructuredError } from '@/uploaders/base/ErrorTypes';
+import { formatRelativeTime } from '@/utils/formatters';
+import { formatServiceHealthErrorMessage } from '@/utils/serviceHealthMessage';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ServiceHealth');
 

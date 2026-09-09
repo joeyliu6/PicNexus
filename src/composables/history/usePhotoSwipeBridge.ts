@@ -10,7 +10,7 @@
 import { ref, watch, onUnmounted, nextTick, type Ref, type ComputedRef } from 'vue';
 import PhotoSwipe from 'photoswipe';
 import type { PhotoSwipeOptions } from 'photoswipe';
-import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } from '../../utils/reducedMotion';
+import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } from '@/utils/reducedMotion';
 
 export const SHOW_ANIMATION_DURATION = 300;
 export const HIDE_ANIMATION_DURATION = 280;

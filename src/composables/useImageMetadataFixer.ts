@@ -6,9 +6,9 @@
 
 import { ref, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { HistoryItem, ImageMetadata } from '../config/types';
-import { DimensionBatchUpdateError } from '../services/database/MetadataQuery';
-import { createLogger } from '../utils/logger';
+import type { HistoryItem, ImageMetadata } from '@/config/types';
+import { DimensionBatchUpdateError } from '@/services/database/MetadataQuery';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('MetadataFixer');
 
@@ -188,7 +188,7 @@ export function useImageMetadataFixer() {
 
     try {
       // 动态导入数据库模块，避免循环依赖
-      const { historyDB } = await import('../services/HistoryDatabase');
+      const { historyDB } = await import('@/services/HistoryDatabase');
 
       // 一次 CASE/WHEN 提交一批：逐条 update() 会对每条记录额外做一次全行回查，
       // 几千条修复下这部分 IPC 往返和 JSON 解析是主要开销。

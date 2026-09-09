@@ -5,7 +5,7 @@
  * 1. 动态熔断：遇到 500 错误时，触发短时冷却
  * 2. 严格串行排队：确保请求之间有最小间隔，防止并发苏醒导致的瞬间 Burst
  */
-import { createLogger } from '../../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('JDRateLimiter');
 

@@ -18,8 +18,8 @@ import {
   type TimelineLayoutOptions,
   type TimelineGroupLayout,
   type GroupLayoutResult,
-} from '../../utils/justifiedLayout';
-import type { ImageMeta } from '../../types/image-meta';
+} from '@/utils/justifiedLayout';
+import type { ImageMeta } from '@/types/image-meta';
 import type { PhotoGroup, VirtualTimelineOptions } from './types';
 import { DEFAULT_OPTIONS } from './types';
 
@@ -149,7 +149,7 @@ export function useTimelineLayout(
 
     const groupLayouts: TimelineGroupLayout[] = [];
     const itemPositionMap = new Map<string, { y: number; height: number; groupId: string }>();
-    const allRows: Array<{ groupId: string; row: import('../../utils/justifiedLayout').LayoutRow; globalRowIndex: number }> = [];
+    const allRows: Array<{ groupId: string; row: import('@/utils/justifiedLayout').LayoutRow; globalRowIndex: number }> = [];
     let currentY = 0;
     let globalRowIndex = 0;
 

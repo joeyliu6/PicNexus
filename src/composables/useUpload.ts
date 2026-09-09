@@ -2,28 +2,28 @@
 // 上传管理 Composable - 上传流程编排（核心协调器）
 
 import { isUploading } from './uploadState';
-import { configStore } from '../store/instances';
+import { configStore } from '@/store/instances';
 import { filterValidFiles, selectFiles, MAX_FILES_PER_UPLOAD } from './upload/FileValidator';
 import { processUploadQueue } from './upload/UploadExecutor';
 import type {
-  UserConfig} from '../config/types';
+  UserConfig} from '@/config/types';
 import {
   DEFAULT_CONFIG,
   DEFAULT_COMPRESSION_PRESET,
   isPublicRiskService,
-} from '../config/types';
-import type { UploadQueueManager } from '../core/UploadQueue';
+} from '@/config/types';
+import type { UploadQueueManager } from '@/core/UploadQueue';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem, type CopyLinkResult } from './useCopyLink';
-import { TOAST_MESSAGES } from '../constants';
-import { checkNetworkConnectivity } from '../utils/network';
-import { chunkArray } from '../utils/semaphore';
+import { TOAST_MESSAGES } from '@/constants';
+import { checkNetworkConnectivity } from '@/utils/network';
+import { chunkArray } from '@/utils/semaphore';
 import { useServiceSelector } from './useServiceSelector';
 import { useHistorySaver } from './useHistorySaver';
 import { fetchMetadataBatch, getImageMetadata } from './useImageMetadata';
 import { useImageCompress } from './useImageCompress';
-import { createLogger } from '../utils/logger';
-import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '../utils/uploadSummary';
+import { createLogger } from '@/utils/logger';
+import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '@/utils/uploadSummary';
 
 const log = createLogger('useUpload');
 

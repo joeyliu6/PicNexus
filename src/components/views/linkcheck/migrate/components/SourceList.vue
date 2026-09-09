@@ -7,10 +7,10 @@
  */
 import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
-import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
-import { formatNumber } from '../utils';
-import { serviceNameTooltip } from '../../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../../common/ServiceLogo.vue';
+import InlineEmptyState from '@/components/common/InlineEmptyState.vue';
+import { formatNumber } from '@/components/views/linkcheck/migrate/utils';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 interface SourceItem {
   id: string;

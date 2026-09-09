@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { rowKey } from '../../../../composables/link-check/useCheckFilter';
-import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
-import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '../../../../types/linkCheck';
-import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import { serviceNameTooltip } from '../../../../utils/serviceNameFit';
-import ServiceLogo from '../../../common/ServiceLogo.vue';
-import EmptyState from '../../../common/EmptyState.vue';
+import { rowKey } from '@/composables/link-check/useCheckFilter';
+import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
+import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
 
 defineProps<{
   visibleRows: LinkCheckRow[];

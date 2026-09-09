@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
+import type { EditorServerConfig, ServerServiceType } from '@/config/types';
 import EditorServiceCard from './EditorServiceCard.vue';
 
 interface Props {

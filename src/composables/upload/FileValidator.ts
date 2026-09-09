@@ -3,10 +3,10 @@
 
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
-import type { useToast } from '../useToast';
-import { TOAST_MESSAGES } from '../../constants';
-import { createLogger } from '../../utils/logger';
-import { Semaphore } from '../../utils/semaphore';
+import type { useToast } from '@/composables/useToast';
+import { TOAST_MESSAGES } from '@/constants';
+import { createLogger } from '@/utils/logger';
+import { Semaphore } from '@/utils/semaphore';
 
 const log = createLogger('FileValidator');
 

@@ -3,13 +3,13 @@
  * 从 HistoryTableView.vue 提取
  */
 import { ref, shallowRef, computed, nextTick, onMounted, onUnmounted, watch, type Ref } from 'vue';
-import type { HistoryItem, ServiceType } from '../../config/types';
-import { useHistoryManager } from '../useHistory';
-import { useHistoryViewState } from '../useHistoryViewState';
-import { useToast } from '../useToast';
-import { onCacheEventType } from '../../events/cacheEvents';
-import { createLogger } from '../../utils/logger';
-import { formatTime, getSuccessfulServices } from '../../utils/formatters';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import { useHistoryManager } from '@/composables/useHistory';
+import { useHistoryViewState } from '@/composables/useHistoryViewState';
+import { useToast } from '@/composables/useToast';
+import { onCacheEventType } from '@/events/cacheEvents';
+import { createLogger } from '@/utils/logger';
+import { formatTime, getSuccessfulServices } from '@/utils/formatters';
 
 interface SkeletonItem {
   id: string;

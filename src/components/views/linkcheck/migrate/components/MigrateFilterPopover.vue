@@ -11,8 +11,8 @@
 import { computed, ref } from 'vue';
 import Popover from 'primevue/popover';
 import type PopoverType from 'primevue/popover';
-import { filterThresholds, timestampRangePresets } from '../utils';
-import type { MigrateScope } from '../../../../../types/batchMigrate';
+import { filterThresholds, timestampRangePresets } from '@/components/views/linkcheck/migrate/utils';
+import type { MigrateScope } from '@/types/batchMigrate';
 
 const DAY_MS = 86400_000;
 const CUSTOM_COUNT_MAX = 20;

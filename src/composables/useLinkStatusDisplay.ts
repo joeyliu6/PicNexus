@@ -1,7 +1,7 @@
 // 链接状态展示辅助 - 从 MdRescueInline.vue 提取
 // 纯函数，无 Vue 响应式依赖，可跨组件复用
 
-import type { CheckLinkResult } from '../types/linkCheck';
+import type { CheckLinkResult } from '@/types/linkCheck';
 
 export interface StatusDisplay {
   color: string;

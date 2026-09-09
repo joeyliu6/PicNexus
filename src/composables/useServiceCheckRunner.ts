@@ -1,8 +1,8 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue';
 import pLimit from 'p-limit';
-import type { BatchTestProgress } from '../types/batchTest';
-import type { ServiceCheckMode, ServiceCheckSession, ServiceCheckSummarySnapshot } from '../types/serviceCheck';
-import type { ServiceHealthStatus } from '../types/serviceHealth';
+import type { BatchTestProgress } from '@/types/batchTest';
+import type { ServiceCheckMode, ServiceCheckSession, ServiceCheckSummarySnapshot } from '@/types/serviceCheck';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
 
 export const MAX_SERVICE_CHECK_CONCURRENCY = 3;
 

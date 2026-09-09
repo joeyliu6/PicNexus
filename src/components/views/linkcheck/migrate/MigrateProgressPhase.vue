@@ -7,25 +7,25 @@
  * 搜索和来源图床筛选逻辑由 useFilterBar composable 管理。
  */
 import { inject, computed, ref, watch, nextTick } from 'vue';
-import { useToast } from '../../../../composables/useToast';
-import { useConfigManager } from '../../../../composables/useConfig';
-import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../../../../composables/useCopyBadgeFeedback';
-import { applyConfiguredUrlWithConfig } from '../../../../composables/useCopyLink';
-import { createLogger } from '../../../../utils/logger';
-import { historyDB } from '../../../../services/database';
+import { useToast } from '@/composables/useToast';
+import { useConfigManager } from '@/composables/useConfig';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
+import { createLogger } from '@/utils/logger';
+import { historyDB } from '@/services/database';
 import { MIGRATE_KEY } from './keys';
 import { buildCsvReport, buildTxtReport } from './reportExport';
 import { buildMigrateProgressTooltip } from './utils';
 import { useFilterBar } from './composables/useFilterBar';
-import type { MigrateItemStatus } from '../../../../types/batchMigrate';
+import type { MigrateItemStatus } from '@/types/batchMigrate';
 import MigrateItemRow from './components/MigrateItemRow.vue';
 import type { MigrateRowItem } from './components/migrateRowTypes';
 import MigrateBottomBar from './components/MigrateBottomBar.vue';
-import type { StatePill } from '../common/StatePill.vue';
+import type { StatePill } from '@/components/views/linkcheck/common/StatePill.vue';
 import MigratePagination from './components/MigratePagination.vue';
 import MigrateFilterBar from './components/MigrateFilterBar.vue';
 import { type MigrateStatusFilter } from './components/chips/MigrateStatusFilterChips.vue';
-import { exportTextFile } from '../../../../utils/userFiles';
+import { exportTextFile } from '@/utils/userFiles';
 
 const PAGE_SIZE = 100;
 

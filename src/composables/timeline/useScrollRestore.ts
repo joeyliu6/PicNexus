@@ -7,7 +7,7 @@
  *    导致 scrollTop.value 与 DOM 失同步、visibleItems 错位、"需要滚动一下才加载"的症状。
  */
 import { onActivated, onDeactivated, nextTick, watch, type Ref, type ComputedRef } from 'vue';
-import type { VisibleItem } from '../useVirtualTimeline';
+import type { VisibleItem } from '@/composables/useVirtualTimeline';
 
 /** 可选的外部回调，由调用方提供 */
 interface ScrollRestoreCallbacks {

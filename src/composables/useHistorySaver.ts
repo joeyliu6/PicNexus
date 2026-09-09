@@ -1,13 +1,13 @@
 // 历史记录保存模块 - 管理上传历史的保存和更新
 
 import { basename } from '@tauri-apps/api/path';
-import type { HistoryItem } from '../config/types';
-import type { SingleServiceResult, MultiUploadResult } from '../core/MultiServiceUploader';
-import { historyDB } from '../services/HistoryDatabase';
+import type { HistoryItem } from '@/config/types';
+import type { SingleServiceResult, MultiUploadResult } from '@/core/MultiServiceUploader';
+import { historyDB } from '@/services/HistoryDatabase';
 import { invalidateCache } from './useHistory';
-import { emitHistoryUpdated } from '../events/cacheEvents';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
 import { getImageMetadata, clearImageMetadataCache } from './useImageMetadata';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('HistorySaver');
 

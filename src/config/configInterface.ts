@@ -144,7 +144,7 @@ export interface GlobalShortcutConfig {
  */
 export interface LinkOutputConfig {
   /** 默认复制格式 */
-  defaultFormat: import('../utils/linkFormatter').LinkFormat;
+  defaultFormat: import('@/utils/linkFormatter').LinkFormat;
   /** 自定义模板（defaultFormat 为 'custom' 时使用） */
   customTemplate: string;
   /** 上传完成后是否自动复制到剪贴板 */

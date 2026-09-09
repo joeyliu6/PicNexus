@@ -12,7 +12,7 @@
  *
  * done 行、CSV 导出、active 行共用此函数。
  */
-import type { MigrateItemStatus } from '../../../../../types/batchMigrate';
+import type { MigrateItemStatus } from '@/types/batchMigrate';
 
 export type StatusChipTone = 'pending' | 'active' | 'success' | 'warning' | 'error';
 

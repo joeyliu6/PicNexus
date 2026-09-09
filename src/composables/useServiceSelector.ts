@@ -2,14 +2,14 @@
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { configStore, readFreshConfig } from '../store/instances';
-import type { UserConfig } from '../config/types';
-import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id, isWebDAVId, makeWebDAVId } from '../config/types';
+import { configStore, readFreshConfig } from '@/store/instances';
+import type { UserConfig } from '@/config/types';
+import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id, isWebDAVId, makeWebDAVId } from '@/config/types';
 import { useToast } from './useToast';
-import { TOAST_MESSAGES } from '../constants';
-import { getRequiredFields, NO_CONFIG_SERVICES } from '../constants/serviceRequiredFields';
-import { debounceWithError } from '../utils/debounce';
-import { createLogger } from '../utils/logger';
+import { TOAST_MESSAGES } from '@/constants';
+import { getRequiredFields, NO_CONFIG_SERVICES } from '@/constants/serviceRequiredFields';
+import { debounceWithError } from '@/utils/debounce';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ServiceSelector');
 

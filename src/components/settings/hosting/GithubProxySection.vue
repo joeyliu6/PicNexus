@@ -4,9 +4,9 @@ import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
 import RadioButton from 'primevue/radiobutton';
 import Button from 'primevue/button';
-import type { GithubCdnConfig, GithubCdnProvider } from '../../../config/types';
-import { DEFAULT_GITHUB_CDN_LIST, DEFAULT_CDN_TEMPLATE } from '../../../config/types';
-import { useConfirm } from '../../../composables/useConfirm';
+import type { GithubCdnConfig, GithubCdnProvider } from '@/config/types';
+import { DEFAULT_GITHUB_CDN_LIST, DEFAULT_CDN_TEMPLATE } from '@/config/types';
+import { useConfirm } from '@/composables/useConfirm';
 
 interface Props {
   cdnConfig?: GithubCdnConfig;
@@ -239,7 +239,7 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .cdn-list {
   display: flex;

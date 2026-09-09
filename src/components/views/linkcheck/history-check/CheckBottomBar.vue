@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import Skeleton from 'primevue/skeleton';
 import CheckBottomActions from './CheckBottomActions.vue';
-import StatePill, { type StatePill as StatePillType } from '../common/StatePill.vue';
-import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
-import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
+import StatePill, { type StatePill as StatePillType } from '@/components/views/linkcheck/common/StatePill.vue';
+import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
+import type { MoreMenuItem, MoreMenuKind } from '@/composables/link-check/useCheckStrategy';
 
 defineProps<{
   isChecking: boolean;
