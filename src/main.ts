@@ -27,7 +27,7 @@ import { createLogger } from '@/utils/logger';
 import { useAnalytics } from '@/composables/useAnalytics';
 
 // 备份文件清理
-import { cleanupStoreBackups } from '@/utils/storeCleanup';
+import { cleanupStoreBackups } from '@/store/storeCleanup';
 
 // PrimeVue 样式
 import 'primeicons/primeicons.css';

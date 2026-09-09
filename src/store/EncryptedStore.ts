@@ -17,7 +17,7 @@ import { join } from '@tauri-apps/api/path';
 import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from '@/security/crypto';
 import { getUserDataDir } from '@/utils/appPaths';
 import { createLogger } from '@/utils/logger';
-import { StoreError } from '@/utils/storeErrors';
+import { StoreError } from './storeErrors';
 import { type StoreData, toErrorMessage } from './types';
 
 const log = createLogger('Store');

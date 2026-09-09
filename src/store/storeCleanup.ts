@@ -1,7 +1,7 @@
 import { readDir, remove } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
-import { getUserDataDir } from './appPaths';
-import { createLogger } from './logger';
+import { getUserDataDir } from '@/utils/appPaths';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('StoreCleanup');
 

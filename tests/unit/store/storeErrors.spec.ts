@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { StoreError } from '@/utils/storeErrors';
+import { StoreError } from '@/store/storeErrors';
 
 describe('StoreError', () => {
   it('name 固定为 StoreError', () => {

@@ -17,11 +17,11 @@ export default defineConfig({
       reportsDirectory: './coverage',
       include: [
         'src/utils/**',
+        'src/store/**',
         'src/services/**',
         'src/core/**',
         'src/composables/**',
         'src/uploaders/**',
-        'src/components/UploadQueue.vue',
         'src/components/views/UploadView.vue',
         'src/components/views/upload/**',
         'src/components/views/SettingsView.vue',

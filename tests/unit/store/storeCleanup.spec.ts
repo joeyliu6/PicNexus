@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getFsMocks, getPathMocks } from '../helpers/tauriMock';
-import { cleanupStoreBackups } from '@/utils/storeCleanup';
+import { cleanupStoreBackups } from '@/store/storeCleanup';
 
 const { readDir: mockReadDir, remove: mockRemove } = getFsMocks();
 const mockAppDataDir = getPathMocks().appDataDir;
