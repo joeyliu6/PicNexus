@@ -6,7 +6,7 @@ import ServiceLogo from '@/components/common/ServiceLogo.vue';
 import MigrateStatusFilterChips, {
   type MigrateStatusFilter,
   type MigrateStatusCounts,
-} from './chips/MigrateStatusFilterChips.vue';
+} from './MigrateStatusFilterChips.vue';
 import type { SourceServiceOption } from '@/components/views/link-check/migrate/composables/useFilterBar';
 
 interface Props {

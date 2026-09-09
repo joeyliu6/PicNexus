@@ -11,7 +11,7 @@ import { computed } from 'vue';
 import { makeCopyBadgeKey } from '@/composables/useCopyBadgeFeedback';
 import { errorTooltipText } from '@/components/views/link-check/migrate/composables/useErrorPresentation';
 import { getServiceDisplayName } from '@/constants/serviceNames';
-import MigrateServiceChip from './chips/MigrateServiceChip.vue';
+import MigrateServiceChip from './MigrateServiceChip.vue';
 import type { MigrateRowItem } from './migrateRowTypes';
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'skipped']);

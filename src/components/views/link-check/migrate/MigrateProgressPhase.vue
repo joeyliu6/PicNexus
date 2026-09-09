@@ -24,7 +24,7 @@ import MigrateBottomBar from './components/MigrateBottomBar.vue';
 import type { StatePill } from '@/components/views/link-check/common/StatePill.vue';
 import MigratePagination from './components/MigratePagination.vue';
 import MigrateFilterBar from './components/MigrateFilterBar.vue';
-import { type MigrateStatusFilter } from './components/chips/MigrateStatusFilterChips.vue';
+import { type MigrateStatusFilter } from './components/MigrateStatusFilterChips.vue';
 import { exportTextFile } from '@/utils/userFiles';
 
 const PAGE_SIZE = 100;
