@@ -8,7 +8,9 @@ const appConsoleCheck = {
   label: 'app console usage',
   dir: 'src',
   extensions: new Set(['.ts', '.vue']),
-  skip: file => file.includes(`${path.sep}test${path.sep}`) || file.endsWith('.spec.ts'),
+  // 曾经还豁免 src 下的 test/ 目录，但那个目录早已空掉（2026-09 结构整理中删除），
+  // 项目约定测试一律放 tests/。只保留 .spec.ts 的防御性豁免。
+  skip: file => file.endsWith('.spec.ts'),
   patterns: [/console\.(log|warn|error|debug|info)\s*\(/],
 };
 
@@ -79,7 +81,7 @@ function scanFrontendLogStatements() {
 
     for (const file of walk(base)) {
       if (!new Set(['.ts', '.vue']).has(path.extname(file))) continue;
-      if (dir === 'src' && (file.includes(`${path.sep}test${path.sep}`) || file.endsWith('.spec.ts'))) continue;
+      if (dir === 'src' && file.endsWith('.spec.ts')) continue;
       if (dir === 'sidecar' && skipSidecarBuildOutput(file)) continue;
 
       const content = fs.readFileSync(file, 'utf8');
