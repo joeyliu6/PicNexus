@@ -46,6 +46,7 @@
 | [webdav-image-host-issues.md](./troubleshooting/webdav-image-host-issues.md) | WebDAV 图床按症状排查（Digest 不支持、模板拼不出 token 链接、匿名直链被拒） |
 | [fake-ip-dns-policy-distortion.md](./troubleshooting/fake-ip-dns-policy-distortion.md) | TUN 代理 fake-ip 池让局域网 / 内网判据双向失真 |
 | [s3-legacy-content-type.md](./troubleshooting/s3-legacy-content-type.md) | S3 系旧对象缺 Content-Type，链接变下载框；升级不自愈，给原地改元数据的命令 |
+| [orphan-field-ciphertext.md](./troubleshooting/orphan-field-ciphertext.md) | 孤儿密文：设了备份密码，已保存的 WebDAV 密码静默作废（改密钥切换链路前必读） |
 
 ## patterns/ — 设计模式 + 最佳实践
 
@@ -62,6 +63,7 @@
 | [batch-operation-target-first.md](./patterns/batch-operation-target-first.md) | UX 模式：先选目标，自动算范围 |
 | [toast-messages-centralization.md](./patterns/toast-messages-centralization.md) | Toast 消息集中管理 |
 | [vite-glob-import.md](./patterns/vite-glob-import.md) | import.meta.glob 动态资源加载 |
+| [sensitive-field-contract.md](./patterns/sensitive-field-contract.md) | 敏感字段契约：密文常驻、明文按需，新增密码/Token 输入框照抄这套 |
 
 ### 测试
 
@@ -93,5 +95,6 @@
 | [add-new-uploader.md](./guides/add-new-uploader.md) | 新增图床完整步骤 |
 | [testing-guide.md](./guides/testing-guide.md) | 测试规范与 Mock 策略 |
 | [webdav-testing-environments.md](./guides/webdav-testing-environments.md) | WebDAV 图床三套真机测试环境（dufs / OpenList / 坚果云）搭建与判据 |
+| [backup-password-regression.md](./guides/backup-password-regression.md) | 备份密码真机回归步骤（改 config.webdav 密码链路后跑） |
 | [obsidian-plugin-installation.md](./guides/obsidian-plugin-installation.md) | Obsidian 插件的 BRAT、官方目录、手动安装与连接配置 |
 | [obsidian-plugin-release.md](./guides/obsidian-plugin-release.md) | Obsidian 插件构建、发布、BRAT 测试与官方提交 |

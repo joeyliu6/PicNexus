@@ -50,6 +50,7 @@ docs/
 | 我要做什么 | 去哪里 |
 |-----------|--------|
 | 查看开发待办 | [TODO.md](./TODO.md) |
+| 打 Windows 便携版 | [portable-windows.md](./portable-windows.md) |
 | 了解项目架构 | [reference/architecture/overview.md](./reference/architecture/overview.md) |
 | 开发新功能 | 先读 [flows/](./flows/) 对应流程图 |
 | 查 CSS 变量 | [design/tokens.md](./design/tokens.md) |
