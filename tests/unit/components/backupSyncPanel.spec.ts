@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
 import BackupSyncPanel from '@/components/settings/BackupSyncPanel.vue';
-import DataItemCard from '@/components/settings/backup/DataItemCard.vue';
+import DataItemCard from '@/components/settings/backup-sync/DataItemCard.vue';
 import type { WebDAVConfig } from '@/config/types';
 
 const confirmRequireMock = vi.hoisted(() => vi.fn());

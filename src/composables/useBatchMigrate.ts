@@ -25,11 +25,11 @@ import type {
   MigrateFailureDetail,
   MigrateScope,
 } from '@/types/batchMigrate';
-import { processBatch } from './batchMigrate/migrateCore';
-import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
-import { createRetry } from './batchMigrate/retryFailed';
-import { createRafThrottle } from './batchMigrate/rafThrottle';
-import { createMigrationRefreshBuffer } from './batchMigrate/historyRefresh';
+import { processBatch } from './batch-migrate/migrateCore';
+import { preloadAllPending, type PreloadedItem } from './batch-migrate/preloadPending';
+import { createRetry } from './batch-migrate/retryFailed';
+import { createRafThrottle } from './batch-migrate/rafThrottle';
+import { createMigrationRefreshBuffer } from './batch-migrate/historyRefresh';
 
 export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail, MigrateScope };
 

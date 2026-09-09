@@ -106,5 +106,5 @@ async function applyFilter() {
 ## 相关文件
 
 - `src/composables/useBatchMigrate.ts` — 批量迁移管理器
-- `src/components/views/linkcheck/BatchMigratePanel.vue` — 批量迁移面板 UI
+- `src/components/views/link-check/BatchMigratePanel.vue` — 批量迁移面板 UI
 - `src/types/batchMigrate.ts` — 类型定义

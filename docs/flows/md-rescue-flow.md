@@ -346,7 +346,7 @@ setup 期间取好、当参数传进来**，由 `useMdRescueManager()` 里的四
 
 > **关键源文件**：`src/composables/md-rescue/useRepairStrategy.ts`（`pickBackupForLink`、
 > `applyRepairStrategy`、`summarizeRepairStrategy`、`applyHostPreference`）、
-> `src/components/views/linkcheck/MdRepairDialog.vue`（`currentStrategy` 计算属性、摘要面板）
+> `src/components/views/link-check/MdRepairDialog.vue`（`currentStrategy` 计算属性、摘要面板）
 
 ```mermaid
 flowchart TD

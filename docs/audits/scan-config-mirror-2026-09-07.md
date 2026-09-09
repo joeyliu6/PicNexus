@@ -39,8 +39,8 @@
 - **位置**：
   - 托盘常驻：[src-tauri/src/main.rs:468](../../src-tauri/src/main.rs#L468)；挂载即读配置并缓存钥匙：
     [TrayMenuWindow.vue:274](../../src/components/tray/TrayMenuWindow.vue#L274) → `readFreshConfig` → `decrypt` → `init()`
-  - 换钥匙只通知本窗口：[BackupPasswordSection.vue:96](../../src/components/settings/backup/BackupPasswordSection.vue#L96)
-    `setDirect` + [:164](../../src/components/settings/backup/BackupPasswordSection.vue#L164) 只 `emit('secrets-rekeyed')`（Vue 组件事件）。
+  - 换钥匙只通知本窗口：[BackupPasswordSection.vue:96](../../src/components/settings/backup-sync/BackupPasswordSection.vue#L96)
+    `setDirect` + [:164](../../src/components/settings/backup-sync/BackupPasswordSection.vue#L164) 只 `emit('secrets-rekeyed')`（Vue 组件事件）。
     全仓 tauri `config-updated` 只有 `useConfig.saveConfig` 与 `trayMenu.ts` 两处发射，换钥匙不在其中。
     新机器输入迁移密码恢复（[App.vue:117](../../src/App.vue#L117)）同样不通知托盘。
   - 托盘写入路径：[trayMenu.ts:338](../../src/services/trayMenu.ts#L338) `loadTrayConfig()` 命中缓存 →

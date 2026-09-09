@@ -123,7 +123,7 @@ flowchart TD
 
 展示 `migrateOneItem` 中单张图片从下载到**多目标并行上传**的完整管线，包含格式转换逻辑。
 
-> **关键源文件**：`src/composables/batchMigrate/migrateCore.ts`（`migrateOneItem`、`optimizeSourceUrl`、`convertIfNeeded`）
+> **关键源文件**：`src/composables/batch-migrate/migrateCore.ts`（`migrateOneItem`、`optimizeSourceUrl`、`convertIfNeeded`）
 >
 > **status 取值**：`pending | downloading | converting | uploading | success | failed | skipped`。并行上传后，`status` 在"当前阶段聚合值"语义下工作：
 > - 有任一目标还在转换 → `converting`
@@ -206,7 +206,7 @@ flowchart TD
 | 下载文件格式不被目标支持 | `needsFormatConversion(targetId, ext)` 在循环内按 target 探测 | `status='converting'` → `compress_image` 转 jpeg（quality=92）→ `convertedFormat='jpeg'` → `status='uploading'` | **已转 JPEG**（由 `convertedFormat` 字段驱动） |
 | 目标图床无格式白名单（对象存储类） | `needsFormatConversion` 返回 false | 直接上传原文件 | **已完成** |
 
-> 状态 chip 映射集中在 `src/components/views/linkcheck/migrate/composables/useStatusChip.ts` 的 `getStatusChipMeta()`。原"三段管道（下载 → 适配 → 上传）"已由单个状态 chip 替代，过程态（`downloading/converting/uploading`）以 chip 文字切换呈现。
+> 状态 chip 映射集中在 `src/components/views/link-check/migrate/composables/useStatusChip.ts` 的 `getStatusChipMeta()`。原"三段管道（下载 → 适配 → 上传）"已由单个状态 chip 替代，过程态（`downloading/converting/uploading`）以 chip 文字切换呈现。
 
 > 公共图床（有白名单）：京东、牛客、B 站、知乎、超星、SM.MS、Imgur、奇遇；对象存储（无限制）：R2、腾讯云、阿里云、七牛、又拍、GitHub、微博、纳米。详见 `src/constants/serviceFormats.ts`。
 
@@ -218,7 +218,7 @@ flowchart TD
 
 展示 `startMigrate` 的执行循环：预加载与处理**并发**跑，首批 100 条加载完就开始迁移。排查「漏处理」「进度卡住」「迁移完视图不刷新」。
 
-> **关键源文件**：`src/composables/useBatchMigrate.ts`（`startMigrate`）、`src/composables/batchMigrate/preloadPending.ts`（`preloadAllPending`）、`src/composables/batchMigrate/historyRefresh.ts`
+> **关键源文件**：`src/composables/useBatchMigrate.ts`（`startMigrate`）、`src/composables/batch-migrate/preloadPending.ts`（`preloadAllPending`）、`src/composables/batch-migrate/historyRefresh.ts`
 >
 > ⚠️ **已废弃的旧机制**：`skipOffset` 翻页 + `processedIds` 去重（本图 2026-08-13 前的画法）早已被 **keyset 游标预加载 + processQueue 流水线**替换。去重责任前移到预加载：`makePreloaded` 直接剔除"所有勾选目标都已存在"的项，主循环只按 `cursor` 单向推进，天然不会重复处理同一条。
 
@@ -374,7 +374,7 @@ flowchart TD
 
 > **为什么砍**：`MAX_CONCURRENT` 从 2 升到 3 后，固定槽位视觉密度不再匹配实际并发；用户也想直接按 chip 切换去看「处理中 / 已完成 / 失败 / 已跳过」分桶，而不是被"活跃槽 + 快照"的分区结构束缚。
 
-> **关键源文件**：`src/components/views/linkcheck/migrate/MigrateProgressPhase.vue`（`rawList` / `displayList` / `filterCounts` 三个 computed）、`src/components/views/linkcheck/migrate/components/MigrateItemRow.vue`
+> **关键源文件**：`src/components/views/link-check/migrate/MigrateProgressPhase.vue`（`rawList` / `displayList` / `filterCounts` 三个 computed）、`src/components/views/link-check/migrate/components/MigrateItemRow.vue`
 
 | 态 | 数据源 | 排序 |
 |----|--------|------|

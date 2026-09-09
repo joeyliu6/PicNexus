@@ -25,7 +25,7 @@ vi.mock('@/composables/useConfirm', () => ({
   }),
 }));
 
-import WebDAVConfigCollapsible from '@/components/settings/backup/WebDAVConfigCollapsible.vue';
+import WebDAVConfigCollapsible from '@/components/settings/backup-sync/WebDAVConfigCollapsible.vue';
 import SensitiveField from '@/components/common/SensitiveField.vue';
 import { WebDAVClient } from '@/utils/webdav';
 

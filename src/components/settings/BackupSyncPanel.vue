@@ -5,10 +5,10 @@ import { useConfirm } from 'primevue/useconfirm';
 import { useBackupSync } from '@/composables/backup-sync/useBackupSync';
 import type { WebDAVConfig } from '@/config/types';
 
-import DataItemCard from './backup/DataItemCard.vue';
-import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
-import BackupPasswordSection from './backup/BackupPasswordSection.vue';
-import SyncHistoryLog from './backup/SyncHistoryLog.vue';
+import DataItemCard from './backup-sync/DataItemCard.vue';
+import WebDAVConfigCollapsible from './backup-sync/WebDAVConfigCollapsible.vue';
+import BackupPasswordSection from './backup-sync/BackupPasswordSection.vue';
+import SyncHistoryLog from './backup-sync/SyncHistoryLog.vue';
 import ReloadBanner from '@/components/common/ReloadBanner.vue';
 
 interface Props {

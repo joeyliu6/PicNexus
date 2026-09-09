@@ -229,11 +229,11 @@
 
 ## 范围外线索（未验证，不定性，仅登记）
 
-- `src/components/views/linkcheck/rescue/RescueBrokenGroups.vue:69` 的
+- `src/components/views/link-check/rescue/RescueBrokenGroups.vue:69` 的
   `catch (err) { toast.error(errorMsg, String(err)) }` 是 P0-2 的同类写法（无 `Error` 判别的裸 `String(err)`）。
   该文件属 md-rescue / link-check 模块，本次未追其是否包裹 invoke 调用。
-- `src/App.vue`、`src/components/settings/backup/BackupPasswordSection.vue:167`、
-  `src/composables/batchMigrate/migrateCore.ts`、`src/composables/history/useMirrorFallback.ts`、
+- `src/App.vue`、`src/components/settings/backup-sync/BackupPasswordSection.vue:167`、
+  `src/composables/batch-migrate/migrateCore.ts`、`src/composables/history/useMirrorFallback.ts`、
   `src/composables/link-check/useLinkCheck.ts`、`src/security/crypto.ts` 六个文件同时满足
   「含 `invoke(` 」且「用 `String(error)` 兜底」且「未 import `getErrorMessage`」。
   是否真的会拿到 AppError 对象需逐个追调用点，本次未追。

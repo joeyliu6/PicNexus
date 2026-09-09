@@ -3,8 +3,8 @@ import { nextTick } from 'vue';
 import { useBatchMigrateManager } from '@/composables/useBatchMigrate';
 import { historyDB } from '@/services/database';
 import { configStore } from '@/store/instances';
-import { processBatch } from '@/composables/batchMigrate/migrateCore';
-import { preloadAllPending, type PreloadedItem } from '@/composables/batchMigrate/preloadPending';
+import { processBatch } from '@/composables/batch-migrate/migrateCore';
+import { preloadAllPending, type PreloadedItem } from '@/composables/batch-migrate/preloadPending';
 import type { HistoryItem, UserConfig } from '@/config/types';
 import type { MigrateItemStatus } from '@/types/batchMigrate';
 
@@ -27,12 +27,12 @@ vi.mock('@/core/MultiServiceUploader', () => ({
   })),
 }));
 
-vi.mock('@/composables/batchMigrate/migrateCore', () => ({
+vi.mock('@/composables/batch-migrate/migrateCore', () => ({
   processBatch: mocks.processBatch,
   migrateOneItem: mocks.migrateOneItem,
 }));
 
-vi.mock('@/composables/batchMigrate/preloadPending', () => ({
+vi.mock('@/composables/batch-migrate/preloadPending', () => ({
   preloadAllPending: mocks.preloadAllPending,
 }));
 

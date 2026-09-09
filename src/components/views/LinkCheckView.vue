@@ -6,9 +6,9 @@ import { useLinkCheckBulkActions } from '@/composables/link-check/useLinkCheckBu
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { useToast } from '@/composables/useToast';
 import type { LinkCheckRow, StatusFilter } from '@/types/linkCheck';
-import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';
-import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
-import MdRescueInline from './linkcheck/MdRescueInline.vue';
+import BatchMigratePanel from './link-check/BatchMigratePanel.vue';
+import HistoryCheckPanel from './link-check/HistoryCheckPanel.vue';
+import MdRescueInline from './link-check/MdRescueInline.vue';
 import { exportTextFile } from '@/utils/userFiles';
 
 const toast = useToast();

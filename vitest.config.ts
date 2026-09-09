@@ -30,7 +30,7 @@ export default defineConfig({
         'src/components/views/HistoryView.vue',
         'src/components/views/history/**',
         'src/components/views/LinkCheckView.vue',
-        'src/components/views/linkcheck/**',
+        'src/components/views/link-check/**',
       ],
       exclude: [
         'tests/unit/**',
@@ -60,7 +60,7 @@ export default defineConfig({
           branches: 75,
           statements: 90,
         },
-        'src/components/settings/{BackupSyncPanel.vue,backup/**}': {
+        'src/components/settings/{BackupSyncPanel.vue,backup-sync/**}': {
           lines: 90,
           functions: 70,
           branches: 70,
@@ -72,7 +72,7 @@ export default defineConfig({
           branches: 80,
           statements: 80,
         },
-        'src/components/{views/LinkCheckView.vue,views/linkcheck/**}': {
+        'src/components/{views/LinkCheckView.vue,views/link-check/**}': {
           lines: 80,
           functions: 55,
           branches: 75,
