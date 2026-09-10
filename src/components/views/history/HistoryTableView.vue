@@ -426,57 +426,5 @@ function handleCheckboxToggle(id: string) {
 }
 </style>
 
-<!-- 全局样式（悬浮预览层） -->
-<style>
-.global-thumb-hover-preview {
-  position: fixed;
-  z-index: var(--z-modal);
-  pointer-events: none;
-
-  --preview-close-duration: 180ms;
-}
-
-.thumb-preview-enter-active {
-  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
-}
-
-.thumb-preview-enter-from {
-  opacity: 0;
-  transform: scale(0.92);
-}
-
-.thumb-preview-leave-active {
-  transition: opacity var(--duration-medium) var(--ease-standard);
-  will-change: opacity;
-}
-
-.thumb-preview-leave-to {
-  opacity: 0;
-}
-
-.global-thumb-hover-preview img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  box-sizing: border-box;
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 32px var(--photo-shadow-light);
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  object-fit: contain;
-  transition:
-    opacity var(--preview-close-duration) var(--ease-standard),
-    transform var(--preview-close-duration) var(--ease-standard);
-  transition-delay: 0ms;
-  transform: translateZ(0) scale(1);
-}
-
-.global-thumb-hover-preview.is-closing.thumb-preview-leave-active {
-  transition: none;
-}
-
-.global-thumb-hover-preview.is-closing img {
-  opacity: 0;
-  transition: none;
-}
-</style>
+<!-- 悬浮预览层样式（外部文件；Teleport 到 body，故不加 scoped） -->
+<style src="./thumb-hover-preview.css"></style>
