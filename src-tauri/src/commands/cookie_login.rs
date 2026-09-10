@@ -1,7 +1,7 @@
 // src-tauri/src/commands/cookie_login.rs
 // Cookie 登录链路：开登录窗口 → 监听导航/轮询 → 提取并校验 Cookie → 回传主窗口
 //
-// 这一族对外只暴露 5 个命令，私有辅助函数全部只被它们调用，所以整体收在一个模块里。
+// 这一族对外只暴露 3 个命令，私有辅助函数全部只被它们调用，所以整体收在一个模块里。
 // 注意其中 6 个（`CookieMonitorCtx` 及其配套的 arm/capture/poll/extract 一组）带
 // `#[cfg(target_os = "windows")]`——它们靠 WebView2 的 CoreWebView2 接口拿 Cookie，
 // **没有非 Windows 实现**；非 Windows 平台由调用点的 `#[cfg(not(target_os = "windows"))]`
@@ -173,8 +173,10 @@ pub async fn show_login_window(app: tauri::AppHandle) -> Result<(), AppError> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn save_cookie_from_login(
+// 不再是 Tauri 命令：唯一的前端调用点在 login-webview.ts 的 handleGetCookie，
+// 而那段代码作为 prop 传给 LoginPanel 后从未被引用（死代码），2026-09-10 已删除。
+// 现在只剩 capture_and_save_once 这一个 Rust 内部调用者，没有理由继续占着 IPC 接口面。
+pub(crate) async fn save_cookie_from_login(
     cookie: String,
     service_id: Option<String>,
     required_fields: Option<Vec<String>>,
@@ -729,82 +731,6 @@ pub async fn setup_cookie_event_monitoring(
     }
 
     Ok(())
-}
-
-#[tauri::command]
-pub async fn get_request_header_cookie(
-    app: tauri::AppHandle,
-    service_id: Option<String>,
-    target_domain: Option<String>,
-    target_domains: Option<Vec<String>>,
-    required_fields: Option<Vec<String>>,
-    any_of_fields: Option<Vec<String>>,
-) -> Result<String, AppError> {
-    let service = service_id.unwrap_or_else(|| "weibo".to_string());
-
-    if !is_safe_service_id(&service) {
-        return Err(AppError::validation(format!(
-            "无效的服务 ID: {}，只允许字母、数字、下划线和连字符",
-            service
-        )));
-    }
-
-    // 不再默认回退到微博域名，使用前端传入的配置
-    let domains: Vec<String> = target_domains
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| target_domain.map(|d| vec![d]).unwrap_or_default());
-    let fields = required_fields.unwrap_or_default();
-    let any_fields = any_of_fields.unwrap_or_default();
-
-    for field in fields.iter().chain(any_fields.iter()) {
-        if !is_safe_field_name(field) {
-            return Err(AppError::validation(format!(
-                "无效的字段名: {}，只允许字母、数字、下划线和连字符",
-                field
-            )));
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let Some(login_webview) = app.get_webview("login-content") else {
-            return Err(AppError::external("登录窗口未打开，请先点击「开始登录」"));
-        };
-
-        let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "Cookie获取")
-        {
-            Some(c) => c,
-            None => return Err(AppError::auth("未检测到 Cookie，请确认已完成登录后再试")),
-        };
-
-        if validate_cookie_fields(&service, &merged_cookie, &fields, &any_fields) {
-            log::debug!(
-                "[Cookie获取] {} 请求头Cookie长度: {}",
-                service,
-                merged_cookie.len()
-            );
-            Ok(merged_cookie)
-        } else {
-            Err(AppError::auth(format!(
-                "提取到的 Cookie 缺少关键字段（{:?}{}），请确认已成功登录{}",
-                fields,
-                if any_fields.is_empty() {
-                    String::new()
-                } else {
-                    format!(" 或 {:?} 之一", any_fields)
-                },
-                service
-            )))
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = (app, service, domains, fields, any_fields);
-        Err(AppError::external(
-            "当前操作系统暂不支持请求头 Cookie 提取，请使用页面内的手动复制方式",
-        ))
-    }
 }
 
 /// 一次 Cookie 监控会话的共享上下文。

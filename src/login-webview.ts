@@ -101,56 +101,6 @@ async function handleStartLogin() {
 }
 
 /**
- * 手动获取 Cookie（备用方案）
- */
-async function handleGetCookie() {
-  try {
-    log.info('手动获取 Cookie', { serviceId });
-
-    let cookie: string | null = null;
-
-    // 尝试从请求头获取（Windows 专用）
-    try {
-      cookie = await invoke<string>('get_request_header_cookie', {
-        serviceId,
-        targetDomains: provider.domains,
-        requiredFields: provider.cookieValidation?.requiredFields || [],
-        anyOfFields: provider.cookieValidation?.anyOfFields || []
-      });
-    } catch (err) {
-      log.warn('请求头 Cookie 获取失败', err);
-    }
-
-    // 备用：从 document.cookie 获取
-    if (!cookie || cookie.trim().length === 0) {
-      cookie = document.cookie.trim();
-      log.info('使用 document.cookie 兜底');
-    }
-
-    if (!cookie || cookie.trim().length === 0) {
-      alert(`未检测到 Cookie，请确保已登录 ${provider.name}`);
-      return;
-    }
-
-    // 保存 Cookie
-    await invoke('save_cookie_from_login', {
-      cookie: cookie.trim(),
-      serviceId,
-      requiredFields: provider.cookieValidation?.requiredFields || [],
-      anyOfFields: provider.cookieValidation?.anyOfFields || []
-    });
-
-    log.info('Cookie 保存成功', { serviceId });
-
-    // 2秒后关闭窗口
-    setTimeout(() => appWindow.close(), 2000);
-  } catch (error) {
-    log.error('获取 Cookie 失败', error);
-    alert(`获取 Cookie 失败\n${error}\n请确认已登录后重试`);
-  }
-}
-
-/**
  * 关闭窗口
  */
 async function handleClose() {
@@ -172,7 +122,6 @@ async function bootstrap() {
   const app = createApp(LoginPanel, {
     provider,
     onStartLogin: handleStartLogin,
-    onGetCookie: handleGetCookie,
     onClose: handleClose
   });
 

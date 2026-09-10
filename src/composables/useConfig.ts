@@ -457,7 +457,12 @@ export function useConfigManager() {
           log.warn(`${serviceName} 自动获取超时`);
           toast.showConfig('warn', {
             summary: '自动获取超时',
-            detail: `${serviceName} Cookie 自动获取超时，请手动点击「获取 Cookie」按钮`,
+            // 两条后路都必须是真实存在的入口：卡片上的「自动获取」按钮，和同一张卡片的
+            // Cookie 手动粘贴框。原文案指向「获取 Cookie」按钮——那个按钮全项目都不存在
+            // （LoginPanel 只有「开始登录」「取消」），而且超时这一刻登录窗口早已被第三方
+            // 网站接管，PicNexus 自己的按钮一个都不在。
+            detail: `${serviceName}未在 60 秒内完成登录，已停止自动抓取
+可重新点击「自动获取」重试，或把 Cookie 手动粘贴到卡片上的输入框`,
             life: 8000
           });
         });

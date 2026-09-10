@@ -105,9 +105,7 @@ src-tauri/
 |------|------|
 | `open_login_window` | 打开双 Webview 登录窗口（标题栏 + 内容区） |
 | `show_login_window` | 前端挂载完成后显示窗口 |
-| `save_cookie_from_login` | 校验后把 Cookie 发回主窗口并关闭登录窗口 |
 | `setup_cookie_event_monitoring` | **仅 Windows**：WebView2 `NavigationCompleted` 事件驱动抓取 |
-| `get_request_header_cookie` | **仅 Windows**：手动获取路径，从请求头读 Cookie |
 
 平台边界：`CookieMonitorCtx` 及其配套的 arm / capture / poll / extract 一组函数带
 `#[cfg(target_os = "windows")]`，**没有非 Windows 实现**——它们直接调 WebView2 的

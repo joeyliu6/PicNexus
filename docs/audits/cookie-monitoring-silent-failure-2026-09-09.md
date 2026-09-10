@@ -125,8 +125,17 @@ release 构建里 `forced_failure_stage()` 恒返回 `None`，两处判断被常
 
 ## 六、真机验收清单
 
+> ⚠️ 不需要设 `RUST_LOG`。日志级别在 `main.rs` 里是写死的
+> （`.level_for("picnexus", LevelFilter::Debug)`），`tauri_plugin_log` 也不读这个环境变量。
+> 本文档 2026-09-09 版曾写过一句 `$env:RUST_LOG='picnexus=debug'`，那是无效动作。
+> debug 日志本来就是开的，且同时写 stdout 与日志目录——直接重定向 stdout 最省事。
+
+**跑法**（`PICNEXUS_COOKIE_FORCE_FALLBACK` 只在 debug 构建生效）：
+
 ```powershell
-$env:RUST_LOG = 'picnexus=debug'
+npm run dev                      # debug 构建走 devUrl，vite 必须先起在 1420
+$env:PICNEXUS_COOKIE_FORCE_FALLBACK = 'add_handler'
+.\src-tauri	arget\debug\picnexus.exe > roundA.log 2>&1
 ```
 
 | # | 操作 | 期望 | 验的是 |
@@ -147,3 +156,35 @@ $env:RUST_LOG = 'picnexus=debug'
   主路径一断，三层一起没。兜底的触发点必须比它要保护的东西更靠外。
 - **"没有执行证据"本身就是缺陷信号**。这条路径能潜伏这么久，就是因为它既进不了单测、
   真机也走不到。发现这种函数体时，优先补一个人为触发口，而不是"看着像对的就放过"。
+
+---
+
+## 八、2026-09-10 真机验收：六步全过
+
+三轮跑完，每步都有日志证据。
+
+| # | 验的是 | 结果 | 证据 |
+| --- | --- | --- | --- |
+| 1 | 主路径没坏 | ✅ | `✓ NavigationCompleted 事件注册成功` → `（触发源: 首次导航）` → `Cookie 验证通过！保存中` → `配置保存成功`（真登录 nowcoder） |
+| 2 | `armed` 幂等 | ✅ | 五次会话，`启动 60000ms 超时计时器` 每次**恰好 1 条**；`已被其他线程完成` **0 次**（两条线程没抢重） |
+| 3 | 降级点 B（handler 注册失败） | ✅ | `强制跳过 NavigationCompleted 注册` → `事件通道不可用，降级到轮询模式` → `（触发源: handler 注册失败）` → `[轮询兜底]` 每 2 秒一轮，真抓到 11 个字段 |
+| 4 | **降级路径下超时兜底还在** | ✅ | arm 后**精确 60 秒**发 `⏰ 超时（60000ms）`，主窗口弹出 Toast。这是原缺陷链丢掉的最后一环 |
+| 5 | 降级点 A（CoreWebView2 失败） | ✅ | `强制 CoreWebView2 失败` → `（触发源: 强制降级(CoreWebView2)）`，其余同步骤 3/4，两次会话各一次 |
+| 6 | 关窗清理，无线程泄漏 | ✅ | 关窗当秒同时出现 `取消超时计时` 与 `[轮询兜底] 登录窗口已关闭，轮询退出`，之后无日志、无幽灵 Toast |
+
+**看门狗在正常路径下全程沉默**——三轮里 `看门狗` 一条都没打印。这正是 `closure_ran` 判据要的效果：
+闭包跑过就交回给它自己的出口判断，掐表起点留给首次导航。若判据仍是 `armed`，它会在第 8 秒
+抢跑 arm，把 60 秒预算削掉 8 秒（详见第七节）。
+
+### 验收中另外挖到的两件事
+
+1. **超时提示指向一个不存在的按钮**。原文案写「请手动点击『获取 Cookie』按钮」，
+   但 `LoginPanel` 只有「开始登录」「取消」；而且超时那一刻登录窗口早被第三方网站接管，
+   PicNexus 自己的按钮一个都不在。已按通知规范（detail = 原因 + 换行 + 该怎么办）改写为
+   两条真实存在的后路：重新点「自动获取」，或把 Cookie 粘贴到卡片上的输入框。
+2. **顺藤摸出三段死代码**。文案指向的那个按钮，源头是 `login-webview.ts` 的
+   `handleGetCookie`——它作为 prop 传给 `LoginPanel` 却**从未被引用**。删掉它之后
+   `get_request_header_cookie` 变成全仓零调用，`save_cookie_from_login` 的 IPC 暴露也失去意义。
+   三者一并收掉（后者降为 `pub(crate)` 内部函数，Rust 侧仍在用）。
+   这与本次修复删掉 `start_cookie_monitoring` 是同一个模式：**没有执行证据的代码，
+   往往连着一条没人走过的路。**
