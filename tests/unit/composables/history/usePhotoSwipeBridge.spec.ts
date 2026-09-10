@@ -416,6 +416,48 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     harness.wrapper.unmount();
   });
 
+  it('resolves the same element, rect and crop semantics on open and on close', async () => {
+    // 这是「大图收回时跳一下」的判据：FLIP 起点和终点必须是同一个矩形。
+    // 开场经 dataSource[0].element 量一次，关场经 thumbEl filter 再量一次，
+    // 两次结果只要有任何一项对不上，屏幕上就会看到位移或缩放的突变。
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb-box';
+    thumb.dataset.lightboxId = 'item-1';
+    mockRect(thumb, { width: 36, height: 36, right: 36, bottom: 36 });
+    document.body.appendChild(thumb);
+
+    const preview = document.createElement('div');
+    preview.className = 'global-thumb-hover-preview';
+    preview.dataset.lightboxId = 'item-1';
+    mockRect(preview, { left: 44, top: 10, width: 300, height: 200, right: 344, bottom: 210 });
+    document.body.appendChild(preview);
+
+    // 鼠标仍停在源缩略图上 → 收回目标就是那张悬浮预览卡片
+    const harness = mountHarness({ resolveCloseTargetMode: () => 'preview' });
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    const slide = (pswp.options.dataSource as Array<Record<string, unknown>>)[0];
+    const openEl = slide.element as HTMLElement;
+    const openRect = openEl.getBoundingClientRect();
+    expect(openEl).toBe(preview);
+    expect(slide.thumbCropped).toBe(false);
+
+    pswp.emit('close', {});
+    const closeData: { thumbCropped?: boolean } = { thumbCropped: false };
+    const closeEl = pswp.filters.get('thumbEl')![0](undefined, closeData, 0) as HTMLElement;
+
+    expect(closeEl).toBe(openEl);
+    expect(closeEl.getBoundingClientRect()).toEqual(openRect);
+    // contain → cover 的语义翻转会让 PhotoSwipe 按裁剪重算 innerRect，
+    // 长宽比悬殊的图会在收回末端明显偏移
+    expect(closeData.thumbCropped).toBe(false);
+
+    harness.wrapper.unmount();
+  });
+
   it('marks switched-in content and placeholder elements after the first activation', async () => {
     const harness = mountHarness();
     harness.visible.value = true;

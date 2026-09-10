@@ -243,6 +243,24 @@
   }
 }
 
+/*
+ * 关闭时让这层跟着大图一起淡走。
+ *
+ * 不加这条的话，PhotoSwipe 在 zoom 模式下只淡出它自己的 .pswp__bg，根元素
+ * opacity 全程是 1 —— 整块全屏模糊背景 + 暗角在收回动画期间纹丝不动，直到
+ * 根元素被 element.remove() 摘掉那一帧才凭空消失。图片优雅地收回去了，
+ * 紧跟着幕布被一把扯走，这是整个关闭过程里最扎眼的一处。
+ *
+ * ⚠️ animation: none 不是可选的：上面的 pswp-blur-bg-open 带 `both`，
+ * 会把 to { opacity: 1 } 作为填充值一直钉着，而 animation 优先级高于
+ * transition —— 不解除它，下面两行完全不起作用。
+ */
+.pswp--picnexus.is-pswp-closing .pswp-blur-bg {
+  animation: none;
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-accelerate);
+}
+
 .pswp--picnexus .pswp-blur-bg img {
   width: 100%;
   height: 100%;

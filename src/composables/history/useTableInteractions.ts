@@ -22,11 +22,15 @@ import { HIDE_ANIMATION_DURATION, SHOW_ANIMATION_DURATION } from './usePhotoSwip
 import type { PhotoSwipeCloseTargetMode } from './usePhotoSwipeBridge';
 import { useLightboxPreloader } from '@/composables/image/useLightboxPreloader';
 import { warmImages } from '@/utils/imagePreload';
+import {
+  PREVIEW_MARGIN,
+  buildPreviewStyle,
+  computePreviewPosition,
+  computePreviewSize,
+} from './thumbPreviewGeometry';
 
 const logger = createLogger('TableInteractions');
 
-const PREVIEW_MAX_SIZE = 300;
-const PREVIEW_MARGIN = 8;
 /** 灯箱打开动画时长（ms），留出 100ms 缓冲覆盖 PhotoSwipe show 动画尾帧 */
 const OPENING_DURATION = SHOW_ANIMATION_DURATION + 100;
 /**
@@ -51,10 +55,8 @@ interface UseTableInteractionsOptions {
   servicePopoverRef: Ref<InstanceType<typeof PopoverType> | null>;
 }
 
-interface PreviewSize {
-  width: number;
-  height: number;
-}
+/** 悬浮预览在灯箱关闭时的退场方式，null 表示不处于关闭流程中 */
+type PreviewCloseMode = 'preview' | 'thumb' | null;
 
 interface TargetVisibilityResult {
   found: boolean;
@@ -107,6 +109,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     keepHoverPreviewAfterClose = false;
     stopHoverHandoffTracking();
     hoverPreview.value.closing = false;
+    hoverPreview.value.closeMode = null;
     hoverPreview.value.visible = false;
   }
 
@@ -114,6 +117,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     keepHoverPreviewAfterClose = false;
     stopHoverHandoffTracking();
     hoverPreview.value.closing = true;
+    // 走到这里说明鼠标已离开源缩略图，卡片不再是大图的落点 → 渐隐而非保持可见
+    hoverPreview.value.closeMode = 'thumb';
     if (!isLightboxClosing.value || !closingTimer) clearHoverPreview();
   }
 
@@ -153,10 +158,14 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   function resolveLightboxCloseTargetMode(): PhotoSwipeCloseTargetMode {
     const sourceId = hoverPreview.value.itemId;
-    if (!sourceId || !hoverPreview.value.url) return 'fade';
+    if (!sourceId || !hoverPreview.value.url) {
+      hoverPreview.value.closeMode = null;
+      return 'fade';
+    }
     hoverPreview.value.closing = true;
-    if (isMouseOnSourceThumb(sourceId)) return 'preview';
-    return 'thumb';
+    const mode = isMouseOnSourceThumb(sourceId) ? 'preview' : 'thumb';
+    hoverPreview.value.closeMode = mode;
+    return mode;
   }
 
   const lightboxIndex = computed(() => {
@@ -178,6 +187,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     keepHoverPreviewAfterClose = false;
     stopHoverHandoffTracking();
     hoverPreview.value.closing = false;
+    hoverPreview.value.closeMode = null;
 
     // 鼠标追踪仅在灯箱会话期间挂载，用完即拆，避免全生命周期的 60Hz 监听
     if (event) { lastMouseX = event.clientX; lastMouseY = event.clientY; }
@@ -361,51 +371,6 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     }
   }
 
-  function computePreviewSize(item: HistoryItem): PreviewSize {
-    const width = Number(item.width);
-    const height = Number(item.height);
-
-    if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
-      const scale = Math.min(1, PREVIEW_MAX_SIZE / width, PREVIEW_MAX_SIZE / height);
-      return {
-        width: width * scale,
-        height: height * scale,
-      };
-    }
-
-    const aspectRatio = Number(item.aspectRatio);
-    if (Number.isFinite(aspectRatio) && aspectRatio > 0) {
-      if (aspectRatio >= 1) return { width: PREVIEW_MAX_SIZE, height: PREVIEW_MAX_SIZE / aspectRatio };
-      return { width: PREVIEW_MAX_SIZE * aspectRatio, height: PREVIEW_MAX_SIZE };
-    }
-
-    return { width: PREVIEW_MAX_SIZE, height: PREVIEW_MAX_SIZE };
-  }
-
-  /** 根据目标行 rect 计算预览的 top/left（避让视口边界） */
-  function computePreviewPosition(anchor: DOMRect, previewSize: PreviewSize): { top: number; left: number } {
-    let top = anchor.top + anchor.height / 2 - previewSize.height / 2;
-    let left = anchor.right + PREVIEW_MARGIN;
-    if (top < PREVIEW_MARGIN) top = PREVIEW_MARGIN;
-    if (top + previewSize.height > window.innerHeight - PREVIEW_MARGIN) {
-      top = window.innerHeight - previewSize.height - PREVIEW_MARGIN;
-    }
-    if (left + previewSize.width > window.innerWidth - PREVIEW_MARGIN) {
-      left = anchor.left - previewSize.width - PREVIEW_MARGIN;
-    }
-    if (left < PREVIEW_MARGIN) left = PREVIEW_MARGIN;
-    return { top, left };
-  }
-
-  function buildPreviewStyle(position: { top: number; left: number }, previewSize: PreviewSize): Record<string, string> {
-    return {
-      top: `${position.top}px`,
-      left: `${position.left}px`,
-      width: `${previewSize.width}px`,
-      height: `${previewSize.height}px`,
-    };
-  }
-
   /**
    * 把悬浮预览同步到指定图：查该图对应行的 wrapper rect，重算预览位置和内容
    * 找不到行或无 medium url 时收起预览（关闭动画走 fade 兜底）
@@ -416,6 +381,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (!wrapper || !url) {
       hoverPreview.value.visible = false;
       hoverPreview.value.closing = false;
+      hoverPreview.value.closeMode = null;
       return;
     }
     const previewSize = computePreviewSize(item);
@@ -423,6 +389,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     hoverPreview.value = {
       visible: true,
       closing: false,
+      closeMode: null,
       url,
       alt: item.localFileName,
       itemId: item.id,
@@ -504,8 +471,16 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   }
 
   // ---- 悬浮预览 ----
+  //
+  // closeMode 决定关闭灯箱时这张预览卡片怎么退场，两种情况的正确做法是相反的：
+  // - 'preview'：鼠标还停在源缩略图上，大图会 FLIP 收缩回这张卡片。卡片必须
+  //   **全程保持可见** —— PhotoSwipe 在 hide 动画结束那一帧直接 element.remove()
+  //   摘走大图（photoswipe.esm.js:6809），没有淡出尾巴。下面若是透明的，就会
+  //   露出一段空白再补淡入，正是用户看到的"跳一下"。
+  // - 'thumb'：鼠标已移开，卡片本来就该消失，与大图同步渐隐即可。
   const hoverPreview = ref({
     visible: false, closing: false, url: '', alt: '', itemId: '',
+    closeMode: null as PreviewCloseMode,
     style: {} as Record<string, string>,
   });
 
@@ -520,6 +495,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     hoverPreview.value = {
       visible: true,
       closing: false,
+      closeMode: null,
       url,
       alt: item.localFileName,
       itemId: item.id,
@@ -549,7 +525,13 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       const sourceId = hoverPreview.value.itemId;
       const mouseIsOnSourceThumb = sourceId ? isMouseOnSourceThumb(sourceId) : false;
       keepHoverPreviewAfterClose = mouseIsOnSourceThumb;
-      if (hoverPreview.value.visible) hoverPreview.value.closing = true;
+      if (hoverPreview.value.visible) {
+        hoverPreview.value.closing = true;
+        // 两条关闭路径的先后顺序是反的：按 Esc 时 PhotoSwipe 的 close 事件先派发，
+        // resolveLightboxCloseTargetMode 已经把 closeMode 定好；而删除按钮直接改
+        // lightboxVisible，本 watch 反而跑在前面。这里用同一套判据补上，两条路才一致。
+        hoverPreview.value.closeMode = mouseIsOnSourceThumb ? 'preview' : 'thumb';
+      }
 
       document.removeEventListener('mousemove', trackMouse);
 
@@ -562,7 +544,10 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
         if (!keepHoverPreviewAfterClose) {
           clearHoverPreview();
         } else {
+          // 卡片留在屏幕上继续当 hover 预览用；它在整个收回过程中始终可见，
+          // 这里只是摘掉关闭态标记，不再需要"解锁后补一次淡入"
           hoverPreview.value.closing = false;
+          hoverPreview.value.closeMode = null;
         }
         isLightboxClosing.value = false;
         closingTimer = null;

@@ -226,7 +226,7 @@ describe('useTableInteractions lightbox close preview motion', () => {
     expect(harness.api().hoverPreview.value.visible).toBe(false);
   });
 
-  it('keeps the preview DOM for close bounds but hides it when the mouse is still over the source thumb', async () => {
+  it('keeps the preview fully visible so the shrinking image lands on it seamlessly', async () => {
     const item = makeItem();
     const source = appendSourceThumb(item.id);
     const harness = mountHarness(item);
@@ -236,16 +236,21 @@ describe('useTableInteractions lightbox close preview motion', () => {
     await nextTick();
     expect(harness.api().resolveLightboxCloseTargetMode()).toBe('preview');
     expect(harness.api().hoverPreview.value.closing).toBe(true);
+    // 'preview' 模式下卡片是大图的落点，CSS 据此让它全程保持可见 ——
+    // PhotoSwipe 摘走大图时不留淡出尾巴，底下透明就会闪一下空白
+    expect(harness.api().hoverPreview.value.closeMode).toBe('preview');
 
     harness.api().lightboxVisible.value = false;
     await nextTick();
 
     expect(harness.api().hoverPreview.value.closing).toBe(true);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
+    expect(harness.api().hoverPreview.value.closeMode).toBe('preview');
 
     await vi.advanceTimersByTimeAsync(300);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
     expect(harness.api().hoverPreview.value.closing).toBe(false);
+    expect(harness.api().hoverPreview.value.closeMode).toBeNull();
 
     harness.api().handlePreviewLeave();
     expect(harness.api().hoverPreview.value.visible).toBe(false);
@@ -270,9 +275,32 @@ describe('useTableInteractions lightbox close preview motion', () => {
 
     expect(harness.api().hoverPreview.value.visible).toBe(true);
     expect(harness.api().hoverPreview.value.closing).toBe(true);
+    // 鼠标离开后卡片不再是落点，改成与大图同步渐隐
+    expect(harness.api().hoverPreview.value.closeMode).toBe('thumb');
 
     await vi.advanceTimersByTimeAsync(300);
     expect(harness.api().hoverPreview.value.visible).toBe(false);
+    expect(harness.api().hoverPreview.value.closeMode).toBeNull();
+  });
+
+  it('resolves the preview close mode even when nothing calls resolveLightboxCloseTargetMode', async () => {
+    // 两条关闭路径的先后顺序是反的：按 Esc 时 PhotoSwipe 先派发 close，
+    // resolveLightboxCloseTargetMode 抢先定好 closeMode；而删除按钮直接改
+    // lightboxVisible，那个函数根本不会被调用。这里守的是后一条路。
+    const item = makeItem();
+    const source = appendSourceThumb(item.id);
+    const harness = mountHarness(item);
+
+    harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+    harness.api().openLightbox(item, { clientX: 12, clientY: 12 } as MouseEvent);
+    await nextTick();
+    expect(harness.api().hoverPreview.value.closeMode).toBeNull();
+
+    harness.api().lightboxVisible.value = false;
+    await nextTick();
+
+    expect(harness.api().hoverPreview.value.closing).toBe(true);
+    expect(harness.api().hoverPreview.value.closeMode).toBe('preview');
   });
 });
 

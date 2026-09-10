@@ -382,7 +382,11 @@ function handleCheckboxToggle(id: string) {
         <div
           v-if="hoverPreview.visible && hoverPreview.url"
           class="global-thumb-hover-preview"
-          :class="{ 'is-closing': hoverPreview.closing }"
+          :class="{
+            'is-closing': hoverPreview.closing,
+            'is-closing-to-preview': hoverPreview.closeMode === 'preview',
+            'is-closing-to-thumb': hoverPreview.closeMode === 'thumb',
+          }"
           :data-lightbox-id="hoverPreview.itemId"
           :style="hoverPreview.style"
         >

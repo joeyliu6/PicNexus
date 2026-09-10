@@ -406,6 +406,21 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const thisInstance = pswp;
     pswp.on('close', () => {
       if (pswp !== thisInstance) return;
+
+      /*
+       * 标记关闭态，让自绘的模糊背景层 + 暗角跟着一起淡出。
+       *
+       * 为什么需要：zoom 模式下 PhotoSwipe 只淡出它自己的 .pswp__bg，
+       * 根元素的 opacity 全程是 1（opener 的 _animateRootOpacity 为 false）。
+       * 而 .pswp-blur-bg 是我们 Teleport 进根元素的子节点，没人管它 ——
+       * 于是整块全屏模糊背景在收回动画期间纹丝不动，直到根元素被
+       * element.remove() 整个摘掉，观感是"幕布被一把扯走"而不是拉下来。
+       *
+       * 时机安全：close 事件是同步派发的，此刻根元素还在 DOM 里，
+       * 后面才开始跑 hide 动画，动画结束才 remove。
+       */
+      thisInstance.element?.classList.add('is-pswp-closing');
+
       closeTargetMode = options.resolveCloseTargetMode?.() ?? 'auto';
       pswpEl.value = null;
       blurSrc.value = null;

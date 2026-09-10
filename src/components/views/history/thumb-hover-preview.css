@@ -1,20 +1,38 @@
 /* thumb-hover-preview.css — 表格视图缩略图的悬浮预览层，从 HistoryTableView.vue 提取 */
 /* 该层 Teleport 到 body，选择器打不到组件的 data-v 作用域，因此引入时不能加 scoped */
+
+/*
+ * ⚠️ 本元素同时是 PhotoSwipe 开关动画（FLIP）的起止矩形来源。
+ * usePhotoSwipeBridge 的 findThumbElement 靠 [data-lightbox-id] 找到它，
+ * 然后对**根元素**调 getBoundingClientRect()（photoswipe.esm.js:4377 的 thumbEl filter）。
+ *
+ * 由此得出一条硬约束：根元素上不能有任何 transform。
+ * 一旦有，进场动画播到一半时点击，量到的就是"缩小中"的框；而关闭时它已静止，
+ * 量到的是满尺寸框 —— 起点和终点不是同一个矩形，大图收回时就会跳一下。
+ * 所以缩放一律挂在内层 img 上（img 不带 data-lightbox-id，不参与测量）。
+ */
 .global-thumb-hover-preview {
   position: fixed;
   z-index: var(--z-modal);
   pointer-events: none;
-
-  --preview-close-duration: 180ms;
 }
 
+/* 根元素只动 opacity —— 见上方关于 getBoundingClientRect 的说明 */
 .thumb-preview-enter-active {
-  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
+  transition: opacity var(--duration-normal) var(--ease-decelerate);
 }
 
 .thumb-preview-enter-from {
   opacity: 0;
-  transform: scale(0.92);
+}
+
+/* 缩放下沉到 img。必须与基础规则写成同结构（translateZ + scale）才能插值 */
+.thumb-preview-enter-active img {
+  transition: transform var(--duration-normal) var(--ease-decelerate);
+}
+
+.thumb-preview-enter-from img {
+  transform: translateZ(0) scale(var(--scale-pop));
 }
 
 .thumb-preview-leave-active {
@@ -37,9 +55,8 @@
   border: 1px solid var(--border-subtle);
   object-fit: contain;
   transition:
-    opacity var(--preview-close-duration) var(--ease-standard),
-    transform var(--preview-close-duration) var(--ease-standard);
-  transition-delay: 0ms;
+    opacity var(--duration-normal) var(--ease-standard),
+    transform var(--duration-normal) var(--ease-standard);
   transform: translateZ(0) scale(1);
 }
 
@@ -47,7 +64,22 @@
   transition: none;
 }
 
-.global-thumb-hover-preview.is-closing img {
-  opacity: 0;
+/*
+ * 关闭灯箱时这张卡片怎么退场，取决于它还是不是大图的落点 —— 两种情况做法相反。
+ *
+ * 鼠标仍停在源缩略图上：大图会 FLIP 收缩回这张卡片（同一个元素、同一个矩形、
+ * thumbCropped 同为 false）。卡片必须全程保持可见 —— PhotoSwipe 在 hide 动画
+ * 结束那一帧直接 element.remove() 摘走大图（photoswipe.esm.js:6809），不留淡出
+ * 尾巴。底下若是透明的，就会先露出一段空白、再补一次淡入，这正是用户看到的
+ * "跳一下"。保持可见后，摘走大图的那一帧下面已经是一张位置尺寸完全一致的图。
+ */
+.global-thumb-hover-preview.is-closing-to-preview img {
+  opacity: 1;
   transition: none;
+}
+
+/* 鼠标已移开：卡片本来就该消失，与大图同步渐隐，而不是瞬切透明后再补淡入 */
+.global-thumb-hover-preview.is-closing-to-thumb img {
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-accelerate);
 }
