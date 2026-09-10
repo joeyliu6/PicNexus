@@ -108,6 +108,9 @@
   background: var(--bg-input);
   display: inline-block;
   position: relative;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .thumb-skeleton {
@@ -126,6 +129,29 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: filter var(--duration-fast) var(--ease-standard);
+}
+
+/*
+ * 缩略图的 hover 反馈：主色描边 + 轻微提亮。
+ *
+ * ⚠️ 这里绝对不能用 transform。.thumb-box 是 data-lightbox-id 的宿主，
+ * 它的 getBoundingClientRect() 是灯箱开关动画（FLIP）起止矩形的唯一来源，
+ * usePhotoSwipeBridge 有四处读它（可见性过滤、面积比较、useZoom 阈值、thumbEl
+ * filter）。一放大，鼠标停着点开的那一刻量到的就是放大后的框，起止两端对不上。
+ * filter 和 box-shadow 都不参与 layout、不进 getBoundingClientRect，几何绝对干净。
+ *
+ * 触发器挂在 .thumb-preview-wrapper 而不是 .thumb-box：悬浮预览的
+ * mouseenter/mouseleave 就绑在 wrapper 上，两者的触发区域必须一致，
+ * 否则会出现"预览弹出来了但缩略图没反应"的错位。
+ */
+.thumb-preview-wrapper:hover .thumb-img {
+  filter: brightness(1.08);
+}
+
+.thumb-preview-wrapper:hover .thumb-box {
+  border-color: var(--primary-border);
+  box-shadow: 0 0 0 2px var(--primary-alpha-15);
 }
 
 .thumb-placeholder {
