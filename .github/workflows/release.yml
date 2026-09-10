@@ -134,12 +134,19 @@ jobs:
           choco install gsudo -y --no-progress
           icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
 
-          # gsudo 退出码透传自检，理由同 ci.yml：choco 发的 v2.6.1 早于上游两个
-          # 「退出码丢失」修复（gerardog/gsudo#410、#421）。透传坏掉时这一步会静默变绿，
+          # gsudo 成败转达自检，理由同 ci.yml：choco 发的 v2.6.1 早于上游两个
+          # 「退出码丢失」修复（gerardog/gsudo#410、#421）。转达坏掉时这一步会静默变绿，
           # 而发版路径上的静默变绿正是最不该有的东西。
+          # 断言的是「0 保持 0、非零保持非零」，不是数值原样透传——v2.6.1 实测会把非零
+          # 归一成 1，那不影响门禁。
+          gsudo --integrity Medium cmd /c "exit 0"
+          if ($LASTEXITCODE -ne 0) {
+            throw "gsudo 把成功报成了失败（$LASTEXITCODE）——本步骤会永远红。"
+          }
+
           gsudo --integrity Medium cmd /c "exit 42"
-          if ($LASTEXITCODE -ne 42) {
-            throw "gsudo 未透传子进程退出码（期望 42，实得 $LASTEXITCODE）——本步骤结果不可信。"
+          if ($LASTEXITCODE -eq 0) {
+            throw "gsudo 把子进程的失败吞成了成功——本步骤结果不可信。"
           }
 
           gsudo --integrity Medium npm run test:tauri:e2e

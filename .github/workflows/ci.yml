@@ -371,15 +371,26 @@ jobs:
           #    应用起不来会被误判成"降权也没用"。2026-08-21 那轮很可能就栽在这里。
           icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
 
-          # ⚠️ 自检：本步骤的成败**完全押在 gsudo 把子进程退出码原样透传上**——
-          # GitHub 的 pwsh 步骤拿最后一条命令的 $LASTEXITCODE 当结果。透传一旦坏掉，
-          # 这个已阻断的门禁就变成「测试挂了也放行」的假门禁，比没有门禁更危险。
+          # ⚠️ 自检：本步骤的成败**完全押在 gsudo 转达子进程成败上**——GitHub 的 pwsh
+          # 步骤拿最后一条命令的 $LASTEXITCODE 当结果。转达一旦坏掉，这个已阻断的门禁
+          # 就变成「测试挂了也放行」的假门禁，比没有门禁更危险。
           # 不能想当然：choco 当前发的是 gsudo v2.6.1（2025-10），而上游两个
-          # 「退出码丢失」修复（gerardog/gsudo#410、#421）2026-05 才合入，
-          # 尚未随任何 release 发布。所以每次都用已知退出码实测一遍，坏了当场喊。
+          # 「退出码丢失」修复（gerardog/gsudo#410、#421）2026-05 才合入、尚未随任何
+          # release 发布。所以每次都实测一遍，坏了当场喊。
+          #
+          # ⚠️ 断言的是「0 保持 0、非零保持非零」这两条**门禁真正依赖的性质**，
+          # 不是「退出码数值原样透传」。2026-09-10 run 34429720917 实测：v2.6.1 会把
+          # 非零退出码**归一成 1**（子进程 exit 42 → gsudo 返回 1），与上述两个未发布
+          # 修复的描述一致。数值丢了不影响门禁——只要失败仍是非零就够。当初把断言写成
+          # `-ne 42` 卡的是门禁并不关心的性质，白红了一次。
+          gsudo --integrity Medium cmd /c "exit 0"
+          if ($LASTEXITCODE -ne 0) {
+            throw "gsudo 把成功报成了失败（$LASTEXITCODE）——门禁会永远红，先修 gsudo 调用。"
+          }
+
           gsudo --integrity Medium cmd /c "exit 42"
-          if ($LASTEXITCODE -ne 42) {
-            throw "gsudo 未透传子进程退出码（期望 42，实得 $LASTEXITCODE）——本门禁不可信，先修这个再看 E2E 结果。"
+          if ($LASTEXITCODE -eq 0) {
+            throw "gsudo 把子进程的失败吞成了成功——本门禁不可信（会假绿），先修这个再看 E2E 结果。"
           }
 
           gsudo --integrity Medium npm run test:tauri:e2e

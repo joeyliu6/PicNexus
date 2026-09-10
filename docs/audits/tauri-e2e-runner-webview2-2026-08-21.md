@@ -196,3 +196,30 @@ WebKitWebDriver + xvfb（[Tauri 官方 CI 示例](https://v2.tauri.app/develop/t
 2026-09-09 已按根因关闭：**盯镜像这件事本身就是错的**，`actions/runner-images` 不追踪
 WebView2 版本（Evergreen 自更新），而且这是 by-design 硬化，不会因镜像更新消失。
 配套的云端盯梢例行任务应一并停掉。
+
+---
+
+## 2026-09-10 追记：gsudo 的退出码行为（实测）
+
+门禁转阻断的同时加了一条 gsudo 自检，**第一次运行就把自己红掉了**
+（[run 34429720917](https://github.com/joeyliu6/PicNexus/actions/runs/34429720917)）。
+记下来，因为结论和当时的直觉相反。
+
+自检原本断言 `gsudo --integrity Medium cmd /c "exit 42"` 必须返回 42，实得 1。
+
+两次运行合起来才是完整事实：
+
+| 子进程退出码 | gsudo 返回 | 运行 |
+| --- | --- | --- |
+| 0（E2E 全过） | **0** | [34428364202](https://github.com/joeyliu6/PicNexus/actions/runs/34428364202) |
+| 42 | **1** | [34429720917](https://github.com/joeyliu6/PicNexus/actions/runs/34429720917) |
+
+即 gsudo v2.6.1 **把非零退出码归一成 1**，与两个已合入但尚未随 release 发布的上游修复
+（[#410](https://github.com/gerardog/gsudo/issues/410)、[#421](https://github.com/gerardog/gsudo/issues/421)）
+描述一致。
+
+**但门禁并不需要数值。** 它依赖的只有两条：成功保持 0、失败保持非零——两条 gsudo 都满足。
+原断言卡的是门禁根本不关心的性质，属于自检写得比需求严，白红一次。已改为分别断言这两条
+（`exit 0` 必须回 0、`exit 42` 必须回非零），既保住"防假绿"的本意，又不会被数值归一误伤。
+
+教训与本次 cookie 缺陷同源：**判据要对准真正依赖的性质**，不是对准最容易写出来的那个断言。
