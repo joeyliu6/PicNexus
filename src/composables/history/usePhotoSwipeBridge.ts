@@ -198,6 +198,15 @@ function findThumbElement(itemId: string, mode: PhotoSwipeCloseTargetMode = 'aut
 }
 
 /**
+ * 开场动画是否仍在播。opener.isOpen 由 PhotoSwipe 在开场动画结束时置 true，
+ * 在此之前它拒绝一切关闭请求（见 closePswp 的说明）。
+ * 用可选链读内部状态：拿不到就当作"可以关"，退回原来的直接调用行为。
+ */
+function isOpeningAnimationRunning(instance: PhotoSwipe): boolean {
+  return (instance as unknown as { opener?: { isOpen?: boolean } }).opener?.isOpen === false;
+}
+
+/**
  * 按关闭模式解析 FLIP 的目标元素；返回 undefined 表示"没有合适落点"，
  * PhotoSwipe 会把 _thumbBounds 留空并自动降级为整体淡出。
  *
@@ -222,6 +231,8 @@ function resolveFlipElement(itemId: string, mode: PhotoSwipeCloseTargetMode): HT
 export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   let pswp: PhotoSwipe | null = null;
   let closeTargetMode: PhotoSwipeCloseTargetMode = 'auto';
+  /** 开场动画期间收到的关闭请求，等 openingAnimationEnd 再执行（见 closePswp） */
+  let pendingClose = false;
   /** PhotoSwipe 根元素，供 Vue Teleport 挂载自定义 UI */
   const pswpEl = ref<HTMLElement | null>(null);
   /** 模糊背景图源：全程优先取中图（LQIP），加载秒到；无中图时回落到原图 */
@@ -420,6 +431,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     currentLoadingId = id;
     currentLoadingSrc = src;
     closeTargetMode = 'auto';
+    pendingClose = false;
     // 重置方向：上一次会话残留的值不应影响新灯箱的首次切换判定
     switchDirection.value = null;
     // 模糊背景优先用中图（LQIP）；回落 FLIP 占位图；再回落原图
@@ -552,6 +564,13 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       }
     });
 
+    // 补执行开场期间被搁置的关闭请求（见 closePswp）
+    pswp.on('openingAnimationEnd', () => {
+      if (pswp !== thisInstance || !pendingClose) return;
+      pendingClose = false;
+      pswp.close();
+    });
+
     pswp.init();
     pswpEl.value = pswp.element ?? null;
 
@@ -561,11 +580,30 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
 
   // ── 关闭 PhotoSwipe ─────────────────────────
 
+  /**
+   * PhotoSwipe 在开场动画播完之前拒绝关闭，而且是**静默**拒绝：
+   * close() 开头 `if (!this.opener.isOpen || this.isDestroying) return;`，
+   * 而 opener.isOpen 要等开场动画结束才置 true。
+   *
+   * 后果不是"关不掉"这么轻：close 直接 return 意味着 'close' 事件永不派发，
+   * 我们的回调不跑，模块里的 pswp 变量一直非 null，于是 openPswp 开头的
+   * `if (pswp) return` 会**永久**挡住之后每一次打开，根元素也留在 DOM 里。
+   * destroy() 救不了 —— 它内部还是转调 close()，一样被吃掉。
+   *
+   * 触发路径是真实存在的：灯箱里的删除按钮直接把 lightboxVisible 置 false，
+   * 开场 300ms 内点得到。
+   *
+   * 解法是延后：记下意图，等 openingAnimationEnd 再执行。不硬闯还有个好处 ——
+   * PhotoSwipe 源码注释说浏览器不擅长中途反转 CSS transition。
+   */
   function closePswp() {
     window.removeEventListener('keydown', handleKeydown);
-    if (pswp) {
-      pswp.close();
+    if (!pswp) return;
+    if (isOpeningAnimationRunning(pswp)) {
+      pendingClose = true;
+      return;
     }
+    pswp.close();
   }
 
   // ── 更新当前幻灯片内容（导航时调用） ──────────
@@ -643,8 +681,19 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     clearLoadRetryTimer();
     loadRetryCounts.clear();
     if (pswp) {
-      pswp.destroy();
+      /*
+       * destroy() 也会被开场动画的守卫吃掉：它内部转调 close()，同样撞在
+       * `!opener.isOpen` 上（见 closePswp 的说明）。组件都要卸载了，没有
+       * "等动画播完"的余地，只能直接把根元素摘掉，否则它会留在 body 上，
+       * 挡住后面的交互。
+       */
+      if (isOpeningAnimationRunning(pswp)) {
+        pswp.element?.remove();
+      } else {
+        pswp.destroy();
+      }
       pswp = null;
+      pendingClose = false;
     }
   });
 

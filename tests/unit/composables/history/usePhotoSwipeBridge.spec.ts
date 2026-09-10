@@ -21,11 +21,25 @@ class MockPhotoSwipe {
   currSlide?: { content?: unknown };
   refreshSlideContent = vi.fn();
   filters = new Map<string, PswpFilter[]>();
+  /**
+   * 复刻真实 opener 的开场闸门：isOpen 要等开场动画结束才为 true，在此之前
+   * close() 静默 return（photoswipe.esm.js 的 `if (!this.opener.isOpen …) return`）。
+   * 不模拟这一条，就测不出"开场期间关闭被吞掉"那个缺陷。
+   */
+  opener = { isOpen: false };
+  closeCalls = 0;
+  destroyCalls = 0;
   private handlers = new Map<string, PswpHandler[]>();
 
   constructor(options: { dataSource?: unknown }) {
     this.options = options;
     pswpInstances.push(this);
+  }
+
+  /** 开场动画播完：解除闸门并派发 openingAnimationEnd */
+  finishOpeningAnimation(): void {
+    this.opener.isOpen = true;
+    this.emit('openingAnimationEnd', {});
   }
 
   on(eventName: string, handler: PswpHandler): void {
@@ -42,9 +56,17 @@ class MockPhotoSwipe {
 
   init(): void {}
 
-  close(): void {}
+  close(): void {
+    this.closeCalls += 1;
+    // 真实实现：开场动画未结束时直接 return，'close' 事件根本不派发
+    if (!this.opener.isOpen) return;
+    this.emit('close', {});
+  }
 
-  destroy(): void {}
+  destroy(): void {
+    this.destroyCalls += 1;
+    this.close();
+  }
 
   emit(eventName: string, event: PswpEvent): void {
     for (const handler of this.handlers.get(eventName) ?? []) {
@@ -510,6 +532,59 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     expect(pswp.element.classList.contains('is-pswp-closing--fade')).toBe(false);
 
     harness.wrapper.unmount();
+  });
+
+  it('defers a close requested mid-opening instead of losing it, and can reopen afterwards', async () => {
+    /*
+     * PhotoSwipe 拒绝在开场动画播完前关闭，而且是静默 return —— 'close' 事件
+     * 不派发，桥接层的实例引用就永远清不掉，之后每次打开都会被开头的
+     * `if (pswp) return` 挡住，灯箱从此打不开。触发路径真实存在：灯箱里的
+     * 删除按钮直接把 visible 置 false，开场 300ms 内点得到。
+     */
+    const harness = mountHarness();
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const first = pswpInstances[0];
+    expect(first.opener.isOpen).toBe(false);
+
+    // 开场动画还没播完就要求关闭
+    harness.visible.value = false;
+    await nextTick();
+
+    // 此刻不该硬闯（闯了也是白闯，而且浏览器不擅长中途反转 transition）
+    expect(first.closeCalls).toBe(0);
+
+    // 开场动画结束 → 补上那次关闭
+    first.finishOpeningAnimation();
+    expect(first.closeCalls).toBe(1);
+    expect(harness.api().pswpEl.value).toBeNull();
+
+    // 关键回归点：实例引用已清干净，灯箱还能再打开
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+    expect(pswpInstances).toHaveLength(2);
+
+    harness.wrapper.unmount();
+  });
+
+  it('tears the root out of the DOM when unmounted mid-opening', async () => {
+    // destroy() 同样撞在那道闸门上（内部转调 close）。组件正在卸载，没有
+    // "等动画播完"的余地，根元素必须当场摘掉，否则会赖在 body 上挡住交互。
+    const harness = mountHarness();
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    document.body.appendChild(pswp.element);
+    expect(pswp.element.isConnected).toBe(true);
+
+    harness.wrapper.unmount();
+
+    expect(pswp.element.isConnected).toBe(false);
   });
 
   it('marks switched-in content and placeholder elements after the first activation', async () => {
