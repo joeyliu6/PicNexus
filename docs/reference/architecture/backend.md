@@ -97,6 +97,28 @@ src-tauri/
 | `delete_s3_object` | 删除单个对象 |
 | `delete_s3_objects` | 批量删除对象 |
 
+### Cookie 登录命令
+
+全部在 `commands/cookie_login.rs`。流程图见 [app-lifecycle.md 图 9](../../flows/app-lifecycle.md)。
+
+| 命令 | 用途 |
+|------|------|
+| `open_login_window` | 打开双 Webview 登录窗口（标题栏 + 内容区） |
+| `show_login_window` | 前端挂载完成后显示窗口 |
+| `save_cookie_from_login` | 校验后把 Cookie 发回主窗口并关闭登录窗口 |
+| `setup_cookie_event_monitoring` | **仅 Windows**：WebView2 `NavigationCompleted` 事件驱动抓取 |
+| `get_request_header_cookie` | **仅 Windows**：手动获取路径，从请求头读 Cookie |
+
+平台边界：`CookieMonitorCtx` 及其配套的 arm / capture / poll / extract 一组函数带
+`#[cfg(target_os = "windows")]`，**没有非 Windows 实现**——它们直接调 WebView2 的
+`CoreWebView2` 接口。非 Windows 平台由两个命令各自的 `#[cfg(not(target_os = "windows"))]`
+分支返回错误，不存在"降级到轮询"这回事（轮询本身也走 WebView2）。
+
+Windows 上有两条提取通道：主路径是 `NavigationCompleted` 事件驱动，兜底是每 2 秒轮询
+（SPA 登录流程不触发导航事件）。事件通道建不起来时降级为「仅轮询 + 超时通知」。
+⚠️ 降级判断不能写在 `with_webview` 的返回值上——它是单向投递，返回 `Ok` 只代表消息发出去了，
+不代表闭包执行过；正确做法是在闭包内部就地启动兜底。
+
 ---
 
 ## 命令实现模式

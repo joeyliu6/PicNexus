@@ -38,56 +38,101 @@
 
 ## 待处理
 
-### [ ] `start_cookie_monitoring` 对前端暴露着，却没有任何前端调用点
-
-- **来源**：2026-09-09 Rust 命令归位后逐条核对执行证据时发现（不是本次引入，搬迁前就是这个状态）
-- **现状**：它挂在 `generate_handler!` 里当 Tauri 命令暴露，但全仓零前端 `invoke`。
-  唯一调用者是 `commands/cookie_login.rs` 内部——`setup_cookie_event_monitoring` 在
-  `with_webview` 调用失败时降级调它（见该文件 `[事件监控] with_webview 调用失败，降级到轮询模式`）
-- **风险**：低但不是零。①多暴露一个 IPC 面；②那条降级路径**既没有单测、真机也从未触发过**
-  （2026-09-09 那次真机验收走的是 `✓ NavigationCompleted 事件注册成功`，`[Cookie监控]` 日志命中 0 次），
-  所以它是这批搬迁里唯一「没有任何执行证据」的函数体
-- **两条可选路子**：去掉 `#[tauri::command]` 属性只留内部函数（同时从 `generate_handler!` 摘掉）；
-  或者保留命令、补一条覆盖降级路径的测试。**先确认没有外部调用方**（Typora / Obsidian / CLI 三条链路）再动
-- 背景见 [rust-command-relocation-2026-09-09.md](audits/rust-command-relocation-2026-09-09.md)
-
-### [ ] Tauri E2E 在 CI 跑手上建会话失败（暂设非阻断，待上游修复后恢复）
+### [ ] Tauri E2E 在 CI 跑手上建会话失败（根因已定位，降权 workaround 待复验）
 
 - **来源**：2026-08-21 发版 v1.1.0 前触发 CI 加测，`Tauri desktop E2E smoke` 首次真正执行即失败
 - **症状**：`WebDriverError: session not created: DevToolsActivePort file doesn't exist`——
   msedgedriver 拉起 `picnexus.exe` 后等 60 秒，WebView2 从未把调试端口文件写到任何目录
   （全盘监视确认，见诊断第 4 轮）
-- **定性**：跑手环境问题，非应用缺陷。windows-2025 镜像 2026-08-18 更新把 WebView2 从 149
-  升到 151 后必现；v1.0.10（2026-07-14，WebView2 149）同一步骤是过的；本机 Windows 10 +
-  WebView2 151.0.4129.93 同套件 4/4 通过
+- **定性**（2026-09-09 修正，原记的「等上游镜像修」是错的）：**微软 by-design 的安全硬化，
+  不会有上游修复，等镜像更新是白等**。WebView2 Runtime 150 起，宿主进程提权（High Integrity）
+  时故意忽略 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`，而 msedgedriver 只能靠这个环境变量注入
+  `--remote-debugging-port` → 端口不开 → 文件不落盘。GitHub 跑手默认以管理员运行，故必现。
+  依据：[wry#1782](https://github.com/tauri-apps/wry/issues/1782)（其中 2026-08-14 的评论是
+  Runtime 151 上的独立复现，日志与我们一字不差）、
+  [WebView2Feedback#5645](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645)（微软回复
+  intentionally dropped）、[官方安全文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#recommended-privilege-level-for-webview2-host-applications)
+- 本机 Windows 10 + WebView2 151 同套件 4/4 通过（本机不提权，符合上述定性）
 
 四轮诊断已排除的假设（分支 `diag/tauri-e2e-runner` 的 4 次 run，编号 32472333974 /
-32473518344 / 32474934108 / 32476368456）：
+32473518344 / 32474934108 / 32476368456；完整证据链见
+[tauri-e2e-runner-webview2-2026-08-21.md](audits/tauri-e2e-runner-webview2-2026-08-21.md)）：
 
 | 假设 | 排除依据 |
 |------|---------|
 | 应用在跑手上起不来 | 裸启动 25 秒健康存活，webview 进程齐全，启动日志全绿 |
 | 驱动/运行时版本不匹配 | msedgedriver-tool 精确匹配 .86；升运行时到 .101 后仍挂 |
 | Edge 策略禁远程调试 | 三个策略键全部不存在；显式写 `RemoteDebuggingAllowed=1` 无效 |
-| 提权降权掐断握手 | `runas /trustlevel:0x20000` 去提权整套重跑，同样挂法 |
+| ~~提权降权掐断握手~~ | ❌ **这条排除是错的**：`runas /trustlevel:0x20000` ≠ 降到 Medium 完整性级别，且漏了降权后必需的 `icacls` 授权（应用起不来被误判成"降权没用"）。提权就是根因 |
 | tauri-driver 的问题 | 绕开它直接驱动 msedgedriver（`--verbose`）同样复现 |
 
 **当前处置**：`ci.yml` 的 `tauri-e2e` job 与 `release.yml` 的 Windows E2E 步骤均
 `continue-on-error: true`。应用可运行性由 release 的安装包冒烟（`App running OK`）和
 发版清单里的本地 `npm run test:tauri:e2e` 兜底。
 
-**恢复条件**（满足其一）：跑手镜像后续更新后手动触发 `run_tauri_e2e=true` 转绿；
-或上游（actions/runner-images、MicrosoftEdge/EdgeWebDriver、tauri-apps/tauri-driver）
-出修复。恢复时删掉两处 `continue-on-error` 及注释即可。
+**2026-09-09 处置**：已接入 [wry#1782](https://github.com/tauri-apps/wry/issues/1782) 里
+2026-09-07 给出的降权 workaround——用 `gsudo --integrity Medium` 把整条链
+（node → wdio → tauri-driver → msedgedriver → picnexus.exe）降到 Medium 完整性级别运行。
+⚠️ 配套的 `icacls "$GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F"` **不能省**：降权后进程
+会失去 workspace 读写权限，应用起不来会被误判成"降权也没用"。同时加了一步
+`whoami /groups` 完整性级别探针取证。
 
-**2026-09-08 第一次复验：仍未修复**（[run 34179056938](https://github.com/joeyliu6/PicNexus/actions/runs/34179056938)，
-[issue #5](https://github.com/joeyliu6/PicNexus/issues/5) 已按处置关闭）。镜像换成
-`windows-2025-vs2026` / `20260824.214.3` 后报错一字不差，其余 job 全绿。
+**剩余待办（就这一件）**：跑一次 `gh workflow run ci.yml -f run_tauri_e2e=true` 复验。
 
-⚠️ 同时发现盯梢用的判据选错了谱系：`runs-on: windows-latest` 解析到的是
-**`windows-2025-vs2026`**（分支 `win25-vs2026`），不是云端例行任务盯的 `windows-2025`。
-本次验证仍有效（20260824 比出问题的 20260818 新），但下次要按 `win25-vs2026` 谱系判断，
-否则提醒会踩不准时点。
+复验时看三样，缺一不可：
+
+| 看什么 | 期望 | 不符时的含义 |
+| --- | --- | --- |
+| `Probe process integrity level` 步骤 | `High Mandatory Level` | 前提不成立，根因定性要重查 |
+| job 结果 | 转绿 | 见下方「若降权后仍挂」 |
+| **wdio 日志里真的跑了用例** | 有 spec/断言输出 | ⚠️ **假绿**，见下一段 |
+
+⚠️ **第三样不能省**。这一步现在的最后一条命令是 `gsudo --integrity Medium npm run test:tauri:e2e`，
+GitHub 的 pwsh 步骤拿最后一条命令的 `$LASTEXITCODE` 当结果，所以**整步的成败完全押在 gsudo
+把子进程退出码原样透传上**。若 gsudo 吞掉非零退出码，这个 job 会永远显示成功——
+而我们正准备把它转成阻断门禁，那就是个测试挂了也放行的假门禁。
+上游示例（wry#1782）没有验证过这一点，我们也还没有。**摘 `continue-on-error` 之前必须先确认。**
+
+转绿后**要改三处，不是两处**——原记录写的「删掉两处 `continue-on-error` 即可」是不完整的：
+
+1. 删 `ci.yml` `tauri-e2e` 的 job 级 `continue-on-error: true` 及注释
+2. `release.yml` 的 step 级 `continue-on-error: true`——**先留着，不跟 ci.yml 同批摘**。
+   理由：这次给发版路径新加了一条 `choco install gsudo` 的**外网依赖**，choco 源抽风就会
+   卡住发版。等 ci.yml 侧转成阻断并稳跑几次、或给 gsudo 做了缓存/固定版本之后再摘。
+3. **把 `if:` 放开**，否则这个 job 在 push / PR 上一次都不会跑，"恢复门禁"是空的
+   （它当前只认 `workflow_dispatch` + 勾选）。
+
+**第 3 条的定案（2026-09-10）：放开到 push + dispatch，不含 PR。与 testing-guide 不冲突，
+不需要推翻任何既有决定。**
+
+```yaml
+if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_tauri_e2e) }}
+needs: test
+```
+
+原本以为要拍板的「冲突」是误读：[testing-guide.md](reference/guides/testing-guide.md) 的原话是
+「不建议直接放入**每个 PR**」，它拦的是 PR，没拦 push。之所以撞上，是因为提案照抄了 `e2e` job
+的 `if:`，而那个形状是 push + PR 都跑。把 PR 摘掉即两全。
+
+选 push 而不是 PR 的实证依据：最近 20 次 CI 触发是 3 push / 16 schedule / 1 dispatch，
+**PR 数为 0**——放 PR 上等于没放，push main 才是它真正会跑的地方。仓库 PUBLIC、Actions
+免费不限量，该 job 与其他 job 并行不拖慢别的检查；而 `ci:prepush` 本地门禁里没有 Tauri E2E，
+CI 再不跑就等于永远不自动跑。代价是冷缓存下每次 push main 多等 15~25 分钟（并行，不阻塞其他 job）。
+
+**testing-guide 无需修改**——该文表述与本定案一致。
+
+若降权后仍挂（探针显示 Medium 但报错不变），说明本方案被证伪，回落 Linux +
+WebKitWebDriver + xvfb（[Tauri 官方 CI 示例](https://v2.tauri.app/develop/tests/webdriver/ci/)
+就是这条路；`wdio.tauri.e2e.conf.cjs` 已有 Linux 分支，发版矩阵也已在 ubuntu 上构建；
+钥匙串问题可用 `portable.json` 绕开）。
+
+**历史记录**：2026-09-08 第一次复验仍失败
+（[run 34179056938](https://github.com/joeyliu6/PicNexus/actions/runs/34179056938)，
+[issue #5](https://github.com/joeyliu6/PicNexus/issues/5) 已关闭）。
+[issue #6](https://github.com/joeyliu6/PicNexus/issues/6) 提醒重试镜像 `20260907` ——
+2026-09-09 已按根因关闭：**盯镜像这件事本身就是错的**，`actions/runner-images` 不追踪
+WebView2 版本（Evergreen 自更新），而且这是 by-design 硬化，不会因镜像更新消失。
+配套的云端盯梢例行任务应一并停掉。
 
 ### [ ] login-titlebar 的配色自成一套，未并进主题令牌
 
@@ -205,6 +250,12 @@
 ---
 
 ## 已完成
+
+### [x] Cookie 事件监控的降级兜底从未生效（连 `start_cookie_monitoring` 一起收掉）
+
+降级判断挂在 `with_webview` 的返回值上，而那个 `Ok` 只代表消息投递成功、不代表闭包跑过，事件通道
+真失败时三层兜底全灭、连超时都不报。已改为闭包内就地降级 + 看门狗，删掉无人调用的
+`start_cookie_monitoring`，补上首份单测。详见 [cookie-monitoring-silent-failure-2026-09-09.md](./audits/cookie-monitoring-silent-failure-2026-09-09.md)。
 
 ### [x] Rust 侧 main.rs 减重：21 个内联命令归位到 commands/
 

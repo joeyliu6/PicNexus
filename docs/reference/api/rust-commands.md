@@ -53,6 +53,11 @@
 | **CLI PATH** | `get_cli_path_status` | 读取 PicNexus CLI 是否已加入用户 PATH |
 | | `add_cli_to_path` | 将 PicNexus CLI 加入用户 PATH |
 | | `remove_cli_from_path` | 从用户 PATH 移除 PicNexus CLI |
+| **Cookie 登录** | `open_login_window` | 打开双 Webview 登录窗口（标题栏 36px + 内容区）；窗口已存在则聚焦 |
+| | `show_login_window` | 前端挂载完成后显示窗口（`open_login_window` 内有 3 秒兜底自动 show） |
+| | `save_cookie_from_login` | 校验并把 Cookie 发回主窗口（`cookie-updated` 事件），随后关闭登录窗口 |
+| | `setup_cookie_event_monitoring` | **仅 Windows**：注册 WebView2 `NavigationCompleted` 监听自动抓 Cookie<br/>发两个事件：`cookie-monitoring-ready`（监控已就绪，前端收到才可跳转登录页）、`cookie-monitoring-timeout`（会话超时，默认 60 秒）<br/>事件通道建不起来时自动降级为「仅轮询 + 超时通知」，前端无需感知 |
+| | `get_request_header_cookie` | **仅 Windows**：手动获取路径，直接从请求头读 Cookie；失败时前端回落到 `document.cookie` |
 | **Analytics** | `analytics_send_batch` | 经隔离 WebView 上报 `first_run` / `app_start` |
 | | `analytics_shutdown` | 销毁隔离 WebView 与本地回环服务 |
 | | `analytics_start_heartbeat` | 启动在线心跳（Rust 定时器 + Measurement Protocol，25 分钟一次）；返回 `started` 或 `disabled` |

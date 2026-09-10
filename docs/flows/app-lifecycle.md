@@ -79,7 +79,8 @@ flowchart TD
 
 展示自动获取 Cookie 的完整流程。排查**登录窗口无反应**或**Cookie 验证失败**时查看。
 
-> **关键源文件**：`src/config/cookieProviders.ts`、`src/composables/useConfig.ts`
+> **关键源文件**：`src/config/cookieProviders.ts`、`src/composables/useConfig.ts`、
+> `src/login-webview.ts`（真正发起 invoke 的地方）、`src-tauri/src/commands/cookie_login.rs`
 
 ```mermaid
 flowchart TD
@@ -89,14 +90,17 @@ flowchart TD
     C -- 是 --> D[获取 CookieProvider 配置]
 
     D --> E["打开登录窗口<br/>默认 1300x800"]
-    E --> F[加载 loginUrl]
-    F --> G[监听指定 domains 的 Cookie 变化]
 
-    G --> H{平台}
-    H -- Windows --> I[事件驱动监听<br/>实时捕获 Cookie 变化]
-    H -- 非 Windows --> J["降级轮询<br/>初始延迟 2-3秒<br/>间隔 500ms-1秒"]
+    E --> PLT{平台}
+    PLT -- 非 Windows --> PLT1["直接报错：暂不支持自动提取<br/>（提取靠 WebView2，无跨平台实现）"]
+    PLT -- Windows --> F["setup_cookie_event_monitoring<br/>注册 NavigationCompleted 监听"]
 
-    I & J --> K[用户在窗口中完成登录]
+    F --> H{事件通道建起来了吗?}
+    H -- 是 --> I["事件驱动<br/>每次导航完成时提取<br/>+ 首次导航后启动 2 秒轮询兜底"]
+    H -- 否 --> J["降级：仅轮询兜底<br/>初始延迟 3 秒 / 间隔 2 秒<br/>同时启动超时计时"]
+
+    I & J --> G["发 cookie-monitoring-ready<br/>前端收到才跳转 loginUrl"]
+    G --> K[用户在窗口中完成登录]
     K --> L[捕获到 Cookie 字符串]
     L --> M["validateCookie(cookie, provider)"]
 
@@ -116,12 +120,14 @@ flowchart TD
     S --> T[关闭登录窗口]
     T --> U["Toast: 获取成功 ✓"]
 
-    %% 超时分支
-    G -.-> TIMEOUT{超时?<br/>默认 60秒}
-    TIMEOUT -- 是 --> TIMEOUT1[关闭窗口 + Toast: 获取超时]
+    %% 超时分支：计时与轮询兜底同时启动，两条通道共用同一个超时预算
+    I & J -.-> TIMEOUT{超时?<br/>默认 60秒}
+    TIMEOUT -- 是 --> TIMEOUT1[发 cookie-monitoring-timeout<br/>Toast: 获取超时]
 
     style U fill:#e8f5e9,stroke:#2e7d32
     style TIMEOUT1 fill:#ffebee,stroke:#c62828
+    style PLT1 fill:#ffebee,stroke:#c62828
+    style J fill:#fff3e0,stroke:#ef6c00
     style N1 fill:#fff3e0,stroke:#ef6c00
     style O1 fill:#fff3e0,stroke:#ef6c00
 ```
@@ -149,7 +155,8 @@ flowchart TD
 | 主题未生效 | initializeTheme 在事件监听之前，检查 effectiveTheme | 图8 节点 I |
 | 自动更新未触发 | config.autoUpdate.enabled = false | 图8 节点 O |
 | GA4 日志显示发送失败 | 不影响应用挂载；仅 `first_run` 会在下次启动重试，`app_start` 不补发 | 图8 节点 E |
-| 登录窗口打开但 Cookie 获取不到 | 域名不在 domains 列表 / 平台降级轮询延迟 | 图9 节点 G → H |
+| 登录窗口打开但 Cookie 获取不到 | 域名不在 domains 列表 / 事件通道已降级，按 2 秒轮询（首次提取最慢 3 秒） | 图9 节点 F → H |
+| 登录完成后毫无反应、连超时提示都没有 | 日志搜 `[事件监控]` 与 `[轮询兜底]`：两个前缀都没有说明兜底没起来，把日志贴进 issue | 图9 节点 H → J |
 | Cookie 获取后提示失败 | requiredFields 缺失或 fieldValueChecks 不通过 | 图9 节点 N → O |
 | 登录超时 | 用户未完成登录 / Cookie 事件未触发 | 图9 TIMEOUT 分支 |
 

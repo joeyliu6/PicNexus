@@ -70,6 +70,12 @@
 **portable 隔离**：在 `src-tauri/target/debug/data/` 放 `portable.json` 标记，debug 版
 应用的全部数据走该目录（`src-tauri/src/portable.rs`），完全不碰真实用户数据；
 造数脚本按 SchemaManager 最新 DDL 建库插 6 条 `e2e-*` 记录。
+
+> 2026-09-09 补：当初的造数脚本是临时写的、跑完就删了，导致这条验收 spec 之后一直
+> 没法直接重跑（会卡在 `waitForDataRows(6)`）。现已补成常驻脚本
+> `scripts/seed-tauri-e2e-portable.mjs`（`--clean` 负责收尾），DDL 从 `SchemaManager.ts`
+> 运行时抽取、不留第二份副本。用法见
+> [testing-guide.md](../reference/guides/testing-guide.md)。
 **⚠️ 验收后必须删掉整个 `target/debug/data/` 目录**，否则以后 `tauri dev` 会静默进入
 portable 模式读错数据。
 

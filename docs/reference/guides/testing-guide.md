@@ -114,6 +114,26 @@ vi.mock('@tauri-apps/plugin-sql', () => ({ ... }));
 - Linux：安装 `WebKitWebDriver` / `webkit2gtk-driver`，无桌面时用 `xvfb`
 - macOS：当前不支持 `tauri-driver` 桌面 WebView，发版前走手动清单
 
+> CI 上这套跑不起来的原因不是配置问题：WebView2 Runtime 150+ 在**提权**宿主下故意丢弃
+> msedgedriver 注入的调试参数，而 GitHub 跑手默认以管理员运行。已接入 `gsudo --integrity Medium`
+> 降权绕过，根因见 [wry#1782](https://github.com/tauri-apps/wry/issues/1782) 与
+> `docs/TODO.md`「Tauri E2E 在 CI 跑手上建会话失败」。
+
+### 带数据的验收（portable 隔离库）
+
+需要预置历史记录的验收 spec（`PICNEXUS_ACCEPTANCE=1` 门控）走 portable 隔离：
+
+```bash
+node scripts/seed-tauri-e2e-portable.mjs          # 建 portable.json + 6 条 e2e-* 记录
+PICNEXUS_ACCEPTANCE=1 npm run test:tauri:e2e
+node scripts/seed-tauri-e2e-portable.mjs --clean  # ⚠️ 必做
+```
+
+portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥）落到
+`src-tauri/target/debug/data/`，完全不碰真实用户数据；密钥走文件而非系统钥匙串。
+⚠️ 不 `--clean` 的话，以后 `tauri dev` 会静默进入 portable 模式读错数据。
+建表语句由脚本从 `SchemaManager.ts` 运行时抽取，不存在第二份会漂移的 DDL 副本。
+
 ## 跨引擎（WebKit）层
 
 ### 它解决什么
