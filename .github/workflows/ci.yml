@@ -291,10 +291,12 @@ jobs:
 
   tauri-e2e:
     name: Tauri desktop E2E smoke
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_tauri_e2e == 'true'
+    # 2026-09-10 起阻断。触发面是 push + 勾选的 dispatch，**刻意不含 PR**：
+    # testing-guide 的既有结论是「成本高，不建议直接放入每个 PR」，这里不推翻它；
+    # 而本仓库最近 20 次 CI 触发里 PR 数为 0，只挂 PR 等于不跑。
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_tauri_e2e) }}
+    needs: test
     runs-on: windows-latest
-    # ⚠️ 2026-08-21 起暂设为非阻断，2026-09-09 已定位根因并接入 workaround，待一次
-    # dispatch 复验转绿后即可摘掉本行与下方的降权说明，并把 if: 放开到 push / PR。
     #
     # 根因（微软确认 by-design，**不会有上游修复**，等镜像更新是白等）：
     #   WebView2 Runtime 150+ 在宿主进程提权（High Integrity）时，故意忽略
@@ -307,7 +309,10 @@ jobs:
     # 注：2026-08-21 那轮诊断把「提权降权」记成了已排除，是**错误结论**——当时用
     # runas /trustlevel 且没给 workspace 重新授权，应用起不来被误判成"降权也没用"。
     # 详见 docs/audits/tauri-e2e-runner-webview2-2026-08-21.md 的 2026-09-09 追记。
-    continue-on-error: true
+    #
+    # 2026-09-10 复验通过后摘掉 continue-on-error：run 34428364202 的探针显示
+    # High Mandatory Level（根因坐实），降权后 4 passing / 2 spec files，
+    # WebView2 151.0.4129.101 上再无 DevToolsActivePort。
 
     steps:
       - uses: actions/checkout@v5
@@ -365,26 +370,38 @@ jobs:
           # ⚠️ icacls 这行不能省：降到 Medium 后进程会失去 workspace 读写权限，
           #    应用起不来会被误判成"降权也没用"。2026-08-21 那轮很可能就栽在这里。
           icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
+
+          # ⚠️ 自检：本步骤的成败**完全押在 gsudo 把子进程退出码原样透传上**——
+          # GitHub 的 pwsh 步骤拿最后一条命令的 $LASTEXITCODE 当结果。透传一旦坏掉，
+          # 这个已阻断的门禁就变成「测试挂了也放行」的假门禁，比没有门禁更危险。
+          # 不能想当然：choco 当前发的是 gsudo v2.6.1（2025-10），而上游两个
+          # 「退出码丢失」修复（gerardog/gsudo#410、#421）2026-05 才合入，
+          # 尚未随任何 release 发布。所以每次都用已知退出码实测一遍，坏了当场喊。
+          gsudo --integrity Medium cmd /c "exit 42"
+          if ($LASTEXITCODE -ne 42) {
+            throw "gsudo 未透传子进程退出码（期望 42，实得 $LASTEXITCODE）——本门禁不可信，先修这个再看 E2E 结果。"
+          }
+
           gsudo --integrity Medium npm run test:tauri:e2e
 
-      # 非阻断 ≠ 静默：失败时把结论写进本次运行的 Summary 并打一条 warning 注解，
-      # 避免应用侧真回归被 continue-on-error 悄悄放过（只留在 step 日志里没人看）。
+      # 该 job 2026-09-10 起阻断，失败会挂掉工作流。这一步不再是"唯一的失败出口"，
+      # 但仍保留：它把"该按哪一类处理"直接写进 Summary，省掉每次翻 step 日志。
       - name: Report Tauri desktop E2E outcome
         if: always() && steps.tauri_e2e.outcome == 'failure'
         shell: bash
         run: |
-          echo "::warning title=Tauri desktop E2E failed (non-gating)::降权 workaround 已接入；再出现 DevToolsActivePort 说明绕法没生效，不能再当'已知问题'忽略。"
+          echo "::error title=Tauri desktop E2E failed::按 Summary 的判据分类；2026-09-10 起该 job 阻断，DevToolsActivePort 不再是可忽略的已知问题。"
           {
-            echo "## ⚠️ Tauri desktop E2E 失败（非阻断）"
+            echo "## ❌ Tauri desktop E2E 失败"
             echo ""
-            echo "该 job 自 2026-08-21 起 \`continue-on-error: true\`，失败不会挂掉工作流。"
-            echo "2026-09-09 起已接入 gsudo 降权 workaround，判据随之改变："
+            echo "该 job 2026-09-10 起阻断（此前 \`continue-on-error\` 已摘）。按日志特征分类："
             echo ""
             echo "| 日志特征 | 判定 | 处理 |"
             echo "| --- | --- | --- |"
-            echo "| \`Mandatory Label\` 探针显示 High + 出现 \`DevToolsActivePort\` | 降权没生效（gsudo 装失败 / icacls 没授权成功） | 查上面两步的日志 |"
-            echo "| 探针显示 Medium 但仍 \`DevToolsActivePort\` | 降权生效了仍失败 → 本方案被证伪 | 回落 Linux + WebKitWebDriver 方案 |"
-            echo "| 用例内断言失败、超时 | 疑似应用侧回归 | 必须人工确认 |"
+            echo "| \`gsudo 未透传子进程退出码\` | 自检拦下，门禁本身不可信 | 先修 gsudo 调用，别看 E2E 结果 |"
+            echo "| 探针 High + 出现 \`DevToolsActivePort\` | 降权没生效（gsudo 装失败 / icacls 没授权成功） | 查上面两步的日志 |"
+            echo "| 探针 Medium 但仍 \`DevToolsActivePort\` | 降权方案被证伪 | 回落 Linux + WebKitWebDriver 方案 |"
+            echo "| 用例内断言失败、超时 | 应用侧回归 | 按普通失败修 |"
             echo ""
             echo "根因与处置见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」，"
             echo "上游依据 https://github.com/tauri-apps/wry/issues/1782 。"

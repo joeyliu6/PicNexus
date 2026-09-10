@@ -117,9 +117,11 @@ jobs:
       # 于是 DevToolsActivePort 永不落盘。微软确认 by-design，不会有上游修复。
       #   https://github.com/tauri-apps/wry/issues/1782
       #   https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645
-      # ci.yml 的同名 job 复验转绿后，这里的 continue-on-error 一并摘掉。
-      # 在此之前应用可运行性仍由下方安装包冒烟（App running OK）+ 本地
-      # npm run test:tauri:e2e 兜底。
+      # ⚠️ 这里的 continue-on-error **刻意保留**，不跟 ci.yml 同批摘（后者 2026-09-10
+      # 已转阻断并复验通过）。原因：本步骤新增了 `choco install gsudo` 这条**外网依赖**，
+      # choco 源抽风就会卡住发版。等 ci.yml 侧稳跑几次、或给 gsudo 做了缓存/固定版本
+      # 之后再摘。在此之前应用可运行性由下方安装包冒烟（App running OK）+ ci.yml 的
+      # 阻断门禁兜底。
       - name: Run Tauri desktop E2E before release (Windows)
         id: tauri_e2e
         if: matrix.platform == 'windows-latest'
@@ -131,6 +133,15 @@ jobs:
           whoami /groups | Select-String "Mandatory Label"
           choco install gsudo -y --no-progress
           icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
+
+          # gsudo 退出码透传自检，理由同 ci.yml：choco 发的 v2.6.1 早于上游两个
+          # 「退出码丢失」修复（gerardog/gsudo#410、#421）。透传坏掉时这一步会静默变绿，
+          # 而发版路径上的静默变绿正是最不该有的东西。
+          gsudo --integrity Medium cmd /c "exit 42"
+          if ($LASTEXITCODE -ne 42) {
+            throw "gsudo 未透传子进程退出码（期望 42，实得 $LASTEXITCODE）——本步骤结果不可信。"
+          }
+
           gsudo --integrity Medium npm run test:tauri:e2e
 
       # 非阻断 ≠ 静默：失败时留一条 warning 注解 + Summary 段落，

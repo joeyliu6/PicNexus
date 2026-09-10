@@ -107,3 +107,92 @@ WebView2 151 运行时与 Windows Server 2025 跑手会话的组合上——超�
 - **（2026-09-09 补）本侧假设排完，不等于结论就是"环境问题、等上游"。** 这次真正的
   下一步是去上游 issue 里搜同样的报错签名——那里已经躺着一条精确命中的 issue 三周了。
   四轮实验花掉的时间，一次 `DevToolsActivePort WebView2` 搜索就能省下大半。
+
+---
+
+## 2026-09-10 结案：根因、处置与复验证据
+
+> 由 `docs/TODO.md` 迁入（条目关闭后正文按归档规则搬来这里）。
+
+- **来源**：2026-08-21 发版 v1.1.0 前触发 CI 加测，`Tauri desktop E2E smoke` 首次真正执行即失败
+- **症状**：`WebDriverError: session not created: DevToolsActivePort file doesn't exist`——
+  msedgedriver 拉起 `picnexus.exe` 后等 60 秒，WebView2 从未把调试端口文件写到任何目录
+  （全盘监视确认，见诊断第 4 轮）
+- **定性**（2026-09-09 修正，原记的「等上游镜像修」是错的）：**微软 by-design 的安全硬化，
+  不会有上游修复，等镜像更新是白等**。WebView2 Runtime 150 起，宿主进程提权（High Integrity）
+  时故意忽略 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`，而 msedgedriver 只能靠这个环境变量注入
+  `--remote-debugging-port` → 端口不开 → 文件不落盘。GitHub 跑手默认以管理员运行，故必现。
+  依据：[wry#1782](https://github.com/tauri-apps/wry/issues/1782)（其中 2026-08-14 的评论是
+  Runtime 151 上的独立复现，日志与我们一字不差）、
+  [WebView2Feedback#5645](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645)（微软回复
+  intentionally dropped）、[官方安全文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#recommended-privilege-level-for-webview2-host-applications)
+- 本机 Windows 10 + WebView2 151 同套件 4/4 通过（本机不提权，符合上述定性）
+
+四轮诊断已排除的假设（分支 `diag/tauri-e2e-runner` 的 4 次 run，编号 32472333974 /
+32473518344 / 32474934108 / 32476368456；完整证据链见
+[tauri-e2e-runner-webview2-2026-08-21.md](audits/tauri-e2e-runner-webview2-2026-08-21.md)）：
+
+| 假设 | 排除依据 |
+|------|---------|
+| 应用在跑手上起不来 | 裸启动 25 秒健康存活，webview 进程齐全，启动日志全绿 |
+| 驱动/运行时版本不匹配 | msedgedriver-tool 精确匹配 .86；升运行时到 .101 后仍挂 |
+| Edge 策略禁远程调试 | 三个策略键全部不存在；显式写 `RemoteDebuggingAllowed=1` 无效 |
+| ~~提权降权掐断握手~~ | ❌ **这条排除是错的**：`runas /trustlevel:0x20000` ≠ 降到 Medium 完整性级别，且漏了降权后必需的 `icacls` 授权（应用起不来被误判成"降权没用"）。提权就是根因 |
+| tauri-driver 的问题 | 绕开它直接驱动 msedgedriver（`--verbose`）同样复现 |
+
+**当前处置**：`ci.yml` 的 `tauri-e2e` job 与 `release.yml` 的 Windows E2E 步骤均
+`continue-on-error: true`。应用可运行性由 release 的安装包冒烟（`App running OK`）和
+发版清单里的本地 `npm run test:tauri:e2e` 兜底。
+
+**2026-09-09 处置**：已接入 [wry#1782](https://github.com/tauri-apps/wry/issues/1782) 里
+2026-09-07 给出的降权 workaround——用 `gsudo --integrity Medium` 把整条链
+（node → wdio → tauri-driver → msedgedriver → picnexus.exe）降到 Medium 完整性级别运行。
+⚠️ 配套的 `icacls "$GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F"` **不能省**：降权后进程
+会失去 workspace 读写权限，应用起不来会被误判成"降权也没用"。同时加了一步
+`whoami /groups` 完整性级别探针取证。
+
+**2026-09-10 复验通过，本条关闭**（[run 34428364202](https://github.com/joeyliu6/PicNexus/actions/runs/34428364202)）。
+三个判据全中：
+
+| 判据 | 实测 |
+| --- | --- |
+| 完整性级别探针 | `Mandatory Label\High Mandatory Level`（S-1-16-12288）——跑手确以管理员运行，根因坐实 |
+| job 结果 | 转绿，`DevToolsActivePort` 未再出现（WebView2 151.0.4129.101，正是出问题的那一支） |
+| **用例真的跑了** | `4 passing (1m 9.5s)` / `Spec Files: 2 passed, 2 total` ——不是空转假绿 |
+
+已随之落地：
+
+1. 摘掉 `ci.yml` `tauri-e2e` 的 job 级 `continue-on-error`
+2. `if:` 放开到 **push + 勾选的 dispatch，刻意不含 PR** + `needs: test`：
+
+   ```yaml
+   if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_tauri_e2e) }}
+   ```
+
+   原以为要拍板的「与 testing-guide 冲突」是误读：该文原话是「不建议直接放入**每个 PR**」，
+   拦的是 PR，没拦 push。之所以撞上，是因为提案照抄了 `e2e` job 的 `if:`，而那个形状 push + PR 都跑。
+   把 PR 摘掉即两全，**testing-guide 无需修改**。选 push 的实证依据：最近 20 次 CI 触发是
+   3 push / 16 schedule / 1 dispatch，PR 数为 0，只挂 PR 等于不跑；而 `ci:prepush` 本地门禁里
+   没有 Tauri E2E，CI 再不跑就永远不会自动跑。代价是冷缓存下每次 push main 多等 15~25 分钟（并行，不阻塞其他 job）。
+3. **加了 gsudo 退出码透传自检**（两个 workflow 都加）。这一步的成败完全押在 gsudo 把子进程
+   退出码原样透传上，透传坏掉就是「测试挂了也放行」的假门禁——比没有门禁更危险。而 choco
+   当前发的是 gsudo **v2.6.1（2025-10）**，上游两个「退出码丢失」修复
+   （[gsudo#410](https://github.com/gerardog/gsudo/issues/410)、[#421](https://github.com/gerardog/gsudo/issues/421)）
+   **2026-05 才合入、尚未随任何 release 发布**，所以不能假设它是好的。改为每次跑
+   `gsudo --integrity Medium cmd /c "exit 42"` 实测，不等于 42 就当场 throw。
+4. `release.yml` 的 step 级 `continue-on-error` **刻意保留**：本次给发版路径新增了
+   `choco install gsudo` 这条外网依赖，choco 源抽风会卡住发版。等 ci.yml 侧稳跑几次、
+   或给 gsudo 做缓存/固定版本后再摘。
+
+若降权后仍挂（探针显示 Medium 但报错不变），说明本方案被证伪，回落 Linux +
+WebKitWebDriver + xvfb（[Tauri 官方 CI 示例](https://v2.tauri.app/develop/tests/webdriver/ci/)
+就是这条路；`wdio.tauri.e2e.conf.cjs` 已有 Linux 分支，发版矩阵也已在 ubuntu 上构建；
+钥匙串问题可用 `portable.json` 绕开）。
+
+**历史记录**：2026-09-08 第一次复验仍失败
+（[run 34179056938](https://github.com/joeyliu6/PicNexus/actions/runs/34179056938)，
+[issue #5](https://github.com/joeyliu6/PicNexus/issues/5) 已关闭）。
+[issue #6](https://github.com/joeyliu6/PicNexus/issues/6) 提醒重试镜像 `20260907` ——
+2026-09-09 已按根因关闭：**盯镜像这件事本身就是错的**，`actions/runner-images` 不追踪
+WebView2 版本（Evergreen 自更新），而且这是 by-design 硬化，不会因镜像更新消失。
+配套的云端盯梢例行任务应一并停掉。
