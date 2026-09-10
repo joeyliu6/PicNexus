@@ -58,8 +58,20 @@ interface UseTableInteractionsOptions {
   servicePopoverRef: Ref<InstanceType<typeof PopoverType> | null>;
 }
 
-/** 悬浮预览在灯箱关闭时的退场方式，null 表示不处于关闭流程中 */
-type PreviewCloseMode = 'preview' | 'thumb' | null;
+/**
+ * 悬浮预览卡片相对于灯箱的处境，决定它该不该露脸。
+ *
+ * 灯箱一旦开场，这张卡片就必须**让位**：大图是从它身上飞出去、又飞回来的，
+ * 但飞行途中大图会一边缩放一边往屏幕中心移动，根本盖不住卡片 ——
+ * 卡片只要还看得见，就会和大图形成两个错开的框（这正是修之前的观感）。
+ *
+ * - idle       正常 hover 预览，正常显示
+ * - open       灯箱开着（含开场动画）：让位
+ * - landing    正在收回到这张卡片：全程让位，只在收回动画末段接上，
+ *              这样 PhotoSwipe 摘走大图的那一帧，底下已经是同样的画面
+ * - dismissing 正在关闭但鼠标已移开，卡片不再是落点：保持让位直到被移除
+ */
+type PreviewLightboxPhase = 'idle' | 'open' | 'landing' | 'dismissing';
 
 interface TargetVisibilityResult {
   found: boolean;
@@ -111,17 +123,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   function clearHoverPreview(): void {
     keepHoverPreviewAfterClose = false;
     stopHoverHandoffTracking();
-    hoverPreview.value.closing = false;
-    hoverPreview.value.closeMode = null;
+    hoverPreview.value.phase = 'idle';
     hoverPreview.value.visible = false;
   }
 
   function requestHoverPreviewDismissAfterClose(): void {
     keepHoverPreviewAfterClose = false;
     stopHoverHandoffTracking();
-    hoverPreview.value.closing = true;
-    // 走到这里说明鼠标已离开源缩略图，卡片不再是大图的落点 → 渐隐而非保持可见
-    hoverPreview.value.closeMode = 'thumb';
+    // 走到这里说明鼠标已离开源缩略图，卡片不再是大图的落点 → 保持让位直到被移除
+    hoverPreview.value.phase = 'dismissing';
     if (!isLightboxClosing.value || !closingTimer) clearHoverPreview();
   }
 
@@ -162,13 +172,12 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   function resolveLightboxCloseTargetMode(): PhotoSwipeCloseTargetMode {
     const sourceId = hoverPreview.value.itemId;
     if (!sourceId || !hoverPreview.value.url) {
-      hoverPreview.value.closeMode = null;
+      hoverPreview.value.phase = 'idle';
       return 'fade';
     }
-    hoverPreview.value.closing = true;
-    const mode = isMouseOnSourceThumb(sourceId) ? 'preview' : 'thumb';
-    hoverPreview.value.closeMode = mode;
-    return mode;
+    const onThumb = isMouseOnSourceThumb(sourceId);
+    hoverPreview.value.phase = onThumb ? 'landing' : 'dismissing';
+    return onThumb ? 'preview' : 'thumb';
   }
 
   const lightboxIndex = computed(() => {
@@ -189,8 +198,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     isLightboxClosing.value = false;
     keepHoverPreviewAfterClose = false;
     stopHoverHandoffTracking();
-    hoverPreview.value.closing = false;
-    hoverPreview.value.closeMode = null;
+    // 灯箱要开场了：卡片立刻让位，否则大图飞向屏幕中心时会把它露在旁边
+    hoverPreview.value.phase = 'open';
 
     // 鼠标追踪仅在灯箱会话期间挂载，用完即拆，避免全生命周期的 60Hz 监听
     if (event) { lastMouseX = event.clientX; lastMouseY = event.clientY; }
@@ -383,16 +392,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     const url = getItemMediumUrl(item);
     if (!wrapper || !url) {
       hoverPreview.value.visible = false;
-      hoverPreview.value.closing = false;
-      hoverPreview.value.closeMode = null;
+      hoverPreview.value.phase = 'idle';
       return;
     }
     const previewSize = computePreviewSize(item);
     const position = computePreviewPosition(wrapper.getBoundingClientRect(), previewSize);
     hoverPreview.value = {
       visible: true,
-      closing: false,
-      closeMode: null,
+      // 只在灯箱导航时被调用，卡片此刻仍要给大图让位
+      phase: 'open',
       url,
       alt: item.localFileName,
       itemId: item.id,
@@ -474,16 +482,10 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   }
 
   // ---- 悬浮预览 ----
-  //
-  // closeMode 决定关闭灯箱时这张预览卡片怎么退场，两种情况的正确做法是相反的：
-  // - 'preview'：鼠标还停在源缩略图上，大图会 FLIP 收缩回这张卡片。卡片必须
-  //   **全程保持可见** —— PhotoSwipe 在 hide 动画结束那一帧直接 element.remove()
-  //   摘走大图（photoswipe.esm.js:6809），没有淡出尾巴。下面若是透明的，就会
-  //   露出一段空白再补淡入，正是用户看到的"跳一下"。
-  // - 'thumb'：鼠标已移开，卡片本来就该消失，与大图同步渐隐即可。
+  // phase 是这张卡片该不该露脸的唯一真相源，语义见 PreviewLightboxPhase。
   const hoverPreview = ref({
-    visible: false, closing: false, url: '', alt: '', itemId: '',
-    closeMode: null as PreviewCloseMode,
+    visible: false, url: '', alt: '', itemId: '',
+    phase: 'idle' as PreviewLightboxPhase,
     style: {} as Record<string, string>,
   });
 
@@ -497,8 +499,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     const position = computePreviewPosition(rect, previewSize);
     hoverPreview.value = {
       visible: true,
-      closing: false,
-      closeMode: null,
+      phase: 'idle',
       url,
       alt: item.localFileName,
       itemId: item.id,
@@ -529,11 +530,10 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       const mouseIsOnSourceThumb = sourceId ? isMouseOnSourceThumb(sourceId) : false;
       keepHoverPreviewAfterClose = mouseIsOnSourceThumb;
       if (hoverPreview.value.visible) {
-        hoverPreview.value.closing = true;
         // 两条关闭路径的先后顺序是反的：按 Esc 时 PhotoSwipe 的 close 事件先派发，
-        // resolveLightboxCloseTargetMode 已经把 closeMode 定好；而删除按钮直接改
+        // resolveLightboxCloseTargetMode 已经把 phase 定好；而删除按钮直接改
         // lightboxVisible，本 watch 反而跑在前面。这里用同一套判据补上，两条路才一致。
-        hoverPreview.value.closeMode = mouseIsOnSourceThumb ? 'preview' : 'thumb';
+        hoverPreview.value.phase = mouseIsOnSourceThumb ? 'landing' : 'dismissing';
       }
 
       document.removeEventListener('mousemove', trackMouse);
@@ -547,10 +547,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
         if (!keepHoverPreviewAfterClose) {
           clearHoverPreview();
         } else {
-          // 卡片留在屏幕上继续当 hover 预览用；它在整个收回过程中始终可见，
-          // 这里只是摘掉关闭态标记，不再需要"解锁后补一次淡入"
-          hoverPreview.value.closing = false;
-          hoverPreview.value.closeMode = null;
+          // 收回动画早已结束、大图也已被摘走，卡片回到普通 hover 预览的身份
+          hoverPreview.value.phase = 'idle';
         }
         isLightboxClosing.value = false;
         closingTimer = null;

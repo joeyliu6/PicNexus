@@ -66,26 +66,48 @@
   transform: translateZ(0) scale(1);
 }
 
-.global-thumb-hover-preview.is-closing.thumb-preview-leave-active {
+.global-thumb-hover-preview.is-lightbox-dismissing.thumb-preview-leave-active {
   transition: none;
 }
 
 /*
- * 关闭灯箱时这张卡片怎么退场，取决于它还是不是大图的落点 —— 两种情况做法相反。
+ * 灯箱开着的时候，这张卡片必须让位。
  *
- * 鼠标仍停在源缩略图上：大图会 FLIP 收缩回这张卡片（同一个元素、同一个矩形、
- * thumbCropped 同为 false）。卡片必须全程保持可见 —— PhotoSwipe 在 hide 动画
- * 结束那一帧直接 element.remove() 摘走大图（photoswipe.esm.js:6809），不留淡出
- * 尾巴。底下若是透明的，就会先露出一段空白、再补一次淡入，这正是用户看到的
- * "跳一下"。保持可见后，摘走大图的那一帧下面已经是一张位置尺寸完全一致的图。
+ * 大图是从卡片身上飞出去、又飞回来的，但飞行途中它一边缩放一边往屏幕中心移动，
+ * 根本盖不住卡片 —— 卡片只要还看得见，就会和大图形成两个错开的框。
+ * （这一条正是当初"全程保持可见"的写法在真机上穿帮的原因。）
  */
-.global-thumb-hover-preview.is-closing-to-preview img {
-  opacity: 1;
+.global-thumb-hover-preview.is-lightbox-open img,
+.global-thumb-hover-preview.is-lightbox-dismissing img {
+  opacity: 0;
   transition: none;
 }
 
-/* 鼠标已移开：卡片本来就该消失，与大图同步渐隐，而不是瞬切透明后再补淡入 */
-.global-thumb-hover-preview.is-closing-to-thumb img {
-  opacity: 0;
-  transition: opacity var(--duration-medium) var(--ease-accelerate);
+/*
+ * 收回到这张卡片：全程让位，只在收回动画的末段接上。
+ *
+ * PhotoSwipe 在收回动画结束那一帧直接 element.remove() 摘走大图，不留淡出尾巴
+ * （photoswipe.esm.js 的 _onAnimationComplete → destroy → element.remove）。
+ * 所以卡片必须赶在那一帧之前就位，否则会先露出一段空白 —— 那是"跳一下"的另一半。
+ *
+ * 时长与 HIDE_ANIMATION_DURATION 同源（都是 --duration-normal），
+ * 末段留一小截淡入而不是硬切：万一 CSS 与 PhotoSwipe 的计时差了几毫秒，
+ * 淡入期间两张图重叠也看不出来（此刻大图已经收到和卡片几乎一样的位置和尺寸），
+ * 而硬切一旦早于大图消失，就会露出一帧双影。
+ */
+@keyframes preview-land-in {
+  0%, 85% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.global-thumb-hover-preview.is-lightbox-landing img {
+  animation: preview-land-in var(--duration-normal) linear forwards;
+}
+
+/* 关掉动效时不做渐进，直接让卡片就位 —— duration 归零会让 keyframes 失去意义 */
+@media (prefers-reduced-motion: reduce) {
+  .global-thumb-hover-preview.is-lightbox-landing img {
+    animation: none;
+    opacity: 1;
+  }
 }
