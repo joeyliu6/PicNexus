@@ -293,11 +293,20 @@ jobs:
     name: Tauri desktop E2E smoke
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_tauri_e2e == 'true'
     runs-on: windows-latest
-    # ⚠️ 2026-08-21 起暂设为非阻断：windows-2025 镜像 2026-08-18 更新（WebView2 149→151）后，
-    # msedgedriver 拉起应用时 DevToolsActivePort 永远不落盘，会话必然建不起来。
-    # 四轮诊断已排除：驱动/运行时版本不匹配（.86/.93/.101 全试过）、Edge 策略、提权降权、
-    # tauri-driver（裸 msedgedriver 同样复现）。应用本身在跑手上裸启动健康；本机同套件 4/4 过。
-    # 恢复条件与证据链见 docs/TODO.md「Tauri E2E 在 CI 跑手上建会话失败」。
+    # ⚠️ 2026-08-21 起暂设为非阻断，2026-09-09 已定位根因并接入 workaround，待一次
+    # dispatch 复验转绿后即可摘掉本行与下方的降权说明，并把 if: 放开到 push / PR。
+    #
+    # 根因（微软确认 by-design，**不会有上游修复**，等镜像更新是白等）：
+    #   WebView2 Runtime 150+ 在宿主进程提权（High Integrity）时，故意忽略
+    #   WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS 环境变量；而 msedgedriver 恰恰只能通过
+    #   这个变量注入 --remote-debugging-port，于是调试端口不开、DevToolsActivePort
+    #   永不落盘、会话 60 秒超时。GitHub 托管跑手默认以管理员运行，故必现。
+    #   https://github.com/tauri-apps/wry/issues/1782
+    #   https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645
+    #
+    # 注：2026-08-21 那轮诊断把「提权降权」记成了已排除，是**错误结论**——当时用
+    # runas /trustlevel 且没给 workspace 重新授权，应用起不来被误判成"降权也没用"。
+    # 详见 docs/audits/tauri-e2e-runner-webview2-2026-08-21.md 的 2026-09-09 追记。
     continue-on-error: true
 
     steps:
@@ -334,9 +343,29 @@ jobs:
           $cargoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $PWD.Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      # 取证步骤：坐实跑手确实以 High Integrity 运行（wry#1782 的前提）。
+      # 上游结论再硬也不能替代在自己环境里实测一次——2026-08-21 那行错误的
+      # 「已排除提权」正是"没实测就下定论"的产物，不再犯第二次。
+      - name: Probe process integrity level
+        shell: pwsh
+        run: |
+          whoami /groups | Select-String "Mandatory Label"
+
       - name: Run Tauri desktop E2E smoke tests
         id: tauri_e2e
-        run: npm run test:tauri:e2e
+        shell: pwsh
+        run: |
+          # 把整条链（node → wdio → tauri-driver → msedgedriver → picnexus.exe）降到
+          # Medium 完整性级别运行。被检查完整性级别的是 WebView2 宿主进程，而它是
+          # msedgedriver 的子进程、令牌自上而下继承，所以降权必须作用在链条顶端。
+          # 依据：https://github.com/tauri-apps/wry/issues/1782 (2026-09-07 评论)
+          # 这里用 choco 而非上游示例的 winget——choco 在 GitHub Windows 跑手上预装，
+          # winget 在非交互会话里历史上有过问题。
+          choco install gsudo -y --no-progress
+          # ⚠️ icacls 这行不能省：降到 Medium 后进程会失去 workspace 读写权限，
+          #    应用起不来会被误判成"降权也没用"。2026-08-21 那轮很可能就栽在这里。
+          icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
+          gsudo --integrity Medium npm run test:tauri:e2e
 
       # 非阻断 ≠ 静默：失败时把结论写进本次运行的 Summary 并打一条 warning 注解，
       # 避免应用侧真回归被 continue-on-error 悄悄放过（只留在 step 日志里没人看）。
@@ -344,17 +373,19 @@ jobs:
         if: always() && steps.tauri_e2e.outcome == 'failure'
         shell: bash
         run: |
-          echo "::warning title=Tauri desktop E2E failed (non-gating)::日志含 DevToolsActivePort 属已知跑手环境问题；否则按应用侧回归处理。"
+          echo "::warning title=Tauri desktop E2E failed (non-gating)::降权 workaround 已接入；再出现 DevToolsActivePort 说明绕法没生效，不能再当'已知问题'忽略。"
           {
             echo "## ⚠️ Tauri desktop E2E 失败（非阻断）"
             echo ""
             echo "该 job 自 2026-08-21 起 \`continue-on-error: true\`，失败不会挂掉工作流。"
-            echo "本条 Summary 是它唯一的失败出口，请人工判定属于哪一类："
+            echo "2026-09-09 起已接入 gsudo 降权 workaround，判据随之改变："
             echo ""
             echo "| 日志特征 | 判定 | 处理 |"
             echo "| --- | --- | --- |"
-            echo "| 出现 \`DevToolsActivePort\` / 会话建不起来 | 已知跑手环境问题（WebView2 151） | 可忽略 |"
+            echo "| \`Mandatory Label\` 探针显示 High + 出现 \`DevToolsActivePort\` | 降权没生效（gsudo 装失败 / icacls 没授权成功） | 查上面两步的日志 |"
+            echo "| 探针显示 Medium 但仍 \`DevToolsActivePort\` | 降权生效了仍失败 → 本方案被证伪 | 回落 Linux + WebKitWebDriver 方案 |"
             echo "| 用例内断言失败、超时 | 疑似应用侧回归 | 必须人工确认 |"
             echo ""
-            echo "恢复条件与四轮诊断证据链见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」。"
+            echo "根因与处置见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」，"
+            echo "上游依据 https://github.com/tauri-apps/wry/issues/1782 。"
           } >> "$GITHUB_STEP_SUMMARY"

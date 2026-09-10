@@ -111,16 +111,27 @@ jobs:
           $cargoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $PWD.Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # ⚠️ 2026-08-21 起暂设为非阻断：windows-2025 镜像更新（WebView2 149→151）后
-      # msedgedriver 无法与 WebView2 建会话（DevToolsActivePort 不落盘），四轮诊断
-      # 排除了版本/策略/提权/tauri-driver 后判定为跑手环境问题。应用可运行性仍由
-      # 下方安装包冒烟（App running OK）和本地 npm run test:tauri:e2e 兜底。
-      # 恢复条件见 docs/TODO.md「Tauri E2E 在 CI 跑手上建会话失败」。
+      # ⚠️ 2026-08-21 起暂设为非阻断，2026-09-09 已定位根因并接入降权 workaround。
+      # WebView2 Runtime 150+ 在提权宿主下故意丢弃 msedgedriver 注入的
+      # WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS（含 --remote-debugging-port），
+      # 于是 DevToolsActivePort 永不落盘。微软确认 by-design，不会有上游修复。
+      #   https://github.com/tauri-apps/wry/issues/1782
+      #   https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645
+      # ci.yml 的同名 job 复验转绿后，这里的 continue-on-error 一并摘掉。
+      # 在此之前应用可运行性仍由下方安装包冒烟（App running OK）+ 本地
+      # npm run test:tauri:e2e 兜底。
       - name: Run Tauri desktop E2E before release (Windows)
         id: tauri_e2e
         if: matrix.platform == 'windows-latest'
         continue-on-error: true
-        run: npm run test:tauri:e2e
+        shell: pwsh
+        run: |
+          # 降权到 Medium 完整性级别，必须作用在整条链的顶端（跑 wdio 的 node 进程）。
+          # icacls 那行不能省：降权后进程会失去 workspace 读写权限，应用起不来。
+          whoami /groups | Select-String "Mandatory Label"
+          choco install gsudo -y --no-progress
+          icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
+          gsudo --integrity Medium npm run test:tauri:e2e
 
       # 非阻断 ≠ 静默：失败时留一条 warning 注解 + Summary 段落，
       # 否则发版路径上的应用侧回归只会躺在 step 日志里，没人会翻。
@@ -128,17 +139,18 @@ jobs:
         if: always() && steps.tauri_e2e.outcome == 'failure'
         shell: bash
         run: |
-          echo "::warning title=Tauri desktop E2E failed (non-gating)::发版继续，但请人工判定：日志含 DevToolsActivePort 属已知跑手环境问题，否则按应用侧回归处理。"
+          echo "::warning title=Tauri desktop E2E failed (non-gating)::发版继续，但降权 workaround 已接入，再出现 DevToolsActivePort 不能再当'已知问题'忽略。"
           {
             echo "## ⚠️ Tauri desktop E2E 失败（非阻断，发版已继续）"
             echo ""
             echo "| 日志特征 | 判定 | 处理 |"
             echo "| --- | --- | --- |"
-            echo "| 出现 \`DevToolsActivePort\` / 会话建不起来 | 已知跑手环境问题（WebView2 151） | 可忽略 |"
+            echo "| \`Mandatory Label\` 显示 High + \`DevToolsActivePort\` | 降权没生效（gsudo / icacls 那两步失败） | 查该步日志 |"
+            echo "| 显示 Medium 但仍 \`DevToolsActivePort\` | 降权方案被证伪 | 发版前人工确认，另议 Linux 方案 |"
             echo "| 用例内断言失败、超时 | 疑似应用侧回归 | 发版前必须人工确认 |"
             echo ""
             echo "兜底覆盖：下方安装包冒烟（App running OK）+ 本地 \`npm run test:tauri:e2e\`。"
-            echo "恢复条件见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」。"
+            echo "根因见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」与 wry#1782。"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate changelog
