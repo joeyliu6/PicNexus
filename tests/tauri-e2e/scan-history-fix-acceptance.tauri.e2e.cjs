@@ -2,9 +2,11 @@
 /**
  * scan-history-fix-2026-08-22 真机验收（portable 隔离库，不碰真实数据）
  *
- * 前置（由外部脚本完成，见 docs/audits/scan-history-fix-2026-08-22.md）：
- * - src-tauri/target/debug/data/portable.json 存在（portable 模式，数据全进该目录）
- * - data/history.db 已 seed 6 条 e2e-* 记录
+ * 前置：先跑 `node scripts/seed-tauri-e2e-portable.mjs`，它会建好
+ * - src-tauri/target/debug/data/portable.json（portable 模式，数据全进该目录，不碰真实数据）
+ * - data/history.db，含 6 条 e2e-* 记录
+ * 跑完验收务必 `node scripts/seed-tauri-e2e-portable.mjs --clean`，
+ * 否则以后 tauri dev 会静默进入 portable 模式读错数据。
  *
  * 门控：仅 PICNEXUS_ACCEPTANCE=1 时执行，避免混进常规 smoke / CI。
  * 判据：
