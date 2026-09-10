@@ -44,13 +44,30 @@
   transition: opacity var(--duration-normal) var(--ease-decelerate);
 }
 
-/* 图片圆角 + 阴影 */
+/*
+ * 图片圆角 + 描边
+ *
+ * 这里原本是 `0 8px 40px rgb(0 0 0 / 50%)` —— 黑影打在近黑背景上，肉眼完全看不见，
+ * 却因为 will-change 让每帧的合成层向外多撑 80px。换成 0 模糊 0 扩散的一条细高光，
+ * 靠亮度差把图片从暗底里"切"出来，既真的看得见，也不放大合成层。
+ */
 .pswp--picnexus .pswp__img {
   border-radius: var(--radius-md);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱暗色环境下的图片阴影，无对应 token */
-  box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
+  box-shadow: var(--shadow-lightbox-image);
   backface-visibility: hidden;
   will-change: opacity, transform;
+}
+
+/*
+ * 降级为整体淡出时的补偿（由 bridge 在 close 回调里按实际动画类型挂类）。
+ * 纯淡出没有位移和缩放，观感偏轻飘，补一个极轻微的收缩给它一点重量。
+ * 只作用于 fade 分支 —— 有 FLIP 时 FLIP 本身就是缩放，叠上去会双重缩放。
+ * 安全性同本文件下方关于切图动画的说明：PhotoSwipe 的 zoom/pan 矩阵作用在
+ * .pswp__zoom-wrap 上，不碰 .pswp__img 自身的 transform。
+ */
+.pswp--picnexus.is-pswp-closing--fade .pswp__img {
+  transform: scale(var(--scale-subtle));
+  transition: transform var(--duration-normal) var(--ease-accelerate);
 }
 
 /*
@@ -187,10 +204,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* hover 属于微交互，按 motion.css 的定义走 --duration-fast(120ms)；
+     原先 200ms + 裸 ease 在快速划过箭头时会有拖影感 */
   transition:
-    background-color var(--duration-normal) ease,
-    color var(--duration-normal) ease,
-    transform var(--duration-normal) ease;
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
   backdrop-filter: blur(8px);
 }
 
@@ -199,7 +218,7 @@
 
 .pswp-nav:hover {
   color: var(--text-main);
-  transform: translateY(-50%) scale(1.08);
+  transform: translateY(-50%) scale(1.06);
 }
 
 .pswp--low-effects .pswp-nav {
@@ -228,7 +247,9 @@
    * 开场从稳定暗场开始，而不是从 0 透明度开始；这样浅色图打开时不会先透出底下视图，
    * 再被 PhotoSwipe 遮罩压暗，视觉上少一次亮暗波动。
    */
-  animation: pswp-blur-bg-open var(--duration-normal) ease-out both;
+  /* 时长/曲线与 SHOW_ANIMATION_DURATION 对齐：开场三层（本层、其内的图、
+     PhotoSwipe 自己的 .pswp__bg）以前各跑各的长度和曲线，亮度是条折线，观感发浑 */
+  animation: pswp-blur-bg-open var(--duration-medium) var(--ease-decelerate) both;
   contain: paint;
 }
 
@@ -265,26 +286,35 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: translateZ(0) scale(1.18); /* 消除 blur 边缘白边，scale 需略大于 blur 半径 */
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱模糊背景复合滤镜，无对应 token */
-  filter: blur(26px) brightness(0.42) saturate(1.05);
+  transform: translateZ(0) scale(1.22); /* 消除 blur 边缘白边，scale 需略大于 blur 半径 */
+
+  /*
+   * 这一层是灯箱里唯一的颜色来源，之前被压得太狠：
+   * brightness .42 × opacity .72 × 遮罩留下的 24% ≈ 只剩原图亮度的 7%，
+   * 边缘再乘暗角还剩 2.5% —— 三层滤镜叠出来一块几乎纯黑的东西，
+   * 用户看到的"颜色不好"就是这么来的。
+   * 现在提亮并加饱和，让图片自己的色调透上来；聚焦仍由暗角负责。
+   * blur 半径同步加大：更像景深，少像糊图。
+   */
+  filter: blur(32px) brightness(0.55) saturate(1.25);
   opacity: 0;
-  transition: opacity var(--duration-normal) ease;
+  transition: opacity var(--duration-medium) var(--ease-decelerate);
   pointer-events: none;
   will-change: opacity;
 }
 
 .pswp--picnexus .pswp-blur-bg img.is-loaded {
-  opacity: 0.72;
+  opacity: 0.85;
 }
 
+/* 低配设备：不跑高斯模糊，只靠亮度压暗；同样按上面的思路整体提亮 */
 .pswp--low-effects .pswp-blur-bg img {
-  filter: brightness(0.28);
+  filter: brightness(0.42);
   transform: translateZ(0) scale(1.04);
 }
 
 .pswp--low-effects .pswp-blur-bg img.is-loaded {
-  opacity: 0.36;
+  opacity: 0.5;
 }
 
 /*
@@ -292,13 +322,16 @@
  * 中心透明露出 blur 氛围，边缘径向沉到近黑 → 视觉焦点自然收束到主图
  * 位置：blur img 之上、.pswp__bg 之下（仍受父层 z:-1 约束）
  * 椭圆形 vs 圆形：椭圆更匹配宽屏视口，两侧沉得更深
+ *
+ * 渐变本身在 --lightbox-vignette 里（内圈从 30% 放宽到 42%、外圈从 65% 收到 60%）：
+ * 上面把模糊背景整体提亮之后，暗角要跟着松一档，否则提亮的部分又被它吃回去。
+ * 中心/边缘的对比基本没变，聚焦感保持，但整块背景亮了约三倍。
  */
 .pswp--picnexus .pswp-blur-bg::after {
   content: '';
   position: absolute;
   inset: 0;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 影院暗角径向渐变，无对应 token */
-  background: radial-gradient(ellipse at center, transparent 30%, rgb(0 0 0 / 65%) 100%);
+  background: var(--lightbox-vignette);
   pointer-events: none;
 }
 

@@ -12,9 +12,28 @@ import PhotoSwipe from 'photoswipe';
 import type { PhotoSwipeOptions } from 'photoswipe';
 import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } from '@/utils/reducedMotion';
 
+/*
+ * 灯箱开关动画的时长与缓动。
+ *
+ * 这几个值必须传给 PhotoSwipe 的 JS 选项，读不到 CSS 变量（getComputedStyle 在
+ * jsdom 下拿空串，全测试都得 mock，不划算），所以在这里写死数值，但**取值一律
+ * 对齐 motion.css 的 token**，改动时两边一起改。
+ *
+ * 开慢关快是 motion.css 的既定原则（"进入略慢给感知，退出略快不拖沓"）：
+ * 开场 300ms + decelerate（快启慢停，图片送到眼前轻轻落位），
+ * 关场 200ms + accelerate（慢启快走，先粘一下再迅速收走）。
+ * 原先 300/280 两头几乎一样长，等于没体现这条原则。
+ */
+/** = --duration-medium */
 export const SHOW_ANIMATION_DURATION = 300;
-export const HIDE_ANIMATION_DURATION = 280;
-export const ZOOM_ANIMATION_DURATION = 250;
+/** = --duration-normal */
+export const HIDE_ANIMATION_DURATION = 200;
+/** = --duration-normal */
+export const ZOOM_ANIMATION_DURATION = 200;
+/** = --ease-decelerate，开场用 */
+const EASE_DECELERATE = 'cubic-bezier(0, 0, 0.2, 1)';
+/** = --ease-accelerate，关场用 */
+const EASE_ACCELERATE = 'cubic-bezier(0.4, 0, 1, 1)';
 
 /**
  * 加载指示器延迟（ms）
@@ -98,14 +117,20 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
       id: slide.id,
     }],
     index: 0,
-    bgOpacity: 0.76,
+    /*
+     * 0.55 而非更高：背景一共叠了三层（本遮罩 + 模糊图 brightness + 影院暗角），
+     * 三层相乘后中心亮度只剩原图的个位数百分比，模糊背景那点颜色氛围会被压没。
+     * 调低这一层是把颜色救回来最有效的一处，聚焦感由暗角继续负责。
+     */
+    bgOpacity: 0.55,
     // 自定义 spinner 由 Vue 层 Teleport 渲染；清空默认错误文案（避免 slide 内显示英文错误）
     errorMsg: '',
     showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
     showAnimationDuration: motionDuration(SHOW_ANIMATION_DURATION),
     hideAnimationDuration: motionDuration(HIDE_ANIMATION_DURATION),
     zoomAnimationDuration: motionDuration(ZOOM_ANIMATION_DURATION),
-    easing: 'cubic-bezier(.4,0,.22,1)',
+    // 关场会在 close 回调里改成 EASE_ACCELERATE
+    easing: EASE_DECELERATE,
     // 禁用 PhotoSwipe 默认 UI（用我们自己的）
     arrowPrev: false,
     arrowNext: false,
@@ -170,6 +195,28 @@ function findThumbElement(itemId: string, mode: PhotoSwipeCloseTargetMode = 'aut
     }
   }
   return bestEl;
+}
+
+/**
+ * 按关闭模式解析 FLIP 的目标元素；返回 undefined 表示"没有合适落点"，
+ * PhotoSwipe 会把 _thumbBounds 留空并自动降级为整体淡出。
+ *
+ * 尺寸阈值对所有模式一视同仁。这里原本给 'thumb' 开了后门，结果是鼠标移开后
+ * 关闭时，一张 1200px 的图要在一次收回动画里缩进 36px 的格子 —— 30 多倍缩放，
+ * 且 thumbCropped 会从 contain 翻成 cover 重算 innerRect，长宽比悬殊的图末端
+ * 必然偏移，调时长调曲线都掩盖不掉。FLIP 的说服力来自"眼睛能跟住目标"，
+ * 36px 在全屏里占千分之一，跟不住。
+ *
+ * ⚠️ filter 与 close 回调必须共用本函数：前者决定动画怎么走，后者据此决定要不要
+ * 挂 fade 的补偿样式，两处各写一套判定迟早会走散。
+ *
+ * 收藏 / 时间轴视图的 .photo-item 远大于阈值，行为不受影响。
+ */
+function resolveFlipElement(itemId: string, mode: PhotoSwipeCloseTargetMode): HTMLElement | undefined {
+  const el = findThumbElement(itemId, mode);
+  if (!el) return undefined;
+  if (el.getBoundingClientRect().width < FLIP_MIN_WIDTH) return undefined;
+  return el;
 }
 
 export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
@@ -391,11 +438,9 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     pswp.addFilter('thumbEl', (_thumbEl, data, _index) => {
       const currentId = options.itemId.value;
       if (!currentId) return _thumbEl as HTMLElement;
-      const el = findThumbElement(currentId, closeTargetMode);
-      // 缩略图已被虚拟滚动回收、或源尺寸过小 → 交给 PhotoSwipe 降级 fade
+      const el = resolveFlipElement(currentId, closeTargetMode);
+      // 缩略图已被回收、在隐藏视图里、或源尺寸过小 → 交给 PhotoSwipe 降级 fade
       if (!el) return NO_THUMB;
-      const rect = el.getBoundingClientRect();
-      if (closeTargetMode !== 'thumb' && rect.width < FLIP_MIN_WIDTH) return NO_THUMB;
       // 悬浮预览 object-fit:contain → 不裁剪；小缩略图 object-fit:cover → 裁剪
       data.thumbCropped = !el.classList.contains('global-thumb-hover-preview');
       return el;
@@ -421,7 +466,24 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
        */
       thisInstance.element?.classList.add('is-pswp-closing');
 
+      /*
+       * 关场换成"慢启快走"的曲线。opener 要到本回调返回之后才读 options.easing，
+       * 所以此刻改还来得及；PhotoSwipe 只有一个 easing 选项，开关想用不同曲线
+       * 就得这样在中途换。
+       */
+      thisInstance.options.easing = EASE_ACCELERATE;
+
       closeTargetMode = options.resolveCloseTargetMode?.() ?? 'auto';
+
+      /*
+       * 判定这次会不会降级成整体淡出，是则挂补偿类。
+       * 纯淡出没有位移和缩放，观感偏轻飘；补一个极轻微的收缩给它一点重量。
+       * 必须限定在 fade 分支 —— 有 FLIP 时 FLIP 本身就是缩放，叠上去会双重缩放。
+       */
+      const currentId = options.itemId.value;
+      const willFade = !currentId || !resolveFlipElement(currentId, closeTargetMode);
+      if (willFade) thisInstance.element?.classList.add('is-pswp-closing--fade');
+
       pswpEl.value = null;
       blurSrc.value = null;
       clearLoadingIndicator();

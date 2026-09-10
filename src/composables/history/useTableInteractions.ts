@@ -34,10 +34,13 @@ const logger = createLogger('TableInteractions');
 /** 灯箱打开动画时长（ms），留出 100ms 缓冲覆盖 PhotoSwipe show 动画尾帧 */
 const OPENING_DURATION = SHOW_ANIMATION_DURATION + 100;
 /**
- * 灯箱关闭的"拦截窗口"时长（ms），覆盖 PhotoSwipe 收回到小缩略图的主动作。
- * 280ms 给眼睛足够时间追踪大图到表格位置，额外 20ms 吃掉动画尾帧。
+ * 灯箱关闭的"拦截窗口"时长（ms），覆盖 PhotoSwipe 收回动画的整个主动作，
+ * 额外 20ms 吃掉尾帧。跟随 HIDE_ANIMATION_DURATION 自动变化。
+ *
+ * 导出给测试用：断言里写死毫秒数的话，一调收回时长测试就会挂，
+ * 而挂的原因跟被测行为无关。
  */
-const CLOSING_DURATION = HIDE_ANIMATION_DURATION + 20;
+export const CLOSING_DURATION = HIDE_ANIMATION_DURATION + 20;
 const HOVER_HANDOFF_POINTER_EVENTS = ['mousemove', 'pointermove', 'pointerdown'] as const;
 
 interface UseTableInteractionsOptions {

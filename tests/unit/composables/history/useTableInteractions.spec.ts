@@ -91,7 +91,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-const { useTableInteractions } = await import('@/composables/history/useTableInteractions');
+const { useTableInteractions, CLOSING_DURATION } = await import('@/composables/history/useTableInteractions');
 
 beforeEach(() => {
   writeTextMock.mockReset();
@@ -219,7 +219,7 @@ describe('useTableInteractions lightbox close preview motion', () => {
     expect(harness.api().hoverPreview.value.closing).toBe(true);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
 
-    await vi.advanceTimersByTimeAsync(299);
+    await vi.advanceTimersByTimeAsync(CLOSING_DURATION - 1);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
 
     await vi.advanceTimersByTimeAsync(1);
@@ -247,7 +247,7 @@ describe('useTableInteractions lightbox close preview motion', () => {
     expect(harness.api().hoverPreview.value.visible).toBe(true);
     expect(harness.api().hoverPreview.value.closeMode).toBe('preview');
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(CLOSING_DURATION);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
     expect(harness.api().hoverPreview.value.closing).toBe(false);
     expect(harness.api().hoverPreview.value.closeMode).toBeNull();
@@ -278,7 +278,7 @@ describe('useTableInteractions lightbox close preview motion', () => {
     // 鼠标离开后卡片不再是落点，改成与大图同步渐隐
     expect(harness.api().hoverPreview.value.closeMode).toBe('thumb');
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(CLOSING_DURATION);
     expect(harness.api().hoverPreview.value.visible).toBe(false);
     expect(harness.api().hoverPreview.value.closeMode).toBeNull();
   });

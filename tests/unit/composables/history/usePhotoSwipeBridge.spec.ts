@@ -458,6 +458,60 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     harness.wrapper.unmount();
   });
 
+  it('degrades to fade rather than shrinking the image into a 36px thumbnail', async () => {
+    // 表格里的缩略图只有 36px。从全屏收进去是 30 多倍缩放，眼睛跟不住，
+    // 而且 thumbCropped 会从 contain 翻成 cover，长宽比悬殊的图末端还会偏移。
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb-box';
+    thumb.dataset.lightboxId = 'item-1';
+    mockRect(thumb, { width: 36, height: 36, right: 36, bottom: 36 });
+    document.body.appendChild(thumb);
+
+    const preview = document.createElement('div');
+    preview.className = 'global-thumb-hover-preview';
+    preview.dataset.lightboxId = 'item-1';
+    mockRect(preview, { width: 300, height: 200, right: 300, bottom: 200 });
+    document.body.appendChild(preview);
+
+    const harness = mountHarness({ resolveCloseTargetMode: () => 'thumb' });
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    pswp.emit('close', {});
+    expect(pswp.filters.get('thumbEl')![0](undefined, {}, 0)).toBeUndefined();
+    // 降级的补偿样式由 close 回调按实际动画类型挂上
+    expect(pswp.element.classList.contains('is-pswp-closing--fade')).toBe(true);
+
+    harness.wrapper.unmount();
+  });
+
+  it('keeps the FLIP animation for grid tiles that clear the size threshold', async () => {
+    // 收藏 / 时间轴视图的 .photo-item 是大方格，不传 resolveCloseTargetMode
+    // （closeTargetMode 恒为 'auto'）。上面那条降级规则绝不能波及它们 ——
+    // 它们的开合动画本来就是对称的，必须保持"从方格长出来、原路收回去"。
+    const tile = document.createElement('div');
+    tile.className = 'photo-item';
+    tile.dataset.lightboxId = 'item-1';
+    mockRect(tile, { width: 180, height: 180, right: 180, bottom: 180 });
+    document.body.appendChild(tile);
+
+    const harness = mountHarness();
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    expect(pswp.options).toMatchObject({ showHideAnimationType: 'zoom' });
+
+    pswp.emit('close', {});
+    expect(pswp.filters.get('thumbEl')![0](undefined, {}, 0)).toBe(tile);
+    expect(pswp.element.classList.contains('is-pswp-closing--fade')).toBe(false);
+
+    harness.wrapper.unmount();
+  });
+
   it('marks switched-in content and placeholder elements after the first activation', async () => {
     const harness = mountHarness();
     harness.visible.value = true;
