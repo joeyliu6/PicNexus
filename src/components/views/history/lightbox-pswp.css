@@ -246,17 +246,24 @@
   background: var(--pswp-bg);
 
   /*
-   * 开场从稳定暗场开始，而不是从 0 透明度开始；这样浅色图打开时不会先透出底下视图，
-   * 再被 PhotoSwipe 遮罩压暗，视觉上少一次亮暗波动。
+   * 开场：用这一层的渐入填掉 PhotoSwipe 的启动空窗。
+   *
+   * PhotoSwipe 从建好 DOM 到图片真的开始放大，中间固定有约 120ms 不动
+   * （opener._start 强制等占位图 decode「最少 50ms」，CSSAnimation 又要过
+   * setTimeout(0) → setTimeout(30) 才写目标值）。这段时间本层要是一上来就
+   * 铺到接近不透明，观感就是「啪一下变黑，然后干等一会儿图才动」——
+   * 一次突兀的黑闪加一段停顿。
+   *
+   * 改成从全透明缓缓压暗，正好把那段空窗填成一个连续动作：
+   * 背景先暗下来，图片紧接着长出来。时长取 --duration-slow，
+   * 覆盖「启动空窗 + 放大」的大部分，让两段衔接上而不是各跑各的。
    */
-  /* 时长/曲线与 SHOW_ANIMATION_DURATION 对齐：开场三层（本层、其内的图、
-     PhotoSwipe 自己的 .pswp__bg）以前各跑各的长度和曲线，亮度是条折线，观感发浑 */
-  animation: pswp-blur-bg-open var(--duration-medium) var(--ease-decelerate) both;
+  animation: pswp-blur-bg-open var(--duration-slow) var(--ease-decelerate) both;
   contain: paint;
 }
 
 @keyframes pswp-blur-bg-open {
-  from { opacity: 0.78; }
+  from { opacity: 0; }
   to { opacity: 1; }
 }
 

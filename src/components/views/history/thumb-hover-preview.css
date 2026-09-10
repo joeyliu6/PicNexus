@@ -77,7 +77,20 @@
  * 根本盖不住卡片 —— 卡片只要还看得见，就会和大图形成两个错开的框。
  * （这一条正是当初"全程保持可见"的写法在真机上穿帮的原因。）
  */
-.global-thumb-hover-preview.is-lightbox-open img,
+/*
+ * 开场让位要柔和，不能瞬切。
+ *
+ * 灯箱的暗场是渐渐压上来的（见 lightbox-pswp.css 里 pswp-blur-bg-open 的说明），
+ * 头一百多毫秒背景还基本是透明的。这时候把卡片一刀切成透明，就会露出一次
+ * "卡片凭空消失、页面闪回原样"的断点。淡出的时长落在背景压暗的窗口里，
+ * 两件事一起发生，看上去就是这张卡片被暗场吞掉。
+ */
+.global-thumb-hover-preview.is-lightbox-open img {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+/* 已经在关闭流程里，卡片从开场起就是透明的，保持原样即可 */
 .global-thumb-hover-preview.is-lightbox-dismissing img {
   opacity: 0;
   transition: none;
