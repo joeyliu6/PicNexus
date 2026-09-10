@@ -1,12 +1,22 @@
 // src-tauri/src/commands/cookie_login.rs
 // Cookie 登录链路：开登录窗口 → 监听导航/轮询 → 提取并校验 Cookie → 回传主窗口
 //
-// 这一族对外只暴露 6 个命令，12 个私有辅助函数全部只被它们调用，所以整体收在
-// 一个模块里。注意其中 4 个提取函数带 `#[cfg(target_os = "windows")]`——它们靠
-// WebView2 的 CoreWebView2 接口拿 Cookie，**没有非 Windows 实现**；非 Windows
-// 平台由调用点的 `#[cfg(not(target_os = "windows"))]` 分支直接返回错误。
-// 改这里时两边分支都要顾到：本机 cargo check 只会编译 Windows 那一半。
+// 这一族对外只暴露 5 个命令，私有辅助函数全部只被它们调用，所以整体收在一个模块里。
+// 注意其中 6 个（`CookieMonitorCtx` 及其配套的 arm/capture/poll/extract 一组）带
+// `#[cfg(target_os = "windows")]`——它们靠 WebView2 的 CoreWebView2 接口拿 Cookie，
+// **没有非 Windows 实现**；非 Windows 平台由调用点的 `#[cfg(not(target_os = "windows"))]`
+// 分支直接返回错误。改这里时两边分支都要顾到：本机 cargo check 只会编译 Windows 那一半。
+//
+// Windows 上有两条提取通道，缺一不可：
+//   主路径 = NavigationCompleted 事件驱动；兜底 = 每 2 秒的轮询（SPA 登录不触发导航事件）。
+//   事件通道建不起来时（CoreWebView2 拿不到 / handler 注册失败 / 闭包压根没被执行），
+//   由 `arm_timeout_and_poll_fallback` 降级到「仅轮询 + 超时通知」。
+//   ⚠️ 那个降级判断绝不能写在 `with_webview` 的返回值上——它是单向投递，返回 Ok
+//   只代表消息发出去了，不代表闭包跑过。详见该函数处的注释。
 
+// Duration 只被 Windows 侧的计时/轮询线程用到；不加 cfg 门的话，
+// 非 Windows 编译会报 unused import（本机 cargo check 只编 Windows 那一半，看不见）。
+#[cfg(target_os = "windows")]
 use std::time::Duration;
 
 use tauri::{Emitter, Manager};
@@ -444,143 +454,6 @@ fn validate_cookie_fields_with_value_checks(
     true
 }
 
-// DEPRECATED: 已被 setup_cookie_event_monitoring 替代，保留供非 Windows 降级使用
-#[tauri::command]
-#[allow(clippy::too_many_arguments)] // Tauri IPC 参数已被前端调用约定固定，拆结构会扩大改动面。
-pub async fn start_cookie_monitoring(
-    app: tauri::AppHandle,
-    service_id: Option<String>,
-    target_domain: Option<String>,
-    target_domains: Option<Vec<String>>,
-    required_fields: Option<Vec<String>>,
-    any_of_fields: Option<Vec<String>>,
-    initial_delay_ms: Option<u64>,
-    polling_interval_ms: Option<u64>,
-) -> Result<(), AppError> {
-    const DEFAULT_INITIAL_DELAY_MS: u64 = 3000;
-    const DEFAULT_POLLING_INTERVAL_MS: u64 = 1000;
-    const MIN_INITIAL_DELAY_MS: u64 = 500;
-    const MAX_INITIAL_DELAY_MS: u64 = 10000;
-    const MIN_POLLING_INTERVAL_MS: u64 = 200;
-    const MAX_POLLING_INTERVAL_MS: u64 = 5000;
-
-    let service = service_id.unwrap_or_else(|| "weibo".to_string());
-
-    if !is_safe_service_id(&service) {
-        return Err(AppError::validation(format!(
-            "无效的服务 ID: {}，只允许字母、数字、下划线和连字符",
-            service
-        )));
-    }
-
-    // 不再默认回退到微博域名，使用前端传入的配置
-    let domains: Vec<String> = target_domains
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| target_domain.map(|d| vec![d]).unwrap_or_default());
-    let fields = required_fields.unwrap_or_default();
-    let any_fields = any_of_fields.unwrap_or_default();
-
-    for field in fields.iter().chain(any_fields.iter()) {
-        if !is_safe_field_name(field) {
-            return Err(AppError::validation(format!(
-                "无效的字段名: {}，只允许字母、数字、下划线和连字符",
-                field
-            )));
-        }
-    }
-
-    let initial_delay = initial_delay_ms
-        .unwrap_or(DEFAULT_INITIAL_DELAY_MS)
-        .clamp(MIN_INITIAL_DELAY_MS, MAX_INITIAL_DELAY_MS);
-
-    let polling_interval = polling_interval_ms
-        .unwrap_or(DEFAULT_POLLING_INTERVAL_MS)
-        .clamp(MIN_POLLING_INTERVAL_MS, MAX_POLLING_INTERVAL_MS);
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = (
-            &app,
-            &service,
-            &domains,
-            &fields,
-            &any_fields,
-            initial_delay,
-            polling_interval,
-        );
-        return Err(AppError::external(
-            "当前操作系统暂不支持安全的自动 Cookie 提取，请在 Windows WebView2 环境使用登录授权",
-        ));
-    }
-
-    log::debug!(
-        "[Cookie监控] 开始监控 {} 的Cookie (域名列表: {:?}, 必要字段: {:?}, 任意字段: {:?}, 初始延迟: {}ms, 轮询间隔: {}ms)",
-        service, domains, fields, any_fields, initial_delay, polling_interval
-    );
-
-    let app_handle = app.clone();
-
-    std::thread::spawn(move || {
-        log::debug!("[Cookie监控] 等待 {}ms 后开始检测...", initial_delay);
-        std::thread::sleep(Duration::from_millis(initial_delay));
-
-        let mut check_count = 0;
-        let max_timeout_ms = 240000u64;
-        let max_checks =
-            ((max_timeout_ms.saturating_sub(initial_delay)) / polling_interval).max(10) as i32;
-
-        log::debug!(
-            "[Cookie监控] 最大检查次数: {} (预计总时长: {}ms)",
-            max_checks,
-            initial_delay + (max_checks as u64 * polling_interval)
-        );
-
-        while check_count < max_checks {
-            std::thread::sleep(Duration::from_millis(polling_interval));
-            check_count += 1;
-
-            log::debug!(
-                "[Cookie监控] 第 {}/{} 次检查 (服务: {})",
-                check_count,
-                max_checks,
-                service
-            );
-
-            if let Some(login_webview) = app_handle.get_webview("login-content") {
-                #[cfg(target_os = "windows")]
-                {
-                    if attempt_cookie_capture_and_save_generic(
-                        &login_webview,
-                        &app_handle,
-                        &service,
-                        &domains,
-                        &fields,
-                        &any_fields,
-                    ) {
-                        break;
-                    }
-                }
-
-                #[cfg(not(target_os = "windows"))]
-                {
-                    drop(login_webview);
-                    log::warn!(
-                        "[Cookie监控] 非 Windows 平台已禁用远程页面 IPC 注入；请使用支持请求头 Cookie 提取的平台"
-                    );
-                    break;
-                }
-            } else {
-                log::debug!("[Cookie监控] 登录窗口已关闭，自动停止监控");
-                break;
-            }
-        }
-
-        log::debug!("[Cookie监控] 监控结束（检查次数: {}）", check_count);
-    });
-
-    Ok(())
-}
-
 /// 事件驱动的 Cookie 监控：监听 NavigationCompleted 事件，仅在页面导航完成时提取 Cookie
 #[tauri::command]
 pub async fn setup_cookie_event_monitoring(
@@ -639,45 +512,75 @@ pub async fn setup_cookie_event_monitoring(
             return Err(AppError::external("登录窗口未打开"));
         };
 
-        let app_handle = app.clone();
-        let service_clone = service.clone();
-        let domains_clone = domains.clone();
-        let fields_clone = fields.clone();
-        let any_fields_clone = any_fields.clone();
-        let field_value_checks_clone = field_value_checks.clone();
+        let ctx = CookieMonitorCtx {
+            app: app.clone(),
+            service_id: service.clone(),
+            domains: domains.clone(),
+            required_fields: fields.clone(),
+            any_of_fields: any_fields.clone(),
+            field_value_checks: field_value_checks.clone(),
+            completed: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            armed: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            closure_ran: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            timeout_ms: timeout,
+        };
 
-        let completed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let first_nav_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-        let completed_for_handler = completed.clone();
-        let first_nav_for_handler = first_nav_done.clone();
-
-        let app_for_ready = app.clone();
+        let ctx_for_watchdog = ctx.clone();
         let result = login_webview.with_webview(move |webview| {
             #[cfg(windows)]
             unsafe {
                 use webview2_com::Microsoft::Web::WebView2::Win32::*;
 
+                // 闭包有三个出口（注册成功 / CoreWebView2 失败 / 注册失败），每个都必须发
+                // ready，否则前端只能干等它自己那个 3 秒兜底计时器。用 Drop 守卫兜住所有
+                // 出口，包括将来新增的 early return。
+                //
+                // 这个 emit 原本在 with_webview **返回之后**才执行（旧 L878），而闭包此时
+                // 还没跑——`with_webview` 底层是 proxy.send_event 的单向投递，发完就返回。
+                // 所以那句「通知前端 handler 已注册完成，可以安全跳转」是假的：前端可能在
+                // handler 真正注册好之前就跳转，把首次 NavigationCompleted 丢掉；纯 SPA
+                // 登录页之后可能再无导航事件，兜底就永远起不来。移进闭包后
+                // 「ready = 监控已就绪（事件模式或降级模式）」这个语义才成立。
+                struct ReadyGuard(tauri::AppHandle);
+                impl Drop for ReadyGuard {
+                    fn drop(&mut self) {
+                        let _ = self.0.emit("cookie-monitoring-ready", ());
+                    }
+                }
+                let _ready = ReadyGuard(ctx.app.clone());
+
+                // 给看门狗打卡：闭包确实被事件循环执行到了。必须在任何可能 early return
+                // 之前，否则降级出口会被看门狗误判成「闭包没跑」。
+                ctx.closure_ran
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+
+                let forced = forced_failure_stage();
+
                 let controller = webview.controller();
+
+                // ── 降级点 A：拿不到 CoreWebView2 ──
+                // 为什么在闭包内就地启动兜底、而不是回传给外层判断：
+                // `with_webview` 底层是 send_user_message → proxy.send_event 的单向投递
+                // （tauri-runtime-wry/src/lib.rs），闭包返回类型是 `()`，事件循环调完即丢。
+                // 本命令是 async fn，跑在 tokio 工作线程上，必然不是主线程，所以外层拿到
+                // Ok 时这段代码往往还没执行——回传标志只会读到初值，是竞态。
+                if forced.as_deref() == Some("corewebview2") {
+                    log::warn!("[事件监控] 调试开关强制 CoreWebView2 失败");
+                    arm_timeout_and_poll_fallback(&ctx, "强制降级(CoreWebView2)");
+                    return;
+                }
                 let core = match controller.CoreWebView2() {
                     Ok(c) => c,
                     Err(e) => {
-                        log::warn!("[事件监控] 获取 CoreWebView2 失败: {:?}", e);
+                        log::warn!("[事件监控] 获取 CoreWebView2 失败: {:?}，降级到轮询模式", e);
+                        arm_timeout_and_poll_fallback(&ctx, "CoreWebView2 失败");
                         return;
                     }
                 };
 
                 #[windows_core::implement(ICoreWebView2NavigationCompletedEventHandler)]
                 struct NavHandler {
-                    app_handle: tauri::AppHandle,
-                    service_id: String,
-                    domains: Vec<String>,
-                    required_fields: Vec<String>,
-                    any_of_fields: Vec<String>,
-                    field_value_checks: Option<std::collections::HashMap<String, String>>,
-                    completed: std::sync::Arc<std::sync::atomic::AtomicBool>,
-                    first_nav_done: std::sync::Arc<std::sync::atomic::AtomicBool>,
-                    timeout_ms: u64,
+                    ctx: CookieMonitorCtx,
                 }
 
                 impl ICoreWebView2NavigationCompletedEventHandler_Impl for NavHandler_Impl {
@@ -688,7 +591,7 @@ pub async fn setup_cookie_event_monitoring(
                     ) -> windows_core::Result<()> {
                         use std::sync::atomic::Ordering;
 
-                        if self.completed.load(Ordering::SeqCst) {
+                        if self.ctx.completed.load(Ordering::SeqCst) {
                             return Ok(());
                         }
 
@@ -710,163 +613,54 @@ pub async fn setup_cookie_event_monitoring(
                             is_success.as_bool()
                         );
 
-                        // 首次导航完成（登录页加载好），启动超时计时器 + 轮询兜底
-                        if !self.first_nav_done.swap(true, Ordering::SeqCst) {
-                            log::debug!(
-                                "[事件监控] 登录页加载完成，启动 {}ms 超时计时器 + 轮询兜底",
-                                self.timeout_ms
-                            );
-                            let timeout = self.timeout_ms;
-                            let completed_for_timeout = self.completed.clone();
-                            let app_for_timeout = self.app_handle.clone();
-                            let service_for_timeout = self.service_id.clone();
-
-                            // Issue #4: 分段 sleep，支持提前退出 + 窗口关闭感知
-                            std::thread::spawn(move || {
-                                use std::sync::atomic::Ordering;
-                                let interval = Duration::from_secs(1);
-                                let total = Duration::from_millis(timeout);
-                                let mut elapsed = Duration::ZERO;
-
-                                while elapsed < total {
-                                    std::thread::sleep(interval.min(total - elapsed));
-                                    elapsed += interval;
-                                    if completed_for_timeout.load(Ordering::SeqCst) {
-                                        return;
-                                    }
-                                    if app_for_timeout.get_window("login-window").is_none() {
-                                        log::debug!("[事件监控] 登录窗口已关闭，取消超时计时");
-                                        return;
-                                    }
-                                }
-                                log::warn!(
-                                    "[事件监控] ⏰ {} 超时（{}ms），发送通知",
-                                    service_for_timeout,
-                                    timeout
-                                );
-                                let _ = app_for_timeout
-                                    .emit("cookie-monitoring-timeout", &service_for_timeout);
-                            });
-
-                            // 轮询兜底：SPA 登录流程不触发 NavigationCompleted，定期提取 Cookie
-                            spawn_cookie_poll_fallback(
-                                self.app_handle.clone(),
-                                self.service_id.clone(),
-                                self.domains.clone(),
-                                self.required_fields.clone(),
-                                self.any_of_fields.clone(),
-                                self.field_value_checks.clone(),
-                                self.completed.clone(),
-                                self.timeout_ms,
-                            );
-                        }
+                        // 首次导航完成（登录页加载好）→ 启动超时计时 + 轮询兜底。
+                        // 幂等由 arm_timeout_and_poll_fallback 内部的 armed 令牌保证，
+                        // 所以这里不再自己 swap 标志位。
+                        arm_timeout_and_poll_fallback(&self.ctx, "首次导航");
 
                         if !is_success.as_bool() {
                             return Ok(());
                         }
 
-                        // Issue #2: 将 Cookie 提取移到新线程，避免阻塞 WebView2 UI 线程
-                        // try_extract_cookie_header_generic 内部调用 with_webview + channel 等待，
-                        // 在 UI 线程中调用会死锁
-                        let app = self.app_handle.clone();
-                        let service = self.service_id.clone();
-                        let domains = self.domains.clone();
-                        let required_fields = self.required_fields.clone();
-                        let any_of_fields = self.any_of_fields.clone();
-                        let field_value_checks = self.field_value_checks.clone();
-                        let completed = self.completed.clone();
-
+                        // Issue #2: 将 Cookie 提取移到新线程，避免阻塞 WebView2 UI 线程。
+                        // capture_and_save_once 内部会 with_webview + channel 等待，
+                        // 在 UI 线程中调用会死锁。
+                        let ctx = self.ctx.clone();
                         std::thread::spawn(move || {
                             log::debug!(
                                 "[事件监控] 检测到页面跳转，尝试提取 {} Cookie...",
-                                service
+                                ctx.service_id
                             );
-
-                            let login_webview = match app.get_webview("login-content") {
-                                Some(w) => w,
-                                None => {
-                                    log::debug!("[事件监控] 登录窗口已关闭");
-                                    return;
-                                }
-                            };
-
-                            let merged_cookie = match extract_and_merge_cookies(
-                                &login_webview,
-                                &domains,
-                                "事件监控",
-                            ) {
-                                Some(c) => c,
-                                None => {
-                                    log::debug!("[事件监控] 未提取到 Cookie，等待下次导航...");
-                                    return;
-                                }
-                            };
-
-                            if validate_cookie_fields_with_value_checks(
-                                &service,
-                                &merged_cookie,
-                                &required_fields,
-                                &any_of_fields,
-                                &field_value_checks,
-                            ) {
-                                log::debug!("[事件监控] ✓ {} Cookie 验证通过！保存中...", service);
-                                if completed
-                                    .compare_exchange(
-                                        false,
-                                        true,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    )
-                                    .is_err()
-                                {
-                                    log::debug!("[事件监控] 已被其他线程完成，跳过保存");
-                                    return;
-                                }
-
-                                let app_save = app.clone();
-                                let service_save = service.clone();
-                                let fields_save = required_fields;
-                                let any_fields_save = any_of_fields;
-
-                                tauri::async_runtime::spawn(async move {
-                                    if let Err(e) = save_cookie_from_login(
-                                        merged_cookie,
-                                        Some(service_save),
-                                        Some(fields_save),
-                                        Some(any_fields_save),
-                                        app_save,
-                                    )
-                                    .await
-                                    {
-                                        log::warn!("[事件监控] 保存Cookie失败: {}", e);
-                                    }
-                                });
-                            } else {
-                                log::debug!("[事件监控] ✗ Cookie 验证未通过，等待下次导航...");
-                            }
+                            capture_and_save_once(&ctx, "事件监控");
                         });
 
                         Ok(())
                     }
                 }
 
-                let handler: ICoreWebView2NavigationCompletedEventHandler = NavHandler {
-                    app_handle,
-                    service_id: service_clone,
-                    domains: domains_clone,
-                    required_fields: fields_clone,
-                    any_of_fields: any_fields_clone,
-                    field_value_checks: field_value_checks_clone,
-                    completed: completed_for_handler,
-                    first_nav_done: first_nav_for_handler,
-                    timeout_ms: timeout,
-                }
-                .into();
+                let handler: ICoreWebView2NavigationCompletedEventHandler =
+                    NavHandler { ctx: ctx.clone() }.into();
 
+                // ── 降级点 B：handler 注册不上 ──
+                // 旧代码这里只有一句 warn 加 `return`，注释写着「降级到轮询模式提示」，
+                // 但实际什么都没降级：这个 return 只是退出闭包，外层 `result` 仍是 Ok。
                 let mut token: i64 = 0;
-                if let Err(e) = core.add_NavigationCompleted(&handler, &mut token) {
-                    log::warn!("[事件监控] 注册 NavigationCompleted 失败: {:?}", e);
-                    // 降级到轮询模式提示
+                let registered = if forced.as_deref() == Some("add_handler") {
+                    log::warn!("[事件监控] 调试开关强制跳过 NavigationCompleted 注册");
+                    false
+                } else {
+                    match core.add_NavigationCompleted(&handler, &mut token) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            log::warn!("[事件监控] 注册 NavigationCompleted 失败: {:?}", e);
+                            false
+                        }
+                    }
+                };
+
+                if !registered {
+                    log::warn!("[事件监控] 事件通道不可用，降级到轮询模式");
+                    arm_timeout_and_poll_fallback(&ctx, "handler 注册失败");
                     return;
                 }
 
@@ -874,24 +668,48 @@ pub async fn setup_cookie_event_monitoring(
             }
         });
 
-        // 通知前端 handler 已注册完成，可以安全跳转
-        let _ = app_for_ready.emit("cookie-monitoring-ready", ());
+        // `cookie-monitoring-ready` 的发射已移进闭包（见闭包顶部的 ReadyGuard）。
 
-        if result.is_err() {
-            log::warn!("[事件监控] with_webview 调用失败，降级到轮询模式");
-            // 降级：调用旧的轮询命令
-            return start_cookie_monitoring(
-                app,
-                Some(service),
-                None,
-                Some(domains),
-                Some(fields),
-                Some(any_fields),
-                None,
-                None,
-            )
-            .await;
+        if let Err(e) = result {
+            // 走到这里只剩一种语义：事件循环已关闭、应用正在退出（FailedToSendMessage）。
+            // 此时闭包永远不会执行，而降级轮询依赖的 try_extract_cookie_header_generic
+            // 本身也走 with_webview，同样投递不出去——降级毫无意义，如实报错。
+            log::warn!("[事件监控] with_webview 投递失败（事件循环已关闭）: {}", e);
+            return Err(AppError::external("应用正在退出，无法启动 Cookie 监控"));
         }
+
+        // 看门狗：补上两个降级点都盖不到的最后一个洞——WithWebview 消息始终没被事件循环
+        // 处理，闭包一次都没跑。此时闭包内的降级判断全部落空，而用户看到的是
+        // 「窗口开着、毫无反应、也没有任何提示」，正是本次要修的静默失效。
+        //
+        // ⚠️ 判据必须是 `closure_ran`（闭包跑没跑），**不能**是 `armed`（兜底起没起）。
+        // 用 armed 会顺带把「闭包跑了、handler 也注册了，只是登录页还没加载完」也算进来，
+        // 于是在第 8 秒就抢跑 arm——而 arm 同时启动超时计时，`timeout_ms` 默认只有 60 秒。
+        // 后果：慢网下登录页 25 秒才可用时，倒计时却从第 8 秒起算，用户还在扫码就被弹
+        // 「自动获取超时」，且轮询线程同样到点收工，之后登录成功也再不抓 Cookie。
+        // 掐表的起点必须留给首次导航，这正是 `arm_timeout_and_poll_fallback` 原本的语义。
+        //
+        // 闭包真没跑的情况下没有「首次导航」可等，8 秒起算不存在这个副作用。
+        std::thread::spawn(move || {
+            use std::sync::atomic::Ordering;
+
+            std::thread::sleep(Duration::from_secs(8));
+
+            if ctx_for_watchdog.closure_ran.load(Ordering::SeqCst) {
+                // 闭包已执行：注册成功就等它的 NavigationCompleted，注册失败它自己已经
+                // 就地降级过了。两种情况都轮不到看门狗插手。
+                return;
+            }
+            if ctx_for_watchdog.completed.load(Ordering::SeqCst) {
+                return;
+            }
+            if ctx_for_watchdog.app.get_window("login-window").is_none() {
+                return;
+            }
+
+            log::warn!("[事件监控] 看门狗：8s 内 with_webview 闭包未执行，就地降级到轮询模式");
+            arm_timeout_and_poll_fallback(&ctx_for_watchdog, "看门狗(闭包未执行)");
+        });
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -989,127 +807,228 @@ pub async fn get_request_header_cookie(
     }
 }
 
+/// 一次 Cookie 监控会话的共享上下文。
+///
+/// 同一套参数有四处要用：NavigationCompleted handler、超时计时线程、轮询兜底线程，
+/// 以及事件通道不可用时的两条降级路径。散着传的代价是每处重复六行 `xxx.clone()`，
+/// 还得给函数挂 `#[allow(clippy::too_many_arguments)]`。收进结构体后一次 clone 顶六次，
+/// 将来加字段也不会漏掉某个调用点。
 #[cfg(target_os = "windows")]
-fn attempt_cookie_capture_and_save_generic(
-    login_window: &tauri::Webview,
-    app_handle: &tauri::AppHandle,
-    service_id: &str,
-    target_domains: &[String],
-    required_fields: &[String],
-    any_of_fields: &[String],
-) -> bool {
-    let merged_cookie = match extract_and_merge_cookies(login_window, target_domains, "Cookie监控")
-    {
-        Some(c) => c,
-        None => {
-            log::debug!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
-            return false;
-        }
-    };
-
-    if validate_cookie_fields(service_id, &merged_cookie, required_fields, any_of_fields) {
-        log::debug!("[Cookie监控] ✓ 验证通过，尝试保存 {} Cookie", service_id);
-        match tauri::async_runtime::block_on(save_cookie_from_login(
-            merged_cookie.clone(),
-            Some(service_id.to_string()),
-            Some(required_fields.to_vec()),
-            Some(any_of_fields.to_vec()),
-            app_handle.clone(),
-        )) {
-            Ok(_) => {
-                log::debug!("[Cookie监控] ✓ {} Cookie保存成功", service_id);
-                true
-            }
-            Err(err) => {
-                log::warn!("[Cookie监控] 保存Cookie失败: {}", err);
-                false
-            }
-        }
-    } else {
-        log::debug!("[Cookie监控] ✗ 验证失败，Cookie 缺少必要字段，继续等待...");
-        false
-    }
-}
-
-/// SPA 轮询兜底：定期从 WebView 提取 Cookie 并验证
-/// 用于 SPA 登录流程不触发 NavigationCompleted 的场景
-#[cfg(target_os = "windows")]
-#[allow(clippy::too_many_arguments)] // Cookie 轮询兜底沿用调用方拆开的 IPC 参数，保持局部兼容。
-fn spawn_cookie_poll_fallback(
+#[derive(Clone)]
+struct CookieMonitorCtx {
     app: tauri::AppHandle,
     service_id: String,
     domains: Vec<String>,
     required_fields: Vec<String>,
     any_of_fields: Vec<String>,
     field_value_checks: Option<std::collections::HashMap<String, String>>,
+    /// 会话终态：Cookie 已成功保存。后台线程读到 true 立即退出；
+    /// 抢保存权用 `compare_exchange`，保证只有一个线程真的写配置。
     completed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// 一次性令牌：「超时计时 + 轮询兜底」这一对是否已启动。
+    /// 取代原来的 `first_nav_done`——旧名字把「首次导航发生过」和「兜底已启动」
+    /// 绑成一件事，但降级路径下根本没有导航，那个名字会骗人。
+    armed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// `with_webview` 的闭包是否真的被事件循环执行过。
+    /// 只服务于看门狗：它要兜的是「闭包一次都没跑」，而不是「还没导航」。
+    /// 两者必须分开——见看门狗处的注释。
+    closure_ran: std::sync::Arc<std::sync::atomic::AtomicBool>,
     timeout_ms: u64,
-) {
+}
+
+/// 强制走降级路径的调试开关，取值 `corewebview2` / `add_handler`。
+///
+/// 为什么需要它：两个降级点要 WebView2 自身出故障才会走到，正常机器上永远复现不了。
+/// 结果就是这两条分支从上线到今天，`cargo test` 和真机验收**都没碰过**——
+/// 2026-09-09 那次真机验收命中的是「✓ NavigationCompleted 事件注册成功」，
+/// `[轮询兜底]` 日志一次都没出现。没有人为触发口，修完仍然只是「看起来对」。
+///
+/// 只在 debug 构建下读环境变量：release 包里这个函数恒返回 `None`，
+/// 编译器会把两处判断整个折叠掉，不构成配置面或攻击面。
+#[cfg(all(target_os = "windows", debug_assertions))]
+fn forced_failure_stage() -> Option<String> {
+    std::env::var("PICNEXUS_COOKIE_FORCE_FALLBACK").ok()
+}
+
+#[cfg(all(target_os = "windows", not(debug_assertions)))]
+fn forced_failure_stage() -> Option<String> {
+    None
+}
+
+/// 启动「超时计时线程 + 轮询兜底线程」这一对兜底设施，一次会话只生效一次。
+///
+/// 为什么必须成对启动：轮询线程跑满 timeout 后是**静默返回**的，
+/// `cookie-monitoring-timeout` 只有超时线程会发。少启一个，用户就落进
+/// 「窗口开着、永远没反应、也没有任何提示」的静默失效。
+///
+/// 为什么幂等收口在这里：四处触发（首次导航 / CoreWebView2 失败 / handler 注册失败 /
+/// 看门狗）理论上互斥，但把判断散在调用点，日后漏一处就会把超时提示发两遍。
+///
+/// ⚠️ 本函数同时启动超时计时，所以**调用时刻就是掐表起点**。正常路径下这个起点必须是
+/// 首次导航完成（登录页可用），不能提前——`timeout_ms` 默认只有 60 秒，提前多少就等于
+/// 从用户的输密码/扫码时间里扣多少。看门狗因此只在「闭包压根没执行」时才调它。
+///
+/// ⚠️ 调用约束：本函数会被 WebView2 UI 线程调用，**只允许 spawn，不允许阻塞**。
+/// 尤其不能在这里直接调 `try_extract_cookie_header_generic`——它内部 `with_webview`
+/// 再阻塞等 channel，在 UI 线程上调必死锁。
+#[cfg(target_os = "windows")]
+fn arm_timeout_and_poll_fallback(ctx: &CookieMonitorCtx, reason: &str) {
+    use std::sync::atomic::Ordering;
+
+    if ctx.armed.swap(true, Ordering::SeqCst) {
+        log::debug!("[事件监控] 兜底设施已启动，跳过重复启动（触发源: {}）", reason);
+        return;
+    }
+
+    log::debug!(
+        "[事件监控] 启动 {}ms 超时计时器 + 轮询兜底（触发源: {}）",
+        ctx.timeout_ms,
+        reason
+    );
+
+    // 超时计时线程：分段 sleep，支持提前退出 + 窗口关闭感知
+    {
+        let app = ctx.app.clone();
+        let service_id = ctx.service_id.clone();
+        let completed = ctx.completed.clone();
+        let timeout_ms = ctx.timeout_ms;
+
+        std::thread::spawn(move || {
+            let interval = Duration::from_secs(1);
+            let total = Duration::from_millis(timeout_ms);
+            let mut elapsed = Duration::ZERO;
+
+            while elapsed < total {
+                std::thread::sleep(interval.min(total - elapsed));
+                elapsed += interval;
+                if completed.load(Ordering::SeqCst) {
+                    return;
+                }
+                if app.get_window("login-window").is_none() {
+                    log::debug!("[事件监控] 登录窗口已关闭，取消超时计时");
+                    return;
+                }
+            }
+
+            log::warn!(
+                "[事件监控] ⏰ {} 超时（{}ms），发送通知",
+                service_id,
+                timeout_ms
+            );
+            let _ = app.emit("cookie-monitoring-timeout", &service_id);
+        });
+    }
+
+    spawn_cookie_poll_fallback(ctx.clone());
+}
+
+/// 提取 → 校验 → 抢占保存权 → 异步落盘，返回本次是否抢到并保存。
+///
+/// 事件监控线程与轮询兜底线程共用这一段：两者原本是同一段逻辑的两份拷贝
+/// （NavigationCompleted 分支与轮询循环各写了一遍），改一处忘另一处只是时间问题。
+/// `completed` 的 `compare_exchange` 保证两条路径抢的是同一把锁，Cookie 只保存一次。
+///
+/// ⚠️ 调用约束：必须在**非 WebView2 UI 线程**调用。内部 `extract_and_merge_cookies`
+/// → `try_extract_cookie_header_generic` 会 `with_webview` 再阻塞等 channel，
+/// 在 UI 线程上调必死锁。
+#[cfg(target_os = "windows")]
+fn capture_and_save_once(ctx: &CookieMonitorCtx, log_prefix: &str) -> bool {
+    use std::sync::atomic::Ordering;
+
+    let Some(login_webview) = ctx.app.get_webview("login-content") else {
+        log::debug!("[{}] 登录窗口已关闭", log_prefix);
+        return false;
+    };
+
+    let Some(merged_cookie) = extract_and_merge_cookies(&login_webview, &ctx.domains, log_prefix)
+    else {
+        log::debug!("[{}] 未提取到 Cookie，等待下次机会...", log_prefix);
+        return false;
+    };
+
+    if !validate_cookie_fields_with_value_checks(
+        &ctx.service_id,
+        &merged_cookie,
+        &ctx.required_fields,
+        &ctx.any_of_fields,
+        &ctx.field_value_checks,
+    ) {
+        log::debug!("[{}] ✗ Cookie 验证未通过，等待下次机会...", log_prefix);
+        return false;
+    }
+
+    log::debug!(
+        "[{}] ✓ {} Cookie 验证通过！保存中...",
+        log_prefix,
+        ctx.service_id
+    );
+
+    if ctx
+        .completed
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        log::debug!("[{}] 已被其他线程完成，跳过保存", log_prefix);
+        return false;
+    }
+
+    let app_save = ctx.app.clone();
+    let service_save = ctx.service_id.clone();
+    let fields_save = ctx.required_fields.clone();
+    let any_fields_save = ctx.any_of_fields.clone();
+    let prefix = log_prefix.to_string();
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = save_cookie_from_login(
+            merged_cookie,
+            Some(service_save),
+            Some(fields_save),
+            Some(any_fields_save),
+            app_save,
+        )
+        .await
+        {
+            log::warn!("[{}] 保存Cookie失败: {}", prefix, e);
+        }
+    });
+
+    true
+}
+
+/// SPA 轮询兜底：定期从 WebView 提取 Cookie 并验证。
+/// 用于 SPA 登录流程不触发 NavigationCompleted 的场景；事件通道不可用时
+/// （见 `arm_timeout_and_poll_fallback` 的三个触发源）它是唯一的提取通道。
+#[cfg(target_os = "windows")]
+fn spawn_cookie_poll_fallback(ctx: CookieMonitorCtx) {
     use std::sync::atomic::Ordering;
 
     std::thread::spawn(move || {
         let poll_interval = Duration::from_secs(2);
-        let total = Duration::from_millis(timeout_ms);
+        let total = Duration::from_millis(ctx.timeout_ms);
 
         // 初始延迟 3 秒，分段 sleep 以感知窗口关闭
         for _ in 0..3 {
             std::thread::sleep(Duration::from_secs(1));
-            if completed.load(Ordering::SeqCst) || app.get_window("login-window").is_none() {
+            if ctx.completed.load(Ordering::SeqCst) || ctx.app.get_window("login-window").is_none()
+            {
                 return;
             }
         }
         let mut elapsed = Duration::from_secs(3);
 
         while elapsed < total {
-            if completed.load(Ordering::SeqCst) {
+            if ctx.completed.load(Ordering::SeqCst) {
                 log::debug!("[轮询兜底] Cookie 已获取，轮询退出");
                 return;
             }
 
-            let Some(login_webview) = app.get_webview("login-content") else {
+            if ctx.app.get_webview("login-content").is_none() {
                 log::debug!("[轮询兜底] 登录窗口已关闭，轮询退出");
                 return;
-            };
+            }
 
-            if let Some(merged_cookie) =
-                extract_and_merge_cookies(&login_webview, &domains, "轮询兜底")
-            {
-                if validate_cookie_fields_with_value_checks(
-                    &service_id,
-                    &merged_cookie,
-                    &required_fields,
-                    &any_of_fields,
-                    &field_value_checks,
-                ) {
-                    log::debug!("[轮询兜底] ✓ {} Cookie 验证通过！保存中...", service_id);
-                    if completed
-                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_err()
-                    {
-                        log::debug!("[轮询兜底] 已被其他线程完成，跳过保存");
-                        return;
-                    }
-
-                    let app_save = app.clone();
-                    let service_save = service_id.clone();
-                    let fields_save = required_fields.clone();
-                    let any_fields_save = any_of_fields.clone();
-
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = save_cookie_from_login(
-                            merged_cookie,
-                            Some(service_save),
-                            Some(fields_save),
-                            Some(any_fields_save),
-                            app_save,
-                        )
-                        .await
-                        {
-                            log::warn!("[轮询兜底] 保存Cookie失败: {}", e);
-                        }
-                    });
-                    return;
-                }
+            if capture_and_save_once(&ctx, "轮询兜底") {
+                return;
             }
 
             std::thread::sleep(poll_interval);
@@ -1320,3 +1239,6 @@ fn try_extract_cookie_header_generic(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

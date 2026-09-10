@@ -67,7 +67,9 @@ async function handleStartLogin() {
       finishReady();
     }, 3000);
 
-    // 使用事件驱动的 Cookie 监控（NavigationCompleted），非 Windows 自动降级到轮询
+    // 使用事件驱动的 Cookie 监控（NavigationCompleted）。仅 Windows 支持；
+    // WebView2 事件通道建不起来时后端自动降级为轮询，前端无需感知。
+    // 非 Windows 平台这里直接抛错（提取依赖 WebView2，没有跨平台实现）。
     await invoke('setup_cookie_event_monitoring', {
       serviceId,
       targetDomains: provider.domains,

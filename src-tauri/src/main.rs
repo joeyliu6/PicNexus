@@ -288,7 +288,6 @@ fn main() {
             commands::cookie_login::open_login_window,
             commands::cookie_login::show_login_window,
             commands::cookie_login::save_cookie_from_login,
-            commands::cookie_login::start_cookie_monitoring,
             commands::cookie_login::setup_cookie_event_monitoring,
             commands::cookie_login::get_request_header_cookie,
             commands::r2::test_r2_connection,
