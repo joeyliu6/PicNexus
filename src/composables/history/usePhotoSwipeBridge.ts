@@ -20,9 +20,8 @@ import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } fro
  * 对齐 motion.css 的 token**，改动时两边一起改。
  *
  * 开慢关快是 motion.css 的既定原则（"进入略慢给感知，退出略快不拖沓"）：
- * 开场 300ms + decelerate（快启慢停，图片送到眼前轻轻落位），
- * 关场 200ms + accelerate（慢启快走，先粘一下再迅速收走）。
- * 原先 300/280 两头几乎一样长，等于没体现这条原则。
+ * 开场 300ms、关场 200ms。原先 300/280 两头几乎一样长，等于没体现这条原则。
+ * 曲线两头都用 decelerate，理由见 EASE_DECELERATE。
  */
 /** = --duration-medium */
 export const SHOW_ANIMATION_DURATION = 300;
@@ -30,10 +29,16 @@ export const SHOW_ANIMATION_DURATION = 300;
 export const HIDE_ANIMATION_DURATION = 200;
 /** = --duration-normal */
 export const ZOOM_ANIMATION_DURATION = 200;
-/** = --ease-decelerate，开场用 */
+/**
+ * = --ease-decelerate（快启慢停）。开场和关场都用它。
+ *
+ * 关场为什么不用 accelerate：这不是"退出"，而是**收回到一个具体落点**。
+ * accelerate 的末段速度最快，实测最后 20ms 里图片会从 418px 猛缩到 300px ——
+ * 观感是"啪"地被吸进去，而且留给缩略图卡片接手的窗口只剩几毫秒。
+ * decelerate 反过来：早早逼近落点，最后轻轻贴上去，容错窗口也宽得多。
+ * accelerate 适合的是"飞出屏幕、不用管落在哪"的那类退出。
+ */
 const EASE_DECELERATE = 'cubic-bezier(0, 0, 0.2, 1)';
-/** = --ease-accelerate，关场用 */
-const EASE_ACCELERATE = 'cubic-bezier(0.4, 0, 1, 1)';
 
 /**
  * 加载指示器延迟（ms）
@@ -129,7 +134,7 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
     showAnimationDuration: motionDuration(SHOW_ANIMATION_DURATION),
     hideAnimationDuration: motionDuration(HIDE_ANIMATION_DURATION),
     zoomAnimationDuration: motionDuration(ZOOM_ANIMATION_DURATION),
-    // 关场会在 close 回调里改成 EASE_ACCELERATE
+    // 开场关场同一条曲线，理由见 EASE_DECELERATE 的说明
     easing: EASE_DECELERATE,
     // 禁用 PhotoSwipe 默认 UI（用我们自己的）
     arrowPrev: false,
@@ -477,13 +482,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
        * 后面才开始跑 hide 动画，动画结束才 remove。
        */
       thisInstance.element?.classList.add('is-pswp-closing');
-
-      /*
-       * 关场换成"慢启快走"的曲线。opener 要到本回调返回之后才读 options.easing，
-       * 所以此刻改还来得及；PhotoSwipe 只有一个 easing 选项，开关想用不同曲线
-       * 就得这样在中途换。
-       */
-      thisInstance.options.easing = EASE_ACCELERATE;
 
       closeTargetMode = options.resolveCloseTargetMode?.() ?? 'auto';
 

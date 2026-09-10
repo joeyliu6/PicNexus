@@ -90,18 +90,30 @@
  * （photoswipe.esm.js 的 _onAnimationComplete → destroy → element.remove）。
  * 所以卡片必须赶在那一帧之前就位，否则会先露出一段空白 —— 那是"跳一下"的另一半。
  *
- * 时长与 HIDE_ANIMATION_DURATION 同源（都是 --duration-normal），
- * 末段留一小截淡入而不是硬切：万一 CSS 与 PhotoSwipe 的计时差了几毫秒，
- * 淡入期间两张图重叠也看不出来（此刻大图已经收到和卡片几乎一样的位置和尺寸），
- * 而硬切一旦早于大图消失，就会露出一帧双影。
+ * ⚠️ 必须补 animation-delay：PhotoSwipe 的 CSSAnimation 要先过 setTimeout(0)
+ * 再过 setTimeout(30) 才真正给元素写目标值（源码里那句 "Do not reduce this
+ * number"），也就是大图比本动画晚约 30ms 起跑。不补这一段，卡片会提前
+ * 显形在大图还差一大截的时候 —— 屏幕上就是两个错开的框。
+ *
+ * 主时长与 HIDE_ANIMATION_DURATION 同源（都是 --duration-normal）。
+ * 末段留一小截淡入而不是硬切：此刻大图已经收到与卡片几乎重合的位置和尺寸，
+ * 即便两边计时差几毫秒，重叠也看不出来；硬切一旦早于大图消失就是一帧双影。
  */
+:root {
+  /*
+   * 对齐 photoswipe.esm.js 里 CSSAnimation 启动前那个写死的 setTimeout(…, 30)。
+   * 是外部库的常量，不属于本项目的 duration 档位，所以单独留一个局部变量并注明出处。
+   */
+  --pswp-anim-start-delay: 30ms;
+}
+
 @keyframes preview-land-in {
   0%, 85% { opacity: 0; }
   100% { opacity: 1; }
 }
 
 .global-thumb-hover-preview.is-lightbox-landing img {
-  animation: preview-land-in var(--duration-normal) linear forwards;
+  animation: preview-land-in var(--duration-normal) linear var(--pswp-anim-start-delay) forwards;
 }
 
 /* 关掉动效时不做渐进，直接让卡片就位 —— duration 归零会让 keyframes 失去意义 */
