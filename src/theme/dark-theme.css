@@ -72,6 +72,25 @@
   --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.3),
                   0 10px 10px -5px rgba(0, 0, 0, 0.2);
 
+  /*
+   * 表格缩略图的悬浮预览卡片。
+   * 暗色底上纯黑投影是看不见的，所以第一条用 1px 半透明白环替代实体边框来"起边"，
+   * 后两条才是投影。三条一起才有"浮起来"的层次，缺了白环预览会糊在背景里。
+   */
+  --shadow-preview: 0 0 0 1px rgba(255, 255, 255, 0.10),
+                    0 2px 8px rgba(0, 0, 0, 0.55),
+                    0 16px 40px rgba(0, 0, 0, 0.65);
+
+  /*
+   * 灯箱主图描边。灯箱背景恒为暗色（light-theme 下也被强制覆盖），故两个主题同值。
+   * 刻意 0 blur / 0 spread：.pswp__img 带 will-change，任何模糊半径都会把每帧的
+   * 合成层向外撑大同样的尺寸，而黑影打在近黑背景上本来就等于没画。
+   */
+  --shadow-lightbox-image: 0 0 0 1px rgba(255, 255, 255, 0.08);
+
+  /* 灯箱影院暗角。两个主题同值，理由同上 */
+  --lightbox-vignette: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.6) 100%);
+
   /* ===== 焦点环 ===== */
   --focus-ring-shadow: none;
 

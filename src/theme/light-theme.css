@@ -133,6 +133,18 @@
   --shadow-xs: 0 2px 4px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
 
+  /*
+   * 悬浮预览卡片。亮色下不用暗色那种单层大模糊——那样只会发灰，
+   * 改成"近距贴地影 + 中距扩散影"两层，边缘更利落。首条 1px 环同样替代实体边框。
+   */
+  --shadow-preview: 0 0 0 1px rgba(15, 23, 42, 0.06),
+                    0 2px 6px rgba(15, 23, 42, 0.08),
+                    0 12px 28px rgba(15, 23, 42, 0.16);
+
+  /* 灯箱恒为暗色，这两项与 dark-theme.css 同值；写在这里只为满足"两个主题成对定义"的约定 */
+  --shadow-lightbox-image: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --lightbox-vignette: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.6) 100%);
+
   /* ===== 遮罩 & 透明叠加层覆盖 ===== */
   --overlay-modal: rgba(0, 0, 0, 0.5);
   --hover-overlay-md: rgba(0, 0, 0, 0.08);
