@@ -50,8 +50,7 @@ mocked E2E 通过 `tests/e2e/vite.config.ts` 把 Tauri API alias 到 `tests/e2e/
 |--------|------|
 | `tests/unit/helpers/vueMount.ts` | 组件测试优先用 `mountWithDefaults` / `shallowMountWithDefaults`。它内置 `v-tooltip` 测试替身、`Teleport` stub、`Transition` 配置；查 `data-testid` 用 `findByTestId` |
 | `tests/unit/helpers/wait.ts` | 异步刷新优先用 `flushPromisesAndTicks`、`flushTicks`；定时器用 `useFakeTimers`、`advanceTimersByTime`、`runPendingTimers` |
-| `tests/unit/helpers/tauriMock.ts` | 普通 Tauri API mock 统一用这里的 `setupInvokeResponses`、`setupInvokeHandler`、`mockInvokeResponse`、`mockInvokeError`、`resetTauriMocks`、`get*Mock` |
-| `tests/unit/helpers/clipboardMock.ts` | 剪贴板场景用 `mockClipboardText`、`mockClipboardReadError`、`mockClipboardWriteError`、`getClipboardTextWriteMock`、`resetClipboardMock` |
+| `tests/unit/helpers/tauriMock.ts` | 普通 Tauri API mock 统一用这里的 `setupInvokeResponses`、`setupInvokeHandler`、`mockInvokeResponse`、`mockInvokeError`、`resetTauriMocks`、`get*Mock`；剪贴板场景用 `getClipboardMocks()` 拿 `writeText` / `readText` / `writeImage` / `readImage` 的 mock（独立的 `clipboardMock.ts` 已于 2026-09-09 删除） |
 | `tests/unit/factories` | 需要结构化业务对象时优先用工厂：`createConfig`、`createHistoryItem`、`createQueueItem`、`createMockUploader`、`createLinkCheckRow` 等 |
 | `tests/unit/fixtures` | 多个测试共享的固定数据用 fixtures：`historyRows`、`favoriteHistoryRows`、`linkCheckRows`、`selectedLinkCheckRows`、`imageUrls` |
 

@@ -20,7 +20,7 @@ const log = createLogger('WebDAV');
  * **这里做不到**——`webdav_request` 的返回值只有 `{status, body}`，拿不到响应头。
  *
  * 但缺口只剩同步过程中的 PUT/GET 这一档：备份的「测试连接」由 Rust 的
- * `main.rs::probe_webdav_connection` 覆盖，它与图床链路共用同一个 `describe_status`。
+ * `commands/webdav_backup.rs::probe_webdav_connection` 覆盖，它与图床链路共用同一个 `describe_status`。
  * 而连接测试是同步的前置门槛，撞 Digest 必然先在那里撞到。
  */
 export const WEBDAV_AUTH_FAILED_MESSAGE = '认证失败，请检查用户名和密码';

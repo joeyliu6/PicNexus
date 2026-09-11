@@ -67,7 +67,7 @@ Obsidian 插件已提交到 [Obsidian Community](https://community.obsidian.md/p
 Vue 3 前端（Composition API）
 ├── Views — 上传 / 历史 / 时间轴 / 收藏 / 设置
 ├── Composables — 业务逻辑复用层
-├── Core — MultiServiceUploader 多图床编排 + LinkGenerator 链接生成
+├── Core — MultiServiceUploader 多图床编排 + UploadQueue 上传队列
 ├── Uploaders — 工厂 + 策略模式，每个图床一个上传器实现
 └── Services — HistoryDatabase (SQLite) + Store (AES-GCM 加密配置)
 
