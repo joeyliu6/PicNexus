@@ -4,6 +4,7 @@ import { useToast } from '@/composables/useToast';
 import { useCopyLink } from '@/composables/useCopyLink';
 import { createLogger } from '@/utils/logger';
 import { openUserExternalUrl } from '@/security/shellOpen';
+import { getErrorMessage } from '@/types/errors';
 
 const logger = createLogger('LightboxActions');
 const COPY_FEEDBACK_DURATION = 2000;
@@ -87,7 +88,8 @@ export function useLightboxActions({ item, resetZoom, onDelete }: LightboxAction
       await openUserExternalUrl(finalUrl);
     } catch (err) {
       logger.error('打开链接失败:', err);
-      toast.error('打开失败', String(err));
+      // openUserExternalUrl 底层是 open_path 命令，失败时 reject 的是 AppError
+      toast.error('打开失败', getErrorMessage(err));
     }
   }
 

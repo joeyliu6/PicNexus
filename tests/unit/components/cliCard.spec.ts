@@ -214,4 +214,33 @@ describe('CliCard', () => {
     expect(updates.at(-1)?.[0]).toMatchObject({ cliEnabled: false });
     expect(wrapper.find('.path-status-note.error').exists()).toBe(true);
   });
+
+  it('shows the AppError message from get_cli_path_status instead of the generic fallback', async () => {
+    // Rust 的 AppError 序列化后是 { type, data: { message } }：文案在 data.message，顶层没有 message
+    setupInvokeResponses({
+      get_cli_path_status: () => {
+        throw { type: 'FILE_IO', data: { message: '读取 PATH 失败：注册表不可访问' } };
+      },
+    });
+
+    const wrapper = mountCliCard();
+    await flush();
+
+    const note = wrapper.get('.path-status-note.error');
+    expect(note.text()).toContain('读取 PATH 失败：注册表不可访问');
+    expect(note.text()).not.toContain('操作失败，请稍后重试');
+  });
+
+  it('keeps the generic fallback for errors that carry no message at all', async () => {
+    setupInvokeResponses({
+      get_cli_path_status: () => {
+        throw 42;
+      },
+    });
+
+    const wrapper = mountCliCard();
+    await flush();
+
+    expect(wrapper.get('.path-status-note.error').text()).toContain('操作失败，请稍后重试');
+  });
 });

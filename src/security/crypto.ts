@@ -2,6 +2,7 @@
 // v3.0: 支持备份密码加密模式，可跨电脑恢复配置
 import { invoke } from '@tauri-apps/api/core';
 import { createLogger } from '@/utils/logger';
+import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('SecureStorage');
 
@@ -250,7 +251,8 @@ export class SecureStorage {
           log.info('✓ 密钥初始化成功');
         } catch (error) {
           this.initPromise = null; // 失败时允许重试
-          const errorMsg = error instanceof Error ? error.message : String(error);
+          // get_or_create_secure_key 失败时 reject 的是 AppError，String() 会渲染成 [object Object]
+          const errorMsg = getErrorMessage(error);
           log.error('密钥初始化失败:', errorMsg);
           throw new Error(`密钥初始化失败: ${errorMsg}`);
         }

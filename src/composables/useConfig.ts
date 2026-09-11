@@ -376,7 +376,8 @@ export function useConfigManager() {
 
       log.info(`✓ ${provider.name} 窗口创建成功`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      // open_login_window 失败时 reject 的是 AppError，String() 会渲染成 [object Object]
+      const errorMessage = getErrorMessage(error);
       log.error('打开窗口失败:', errorMessage);
       toast.showConfig('error', TOAST_MESSAGES.auth.loginWindowFailed(errorMessage));
     }

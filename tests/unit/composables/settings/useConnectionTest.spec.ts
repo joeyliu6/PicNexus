@@ -371,6 +371,27 @@ describe('useConnectionTest', () => {
     expect(mockState.toastShowConfig).toHaveBeenCalledWith('error', expect.any(Object));
   });
 
+  it('routes cookie-test rejections through errorToString so AppError objects do not render as [object Object]', async () => {
+    // Rust 的 AppError 序列化后是 { type, data: { message } }，不是 Error 实例
+    const appError = { type: 'AUTH', data: { message: 'Cookie 已失效，请重新登录' } };
+    setupInvokeHandler((command) => {
+      if (command === 'test_zhihu_connection') throw appError;
+      return undefined;
+    });
+
+    const { api, errorToString } = createHarness();
+    errorToString.mockImplementation((error: unknown) =>
+      error === appError ? appError.data.message : String(error));
+
+    await api.handleServiceTest('zhihu');
+
+    expect(errorToString).toHaveBeenCalledWith(appError);
+    expect(mockState.toastShowConfig).toHaveBeenCalledWith('error', expect.objectContaining({
+      summary: '测试失败',
+      detail: 'Cookie 已失效，请重新登录',
+    }));
+  });
+
   it('skips unknown services and reports missing custom S3 profiles during prevalidation', async () => {
     setupInvokeHandler(() => {
       throw new Error('should not invoke');

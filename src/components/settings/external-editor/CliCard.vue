@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import Button from 'primevue/button';
 import type { EditorServerConfig } from '@/config/types';
 import { useToast } from '@/composables/useToast';
+import { isAppError } from '@/types/errors';
 import CollapsibleSettingsCard from '@/components/settings/CollapsibleSettingsCard.vue';
 
 interface Props {
@@ -85,6 +86,9 @@ const attentionTooltip = computed(() => (
 ));
 
 function errorToMessage(error: unknown): string {
+  // get_cli_path_status / add_cli_to_path / remove_cli_from_path 失败时 reject 的是 AppError，
+  // 文案在 data.message 里而不是顶层 message，不单独判会退成兜底文案、丢掉后端给的原因
+  if (isAppError(error)) return error.data.message;
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object' && 'message' in error) {

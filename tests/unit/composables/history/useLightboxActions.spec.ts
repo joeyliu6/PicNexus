@@ -193,6 +193,17 @@ describe('useLightboxActions', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the AppError message from open_path instead of [object Object]', async () => {
+    const harness = mountHarness();
+
+    // Rust 的 AppError 序列化后是 { type, data: { message } }，不是 Error 实例
+    getInvokeMock().mockRejectedValueOnce({ type: 'FILE_IO', data: { message: '无法访问路径: x' } });
+    await harness.api().openInBrowser();
+
+    expect(toastErrorMock).toHaveBeenCalledWith('打开失败', '无法访问路径: x');
+    expect(String(toastErrorMock.mock.calls[0]?.[1])).not.toContain('[object Object]');
+  });
+
   it('resets zoom and delegates deletion for the current item without a second confirmation', () => {
     const harness = mountHarness();
 

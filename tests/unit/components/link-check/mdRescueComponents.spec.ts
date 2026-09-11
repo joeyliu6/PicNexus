@@ -23,13 +23,15 @@ const lastRepairMocks = vi.hoisted(() => ({
   isLastRepairRestorable: vi.fn(),
 }));
 
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  warn: vi.fn(),
+  success: vi.fn(),
+  silent: vi.fn(),
+}));
+
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({
-    error: vi.fn(),
-    warn: vi.fn(),
-    success: vi.fn(),
-    silent: vi.fn(),
-  }),
+  useToast: () => toastMocks,
 }));
 
 vi.mock('@/composables/useConfig', async () => {
@@ -229,6 +231,33 @@ describe('Markdown rescue P1 components', () => {
 
     await wrapper.findAll('.mr-group-icon-btn')[0].trigger('click');
     expect(getInvokeMock()).toHaveBeenCalledWith('open_path', { path: 'C:/docs' });
+  });
+
+  it('RescueBrokenGroups shows the AppError message when open_path fails, not [object Object]', async () => {
+    // Rust 的 AppError 序列化后是 { type, data: { message } }，不是 Error 实例
+    getInvokeMock().mockImplementation(async (command) => {
+      if (command === 'open_path') throw { type: 'FILE_IO', data: { message: '无法访问路径: C:/docs' } };
+      return undefined;
+    });
+
+    const wrapper = mountWithDefaults(RescueBrokenGroups, {
+      props: {
+        imageLinks: [mdLink({ url: 'https://dead.example.com/rescuable.png', backupLinks: [] })],
+        isRepaired: false,
+        phase: 'done',
+        scanStage: 'idle',
+        isCollecting: false,
+        healedFiles: new Set(),
+        emptyIcon: 'pi pi-search',
+        emptyTitle: 'empty',
+        emptyDesc: 'empty desc',
+      },
+    });
+
+    await wrapper.findAll('.mr-group-icon-btn')[0].trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(toastMocks.error).toHaveBeenCalledWith('无法打开文件夹', '无法访问路径: C:/docs');
   });
 
   it('RescueFixingCards shows active, pending, and done repair states', () => {

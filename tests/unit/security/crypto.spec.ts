@@ -169,6 +169,13 @@ describe('SecureStorage', () => {
       // 失败后 initPromise 已清空，第二次应成功
       await expect(storage.init()).resolves.toBeUndefined();
     });
+
+    it('Rust 抛 AppError 时错误文案带上后端原因，不是 [object Object]', async () => {
+      // AppError 序列化后是 { type, data: { message } }，不是 Error 实例
+      invokeMock.mockRejectedValueOnce({ type: 'CONFIG', data: { message: '系统凭据管理器不可用' } });
+
+      await expect(storage.init()).rejects.toThrow('密钥初始化失败: 系统凭据管理器不可用');
+    });
   });
 
   // --- forceReinit ---

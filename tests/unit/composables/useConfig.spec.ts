@@ -369,6 +369,19 @@ describe('useConfigManager', () => {
       expect(result.message).toBe('Cookie 已失效，请重新登录');
       expect(result.message).not.toContain('[object Object]');
     });
+
+    it('openCookieWebView 失败时 toast 透传 AppError 的文案，不是 [object Object]', async () => {
+      mockedInvoke.mockRejectedValue(appError('EXTERNAL', '创建登录窗口失败: 已存在同名窗口'));
+
+      const { openCookieWebView } = useConfigManager();
+      await openCookieWebView('weibo');
+
+      expect(mockedInvoke).toHaveBeenCalledWith('open_login_window', expect.objectContaining({ serviceId: 'weibo' }));
+      expect(toastShowConfigMock).toHaveBeenCalledWith('error', {
+        summary: '失败',
+        detail: '创建登录窗口失败: 已存在同名窗口',
+      });
+    });
   });
 
   // ─── setupCookieListener ──────────────────────────

@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { initLoginTheme } from '@/composables/useLoginTheme';
 import { createLogger } from '@/utils/logger';
+import { getErrorMessage } from '@/types/errors';
 
 const appWindow = getCurrentWindow();
 const log = createLogger('LoginWebview');
@@ -96,7 +97,9 @@ async function handleStartLogin() {
       unlistenReady = null;
     }
     log.error('启动登录失败', error);
-    alert(`启动 Cookie 监控失败\n${error}\n请重新打开登录窗口`);
+    // setup_cookie_event_monitoring 失败时 reject 的是 AppError（非 Windows 平台必达），
+    // 模板字符串直接拼会显示成 [object Object]，把后端给的原因整句吃掉
+    alert(`启动 Cookie 监控失败\n${getErrorMessage(error)}\n请重新打开登录窗口`);
   }
 }
 

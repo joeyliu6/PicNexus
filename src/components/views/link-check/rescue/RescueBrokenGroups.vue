@@ -18,6 +18,7 @@ import {
   extractHost, isDefunctHost, extractFilenameFromUrl,
 } from '@/composables/link-check/useLinkStatusDisplay';
 import { openUserExternalUrl } from '@/security/shellOpen';
+import { getErrorMessage } from '@/types/errors';
 
 const props = defineProps<{
   imageLinks: MdImageLinkWithFile[];
@@ -65,8 +66,9 @@ function chipCount(n: number): string | number {
 
 // ---- 行操作 ----
 
+// open_path 失败时 reject 的是 AppError，String() 会渲染成 [object Object]
 async function withErrorToast(fn: () => Promise<void>, errorMsg: string): Promise<void> {
-  try { await fn(); } catch (err) { toast.error(errorMsg, String(err)); }
+  try { await fn(); } catch (err) { toast.error(errorMsg, getErrorMessage(err)); }
 }
 
 async function revealInFolder(filePath: string): Promise<void> {
@@ -89,7 +91,7 @@ async function copyRowUrl(url: string): Promise<void> {
     await writeText(resolveConfiguredUrl(url));
     toast.silent('log', '已复制', 'URL 已复制到剪贴板');
   } catch (err) {
-    toast.error('复制失败', String(err));
+    toast.error('复制失败', getErrorMessage(err));
   }
 }
 

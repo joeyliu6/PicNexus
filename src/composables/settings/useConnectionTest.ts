@@ -241,7 +241,8 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       await invoke(command, params);
       toast.showConfig('success', TOAST_MESSAGES.auth.cookieValid(serviceNames[serviceId]));
     } catch (error) {
-      toast.showConfig('error', TOAST_MESSAGES.auth.testFailed(String(error)));
+      // Cookie 测试命令失败时 reject 的是 AppError，String() 会渲染成 [object Object]
+      toast.showConfig('error', TOAST_MESSAGES.auth.testFailed(errorToString(error)));
       throw error;
     }
   }
