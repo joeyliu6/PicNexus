@@ -355,7 +355,7 @@ const triggerTooltip = computed(() =>
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: var(--weight-normal);
+  font-weight: var(--weight-regular);
   cursor: pointer;
   white-space: nowrap;
   transition:

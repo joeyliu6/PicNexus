@@ -18,7 +18,6 @@ import 'primeicons/primeicons.css';
 import './styles/app.css';
 import './theme/dark-theme.css';
 import './theme/light-theme.css';
-import './theme/transitions.css';
 
 // 解析 URL 参数获取服务类型
 const urlParams = new URLSearchParams(window.location.search);

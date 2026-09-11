@@ -11,7 +11,6 @@ import 'primeicons/primeicons.css';
 import '@/theme/dark-theme.css';
 import '@/theme/light-theme.css';
 import '@/theme/primevue-overrides.css';
-import '@/theme/transitions.css';
 import '@/styles/motion.css';
 import '@/styles/bottom-bar-buttons.css';
 import '@/styles/app.css';

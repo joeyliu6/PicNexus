@@ -46,7 +46,7 @@
 | 变量层 | `dark-theme.css`, `light-theme.css` | 定义主题变量，不包含选择器样式 |
 | 组件层 | `primevue-overrides.css` | PrimeVue 组件的主题覆盖 |
 | 全局层 | `styles/app.css` | 全局基础样式、布局、通用组件 |
-| 动画层 | `transitions.css` | 主题切换过渡动画 |
+| 动效层 | `styles/motion.css` | 时长 / 缓动令牌与共享 keyframes（主题切换无过渡：加 `.theme-transitioning` 的逻辑 2026-03 随 ThemeManager 重构一并移除，`transitions.css` 已于 2026-09-11 删除） |
 
 ### 3. 一处定义，多处复用
 
@@ -59,14 +59,15 @@
 ```
 src/
 ├── styles/
-│   └── app.css                  # 全局基础样式
+│   ├── app.css                  # 全局基础样式
+│   ├── motion.css               # 时长 / 缓动令牌、共享 keyframes、reduced-motion 归零
+│   └── bottom-bar-buttons.css   # 底栏按钮共享样式
 └── theme/
     ├── preset.ts                # PrimeVue 预设配置
     ├── ThemeManager.ts          # 主题切换逻辑
     ├── dark-theme.css           # 深色主题变量
     ├── light-theme.css          # 浅色主题变量
-    ├── primevue-overrides.css   # PrimeVue 组件覆盖
-    └── transitions.css          # 主题过渡动画
+    └── primevue-overrides.css   # PrimeVue 组件覆盖
 ```
 
 ### 导入顺序（main.ts）
@@ -84,8 +85,9 @@ import './theme/light-theme.css';
 // 3. PrimeVue 组件覆盖（依赖主题变量）
 import './theme/primevue-overrides.css';
 
-// 4. 过渡动画
-import './theme/transitions.css';
+// 4. 动效令牌与共享样式
+import './styles/motion.css';
+import './styles/bottom-bar-buttons.css';
 ```
 
 > **注意**：`styles/app.css` 在 `index.html` 中通过 `<link>` 引入，在 main.ts 之前加载。

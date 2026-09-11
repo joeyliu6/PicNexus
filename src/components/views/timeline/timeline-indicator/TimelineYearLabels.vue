@@ -69,7 +69,7 @@ const emit = defineEmits<{
 .year-label:hover {
   opacity: 1;
   color: var(--primary);
-  background: var(--bg-hover);
+  background: var(--hover-overlay);
 }
 
 /* 父组件 hover / 拖拽激活态 */

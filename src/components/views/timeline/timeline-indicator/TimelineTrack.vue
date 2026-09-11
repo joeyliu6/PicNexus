@@ -63,7 +63,7 @@ defineProps<{
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--border-color);
+  background: var(--border-subtle);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 无精确 radius token */
   border-radius: 1px;
   opacity: 0.3;
@@ -93,7 +93,7 @@ defineProps<{
   right: -4px;
   width: 16px;
   height: 1px;
-  background: var(--border-color);
+  background: var(--border-subtle);
   opacity: 0.5;
 }
 

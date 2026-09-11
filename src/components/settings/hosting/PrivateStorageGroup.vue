@@ -527,7 +527,7 @@ const secrets = useSensitiveDraft({
   gap: var(--space-xs-sm);
   padding: var(--space-xs-sm) var(--space-md);
   background: none;
-  border: 1px solid var(--error-alpha-20);
+  border: 1px solid var(--error-border);
   border-radius: var(--radius-sm-md);
   color: var(--error);
   font-size: var(--text-xs);

@@ -196,9 +196,8 @@ src/theme/
 ├── dark-theme.css         # 深色主题变量定义
 ├── light-theme.css        # 浅色主题变量定义
 ├── primevue-overrides.css # PrimeVue 组件覆盖
-├── transitions.css        # 主题切换动画
 ├── ThemeManager.ts        # 主题切换逻辑
-└── index.ts               # PrimeVue 预设配置
+└── preset.ts              # PrimeVue 预设配置
 ```
 
 ### 使用规范

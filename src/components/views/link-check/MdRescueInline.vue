@@ -387,10 +387,12 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
   border-radius: 1.5px; overflow: hidden;
 }
 
+/* 进度条填充用 --primary-gradient：此前写的 --primary-light 从未定义过，深色主题下 fallback
+   恰好等于 --primary，渐变退化成纯色；两个主题都给 --primary-gradient 定义了亮端，
+   3px 高的条上 135deg 与 90deg 看不出差别 */
 .progress-bar-fill {
   height: 100%;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- fallback 颜色 #60a5fa 用于 --primary-light 未定义时 */
-  background: linear-gradient(90deg, var(--primary), var(--primary-light, #60a5fa));
+  background: var(--primary-gradient);
   transition: width var(--duration-slower) var(--ease-standard);
   position: relative; overflow: hidden;
 }
