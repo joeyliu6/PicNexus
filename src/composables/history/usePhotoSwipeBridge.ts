@@ -203,12 +203,51 @@ function findThumbElement(itemId: string, mode: PhotoSwipeCloseTargetMode = 'aut
 }
 
 /**
- * 开场动画是否仍在播。opener.isOpen 由 PhotoSwipe 在开场动画结束时置 true，
+ * 关闭闸门是否合着。opener.isOpen 由 PhotoSwipe 在开场动画结束时才置 true，
  * 在此之前它拒绝一切关闭请求（见 closePswp 的说明）。
- * 用可选链读内部状态：拿不到就当作"可以关"，退回原来的直接调用行为。
+ *
+ * `opener` / `isOpen` 是 photoswipe 官方 .d.ts 里类型完整的公开字段（不带 private
+ * 标记，对比同一个类里真正私有的 `_duration`/`_useAnimation` 就能看出区别），不是
+ * 瞎猜的结构，所以直接按 PhotoSwipe 的类型读，不用 `as unknown as` 绕开类型检查——
+ * 哪天大版本真把这个字段改了形状，`npm run typecheck` 会当场报错，而不是像 `unknown`
+ * 那样悄悄编译通过、运行时才发现读到 undefined。保留 `?.` 只是留一道运行时兜底：
+ * 读不到就当作"可以关"，退回原来的直接调用行为。
+ *
+ * ⚠️ 名字别再理解成"开场动画在播"：Opener.close() 的第一件事也是把 isOpen 置 false
+ * （photoswipe.esm.js:5868），所以关场期间本函数同样返回 true。现在唯一的调用点
+ * （closePswp）也先被 `if (!pswp)` 挡住（close 回调里同步置空了 pswp），所以碰不到；
+ * onUnmounted 那条路已经改用 forceDestroy，不再经过这里。
+ * 哪天有人把 `pswp = null` 挪走，或者给这个函数加了新调用点，这里就会误判。
  */
-function isOpeningAnimationRunning(instance: PhotoSwipe): boolean {
-  return (instance as unknown as { opener?: { isOpen?: boolean } }).opener?.isOpen === false;
+function isCloseGateShut(instance: PhotoSwipe): boolean {
+  return instance.opener?.isOpen === false;
+}
+
+/**
+ * 强拆实例，绕开开场闸门，但**不**绕开清理。
+ *
+ * 直接 destroy() 会被闸门吃掉：它第一句是
+ * `if (!this.isDestroying) { this.options.showHideAnimationType = 'none'; this.close(); return; }`
+ * （photoswipe.esm.js:6786），而 close() 撞在 `!opener.isOpen` 上静默 return，
+ * 于是根元素赖在 body 上挡住后面的交互。
+ *
+ * 先把 isDestroying 置真，destroy() 就跳过那段直接走真正的清理分支：
+ * dispatch('destroy') → _listeners = {} → element.remove() → slide.destroy()
+ * → contentLoader.destroy() → events.removeAll()。isDestroying 和 isCloseGateShut
+ * 读的 opener.isOpen 一样，是 .d.ts 里类型完整的公开字段，直接赋值即可，不需要
+ * `as unknown as` 绕开类型检查。
+ *
+ * 为什么不能退而求其次只调 element.remove()：那样只摘 DOM，PhotoSwipe 绑在
+ * document / window 上的监听器会永久留下 ——
+ *   · document keydown（:3150）：_onKeyDown 里 `if (axis) { e.preventDefault(); … }`
+ *     是无条件执行的，泄漏之后全 App 的方向键都被吃掉，输入框光标、列表上下选全部失灵；
+ *   · document focusin（:3145）：对已脱离文档的 template 反复调 focus()；
+ *   · window resize / scroll（:6668-6669）：死实例的回调每次滚动都跑；
+ *   · contentLoader / slide 的缓存与 <img> onload 回调也都留着。
+ */
+function forceDestroy(instance: PhotoSwipe): void {
+  instance.isDestroying = true;
+  instance.destroy();
 }
 
 /**
@@ -494,8 +533,10 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       const willFade = !currentId || !resolveFlipElement(currentId, closeTargetMode);
       if (willFade) thisInstance.element?.classList.add('is-pswp-closing--fade');
 
-      pswpEl.value = null;
-      blurSrc.value = null;
+      /*
+       * ⚠️ pswpEl / blurSrc 不在这里清 —— 拆卸必须等到 destroy，理由见下方的
+       * destroy 回调。在这里清等于亲手把刚挂上的 is-pswp-closing 作废。
+       */
       clearLoadingIndicator();
       clearLoadRetryTimer();
       loadRetryCounts.clear();
@@ -562,6 +603,34 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       }
     });
 
+    /*
+     * 自绘 UI 的拆卸点。放在这里而不是 close 回调里，是这套关场淡出能不能生效的关键。
+     *
+     * .pswp-blur-bg（含影院暗角）、底栏、导航箭头都是 <Teleport v-if="pswpEl">
+     * 挂进根元素的。一旦在 close 回调里把 pswpEl 置空，Vue 会在紧随其后的**微任务**
+     * 里就把它们整个卸载；而 PhotoSwipe 的收回动画要等 opener.close() 结尾那个
+     * setTimeout(0/30) 才开始跑（photoswipe.esm.js:5873）——宏任务永远排在微任务后面。
+     * 也就是说背景层在动画开始之前就已经不在 DOM 里了，刚挂上的 is-pswp-closing
+     * 连一帧都摊不上，"幕布被一把扯走"原封不动，还额外多了一次彩色→纯黑的突变。
+     *
+     * destroy 事件在收回动画结束那一帧派发（_onAnimationComplete → pswp.destroy()），
+     * 且 dispatch('destroy') 跑在 this._listeners = {} 之前，所以收得到；
+     * 动画即便丢了 transitionend，CSSAnimation 也有 duration + 500ms 的兜底
+     * （photoswipe.esm.js:3359），不存在"destroy 永不派发导致 teleport 泄漏"。
+     *
+     * 守卫比对 element 而非 thisInstance：close 回调已经把模块级 pswp 置空，
+     * 收回动画期间可以再开一个新实例，此时不能让旧实例的 destroy 把新的清掉。
+     *
+     * ⚠️ 已知局限（未处理，故意不改，理由见 docs/TODO.md「已知取舍」）：这个守卫只防住了
+     * "引用被误清空"，没防住"Teleport 目标本身被新实例抢走"——200ms 内快速重开会把
+     * pswpEl 从旧实例改指向新实例，旧实例剩下的淡出帧会瞬间丢掉自绘背景/底栏/箭头。
+     */
+    pswp.on('destroy', () => {
+      if (pswpEl.value !== thisInstance.element) return;
+      pswpEl.value = null;
+      blurSrc.value = null;
+    });
+
     // 补执行开场期间被搁置的关闭请求（见 closePswp）
     pswp.on('openingAnimationEnd', () => {
       if (pswp !== thisInstance || !pendingClose) return;
@@ -597,7 +666,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   function closePswp() {
     window.removeEventListener('keydown', handleKeydown);
     if (!pswp) return;
-    if (isOpeningAnimationRunning(pswp)) {
+    if (isCloseGateShut(pswp)) {
       pendingClose = true;
       return;
     }
@@ -680,16 +749,12 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     loadRetryCounts.clear();
     if (pswp) {
       /*
-       * destroy() 也会被开场动画的守卫吃掉：它内部转调 close()，同样撞在
-       * `!opener.isOpen` 上（见 closePswp 的说明）。组件都要卸载了，没有
-       * "等动画播完"的余地，只能直接把根元素摘掉，否则它会留在 body 上，
-       * 挡住后面的交互。
+       * 组件都要卸载了，没有"等动画播完"的余地，只能强拆。
+       * 但强拆 ≠ 只摘 DOM：forceDestroy 走的仍是 PhotoSwipe 自己的完整清理路径，
+       * 监听器、slide、contentLoader 一个不漏（理由见 forceDestroy 的说明）。
+       * 闸门开着时它同样正确（isDestroying 置真只是跳过那段转调）。
        */
-      if (isOpeningAnimationRunning(pswp)) {
-        pswp.element?.remove();
-      } else {
-        pswp.destroy();
-      }
+      forceDestroy(pswp);
       pswp = null;
       pendingClose = false;
     }

@@ -281,16 +281,60 @@
  * 根元素被 element.remove() 摘掉那一帧才凭空消失。图片优雅地收回去了，
  * 紧跟着幕布被一把扯走，这是整个关闭过程里最扎眼的一处。
  *
- * ⚠️ animation: none 不是可选的：上面的 pswp-blur-bg-open 带 `both`，
- * 会把 to { opacity: 1 } 作为填充值一直钉着，而 animation 优先级高于
- * transition —— 不解除它，下面两行完全不起作用。
+ * ⚠️ 这里必须用 animation 接替 animation，**不能**写成 `animation: none` + transition。
+ *
+ * 那个写法看着更自然，实测（真机 WebView2 逐帧采样）却是瞬切：关场第一帧
+ * opacity 就已经是 0，全程无插值。原因是 transition 的起始值取自
+ * before-change style，而 pswp-blur-bg-open 带 `both` 的填充值属于 animation
+ * origin，不参与这个比较 —— 于是"解除 animation"和"opacity 改 0"发生在同一帧，
+ * 浏览器认定无可插值的起点，直接跳到终值。
+ * 同一个文件里底栏那条没有 animation 要解除，transition 就正常跑（实测
+ * 1 → 0.966 → 0.88 → …），两相对照能把这个坑看得很清楚。
+ *
+ * 换成新的 keyframes 则完全绕开交接：animation-name 一变，新动画立刻从
+ * from 值起跑，与旧动画是否还在 fill 无关。`both` 保住终值 0，
+ * 免得动画结束到节点被 destroy 摘走之间闪回一帧。
+ *
+ * ⚠️ 这份 keyframes 不能用 motion.css 共享的 k-fade-in 反着播（`reverse`）替代——
+ * 实测过（本地起 http server + 真实 Chromium 逐帧采样）两者曲线完全不同：
+ * k-fade-in 是 0→1 配 ease-decelerate（快启慢停），反着播出来的观感是
+ * ease-accelerate（慢启快停，opacity 前 300ms 才掉到 0.36，最后 20ms 突然砸到 0）——
+ * `animation-direction: reverse` 只是把关键帧顺序倒过来放，缓动函数依旧按时间
+ * 正向套用，不会把曲线本身也镜像，所以“反着播 0→1”≠“正着播 1→0”。
+ * 这类反直觉的动画时序细节正是本文件这一段一直在强调要实测、不能靠推导的原因，
+ * 别在这里踩同一个坑。
+ *
+ * 时长与 HIDE_ANIMATION_DURATION 同源：淡出比收回还长的话，这一层只会淡到一半
+ * 就随根元素被摘走，等于又变回"幕布被扯走"。
  */
+@keyframes pswp-blur-bg-close {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .pswp--picnexus.is-pswp-closing .pswp-blur-bg {
-  animation: none;
+  animation: pswp-blur-bg-close var(--duration-normal) var(--ease-decelerate) both;
+}
+
+/*
+ * 关场时自绘 UI（底栏 + 导航箭头）一起退场。
+ *
+ * 这两块是 <Teleport v-if="pswpEl"> 挂进根元素的，而 pswpEl 现在要活到 destroy
+ * （见 usePhotoSwipeBridge 的 destroy 回调），不这么收的话它们会在整个收回动画
+ * 期间纹丝不动地杵着 —— 图片都飞回缩略图了，底栏还占着屏幕底部。
+ * PhotoSwipe 自己的 UI 靠 .pswp--ui-visible 收，但那个 class 要等
+ * setTimeout 之后的 _initiate() 才切；is-pswp-closing 在 close 同步派发时就挂上，
+ * 更早，退得更干净。
+ *
+ * 比背景快一档（fast 120ms vs normal 200ms）：UI 是附属物，先让开视线，
+ * 把最后那段时间完整留给图片收回的主动作。
+ * pointer-events 一并断掉，避免退场途中被误点。
+ */
+.pswp--picnexus.is-pswp-closing .lightbox-bottom,
+.pswp--picnexus.is-pswp-closing .pswp-nav {
   opacity: 0;
-  /* 与 HIDE_ANIMATION_DURATION 同源：淡出比收回还长的话，这一层只会淡到一半
-     就随根元素被摘走，等于又变回"幕布被扯走" */
-  transition: opacity var(--duration-normal) var(--ease-decelerate);
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-accelerate);
 }
 
 .pswp--picnexus .pswp-blur-bg img {

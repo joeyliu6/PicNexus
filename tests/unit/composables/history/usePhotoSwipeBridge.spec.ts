@@ -27,6 +27,11 @@ class MockPhotoSwipe {
    * 不模拟这一条，就测不出"开场期间关闭被吞掉"那个缺陷。
    */
   opener = { isOpen: false };
+  /**
+   * 复刻 PhotoSwipe.isDestroying。close() 靠它防重入，destroy() 靠它区分
+   * "先转调 close" 和 "真正清理" 两条分支 —— 桥接层的强拆正是踩着这一条走的。
+   */
+  isDestroying = false;
   closeCalls = 0;
   destroyCalls = 0;
   private handlers = new Map<string, PswpHandler[]>();
@@ -58,14 +63,32 @@ class MockPhotoSwipe {
 
   close(): void {
     this.closeCalls += 1;
-    // 真实实现：开场动画未结束时直接 return，'close' 事件根本不派发
-    if (!this.opener.isOpen) return;
+    // 真实实现：开场闸门未开、或已在销毁流程中，直接 return，'close' 事件根本不派发
+    if (!this.opener.isOpen || this.isDestroying) return;
+    this.isDestroying = true;
     this.emit('close', {});
+    // 真实实现随后才跑收回动画，动画结束那一帧才 destroy()。
+    // 测试用 finishClosingAnimation() 手动推进，好把"动画期间"这段照出来。
+  }
+
+  /** 收回动画播完：PhotoSwipe 在这一帧调 destroy() 摘走根元素 */
+  finishClosingAnimation(): void {
+    this.destroy();
   }
 
   destroy(): void {
     this.destroyCalls += 1;
-    this.close();
+    /*
+     * 真实实现（photoswipe.esm.js:6786）：不在销毁流程中时先转调 close()，
+     * 撞上开场闸门就整个静默 return —— 根元素会赖在 body 上。
+     * 桥接层的 forceDestroy 先把 isDestroying 置真，正是为了跳过这一段。
+     */
+    if (!this.isDestroying) {
+      this.close();
+      return;
+    }
+    this.emit('destroy', {});
+    this.element.remove();
   }
 
   emit(eventName: string, event: PswpEvent): void {
@@ -559,6 +582,9 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     // 开场动画结束 → 补上那次关闭
     first.finishOpeningAnimation();
     expect(first.closeCalls).toBe(1);
+    // pswpEl 此刻**不能**清：收回动画还没跑，teleport 里的背景层要留着淡出
+    expect(harness.api().pswpEl.value).toBe(first.element);
+    first.finishClosingAnimation();
     expect(harness.api().pswpEl.value).toBeNull();
 
     // 关键回归点：实例引用已清干净，灯箱还能再打开
@@ -570,9 +596,67 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     harness.wrapper.unmount();
   });
 
+  it('keeps the teleport target alive through the closing animation', async () => {
+    /*
+     * 自绘的模糊背景层 / 暗角 / 底栏都是 <Teleport v-if="pswpEl"> 挂进根元素的。
+     * 在 close 回调里就把 pswpEl 置空，Vue 会在紧随其后的微任务里把它们整个卸载，
+     * 而 PhotoSwipe 的收回动画要等 opener.close() 结尾那个 setTimeout 才开始 ——
+     * 宏任务永远排在微任务后面，于是 is-pswp-closing 的淡出一帧都摊不上，
+     * 观感是彩色背景在关闭瞬间直接闪没、塌成纯黑。
+     *
+     * 契约：close 之后 pswpEl 必须活着，直到 destroy 才清。
+     */
+    const harness = mountHarness();
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    pswp.finishOpeningAnimation();
+
+    harness.visible.value = false;
+    await nextTick();
+
+    // 收回动画进行中：teleport 目标和模糊背景的图源都必须还在
+    expect(pswp.closeCalls).toBe(1);
+    expect(harness.api().pswpEl.value).toBe(pswp.element);
+    expect(harness.api().blurSrc.value).not.toBeNull();
+    expect(pswp.element.classList.contains('is-pswp-closing')).toBe(true);
+
+    // 动画结束才拆
+    pswp.finishClosingAnimation();
+    expect(harness.api().pswpEl.value).toBeNull();
+    expect(harness.api().blurSrc.value).toBeNull();
+
+    harness.wrapper.unmount();
+  });
+
+  it('runs PhotoSwipe own cleanup on unmount instead of only ripping out the root', async () => {
+    /*
+     * 只调 element.remove() 会把 PhotoSwipe 绑在 document / window 上的监听器
+     * 永久留下，其中 document keydown 的 _onKeyDown 对方向键是无条件
+     * preventDefault 的 —— 泄漏之后全 App 的方向键都失灵。
+     * 所以卸载必须走 destroy() 的完整清理路径，而不是裸摘 DOM。
+     */
+    const harness = mountHarness();
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    pswp.finishOpeningAnimation();
+    document.body.appendChild(pswp.element);
+
+    harness.wrapper.unmount();
+
+    expect(pswp.destroyCalls).toBeGreaterThan(0);
+    expect(pswp.element.isConnected).toBe(false);
+  });
+
   it('tears the root out of the DOM when unmounted mid-opening', async () => {
-    // destroy() 同样撞在那道闸门上（内部转调 close）。组件正在卸载，没有
-    // "等动画播完"的余地，根元素必须当场摘掉，否则会赖在 body 上挡住交互。
+    // 闸门合着时 destroy() 会转调 close() 被静默吃掉。组件正在卸载，没有
+    // "等动画播完"的余地：forceDestroy 先把 isDestroying 置真跳过那一段，
+    // 走完整清理路径，根元素当场摘掉，监听器也一并回收。
     const harness = mountHarness();
     harness.visible.value = true;
     await nextTick();
