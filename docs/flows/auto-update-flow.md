@@ -12,7 +12,7 @@ PicNexus 采用 **Tauri 官方 `tauri-plugin-updater` + GitHub Releases + minisi
 - **Windows 更新包**:走 NSIS `x64-setup.exe`,由 CI 改写 `latest.json` 保证(见图 4);MSI 仅作手动下载资产
 - **触发方式**:启动时自动检查(由 `autoUpdateEnabled` 配置开关控制) + 手动点击
 - **状态机**:`idle → checking → (available | up-to-date | error) → downloading → installing → install-pending(仅 macOS/Linux) → 用户点击重启`
-- **发布流程**:`git tag v*` → GitHub Actions `release.yml` → 桌面端签名产物 + Obsidian 插件产物 → 最终 `SHA256SUMS.txt`
+- **发布流程**:`git tag v*` → GitHub Actions `release.yml` → 从 `CHANGELOG.md` 摘出本版本段落作 Release 正文(缺失即失败) → 桌面端签名产物 + Obsidian 插件产物 → 最终 `SHA256SUMS.txt`
 
 ---
 
@@ -203,14 +203,16 @@ stateDiagram-v2
 
 展示 `git tag v*` 到 Releases 上架 `latest.json` 的 CI 流程。改签名密钥或发布源时对照这张图。
 
-> **关键源文件**:`.github/workflows/release.yml`、`.github/workflows/release-obsidian-plugin.yml`、`src-tauri/tauri.conf.json` pubkey 字段
+> **关键源文件**:`.github/workflows/release.yml`、`scripts/extract-changelog-section.mjs`、`.github/workflows/release-obsidian-plugin.yml`、`src-tauri/tauri.conf.json` pubkey 字段
 
 ```mermaid
 flowchart TD
     A[开发者本地<br/>git tag v1.0.3] --> B[git push --tags]
     B --> C[GitHub Actions 触发<br/>release.yml]
 
-    C --> D[tauri-apps/tauri-action]
+    C --> CL[changelog job<br/>tag 版本 == tauri.conf.json?<br/>从 CHANGELOG.md 摘 ## x.y.z 段落]
+    CL -- 段落缺失 --> CLX[整个 workflow 失败<br/>补写段落后重打 tag]
+    CL -- 正文 --> D[tauri-apps/tauri-action<br/>releaseBody = 该段落]
     D --> E[从 Secrets 取私钥]
     E --> E1[TAURI_SIGNING_PRIVATE_KEY]
     E --> E2[TAURI_SIGNING_PRIVATE_KEY_PASSWORD]
@@ -241,13 +243,18 @@ flowchart TD
     CV --> CV1[用 tauri.conf.json 的 pubkey<br/>验证 latest.json 中的 signature]
 
     style A fill:#e3f2fd,stroke:#1976d2
+    style CLX fill:#ffebee,stroke:#c62828
     style L fill:#e8f5e9,stroke:#2e7d32
     style CV1 fill:#f3e5f5,stroke:#7b1fa2
 ```
 
 **关键要点**:
 
-- **版本号同步**:`package.json` 和 `tauri.conf.json` 都有 `version` 字段,必须同步(Tauri CLI 会在构建时校验)
+- **版本号同步**:`package.json` 和 `tauri.conf.json` 都有 `version` 字段,必须同步(Tauri CLI 会在构建时校验);tag 还必须与 `tauri.conf.json` 一致,`changelog` job 会先拦
+- **Release 正文来自 CHANGELOG.md**:`changelog` job 用 `scripts/extract-changelog-section.mjs` 摘出 `## [x.y.z]` 段落(去掉标题行和段末 `---`)喂给 `releaseBody`,同时写进 run summary。
+  段落格式就是 Release 说明本身:一行一条、面向用户、按感知度排序,由做 bump 提交的人(通常是 AI 会话)在发版时写好。
+  以前用 git-cliff 拼 commit 首行当"初稿"、靠发版清单提醒人工重写成中文,v1.1.2 就是漏了重写把英文初稿发了出去。
+  现在没有初稿这一环:CHANGELOG 段落缺失就在任何构建开始前失败,补写并提交后 `git tag -f vX.Y.Z && git push -f origin vX.Y.Z` 重跑(job 读的是 tag 指向那个提交里的文件)
 - **私钥管理**:`TAURI_SIGNING_PRIVATE_KEY` 存在 GitHub Secrets,**不能提交到仓库**
 - **公钥嵌入**:`tauri.conf.json` 的 `pubkey` 是 base64 编码的 minisign 公钥,修改私钥后必须同步更新公钥,否则所有存量用户无法验证新版
 - **密钥轮换的代价**:换私钥等于让所有旧版本用户"脱离"自动更新 → 必须手动下载新版
@@ -320,6 +327,8 @@ flowchart TD
 | Windows 上安装需要手动确认 | `installMode` 配成 `basicUi` 而非 `passive` | `tauri.conf.json` |
 | 老版本用户收不到更新 | `latest.json` 未正确上传或 Release 是 draft 状态 | 图4 L3 |
 | 新版本号冲突 | `package.json` 和 `tauri.conf.json` 版本不一致 | 图4 F |
+| Release 正文是英文 commit 清单 / 为空 | 正文来自 `CHANGELOG.md`,不再有 git-cliff 初稿;检查 `changelog` job 的 summary 与 `## [x.y.z]` 段落 | 图4 CL |
+| 推了 tag 但 workflow 秒失败,一个包都没构建 | `changelog` job 拦下:CHANGELOG 缺该版本段落,或 tag 与 `tauri.conf.json` 版本不一致 | 图4 CLX |
 | 插件发布提示版本冲突 | 同一插件版本的运行文件发生变化 | 提升 `plugins/obsidian/manifest.json` 及关联版本文件 |
 | 插件仓库同步失败 | Token 无写权限或目标仓库存在人工分叉 | 检查细粒度 Token；按主仓库源码人工协调分叉 |
 | 桌面端 Draft 缺少最终校验和 | Obsidian 插件任务失败，最终任务被阻断 | 修复插件任务并重新运行工作流 |

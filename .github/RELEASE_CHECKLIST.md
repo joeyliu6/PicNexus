@@ -40,8 +40,9 @@
 - [ ] 启动 → 主窗口可见 → 关闭正常
 
 ## 安装与更新
-- [ ] Release body 已重写为面向用户的中文条目（一行一条、动词开头、相关修复合并成一句、按感知度排序），不是 git-cliff 的原始提交清单
-- [ ] 重写前用 `git log --oneline <上一个 tag>..<本 tag>` 通读全部提交——**盘点起点必须是上一个 tag 而不是 `origin/main`**，v1.1.1 就因此漏了 5 条用户可感知的修复
+- [ ] 打 tag 前 `CHANGELOG.md` 已写好 `## [x.y.z]` 段落：一行一条、面向用户、按感知度排序，该几条写几条，剔除纯内部改动。CI 的 `changelog` job 直接拿它做 Release 正文，缺失会在任何构建开始前失败（补写并提交后 `git tag -f vX.Y.Z && git push -f origin vX.Y.Z`，job 读的是 tag 指向那个提交里的文件）
+- [ ] 写 CHANGELOG 前用 `git log --oneline <上一个 tag>..HEAD` 通读全部提交——**盘点起点必须是上一个 tag 而不是 `origin/main`**，v1.1.1 就因此漏了 5 条用户可感知的修复
+- [ ] Release 草稿正文与 `changelog` job 的 run summary 一致，是中文（v1.1.2 曾把英文 commit 清单直接发出去）
 - [ ] 应用内检查更新失败时，「手动下载」能打开最新 Release 页面
 - [ ] Windows：更新下载完成后显示「正在安装更新」，应用自动关闭并在安装完成后自行重启
       （plugin 拉起安装器后紧接 `exit(0)`，**「重启完成更新」按钮在此平台不会出现**，见 `docs/flows/auto-update-flow.md` 图 2）

@@ -9,7 +9,52 @@ permissions:
   contents: write
 
 jobs:
+  # Release 正文直接取 CHANGELOG.md 里本版本的中文段落。以前用 git-cliff 拼 commit 首行当
+  # 初稿、靠发版清单提醒人工重写，v1.1.2 就是漏了重写把英文初稿发了出去。CHANGELOG 段落
+  # 缺失时这里直接失败——放在所有构建之前，什么都还没花；补写段落后重打 tag 即可。
+  changelog:
+    name: Release body from CHANGELOG
+    runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.body.outputs.content }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      # tauri-action 用 tauri.conf.json 的 version 命名 Release；tag 与它不一致时正文会贴到
+      # 错的版本上，这里先拦下来
+      - name: Check tag matches tauri.conf.json version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          conf_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [ "$tag_version" != "$conf_version" ]; then
+            echo "::error::tag 版本 $tag_version 与 src-tauri/tauri.conf.json 的 $conf_version 不一致"
+            exit 1
+          fi
+
+      - name: Extract release body
+        id: body
+        shell: bash
+        run: |
+          node scripts/extract-changelog-section.mjs "${GITHUB_REF_NAME#v}" > release-body.md
+          {
+            echo 'content<<PICNEXUS_RELEASE_BODY'
+            cat release-body.md
+            echo 'PICNEXUS_RELEASE_BODY'
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Release 正文（来自 CHANGELOG.md）"
+            echo ""
+            cat release-body.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
   web-smoke:
+    needs: changelog
     name: Web smoke E2E
     runs-on: ubuntu-latest
 
@@ -42,7 +87,7 @@ jobs:
           retention-days: 14
 
   release:
-    needs: web-smoke
+    needs: [web-smoke, changelog]
     strategy:
       fail-fast: false
       matrix:
@@ -58,12 +103,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-      # git-cliff 需要完整 git 历史。浅克隆下它只能看到 HEAD 那一个提交，
-      # 生成的 changelog 会静默残缺：v1.1.0 只捞到一条、v1.1.1 直接为空——
-      # HEAD 恰好是被 commit_parsers 过滤掉的类型时就什么都不剩。
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -171,28 +211,8 @@ jobs:
             echo "根因见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」与 wry#1782。"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Generate changelog
-        uses: orhun/git-cliff-action@v4
-        id: changelog
-        with:
-          config: cliff.toml
-          args: --latest --strip header
-
-      # 这里只产出 git-cliff 的提交清单作为初稿。发布前 body 要人工重写成面向用户的
-      # 中文条目（一行一条、动词开头、相关修复合并成一句，参照 v1.1.0 与 v1.1.1 的写法），
-      # 所以不再拼装「推荐下载」表——它每次都得手工删掉，是纯负担。
-      - name: Prepare release body
-        id: release_body
-        shell: bash
-        env:
-          CHANGELOG: ${{ steps.changelog.outputs.content }}
-        run: |
-          {
-            echo 'content<<PICNEXUS_RELEASE_BODY'
-            printf '%s\n' "$CHANGELOG"
-            echo 'PICNEXUS_RELEASE_BODY'
-          } >> "$GITHUB_OUTPUT"
-
+      # 正文来自 changelog job（CHANGELOG.md 的本版本段落）；四个平台传同一份，
+      # tauri-action 对已存在的草稿只追加资产
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -203,7 +223,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'PicNexus v__VERSION__'
-          releaseBody: ${{ steps.release_body.outputs.content }}
+          releaseBody: ${{ needs.changelog.outputs.body }}
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
