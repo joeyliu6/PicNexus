@@ -1,7 +1,7 @@
-# 待审查：表格视图灯箱开关动画重做（2026-09-11）
+# 表格视图灯箱开关动画重做（2026-09-11）
 
-> 这份文件是交给**另一个 AI 做代码审查**用的上下文包。审查完可以删，或按 `docs/audits/` 的惯例留档。
-> 改动已全部提交在本地 `main`，**未 push**。工作区干净。
+> 这份文件原是交给**另一个 AI 做代码审查**用的上下文包，已于同日由发版前扫描独立复核（第 11 节），按 `docs/audits/` 惯例留档。
+> 第 0~9 节是审查前的快照，描述当时的事实，不回头改。
 
 ---
 
@@ -243,3 +243,20 @@ ee76ec50 fix(history): make the lightbox open as one continuous motion
 新增的"已知取舍"条目：`docs/TODO.md` 记了一条与 R4 相关但本文档 R1-R6 未覆盖的边界情况——快速关闭后 200ms 内重开新灯箱，会把 Teleport 目标从旧实例抢到新实例身上，旧实例剩下的淡出帧因此丢背景装饰。影响很小（大概率被新实例整体遮住）且根治代价明显更大，故意不修，理由与重新考虑的触发条件都写在那条目里。
 
 R1、R2、R3、R6 以及第 9 节列出的遗留问题**不在本次改动范围内**，状态不变。
+
+---
+
+## 11. 独立复核结论（2026-09-11，发版前扫描）
+
+由 v1.1.2 发版前扫描（[scan-prerelease-1.1.2-2026-09-11.md](./scan-prerelease-1.1.2-2026-09-11.md)）派一个只读代理按 R1~R6 逐条复核，第 4 节对 PhotoSwipe 内部行为的 7 条断言全部与 `photoswipe.esm.js` 源码吻合（`close()` 6767-6776 同步派发；`destroy()` 6786-6811 无提前 return；`thumbEl` filter 返 undefined 时 4377 → 5932 `_animateZoom=false` → 5935 `_animateRootOpacity=true`）。
+
+| 风险点 | 结论 |
+|---|---|
+| **R1** phase 状态机 | 10 个写入点 / 8 个函数无悬空路径：`open` 只经 watch 或 resolve 离开，`landing` / `dismissing` 只经 timer、clear、或 enter 整体替换离开；两条关闭路径判据一致（同一份 `lastMouseX/Y`、同一个 wrapper rect，Esc 路径中间插不进 mousemove）；`onDeactivated` / `blur` / `visibilitychange` / 跨页导航 / `props.visible=false` 都回 idle。**唯一发现**：`pendingClose` 延迟关闭路径下 timer 锚点与真实 close 脱钩（开灯箱后 ~160-380ms 内完成删除 + 确认才触发，人手基本做不到，下次 mouseenter/leave 自愈），已登记 TODO，不改 |
+| **R2** CSS 追 JS 时钟 | reduced-motion 兜底正确：选择器特异性相同靠源码顺序胜出，`animation: none; opacity: 1` 后 30ms delay 不再参与；即便没这条覆盖，`forwards` 无 backwards 填充，delay 期间 img 取非动画值 1 也不会空窗 |
+| **R3** 阈值对所有模式生效 | 不是回归：旧代码 `closeTargetMode !== 'thumb' && rect.width < FLIP_MIN_WIDTH` 对 `'auto'` 本来就生效，收藏 / 时间轴恒 `'auto'`，行为逐字节相同。**订正第 1 节一处描述**："收藏 / 时间轴 `.photo-item` ≥100px"对收藏成立（`minmax(160px,1fr)`，最窄分支 148px），对时间轴**不成立**——`justifiedLayout.ts` 的 `itemWidth = rowHeight × aspectRatio` 未钳制比例，200px 行高下比例 <0.5 的竖图宽度 <100px，开关两端都判 fade。改动前即如此 |
+| **R4** 直接操作库 DOM / 状态 | `is-pswp-closing` 加得及时：`dispatch('close')` 同步，`opener.close()` 之后还有 `setTimeout` 链才到首帧，filter 与回调之间无 DOM 变化 |
+| **R5** 卸载绕过 destroy | 第 10 节已修的 `forceDestroy` 复核通过：`isDestroying=true` 后 `destroy()` 依次走 `dispatch('destroy')` → `element.remove()` → 每个 `slide.destroy()` → `contentLoader.destroy()` → `events.removeAll()`；残留的 decode Promise 与 CSSAnimation 定时器 ≤800ms 内触发，只改已脱离文档的节点，不抛错不泄漏 |
+| **R6** 视觉回归覆盖不到 | **决定维持人工验收**，不给 harness 加真实灯箱场景：真实 PhotoSwipe 依赖 `setTimeout` 链与图片 decode，截图时机不稳定，硬塞进像素比对只会产出 flaky 基准。真机验收清单见发版前扫描文档 |
+
+顺带发现（改动前即如此，登记 TODO）：keep 分支下 `closingTimer` 回调只写 `idle` 不调 `stopHoverHandoffTracking()`，document 5 个 capture 监听 + window 2 个要等鼠标离开源缩略图才拆。

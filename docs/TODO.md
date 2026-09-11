@@ -38,6 +38,42 @@
 
 ## 待处理
 
+### [ ] 灯箱 `pendingClose` 路径下收回计时器与真实 close 事件脱钩
+
+- **来源**：2026-09-11 发版前扫描（[scan-prerelease-1.1.2-2026-09-11.md](./audits/scan-prerelease-1.1.2-2026-09-11.md)）
+- **症状**：`src/composables/history/useTableInteractions.ts` 的 `closingTimer` 以 `lightboxVisible=false` 起算，
+  但 `usePhotoSwipeBridge.ts` 在开场闸门关着时只记 `pendingClose`，真实 `close()` 推迟到 `openingAnimationEnd`（≈380ms 后）。
+  timer 会在大图仍在缩小时把 phase 置 `idle`，卡片提前显形；随后 resolve 再写 `landing`/`dismissing`，此时已无 timer，
+  phase 停在非 idle 直到下一次 mouseenter/leave
+- **定性**：疑似缺陷（静态追踪，未真机复现），置信度 🟡
+- **优先级**：低——触发要在开灯箱后 ~160-380ms 内完成"点删除 + 确认框"，人手基本做不到，且自愈；修法是让 timer
+  起点跟随 `resolveLightboxCloseTargetMode()`（真实 close 事件）或让 bridge 回传"已延迟"
+
+**当前处置**：待验证
+
+### [ ] 灯箱 keep 分支下 handoff 监听器晚拆
+
+- **来源**：同上
+- **症状**：`useTableInteractions.ts` 的 `closingTimer` 回调在 `keepHoverPreviewAfterClose` 为真时只写 `idle`，
+  不调 `stopHoverHandoffTracking()`；document 上 5 个 capture 监听 + window 2 个要等鼠标离开源缩略图才拆。
+  灯箱动画重做之前（`f3e3af79`）结构相同，非本次回归
+- **定性**：确认与文档"用完即拆"描述不符，置信度 🔴；影响面小（监听器最终会拆，只是晚）
+- **优先级**：低
+
+**当前处置**：待修复
+
+### [ ] 给"try 里 await invoke、catch 里 `String(err)`"加静态护栏
+
+- **来源**：同上。本次人工扫出 6 处把 Rust `AppError` 渲染成 `[object Object]` 的站点（08-24 已修过一处同类），
+  全靠人眼追 try/catch，没有门禁下次还会漏
+- **要做的**：写 `scripts/check-app-error-rendering.mjs`：在 `src/` 里找 try 块内含 `invoke(`（或 `shellOpen` 这类薄封装）、
+  对应 catch 块内用 `String(x)` / `` `${x}` `` / `x instanceof Error ? x.message : String(x)` 的组合，报错并提示改用
+  `getErrorMessage()`。需要括号配对不是一行 grep；`useConnectionTest.ts:100/114` 那种 catch 的是 fetch 错误的要能放行
+  （只看 try 体里有没有 invoke）
+- **优先级**：中——发版后做
+
+**当前处置**：待处理
+
 ### [ ] login-titlebar 的配色自成一套，未并进主题令牌
 
 - **来源**：2026-08-22 tsconfig 盲区清单的最后一项；同条目的其余部分（`scripts/`、`tests/`、
