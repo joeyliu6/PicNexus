@@ -75,6 +75,17 @@
 > 硬塞进门禁只会逼出一堆假映射。它的遗留问题（含 `html.light` 类名不合 `light-theme` 约定）
 > 记在 `docs/TODO.md`。
 
+### 引用的变量必须真的存在
+
+`var(--xxx)` 写了一个从没定义过的名字，浏览器不报错、stylelint 不查跨文件、单测也看不见——
+那条声明只是在计算值阶段静默作废，属性退回默认值。2026-09-11 发版前扫描一次挖出 6 处
+（时间轴轨道线从写下那天起就没显示过，只因令牌叫 `--border-subtle` 而作者写成了 `--border-color`）。
+
+[`scripts/check-css-undefined-vars.mjs`](../../scripts/check-css-undefined-vars.mjs) 随 `npm run lint` 跑：
+拿 `src/**` 的全部 `var(--name` 引用与全项目的 `--name:` 定义做差集，非空即失败。
+**带 fallback 的写法照样算未定义**（`var(--x, #60a5fa)`——fallback 只是把问题藏起来，不是定义）；
+`--p-*` 是 PrimeVue 库内令牌，跳过。报错时先去本文件找那个真正存在的名字，多半只是记错了。
+
 ---
 
 ## 动效变量体系
