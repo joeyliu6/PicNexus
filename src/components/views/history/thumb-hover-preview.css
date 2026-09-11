@@ -53,8 +53,10 @@
 
   /*
    * --shadow-preview 自带一条 1px 半透明描边，替掉了原来的 border ——
-   * 暗色下那条实体灰边死板且不透光，而单靠 --photo-shadow-light（两个主题同为
-   * 25% 黑）在深色底上根本看不见，卡片会糊在背景里。
+   * 暗色下那条实体灰边死板且不透光。旧的 `0 8px 32px var(--photo-shadow-light)`
+   * 则更糟：--photo-shadow-light **全项目从未定义**，那条声明一直是 invalid，
+   * 卡片其实一直没有阴影（与 app.css 里 .p-popover 引用未定义的 --shadow-md
+   * 是同一类静默失效）。
    * 去掉 border 还少一次 layout 参与，卡片尺寸完全由 JS 算出的几何决定。
    */
   box-shadow: var(--shadow-preview);
