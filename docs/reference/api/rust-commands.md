@@ -1,6 +1,8 @@
 # Rust 命令参考
 
 > 完整参数/返回值定义请直接阅读 `src-tauri/src/commands/` 源文件，以下为导航索引。
+>
+> 哪个窗口能调用哪个命令，看 `src-tauri/capabilities/*.json` 里的 `allow-<命令名>`；全部命令登记在 `src-tauri/build.rs` 的 `APP_COMMANDS`。外部网页（登录窗口跳去的站点、统计窗口）调用任何命令都会被拒。`upload_to_r2`、`fetch_qiyu_token`、`download_image_from_url` 已注册但没有前端调用方，任何窗口都不放行。
 
 ---
 

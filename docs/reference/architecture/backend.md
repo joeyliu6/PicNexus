@@ -338,6 +338,10 @@ if metadata.len() > MAX_FILE_SIZE {
 2. 实现 `#[tauri::command]` 函数
 3. 在 `commands/mod.rs` 中导出
 4. 在 `main.rs` 的 `invoke_handler` 中注册
+5. 在 `build.rs` 的 `APP_COMMANDS` 登记同名命令（应用命令清单，登记后 Tauri 才逐窗口检查权限）
+6. 在调用它的窗口的 capability（主窗口是 `capabilities/default.json`）加 `allow-<命令名>`，命令名里的下划线换成连字符
+
+漏了 5 或 6，前端调用会报 "not allowed"。`npm run lint` 的 `check-window-capabilities.mjs` 会核对 4、5、6 三处是否一致。
 
 ### 示例
 

@@ -4,7 +4,7 @@
 
 ## 概览
 
-PicNexus 后端目前注册了 **73 个 `#[tauri::command]`**(上传器、Token 获取、链接检测、MD 扫描、剪贴板、图片压缩、配置、Analytics 隔离传输与在线心跳、日志路径等),前端通过 `invoke<T>(name, args)` 调用,长耗时任务用 `window.emit("xxx://progress")` 推送进度,前端 `listen<T>(name, handler)` 订阅。
+PicNexus 后端的 `#[tauri::command]`(上传器、Token 获取、链接检测、MD 扫描、剪贴板、图片压缩、配置、Analytics 隔离传输与在线心跳、日志路径等)以 `main.rs` 的 `generate_handler!` 为准,同一份清单登记在 `build.rs` 的 `APP_COMMANDS`;每个窗口只能调用 `capabilities/` 放行给它的那几个,外部网页一个都调不了。前端通过 `invoke<T>(name, args)` 调用,长耗时任务用 `window.emit("xxx://progress")` 推送进度,前端 `listen<T>(name, handler)` 订阅。
 
 错误统一走 `AppError` 枚举,序列化为 `{ type, data }` 结构,前端 `try/catch` 捕获后按 `type` 分支处理。
 
@@ -12,9 +12,9 @@ PicNexus 后端目前注册了 **73 个 `#[tauri::command]`**(上传器、Token 
 
 ## 图 1:命令注册与初始化链路
 
-展示 Tauri `Builder` 如何把「插件 → 全局状态 → 命令 → setup 回调」串成一条启动链。新增命令时重点关注 L279~L357 的 `generate_handler![]` 宏。
+展示 Tauri `Builder` 如何把「插件 → 全局状态 → 命令 → setup 回调」串成一条启动链。新增命令时重点关注 `main.rs` 的 `generate_handler![]` 宏和 `build.rs` 的 `APP_COMMANDS`(两边必须一致)。
 
-> **关键源文件**:`src-tauri/src/main.rs`(L220~L638)、`src-tauri/Cargo.toml`、`src-tauri/capabilities/default.json`
+> **关键源文件**:`src-tauri/src/main.rs`、`src-tauri/build.rs`、`src-tauri/capabilities/*.json`、`src-tauri/Cargo.toml`
 >
 > 📌 命令实现**全部在 `src-tauri/src/commands/`**。2026-09-09 把最后 21 个内联命令搬出去之后,`main.rs` 里只剩 `set_close_to_tray` 一个命令(它和托盘构建代码同住),其余都以 `commands::<模块>::<命令名>` 的形式登记在 `generate_handler!` 里。
 
@@ -40,8 +40,8 @@ flowchart TD
     M4 --> M5[.manage MdScanCancelFlag]
 
     %% 命令注册
-    M5 --> H[.invoke_handler<br/>generate_handler! 77 个命令]
-    H --> H1[上传系列<br/>upload_to_weibo/r2/jd/github/...]
+    M5 --> H[.invoke_handler<br/>generate_handler! 注册全部命令<br/>build.rs APP_COMMANDS 登记同一份清单]
+    H --> H1[上传系列<br/>upload_file_stream/upload_to_jd/github/...]
     H --> H2[Token 获取<br/>fetch_qiyu_token/fetch_nami_token]
     H --> H3[检测类<br/>check_image_link/batch_check_links]
     H --> H4[工具类<br/>compress_image/scan_md_folder/clipboard_has_image]
@@ -56,12 +56,13 @@ flowchart TD
     S3 --> R[.run generate_context!]
 
     %% 权限校验
-    R -.读取.-> CAP[capabilities/default.json<br/>定义允许的权限范围]
+    R -.读取.-> CAP[capabilities/*.json<br/>按窗口划定权限范围]
+    CAP --> CAP0[应用命令:build.rs 登记清单后才逐窗口检查<br/>主窗口 / 托盘 / 登录引导页各自只放行 allow-命令名]
     CAP --> CAP1[core:window:* / event:*]
     CAP --> CAP2[sidecar 由 Rust portable::run_sidecar 启动<br/>前端不暴露 shell spawn]
     CAP --> CAP3[fs:allow-* + 作用域<br/>appdata/appcache/applog/temp + 用户对话框临时授权]
     CAP --> CAP4[http:allow-* + URL<br/>限定外部服务 + localhost/127.0.0.1 HTTP]
-    CAP --> CAP5[analytics-transport 不匹配任何 capability<br/>隔离 WebView 无 Tauri API 权限]
+    CAP --> CAP5[远程页面一律拒绝:capability 不写 remote<br/>登录窗口跳去的外部网站、analytics-transport 都调不了命令]
 
     style A fill:#e3f2fd,stroke:#1976d2
     style H fill:#fff3e0,stroke:#ef6c00
@@ -93,10 +94,10 @@ sequenceDiagram
     API->>API: 参数自动 camelCase → snake_case
     API->>IPC: 序列化 JSON
 
-    IPC->>IPC: 权限校验<br/>capabilities/default.json
+    IPC->>IPC: 权限校验:按「窗口 + 来源」查 capabilities<br/>应用命令看 allow-命令名,远程页面一律不放行
     alt 权限不足
         IPC-->>API: 拒绝
-        API-->>VUE: Error("not allowed")
+        API-->>VUE: Error("... not allowed ...")
     end
 
     IPC->>CMD: 反射调用 rust 函数
@@ -250,7 +251,9 @@ flowchart TD
     E1 --> F
     F[3. 在 commands/mod.rs 导出]
     F --> G[4. main.rs 的 generate_handler!<br/>加入新命令名]
-    G --> H{需要新权限?<br/>shell / fs 作用域等}
+    G --> G2[4.1 build.rs 的 APP_COMMANDS<br/>登记同名命令]
+    G2 --> G3[4.2 调用它的窗口的 capability<br/>加 allow-命令名 下划线换连字符<br/>npm run lint 会核对 4~4.2]
+    G3 --> H{需要插件权限?<br/>shell / fs 作用域等}
     H -- 是 --> H1[修改 capabilities/default.json]
     H -- 否 --> I
     H1 --> I
@@ -268,7 +271,7 @@ flowchart TD
 
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
-| 前端 `invoke` 抛 "not allowed" | `capabilities/default.json` 未声明权限 | 图1 CAP 节点 |
+| 前端 `invoke` 抛 "not allowed" | 调用它的窗口没放行:应用命令要在该窗口的 capability 加 `allow-<命令名>` 并登记 `build.rs`(`npm run lint` 会指出缺哪条);插件命令查对应的 `插件:allow-*`;外部网页(登录窗口跳去的站点)被拒是预期行为 | 图1 CAP0 / CAP5 节点 |
 | 前端 `invoke` 抛 "command xxx not found" | `generate_handler!` 宏没加入新命令名 | 图1 H 节点 |
 | 前端收不到进度事件 | 没 `listen` 或 Payload 字段命名不匹配 (snake_case vs camelCase) | 图4 |
 | 进度事件到错误组件 | 上次的 `unlisten` 没调用,旧监听残留 | 图4 末尾提示 |
