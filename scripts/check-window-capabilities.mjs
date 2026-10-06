@@ -179,8 +179,18 @@ function readCapabilityGrants(manifestCommands) {
   const dir = path.join(root, 'src-tauri', 'capabilities');
   const result = [];
 
-  for (const name of fs.readdirSync(dir)) {
-    if (path.extname(name) !== '.json') continue;
+  // Tauri 还认 tauri.conf.json 里内嵌的 capability 对象、子目录和 .toml / .json5 文件；
+  // 本脚本只读顶层 .json，读不到的写法直接报错，不能悄悄漏掉一份放行
+  if (Array.isArray(active) && active.some((entry) => typeof entry !== 'string')) {
+    failures.push('tauri.conf.json 里内嵌了 capability 对象——请改成 src-tauri/capabilities/ 下的独立 .json 文件');
+  }
+
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const name = entry.name;
+    if (!entry.isFile() || path.extname(name) !== '.json') {
+      failures.push(`src-tauri/capabilities/${name}：本检查只读 capabilities/ 顶层的 .json 文件，请改成这种写法`);
+      continue;
+    }
     const file = `src-tauri/capabilities/${name}`;
     const capability = JSON.parse(read(file));
     // tauri.conf.json 列了清单就只认清单里的；没列则目录里全部生效（Tauri 的口径）
@@ -296,7 +306,9 @@ function codeUnits(file) {
   if (errors.length > 0) failures.push(`${rel(file)}：SFC 解析失败（${errors[0].message}）`);
   const units = [];
   for (const block of [descriptor.script, descriptor.scriptSetup]) {
-    if (block) units.push({ fileName: `${file}.ts`, code: block.content });
+    if (!block) continue;
+    // <script src="./x.ts">：内容在外部文件里，当成一次 import 交给后面的引用追踪
+    units.push({ fileName: `${file}.ts`, code: block.src ? `import '${block.src}';` : block.content });
   }
   if (descriptor.template) {
     // 模板表达式不是完整的 TS 文件，只抽带引号的字面量给命令名比对
