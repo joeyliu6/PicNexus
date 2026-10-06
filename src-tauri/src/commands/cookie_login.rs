@@ -43,6 +43,28 @@ fn is_safe_service_id(service: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+/// 登录内容区允许的整页跳转去向：只拦「危险去向」，不限定站点。
+///
+/// 不按图床域名做白名单：知乎 / B 站 / 牛客的「用微信、QQ 登录」、SSO、验证码都会整页跳到
+/// 别的站，白名单会把正常登录挡掉。外部网页能不能调用应用命令由 capabilities 管（远程页一律
+/// 不放行），这里只拦两类：
+/// 1. 不是 http/https 的链接（file:、data:、ms-settings: 等本机 / 系统链接）；
+/// 2. PicNexus 自己的页面，只放行登录引导页 login-webview.html 本身——外部网页把这个窗口
+///    带回主界面等页面的话，它们会以「本地页」身份跑在登录窗口里。
+///
+/// 只管整页跳转：页面里的 iframe（验证码等）不经过这里（WebView2 的 NavigationStarting 只报主框架）。
+fn is_allowed_login_navigation(url: &tauri::Url, dev_url: Option<&tauri::Url>) -> bool {
+    // 本地页的三种形态：tauri://localhost（macOS/Linux）、http(s)://tauri.localhost（Windows）、
+    // 开发模式下的 devUrl
+    let is_app_page = url.scheme() == "tauri"
+        || url.host_str() == Some("tauri.localhost")
+        || dev_url.is_some_and(|dev| dev.origin() == url.origin());
+    if is_app_page {
+        return url.path() == "/login-webview.html";
+    }
+    matches!(url.scheme(), "http" | "https")
+}
+
 /// Cookie 更新事件的 payload 结构
 #[derive(Clone, serde::Serialize)]
 struct CookieUpdatedPayload {
@@ -114,13 +136,33 @@ pub async fn open_login_window(
         )
         .map_err(|e| AppError::external(format!("创建标题栏失败: {}", e)))?;
 
-    // 添加内容区 Webview
+    // 添加内容区 Webview（先加载自带引导页，用户点「开始登录」后整页跳去图床登录页）
+    let dev_url = if tauri::is_dev() {
+        app.config().build.dev_url.clone()
+    } else {
+        None
+    };
     let _content = window
         .add_child(
             tauri::webview::WebviewBuilder::new(
                 "login-content",
                 WebviewUrl::App(content_url.into()),
-            ),
+            )
+            .on_navigation(move |url| {
+                let allowed = is_allowed_login_navigation(url, dev_url.as_ref());
+                if !allowed {
+                    // 只记 scheme + host + 截断的 path：查询串里可能带登录票据，
+                    // data: 链接的 path 就是整段内容，可能有几 MB
+                    let path: String = url.path().chars().take(120).collect();
+                    log::warn!(
+                        "[登录导航] 已拦截整页跳转: {}://{}{}",
+                        url.scheme(),
+                        url.host_str().unwrap_or_default(),
+                        path
+                    );
+                }
+                allowed
+            }),
             LogicalPosition::new(0.0, titlebar_height),
             LogicalSize::new(width, height - titlebar_height),
         )
