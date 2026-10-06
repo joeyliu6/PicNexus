@@ -14,6 +14,9 @@ mod secure_key;
 mod server;
 mod url_policy;
 
+#[cfg(test)]
+mod acl_tests;
+
 use log::LevelFilter;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
