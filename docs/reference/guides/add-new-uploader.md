@@ -155,6 +155,26 @@ pub mod myservice;
 ])
 ```
 
+再在 `src-tauri/build.rs` 的 `APP_COMMANDS` 末尾登记同名命令，并给主窗口放行（上传和连接测试都由主窗口调用）：
+
+```rust
+// src-tauri/build.rs
+const APP_COMMANDS: &[&str] = &[
+    // ...existing commands...
+    "upload_to_myservice",
+    "test_myservice_connection",
+];
+```
+
+`src-tauri/capabilities/default.json` 的 `permissions` 末尾（命令名里的下划线换成连字符）：
+
+```json
+"allow-upload-to-myservice",
+"allow-test-myservice-connection"
+```
+
+漏掉任何一处，前端调用会报 "not allowed"；`npm run lint` 会指出缺的是哪一条。
+
 ---
 
 ## 步骤 2: 创建 TypeScript 上传器

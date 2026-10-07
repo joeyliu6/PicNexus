@@ -12,8 +12,8 @@
 
 use super::{
     check_cookie_field, check_field_value_matches, get_default_field_value_checks,
-    get_default_validation_rules, is_safe_field_name, is_safe_service_id,
-    validate_cookie_fields, validate_cookie_fields_with_value_checks,
+    get_default_validation_rules, is_allowed_login_navigation, is_safe_field_name,
+    is_safe_service_id, validate_cookie_fields, validate_cookie_fields_with_value_checks,
 };
 use std::collections::HashMap;
 
@@ -296,4 +296,63 @@ fn name_whitelists_reject_empty_and_non_ascii_and_path_tricks() {
     assert!(is_safe_field_name("Auth-Token"));
     assert!(is_safe_field_name("__snaker__id"));
     assert!(is_safe_service_id("nowcoder"));
+}
+
+// ── 登录窗口的整页跳转限制 ──
+
+fn nav(raw: &str) -> bool {
+    is_allowed_login_navigation(&raw.parse().expect(raw), None)
+}
+
+fn nav_dev(raw: &str) -> bool {
+    let dev = "http://localhost:1420".parse().expect("dev url");
+    is_allowed_login_navigation(&raw.parse().expect(raw), Some(&dev))
+}
+
+#[test]
+fn login_navigation_allows_any_web_page() {
+    // 不按图床域名做白名单：第三方登录（微信 / QQ）、SSO、验证码页都会整页跳到别的站
+    for url in [
+        "https://m.weibo.cn/",
+        "https://passport.weibo.cn/signin/login?entry=mweibo",
+        "https://open.weixin.qq.com/connect/qrconnect?appid=x",
+        "https://graph.qq.com/oauth2.0/show?which=Login",
+        "http://i.chaoxing.com/",
+    ] {
+        assert!(nav(url), "{url} 是正常登录会经过的网页，不能拦");
+    }
+}
+
+#[test]
+fn login_navigation_allows_only_the_bundled_login_page_among_app_pages() {
+    assert!(nav("http://tauri.localhost/login-webview.html?service=weibo"));
+    assert!(nav("tauri://localhost/login-webview.html?service=zhihu"));
+    assert!(nav_dev("http://localhost:1420/login-webview.html?service=weibo"));
+
+    // 外部网页把登录窗口带回 PicNexus 自己的其他页面：那些页面会以「本地页」身份跑在登录窗口里
+    for url in [
+        "http://tauri.localhost/index.html",
+        "http://tauri.localhost/",
+        "https://tauri.localhost/index.html",
+        "tauri://localhost/tray-menu.html",
+        "http://tauri.localhost/login-titlebar.html?name=x",
+    ] {
+        assert!(!nav(url), "{url} 不该放行");
+    }
+    assert!(!nav_dev("http://localhost:1420/index.html"));
+    assert!(!nav_dev("http://localhost:1420/"));
+}
+
+#[test]
+fn login_navigation_blocks_non_web_schemes() {
+    for url in [
+        "file:///C:/Windows/win.ini",
+        "data:text/html,<h1>x</h1>",
+        "blob:https://m.weibo.cn/0f3c",
+        "ms-settings:privacy",
+        "about:blank",
+        "javascript:alert(1)",
+    ] {
+        assert!(!nav(url), "{url} 不是网页，不该放行");
+    }
 }

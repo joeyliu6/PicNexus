@@ -65,6 +65,11 @@ axum = "0.7"
 tower-http = { version = "0.5", features = ["cors"] }
 tower = { version = "0.5", features = ["util"] }
 
+[dev-dependencies]
+# 只给 cargo test 打开 Tauri 自带的模拟运行时（tauri::test），src/acl_tests.rs 用它走真实的
+# IPC 权限关口；正式构建不带这个特性。
+tauri = { version = "2.0", features = ["test"] }
+
 [target.'cfg(windows)'.dependencies]
 # WebView2 COM 接口 - 用于内存优化
 # 使用与 Tauri/wry 相同的版本以避免依赖冲突

@@ -3,8 +3,9 @@
 //
 // 校验分两条路：URL 走白名单 scheme + `url_policy::validate_external_url`，
 // 文件路径走 canonicalize + 危险扩展名黑名单。两条路都要先挡掉 Windows
-// 设备路径（`\\.\`、`\\?\`）和盘符伪装成 scheme 的情况——所以那两个判定
-// 函数各有 `#[cfg(windows)]` / `#[cfg(not(windows))]` 两份实现。
+// 设备路径（`\\.\`、`\\?\` 及其正斜杠变体，按解析出的路径前缀判断）和盘符
+// 伪装成 scheme 的情况——所以那两个判定函数各有 `#[cfg(windows)]` /
+// `#[cfg(not(windows))]` 两份实现。网络共享路径（`\\NAS\共享`）不拦。
 
 use std::path::{Path, PathBuf};
 
@@ -38,9 +39,25 @@ fn is_windows_drive_path(_input: &str) -> bool {
     false
 }
 
+/// 按 Rust 解析出的路径前缀判断，不比对字符串开头：Windows 把 `/` 和 `\` 都当分隔符，
+/// `//./C:/x`、`\/./pipe/x` 与 `\\.\C:\x`、`\\.\pipe\x` 等价，只认反斜杠会被绕过。
 #[cfg(windows)]
 fn has_forbidden_windows_device_prefix(input: &str) -> bool {
-    input.starts_with("\\\\.\\") || input.starts_with("\\\\?\\")
+    use std::path::{Component, Prefix};
+
+    let Some(Component::Prefix(prefix)) = Path::new(input).components().next() else {
+        return false;
+    };
+    match prefix.kind() {
+        // \\.\xxx 设备命名空间：命名管道、物理磁盘、GLOBALROOT……
+        Prefix::DeviceNS(_) => true,
+        // \\?\ 跳过 Windows 的路径规范化，校验看到的和最终打开的未必是同一个东西
+        Prefix::Verbatim(_) | Prefix::VerbatimUNC(..) | Prefix::VerbatimDisk(_) => true,
+        // `//?/C:/x`、`\\?/C:/x`：Rust 解析成服务器名为 `?` 的网络路径，Windows 却当本地设备路径打开
+        Prefix::UNC(server, _) => server == "?" || server == ".",
+        // 普通盘符路径；网络共享（\\NAS\共享）照常放行——用户可能把笔记放在 NAS 上
+        Prefix::Disk(_) => false,
+    }
 }
 
 #[cfg(not(windows))]
@@ -164,6 +181,48 @@ mod open_target_tests {
         let _ = std::fs::remove_file(path);
 
         assert!(result.is_err());
+    }
+
+    /// 同一个真实存在的 .txt：普通写法能打开，设备路径的各种写法一律拒绝。
+    /// 每种写法在 Windows 上都真能读到这个文件（metadata 成功），挡不住就会被交给 opener。
+    #[cfg(windows)]
+    #[test]
+    fn open_target_rejects_every_spelling_of_device_paths() {
+        let path = std::env::temp_dir().join(format!(
+            "picnexus-open-device-test-{}.txt",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"test").expect("write temp file");
+        let plain = path.to_string_lossy().to_string();
+        let forward = plain.replace('\\', "/");
+
+        let plain_ok = validate_open_target(&plain).is_ok();
+        let accepted: Vec<String> = [
+            format!(r"\\.\{plain}"),
+            format!("//./{forward}"),
+            format!(r"\/./{forward}"),
+            format!(r"\\?\{plain}"),
+            // Rust 把这三种解析成「服务器名为 ?」的网络路径，Windows 却当本地设备路径打开
+            format!("//?/{forward}"),
+            format!(r"\\?/{forward}"),
+            format!(r"//?\{plain}"),
+        ]
+        .into_iter()
+        .filter(|spelling| validate_open_target(spelling).is_ok())
+        .collect();
+        let _ = std::fs::remove_file(&path);
+
+        assert!(plain_ok, "对照组：普通写法应能打开");
+        assert!(accepted.is_empty(), "这些设备路径写法被放行了：{accepted:?}");
+    }
+
+    /// 网络共享路径保留可打开：用户可能把笔记放在 NAS 上，经 \\NAS\共享 打开文档修复
+    #[cfg(windows)]
+    #[test]
+    fn network_share_paths_are_not_device_paths() {
+        assert!(!has_forbidden_windows_device_prefix(r"\\nas\notes\a.md"));
+        assert!(!has_forbidden_windows_device_prefix("//nas/notes/a.md"));
+        assert!(!has_forbidden_windows_device_prefix(r"C:\notes\a.md"));
     }
 
     #[test]

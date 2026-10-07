@@ -80,7 +80,8 @@ flowchart TD
 展示自动获取 Cookie 的完整流程。排查**登录窗口无反应**或**Cookie 验证失败**时查看。
 
 > **关键源文件**：`src/config/cookieProviders.ts`、`src/composables/useConfig.ts`、
-> `src/login-webview.ts`（真正发起 invoke 的地方）、`src-tauri/src/commands/cookie_login.rs`
+> `src/login-webview.ts`（真正发起 invoke 的地方）、`src-tauri/src/commands/cookie_login.rs`、
+> `src-tauri/capabilities/login-content.json`（登录引导页只放行 `setup_cookie_event_monitoring`、`show_login_window`）
 
 ```mermaid
 flowchart TD
@@ -101,6 +102,7 @@ flowchart TD
 
     I & J --> G["发 cookie-monitoring-ready<br/>前端收到才跳转 loginUrl"]
     G --> K[用户在窗口中完成登录]
+    G -. 整页跳转限制 .-> NAV["只许去 http/https 网页（微信/QQ 扫码、验证码照常）<br/>跳回 PicNexus 其他页面或 file:、ms-settings: 等链接会被拦<br/>外部网页调用任何应用命令都被拒"]
     K --> L[捕获到 Cookie 字符串]
     L --> M["validateCookie(cookie, provider)"]
 
@@ -158,6 +160,8 @@ flowchart TD
 | 登录窗口打开但 Cookie 获取不到 | 域名不在 domains 列表 / 事件通道已降级，按 2 秒轮询（首次提取最慢 3 秒） | 图9 节点 F → H |
 | 登录完成后毫无反应、连超时提示都没有 | 日志搜 `[事件监控]` 与 `[轮询兜底]`：两个前缀都没有说明兜底没起来，把日志贴进 issue | 图9 节点 H → J |
 | Cookie 获取后提示失败 | requiredFields 缺失或 fieldValueChecks 不通过 | 图9 节点 N → O |
+| 登录页里点某个链接没反应 | 去向不是 http/https 网页，或要跳回 PicNexus 自己的其他页面，被登录窗口的跳转限制拦下；日志搜 `[登录导航]` | 图9 NAV 节点 |
+| 「开始登录」点了没反应、报 not allowed | 登录引导页的 capability 没放行 `setup_cookie_event_monitoring` / `show_login_window`（`capabilities/login-content.json`） | 图9 节点 F |
 | 登录超时 | 用户未完成登录 / Cookie 事件未触发 | 图9 TIMEOUT 分支 |
 
 ---

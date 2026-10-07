@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "tray-menu",
-  "description": "PicNexus tray menu window capability",
+  "description": "PicNexus tray menu window capability: reads the encrypted config, so only the data-dir and master-key read commands",
   "windows": ["tray-menu"],
   "permissions": [
     "core:event:default",
@@ -30,6 +30,8 @@
       ]
     },
     "process:allow-exit",
-    "log:allow-log"
+    "log:allow-log",
+    "allow-get-user-data-dir",
+    "allow-get-or-create-secure-key"
   ]
 }
