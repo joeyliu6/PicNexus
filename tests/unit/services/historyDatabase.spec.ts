@@ -349,34 +349,6 @@ describe('HistoryDatabase', () => {
     expect(items.map(item => item.id)).toEqual(['x', 'y', 'z']);
   });
 
-  it('getByFilePath() returns the newest matching row deterministically', async () => {
-    const { historyDB } = await import('@/services/database');
-    await historyDB.insert(makeHistoryItem({
-      id: 'same-path-old',
-      filePath: '/tmp/same.png',
-      timestamp: 100,
-      generatedLink: 'https://example.com/old.jpg',
-    }));
-    await historyDB.insert(makeHistoryItem({
-      id: 'same-path-new',
-      filePath: '/tmp/same.png',
-      timestamp: 200,
-      generatedLink: 'https://example.com/new.jpg',
-    }));
-
-    const found = await historyDB.getByFilePath('/tmp/same.png');
-
-    expect(found?.id).toBe('same-path-new');
-  });
-
-  it('getByFilePath() uses id DESC as the tie-breaker for identical timestamps', async () => {
-    const { historyDB } = await import('@/services/database');
-    await historyDB.insert(makeHistoryItem({ id: 'tie-a', filePath: '/tmp/tie.png', timestamp: 100 }));
-    await historyDB.insert(makeHistoryItem({ id: 'tie-b', filePath: '/tmp/tie.png', timestamp: 100 }));
-
-    expect((await historyDB.getByFilePath('/tmp/tie.png'))?.id).toBe('tie-b');
-  });
-
   it('keeps identical timestamps stable across main-list pages', async () => {
     const { historyDB } = await import('@/services/database');
     await historyDB.clear();

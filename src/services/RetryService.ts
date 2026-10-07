@@ -9,10 +9,7 @@ import type { UserConfig } from '@/config/types';
 import type { Store } from '@/store';
 import type { UploadResult } from '@/uploaders/base/types';
 import { checkNetworkConnectivity } from '@/utils/network';
-import { invalidateCache } from '@/composables/history/useHistory';
-import { withHistoryUpdateQueue } from '@/composables/history/useHistorySaver';
-import { emitHistoryUpdated } from '@/events/cacheEvents';
-import { historyDB } from '@/services/database';
+import { useHistorySaver } from '@/composables/history/useHistorySaver';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
@@ -57,6 +54,7 @@ interface RetrySingleServiceOptions {
 export class RetryService {
   private retryingItems = new Set<string>();
   private uploader = new MultiServiceUploader();
+  private historySaver = useHistorySaver();
 
   constructor(private options: RetryOptions) { }
 
@@ -307,93 +305,57 @@ export class RetryService {
     }
 
     // 更新历史记录
-    await this.updateHistoryRecord(currentItem.filePath, currentItem.historyId, serviceId, result, link,
-      shouldPromotePrimary);
+    await this.updateHistoryRecord(itemId, currentItem.filePath, serviceId, result, link, shouldPromotePrimary);
     await this.cleanupClipboardTempFileIfComplete(itemId);
   }
 
   /**
-   * 更新历史记录中的单个服务结果
+   * 把单个服务的重试结果写进队列项自己的历史记录
    *
-   * 共用 useHistorySaver 的 per-id 串行锁（withHistoryUpdateQueue），与初始上传的
-   * addResultToHistoryItem 走同一把锁；避免两边对同一 historyId 各自 getById →
-   * 改 results → update 互相覆盖。路径回退只用于定位记录，命中后必须改用实际 ID
-   * 上锁并在锁内重读，避免和该记录的其他写入使用不同锁键。
+   * 只认队列项的 historyId：记录不存在（首次上传全部失败，从没建过）就用这个 id 新建。
+   * 不按文件路径去找——同一文件以前传过时，路径会命中那条旧记录，把它的主链接和
+   * 同图床结果改掉，旧链接从历史消失、远端文件成孤儿。
+   *
+   * 写入走 saveHistoryItemImmediate：与首次上传共用同一把 per-id 锁和「已在则合并」
+   * 逻辑，上传还没结束就点重试时两边谁先到都不丢结果。
    */
   private async updateHistoryRecord(
+    itemId: string,
     filePath: string,
-    historyId: string | undefined,
     serviceId: string,
     result: UploadResult,
     link: string,
     shouldPromotePrimary: boolean
   ): Promise<void> {
-    let resolvedItem = historyId ? await historyDB.getById(historyId) : null;
-    if (historyId && !resolvedItem) {
-      log.warn(`未找到 historyId 对应的历史记录，回退到 filePath 查询: ${historyId}`);
-    }
-    if (!resolvedItem) {
-      resolvedItem = await historyDB.getByFilePath(filePath);
-    }
-    if (!resolvedItem) {
-      log.warn(`未找到对应的历史记录: ${filePath}`);
-      return;
+    let historyId = this.options.queueManager.getItem(itemId)?.historyId;
+    if (!historyId) {
+      // 正常不会发生：上传任务一开始就分配了 historyId。兜底为本队列项补一个，后续重试复用。
+      historyId = crypto.randomUUID();
+      this.options.queueManager.updateItem(itemId, { historyId });
     }
 
-    const actualHistoryId = resolvedItem.id;
-    await withHistoryUpdateQueue(actualHistoryId, async () => {
-      try {
-        const historyItem = await historyDB.getById(actualHistoryId);
-        if (!historyItem) {
-          log.warn(`历史记录在重试更新前已被删除: ${actualHistoryId}`);
-          return;
-        }
+    const uploadResult: UploadResult = {
+      serviceId,
+      fileKey: result.fileKey || '',
+      url: link,
+      size: result.size,
+      width: result.width,
+      height: result.height,
+      metadata: result.metadata
+    };
 
-        // 检查该服务是否已存在结果
-        const updatedResults = [...historyItem.results];
-        const existingIndex = updatedResults.findIndex(r => r.serviceId === serviceId);
-
-        // 构建符合 UploadResult 类型的结果
-        const uploadResult: UploadResult = {
-          serviceId,
-          fileKey: result.fileKey || '',
-          url: link,
-          size: result.size,
-          width: result.width,
-          height: result.height,
-          metadata: result.metadata
-        };
-
-        const newResult = {
-          serviceId,
-          status: 'success' as const,
-          result: uploadResult
-        };
-
-        if (existingIndex !== -1) {
-          // 更新已有结果
-          updatedResults[existingIndex] = newResult;
-        } else {
-          // 添加新结果
-          updatedResults.push(newResult);
-        }
-
-        // 使用 SQLite 更新记录
-        await historyDB.update(actualHistoryId, {
-          results: updatedResults,
-          ...(shouldPromotePrimary ? { primaryService: serviceId, generatedLink: link } : {})
-        });
-
-        // 使缓存失效并通知其他视图刷新
-        invalidateCache();
-        emitHistoryUpdated([actualHistoryId]);
-
-        log.info(`历史记录已更新: ${filePath} -> ${serviceId}`);
-      } catch (error) {
-        log.error('更新历史记录失败:', error);
-        // 不阻塞主流程
-      }
-    });
+    try {
+      await this.historySaver.saveHistoryItemImmediate(
+        filePath,
+        { serviceId, status: 'success', result: uploadResult },
+        historyId,
+        { promotePrimary: shouldPromotePrimary }
+      );
+      log.info(`历史记录已更新: ${filePath} -> ${serviceId}`);
+    } catch (error) {
+      log.error('更新历史记录失败:', error);
+      // 不阻塞主流程
+    }
   }
 
   /**

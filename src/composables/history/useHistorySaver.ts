@@ -24,7 +24,8 @@ export interface UseHistorySaverReturn {
   saveHistoryItemImmediate(
     filePath: string,
     firstResult: SingleServiceResult,
-    historyId: string
+    historyId: string,
+    options?: { promotePrimary?: boolean }
   ): Promise<void>;
 
   addResultToHistoryItem(
@@ -60,13 +61,12 @@ async function getFileName(filePath: string): Promise<string> {
  * 同一条历史记录的追加更新队列
  * 解决并发 addResultToHistoryItem 的读改写覆盖问题
  *
- * 导出 withHistoryUpdateQueue 给 RetryService 共用：让 retry 路径的
- * updateHistoryRecord 与初始上传的 addResultToHistoryItem 走同一把按 ID 锁，
- * 防止两个 read-modify-write 互相覆盖（详见 [[project_rebuild_layer_done]]）。
+ * 重试路径（RetryService）也经 saveHistoryItemImmediate 走这把按 ID 的锁，
+ * 与初始上传的写入互不覆盖。
  */
 const historyUpdateQueue = new Map<string, Promise<void>>();
 
-export async function withHistoryUpdateQueue<T>(
+async function withHistoryUpdateQueue<T>(
   historyId: string,
   task: () => Promise<T>
 ): Promise<T> {
@@ -97,7 +97,7 @@ export async function withHistoryUpdateQueue<T>(
  *
  * 提供三种保存方式：
  * 1. saveHistoryItem - 完整保存（所有图床上传完成后）
- * 2. saveHistoryItemImmediate - 立即保存（第一个成功结果）
+ * 2. saveHistoryItemImmediate - 立即保存（第一个成功结果 / 重试补传；记录已在则合并）
  * 3. addResultToHistoryItem - 追加结果（后续成功/失败结果）
  */
 export function useHistorySaver(): UseHistorySaverReturn {
@@ -174,8 +174,14 @@ export function useHistorySaver(): UseHistorySaverReturn {
   }
 
   /**
-   * 立即保存历史记录（第一个成功结果到达时调用）
-   * 创建只包含首个成功结果的历史记录，后续结果通过 addResultToHistoryItem 追加
+   * 把单个图床的成功结果写进 historyId 对应的记录：记录不存在就用这个 id 新建，
+   * 已存在就按 serviceId 合并进去。
+   *
+   * 两个调用方：首次上传的「第一个成功结果」，以及重试补传。二者共用一个 historyId，
+   * 谁先到谁建记录，后到的合并——上传还没结束就点重试时，任何一边都不能把另一边的
+   * 结果丢掉（insertOrIgnore 被静默忽略就是丢）。
+   *
+   * promotePrimary 只作用于「已存在」分支；新建的记录主图床必然是这个结果。
    *
    * Why: 必须与 addResultToHistoryItem 共享同一把 historyId 串行锁，否则会出现
    *      insertOrIgnore 还没 commit 时 addResult 的 getById 返回 null，导致后续
@@ -184,9 +190,32 @@ export function useHistorySaver(): UseHistorySaverReturn {
   async function saveHistoryItemImmediate(
     filePath: string,
     firstResult: SingleServiceResult,
-    historyId: string
+    historyId: string,
+    options: { promotePrimary?: boolean } = {}
   ): Promise<void> {
     return withHistoryUpdateQueue(historyId, async () => {
+      const existing = await historyDB.getById(historyId);
+      if (existing) {
+        const results = [...(existing.results || [])];
+        const index = results.findIndex(r => r.serviceId === firstResult.serviceId);
+        if (index >= 0) {
+          results[index] = firstResult;
+        } else {
+          results.push(firstResult);
+        }
+        const link = firstResult.result?.url;
+        await historyDB.update(historyId, {
+          results,
+          ...(options.promotePrimary && link
+            ? { primaryService: firstResult.serviceId, generatedLink: link }
+            : {}),
+        });
+        log.info('[历史记录] 合并结果:', existing.localFileName, '(图床:', firstResult.serviceId, ')');
+        invalidateCache();
+        await emitHistoryUpdated([historyId]);
+        return;
+      }
+
       const fileName = await getFileName(filePath);
       const metadata = await getImageMetadata(filePath);
 

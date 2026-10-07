@@ -162,6 +162,39 @@ describe('useHistorySaver', () => {
     expect(inserted.id).toBe('orphan-id');
   });
 
+  it('saveHistoryItemImmediate 遇到已存在的记录（重试先建好了）时合并结果，不被 insertOrIgnore 静默忽略', async () => {
+    const { useHistorySaver } = await import('@/composables/history/useHistorySaver');
+    const { saveHistoryItemImmediate } = useHistorySaver();
+    getByIdMock.mockResolvedValue({
+      id: 'history-shared',
+      localFileName: 'a.jpg',
+      primaryService: 'github',
+      generatedLink: 'https://example.com/github.jpg',
+      results: [makeSuccess('github')],
+    });
+
+    await saveHistoryItemImmediate('/tmp/a.jpg', makeSuccess('smms'), 'history-shared');
+
+    expect(insertOrIgnoreMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith('history-shared', {
+      results: [makeSuccess('github'), makeSuccess('smms')],
+    });
+    expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['history-shared']);
+  });
+
+  it('saveHistoryItemImmediate 合并时 promotePrimary 才改主图床', async () => {
+    const { useHistorySaver } = await import('@/composables/history/useHistorySaver');
+    const { saveHistoryItemImmediate } = useHistorySaver();
+    getByIdMock.mockResolvedValue({ id: 'h', results: [makeSuccess('jd')] });
+
+    await saveHistoryItemImmediate('/tmp/a.jpg', makeSuccess('weibo'), 'h', { promotePrimary: true });
+
+    expect(updateMock).toHaveBeenCalledWith('h', expect.objectContaining({
+      primaryService: 'weibo',
+      generatedLink: 'https://example.com/weibo.jpg',
+    }));
+  });
+
   it('addResultToHistoryItem appends failed results and upserts retries by serviceId', async () => {
     const { useHistorySaver } = await import('@/composables/history/useHistorySaver');
     const { addResultToHistoryItem } = useHistorySaver();

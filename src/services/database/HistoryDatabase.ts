@@ -499,20 +499,6 @@ class HistoryDatabase {
   }
 
   /**
-   * 根据文件路径查询单条历史记录
-   * @param filePath 文件的本地路径
-   * @returns 匹配的历史记录，或 null
-   */
-  async getByFilePath(filePath: string): Promise<HistoryItem | null> {
-    const db = await this.connection.getDb();
-    const rows = await db.select<HistoryItemRow[]>(
-      'SELECT * FROM history_items WHERE file_path = $1 ORDER BY timestamp DESC, id DESC LIMIT 1',
-      [filePath]
-    );
-    return rows.length > 0 ? rowToItem(rows[0]) : null;
-  }
-
-  /**
    * 构建带 COUNT(*) OVER() 窗口函数的分页查询，单次查询同时获取总数和分页数据
    */
   private async queryWithTotal(

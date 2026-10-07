@@ -9,8 +9,8 @@ const {
   retryUploadMock,
   uploadToMultipleServicesMock,
   historyGetByIdMock,
-  historyGetByFilePathMock,
   historyUpdateMock,
+  historyInsertOrIgnoreMock,
   invalidateCacheMock,
   emitHistoryUpdatedMock,
   getServiceDisplayNameMock,
@@ -20,8 +20,8 @@ const {
   retryUploadMock: vi.fn(),
   uploadToMultipleServicesMock: vi.fn(),
   historyGetByIdMock: vi.fn(),
-  historyGetByFilePathMock: vi.fn(),
   historyUpdateMock: vi.fn(),
+  historyInsertOrIgnoreMock: vi.fn(),
   invalidateCacheMock: vi.fn(),
   emitHistoryUpdatedMock: vi.fn(),
   getServiceDisplayNameMock: vi.fn((serviceId: string) => `name:${serviceId}`),
@@ -46,9 +46,16 @@ vi.mock('@/core/MultiServiceUploader', () => ({
 vi.mock('@/services/database', () => ({
   historyDB: {
     getById: historyGetByIdMock,
-    getByFilePath: historyGetByFilePathMock,
     update: historyUpdateMock,
+    insertOrIgnore: historyInsertOrIgnoreMock,
   },
+}));
+
+vi.mock('@/composables/image/useImageMetadata', () => ({
+  getImageMetadata: vi.fn().mockResolvedValue({
+    width: 100, height: 80, aspect_ratio: 1.25, file_size: 12, format: 'png',
+  }),
+  clearImageMetadataCache: vi.fn(),
 }));
 
 vi.mock('@/composables/history/useHistory', () => ({
@@ -108,6 +115,7 @@ function createItem(overrides: Partial<QueueItem> = {}): QueueItem {
     id: 'item-1',
     fileName: 'demo.png',
     filePath: '/tmp/demo.png',
+    historyId: 'history-1',
     status: 'error',
     enabledServices: ['weibo'],
     serviceProgress: {
@@ -259,14 +267,11 @@ describe('RetryService', () => {
       ],
       isPartialSuccess: false,
     });
-    historyGetByFilePathMock.mockResolvedValue({
-      id: 'history-1',
-      results: [],
-    });
     historyGetByIdMock.mockImplementation(async (id: string) => (
       id === 'history-1' ? { id: 'history-1', results: [] } : null
     ));
     historyUpdateMock.mockResolvedValue(undefined);
+    historyInsertOrIgnoreMock.mockResolvedValue(true);
     emitHistoryUpdatedMock.mockResolvedValue(undefined);
     invokeMock.mockResolvedValue(true);
   });
@@ -336,7 +341,6 @@ describe('RetryService', () => {
     expect(item.primaryUrl).toBe('https://img.example.com/demo.png');
     expect(item.thumbUrl).toBe('https://img.example.com/demo.png');
     expect(item.serviceProgress.weibo?.link).toBe('https://img.example.com/demo.png');
-    expect(historyGetByFilePathMock).toHaveBeenCalledWith('/tmp/demo.png');
     expect(historyUpdateMock).toHaveBeenCalledWith('history-1', expect.objectContaining({
       results: [
         expect.objectContaining({
@@ -442,6 +446,48 @@ describe('RetryService', () => {
     }));
   });
 
+  it('全部图床失败后重试：用队列项自己的 historyId 新建记录', async () => {
+    // 首次上传全部失败 → historyId 已分配但库里没有这条记录
+    const queueManager = createQueueManager([createItem({ historyId: 'history-new' })]);
+    historyGetByIdMock.mockResolvedValue(null);
+
+    const service = new RetryService(makeOptions({ queueManager }));
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(historyInsertOrIgnoreMock).toHaveBeenCalledTimes(1);
+    const inserted = historyInsertOrIgnoreMock.mock.calls[0][0];
+    expect(inserted).toMatchObject({
+      id: 'history-new',
+      filePath: '/tmp/demo.png',
+      primaryService: 'weibo',
+      generatedLink: 'https://img.example.com/demo.png',
+      results: [expect.objectContaining({ serviceId: 'weibo', status: 'success' })],
+    });
+    expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['history-new']);
+  });
+
+  it('同一文件以前传过再重试：不碰旧记录，用本次 historyId 新建', async () => {
+    const oldRecord = {
+      id: 'history-old',
+      filePath: '/tmp/demo.png',
+      primaryService: 'r2',
+      generatedLink: 'https://img.example.com/old.png',
+      results: [{
+        serviceId: 'r2',
+        status: 'success',
+        result: { serviceId: 'r2', fileKey: 'old', url: 'https://img.example.com/old.png' },
+      }],
+    };
+    const queueManager = createQueueManager([createItem({ historyId: 'history-new' })]);
+    historyGetByIdMock.mockImplementation(async (id: string) => (id === 'history-old' ? oldRecord : null));
+
+    const service = new RetryService(makeOptions({ queueManager }));
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(historyUpdateMock).not.toHaveBeenCalledWith('history-old', expect.anything());
+    expect(historyInsertOrIgnoreMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'history-new' }));
+  });
+
   it('updates history by queue historyId instead of ambiguous filePath', async () => {
     const queueManager = createQueueManager([
       createItem({
@@ -458,7 +504,6 @@ describe('RetryService', () => {
     await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
 
     expect(historyGetByIdMock).toHaveBeenCalledWith('history-current');
-    expect(historyGetByFilePathMock).not.toHaveBeenCalled();
     expect(historyUpdateMock).toHaveBeenCalledWith('history-current', expect.objectContaining({
       results: [
         expect.objectContaining({
@@ -469,39 +514,21 @@ describe('RetryService', () => {
     }));
   });
 
-  it('falls back to filePath lookup when a legacy queue item has no usable historyId', async () => {
-    const queueManager = createQueueManager([
-      createItem({
-        historyId: 'missing-history',
-      }),
-    ]);
-    historyGetByIdMock
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'history-latest', results: [] });
-    historyGetByFilePathMock.mockResolvedValueOnce({
-      id: 'history-latest',
-      results: [],
-    });
+  it('队列项缺 historyId 时补一个并写回队列项，后续重试复用同一条记录', async () => {
+    const queueManager = createQueueManager([createItem({ historyId: undefined })]);
+    historyGetByIdMock.mockResolvedValue(null);
 
     const service = new RetryService(makeOptions({ queueManager }));
-
     await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
 
-    expect(historyGetByIdMock).toHaveBeenCalledWith('missing-history');
-    expect(historyGetByFilePathMock).toHaveBeenCalledWith('/tmp/demo.png');
-    expect(historyUpdateMock).toHaveBeenCalledWith('history-latest', expect.objectContaining({
-      results: expect.any(Array),
-    }));
+    const assignedId = queueManager.items.get('item-1')?.historyId;
+    expect(assignedId).toEqual(expect.any(String));
+    expect(historyInsertOrIgnoreMock).toHaveBeenCalledWith(expect.objectContaining({ id: assignedId }));
   });
 
-  it('re-reads the path fallback row by its actual id before merging retry results', async () => {
-    const queueManager = createQueueManager([createItem({ historyId: undefined })]);
-    historyGetByFilePathMock.mockResolvedValueOnce({
-      id: 'history-shared',
-      results: [],
-    });
-    historyGetByIdMock.mockResolvedValueOnce({
-      id: 'history-shared',
+  it('记录已存在时在锁内重读并合并，不覆盖其他图床的结果', async () => {
+    historyGetByIdMock.mockResolvedValue({
+      id: 'history-1',
       results: [{
         serviceId: 'r2',
         status: 'success',
@@ -509,16 +536,16 @@ describe('RetryService', () => {
       }],
     });
 
-    const service = new RetryService(makeOptions({ queueManager }));
+    const service = new RetryService(makeOptions());
     await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
 
-    expect(historyGetByIdMock).toHaveBeenCalledWith('history-shared');
-    expect(historyUpdateMock).toHaveBeenCalledWith('history-shared', expect.objectContaining({
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-1', expect.objectContaining({
       results: expect.arrayContaining([
         expect.objectContaining({ serviceId: 'r2' }),
         expect.objectContaining({ serviceId: 'weibo' }),
       ]),
     }));
+    expect(historyInsertOrIgnoreMock).not.toHaveBeenCalled();
   });
 
   it('keeps the whole item in error after one failed service is fixed but another failed service remains', async () => {
@@ -736,7 +763,7 @@ describe('RetryService', () => {
     expect(saveHistoryItem).toHaveBeenCalledWith(
       '/tmp/demo.png',
       expect.objectContaining({ isPartialSuccess: true }),
-      undefined,
+      'history-1',
     );
     expect(toast.warn).toHaveBeenCalledTimes(1);
   });
