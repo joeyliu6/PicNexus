@@ -12,6 +12,7 @@ import { checkNetworkConnectivity } from '@/utils/network';
 import { useHistorySaver } from '@/composables/history/useHistorySaver';
 import { useImageCompress } from '@/composables/image/useImageCompress';
 import { getServiceDisplayName } from '@/constants/serviceNames';
+import { getFileExtension, getUnsupportedServicesForFormat } from '@/constants/serviceFormats';
 import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 import {
@@ -59,6 +60,26 @@ export class RetryService {
   private imageCompress = useImageCompress();
 
   constructor(private options: RetryOptions) { }
+
+  /**
+   * 按当前压缩设置准备重试要传的文件。
+   * 压缩后的格式有图床不支持（例如上传后把输出格式改成了 webp，而京东不收 webp）时，
+   * 只要原图格式这些图床都支持，就改传原图，免得重试必然失败。
+   */
+  private async prepareRetryFile(
+    filePath: string,
+    serviceIds: string[],
+    config: UserConfig
+  ): Promise<{ uploadPath: string; cleanup: () => Promise<void> }> {
+    const prepared = await this.imageCompress.prepareSingleUpload(filePath, config.imageCompression);
+    const unsupported = (path: string) => getUnsupportedServicesForFormat(serviceIds, getFileExtension(path)).length > 0;
+    if (prepared.uploadPath !== filePath && unsupported(prepared.uploadPath) && !unsupported(filePath)) {
+      log.info(`压缩后的格式不被 ${serviceIds.join('、')} 支持，重试改传原图`);
+      await prepared.cleanup();
+      return { uploadPath: filePath, cleanup: async () => {} };
+    }
+    return prepared;
+  }
 
   private async cleanupClipboardTempFileIfComplete(itemId: string): Promise<void> {
     const latestItem = this.options.queueManager.getItem(itemId);
@@ -112,7 +133,7 @@ export class RetryService {
     this.retryingItems.add(retryKey);
 
     // 与首次上传一样按当前设置压缩；队列与历史仍记原图路径，临时文件传完即删
-    const prepared = await this.imageCompress.prepareSingleUpload(item.filePath, config.imageCompression);
+    const prepared = await this.prepareRetryFile(item.filePath, [serviceId], config);
 
     try {
       const result = await this.uploader.retryUpload(
@@ -220,7 +241,7 @@ export class RetryService {
     this.options.queueManager.resetItemForRetry(itemId);
 
     const enabledServices = item.enabledServices || [];
-    const prepared = await this.imageCompress.prepareSingleUpload(item.filePath, config.imageCompression);
+    const prepared = await this.prepareRetryFile(item.filePath, enabledServices, config);
 
     try {
       const result = await this.uploader.uploadToMultipleServices(

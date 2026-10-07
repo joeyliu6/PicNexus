@@ -590,6 +590,35 @@ describe('RetryService', () => {
     expect(historyUpdateMock).toHaveBeenCalledWith('history-1', expect.anything());
   });
 
+  it('压缩改了格式而该图床不支持新格式时，改传原图（原图格式首次上传时已被接受）', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      imageCompression: {
+        enabled: true,
+        activePresetId: 'p',
+        presets: [{
+          ...DEFAULT_CONFIG.imageCompression!.presets[0],
+          id: 'p',
+          skipIfSmallerKB: 0,
+          outputFormat: 'webp',
+        }],
+      },
+    } as typeof DEFAULT_CONFIG;
+    invokeMock.mockImplementation(async (command: string) => (command === 'compress_image'
+      ? { outputPath: '/tmp/compressed/demo.webp', originalSize: 1000, compressedSize: 300, ratio: 0.3, width: 1, height: 1, format: 'webp' }
+      : 1));
+    const queueManager = createQueueManager([createItem({
+      enabledServices: ['jd'],
+      serviceProgress: { jd: { serviceId: 'jd', progress: 0, status: '✗ 失败' } },
+    })]);
+
+    const service = new RetryService(makeOptions({ queueManager }));
+    await service.retrySingleService('item-1', 'jd', config);
+
+    expect(retryUploadMock).toHaveBeenCalledWith('/tmp/demo.png', 'jd', config, expect.any(Function));
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['/tmp/compressed/demo.webp'] });
+  });
+
   it('全量重试同样先压缩再上传', async () => {
     const config = {
       ...DEFAULT_CONFIG,
