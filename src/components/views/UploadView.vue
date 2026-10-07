@@ -18,7 +18,7 @@ import { useConfigManager } from '@/composables/useConfig';
 import { UI_COPY } from '@/constants/uiCopy';
 import type { MultiUploadResult } from '@/core/MultiServiceUploader';
 import type { ImageCompressionConfig, CompressionPreset } from '@/config/types';
-import { DEFAULT_COMPRESSION_PRESET } from '@/config/types';
+import { resolveActivePreset } from '@/composables/image/useImageCompress';
 import type { TrayUploadAction } from '@/services/trayMenu';
 import { createLogger } from '@/utils/logger';
 
@@ -133,12 +133,7 @@ const visiblePrivateServices = computed(() => {
 const visiblePublicServices = computed(() => filterVisibleServices(PUBLIC_SERVICES));
 
 // 当前激活的预设（计算属性）
-const activePreset = computed<CompressionPreset>(() => {
-  const cfg = compressionConfig.value;
-  return cfg.presets?.find(p => p.id === cfg.activePresetId)
-    ?? cfg.presets?.[0]
-    ?? { ...DEFAULT_COMPRESSION_PRESET };
-});
+const activePreset = computed<CompressionPreset>(() => resolveActivePreset(compressionConfig.value));
 
 // 压缩配置写回 configStore（与设置页同步）
 async function handleCompressionToggle(enabled: boolean) {

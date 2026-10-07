@@ -548,6 +548,76 @@ describe('RetryService', () => {
     expect(historyInsertOrIgnoreMock).not.toHaveBeenCalled();
   });
 
+  it('开着压缩时单图床重试上传压缩后的文件，传完删掉自己的临时文件', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      imageCompression: {
+        enabled: true,
+        activePresetId: 'p',
+        presets: [{
+          ...DEFAULT_CONFIG.imageCompression!.presets[0],
+          id: 'p',
+          skipIfSmallerKB: 0,
+          outputFormat: 'webp',
+        }],
+      },
+    } as typeof DEFAULT_CONFIG;
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'compress_image') {
+        return {
+          outputPath: '/tmp/compressed/demo.webp',
+          originalSize: 1000,
+          compressedSize: 300,
+          ratio: 0.3,
+          width: 100,
+          height: 80,
+          format: 'webp',
+        };
+      }
+      return 1;
+    });
+
+    const service = new RetryService(makeOptions());
+    await service.retrySingleService('item-1', 'weibo', config);
+
+    expect(retryUploadMock).toHaveBeenCalledWith(
+      '/tmp/compressed/demo.webp', 'weibo', config, expect.any(Function),
+    );
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', {
+      filePaths: ['/tmp/compressed/demo.webp'],
+    });
+    // 历史和队列仍记原图路径，临时文件删掉后还能再重试
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-1', expect.anything());
+  });
+
+  it('全量重试同样先压缩再上传', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      imageCompression: {
+        enabled: true,
+        activePresetId: 'p',
+        presets: [{ ...DEFAULT_CONFIG.imageCompression!.presets[0], id: 'p', skipIfSmallerKB: 0 }],
+      },
+    } as typeof DEFAULT_CONFIG;
+    invokeMock.mockImplementation(async (command: string) => (command === 'compress_image'
+      ? { outputPath: '/tmp/compressed/all.jpg', originalSize: 1000, compressedSize: 300, ratio: 0.3, width: 1, height: 1, format: 'jpeg' }
+      : 1));
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.useFakeTimers();
+
+    const service = new RetryService(makeOptions());
+    const pending = service.retryAll('item-1', config);
+    await vi.runAllTimersAsync();
+    await pending;
+
+    expect(uploadToMultipleServicesMock).toHaveBeenCalledWith(
+      '/tmp/compressed/all.jpg', ['weibo'], config, expect.any(Function),
+    );
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['/tmp/compressed/all.jpg'] });
+    vi.useRealTimers();
+    vi.mocked(Math.random).mockRestore();
+  });
+
   it('keeps the whole item in error after one failed service is fixed but another failed service remains', async () => {
     const toast = makeToast();
     const filePath = 'C:/Temp/clipboard_image_retry_pending.png';

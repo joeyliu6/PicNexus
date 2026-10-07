@@ -10,6 +10,7 @@ import type { Store } from '@/store';
 import type { UploadResult } from '@/uploaders/base/types';
 import { checkNetworkConnectivity } from '@/utils/network';
 import { useHistorySaver } from '@/composables/history/useHistorySaver';
+import { useImageCompress } from '@/composables/image/useImageCompress';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
@@ -55,6 +56,7 @@ export class RetryService {
   private retryingItems = new Set<string>();
   private uploader = new MultiServiceUploader();
   private historySaver = useHistorySaver();
+  private imageCompress = useImageCompress();
 
   constructor(private options: RetryOptions) { }
 
@@ -109,9 +111,12 @@ export class RetryService {
     this.options.queueManager.resetServiceForRetry(itemId, serviceId);
     this.retryingItems.add(retryKey);
 
+    // 与首次上传一样按当前设置压缩；队列与历史仍记原图路径，临时文件传完即删
+    const prepared = await this.imageCompress.prepareSingleUpload(item.filePath, config.imageCompression);
+
     try {
       const result = await this.uploader.retryUpload(
-        item.filePath,
+        prepared.uploadPath,
         serviceId,
         config,
         (percent, step, stepIndex, totalSteps) => {
@@ -137,6 +142,7 @@ export class RetryService {
       await this.handleSingleServiceFailure(itemId, serviceId, item, error, silentToast, config);
     } finally {
       this.retryingItems.delete(retryKey);
+      await prepared.cleanup();
     }
   }
 
@@ -214,10 +220,11 @@ export class RetryService {
     this.options.queueManager.resetItemForRetry(itemId);
 
     const enabledServices = item.enabledServices || [];
+    const prepared = await this.imageCompress.prepareSingleUpload(item.filePath, config.imageCompression);
 
     try {
       const result = await this.uploader.uploadToMultipleServices(
-        item.filePath,
+        prepared.uploadPath,
         enabledServices,
         config,
         (serviceId, percent, step, stepIndex, totalSteps) => {
@@ -258,6 +265,8 @@ export class RetryService {
       // 清理重试状态
       this.retryingItems.delete(itemId);
       this.options.queueManager.updateItem(itemId, { isRetrying: false });
+    } finally {
+      await prepared.cleanup();
     }
   }
 

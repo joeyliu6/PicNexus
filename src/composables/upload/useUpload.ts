@@ -9,7 +9,6 @@ import type {
   UserConfig} from '@/config/types';
 import {
   DEFAULT_CONFIG,
-  DEFAULT_COMPRESSION_PRESET,
   isPublicRiskService,
 } from '@/config/types';
 import type { UploadQueueManager } from '@/core/UploadQueue';
@@ -21,7 +20,7 @@ import { chunkArray } from '@/utils/semaphore';
 import { useServiceSelector } from '@/composables/service/useServiceSelector';
 import { useHistorySaver } from '@/composables/history/useHistorySaver';
 import { fetchMetadataBatch, getImageMetadata } from '@/composables/image/useImageMetadata';
-import { useImageCompress } from '@/composables/image/useImageCompress';
+import { resolveActivePreset, useImageCompress } from '@/composables/image/useImageCompress';
 import { createLogger } from '@/utils/logger';
 import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '@/utils/uploadSummary';
 
@@ -240,9 +239,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       const compressionConfig = config.imageCompression ?? DEFAULT_CONFIG.imageCompression!;
       compressionEnabled = compressionConfig.enabled;
-      const activePreset = compressionConfig.presets?.find(
-        p => p.id === compressionConfig.activePresetId,
-      ) ?? compressionConfig.presets?.[0] ?? { ...DEFAULT_COMPRESSION_PRESET };
+      const activePreset = resolveActivePreset(compressionConfig);
 
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {

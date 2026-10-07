@@ -9,6 +9,7 @@ import type {
 } from '@/config/types';
 import { DEFAULT_COMPRESSION_PRESET } from '@/config/types';
 import { debounce } from '@/utils/debounce';
+import { resolveActivePreset } from '@/composables/image/useImageCompress';
 import { useConfirm } from '@/composables/useConfirm';
 
 /** 最大预设数量 */
@@ -52,12 +53,7 @@ export function useCompressionPresets({ imageCompression, onUpdate, editInputRef
   // ── 计算属性 ──
 
   /** 当前激活的预设 */
-  const activePreset = computed<CompressionPreset>(() => {
-    const cfg = imageCompression.value;
-    return cfg.presets?.find((p) => p.id === cfg.activePresetId)
-      ?? cfg.presets?.[0]
-      ?? { ...DEFAULT_COMPRESSION_PRESET };
-  });
+  const activePreset = computed<CompressionPreset>(() => resolveActivePreset(imageCompression.value));
 
   /** 是否可以新增预设 */
   const canAddPreset = computed(() => (imageCompression.value.presets?.length ?? 0) < MAX_PRESETS);
