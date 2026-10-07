@@ -84,9 +84,13 @@ export function formatLink(
  * 支持变量：{url}、{filename}、{width}、{height}
  */
 export function applyTemplate(template: string, context: LinkFormatContext): string {
-  return template
-    .replace(/\{url\}/g, context.url)
-    .replace(/\{filename\}/g, context.filename)
-    .replace(/\{width\}/g, context.width != null ? String(context.width) : '')
-    .replace(/\{height\}/g, context.height != null ? String(context.height) : '');
+  const values: Record<string, string> = {
+    url: context.url,
+    filename: context.filename,
+    width: context.width != null ? String(context.width) : '',
+    height: context.height != null ? String(context.height) : '',
+  };
+  // 一遍扫完 + 函数替换：值里的 $' $& 不被当成替换模式，
+  // 文件名里恰好写着 {width} 之类也不会被下一轮二次替换
+  return template.replace(/\{(url|filename|width|height)\}/g, (_, key: string) => values[key]);
 }

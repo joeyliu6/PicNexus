@@ -88,4 +88,20 @@ describe('applyTemplate', () => {
     const noSize: LinkFormatContext = { url: 'u', filename: 'f' };
     expect(applyTemplate('{width}x{height}', noSize)).toBe('x');
   });
+
+  it("文件名含 $' / $& 时原样输出，不被当成替换模式", () => {
+    const tricky: LinkFormatContext = { url: 'https://x/a.png', filename: "Tom$'s $& plan.png" };
+    expect(applyTemplate('![{filename}]({url})', tricky))
+      .toBe("![Tom$'s $& plan.png](https://x/a.png)");
+  });
+
+  it('URL 含 $$ / $1 时原样输出', () => {
+    expect(applyTemplate('{url}', { url: 'https://x/$$/$1.png', filename: 'f' }))
+      .toBe('https://x/$$/$1.png');
+  });
+
+  it('文件名里恰好有 {width} 这类字样时不被二次替换', () => {
+    expect(applyTemplate('{filename}', { url: 'u', filename: '{width}.png', width: 9 }))
+      .toBe('{width}.png');
+  });
 });
