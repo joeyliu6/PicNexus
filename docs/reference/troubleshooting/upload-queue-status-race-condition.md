@@ -1,106 +1,43 @@
 # 上传队列状态竞态条件
 
-## 问题描述
+## 现象
 
-上传失败后，弹窗正确显示"全线上传失败"，但队列 UI 仍显示：
-- 整体状态："正在同步..."
-- 服务状态："上传中..."
+单个图床已经失败或成功，队列卡片却：
 
-重试失败后也有相同问题。
+- 失败的图床又回到「准备上传... / 上传中」，一直转圈，没有重试按钮，「批量重传」也不包含它，「清空已完成」还会把它当干净项清掉；
+- 成功的图床链接消失，复制按钮不见（历史记录不受影响）；
+- 整项失败后仍显示「正在同步...」。
 
-## 问题根源
+## 根因
 
-**节流更新的 RAF 回调覆盖了最终状态。**
+**进度走节流层，最终状态走同步写入，二者在同一帧里交错。**
 
-### 时序分析
+`updateServiceProgress` 把进度压进 `useQueueState` 的 `pendingUpdates`，下一帧 `requestAnimationFrame` 才落地；而图床结果（`handleServiceResult` / `RetryService`）用 `updateItem` 同步写 ✓ / ✗、`link`、`fileKey`。下一帧回放攒下的进度时，如果直接替换，就会把刚写入的最终状态盖回旧值。
 
 ```
-1. 进度回调 → updateServiceProgress → updateItemThrottled
-   → 加入 pendingUpdates 队列（status: 'uploading', serviceProgress: {...}）
-
-2. 上传失败 → onServiceResult 回调 → handleServiceResult
-   → updateItem 更新 serviceProgress（但 status 仍是 'uploading'）
-
-3. ⚠️ RAF 回调可能在此时执行！
-   → flushPendingUpdates 检查 status === 'uploading'
-   → 应用过时的节流更新，覆盖 serviceProgress！
-
-4. catch 块执行 → markItemFailed 设置 status = 'error'
-   → 太晚了，serviceProgress 已被覆盖
+1. github 报进度「准备上传...」 → 进 pendingUpdates
+2. github 失败 → updateItem 同步写「✗ 失败」（整项仍是 uploading，smms 还在传）
+3. 下一帧 flushPendingUpdates 回放第 1 步 → 若整条替换，「✗ 失败」被抹掉
 ```
 
-### 核心问题
+## 防线（三层，缺一不可）
 
-1. `handleServiceResult` 只更新了 `serviceProgress`，没有设置整体 `status`
-2. 节流队列中的更新在 RAF 帧执行，时机不可控
-3. `markItemFailed` 设置 `status: 'error'` 时，`serviceProgress` 已被过时更新覆盖
+| 层 | 位置 | 管什么 |
+|---|---|---|
+| 整项收口时丢弃 | `UploadQueue.ts` 的 `markItemComplete` / `markItemFailed` 调 `clearPendingUpdatesForItem` | 整项已结束，攒下的全部作废 |
+| 整项终态跳过 | `useQueueState.ts` `flushPendingUpdates`：`status` 为 `success` / `error` 时整项跳过 | 收口后才到的迟到进度 |
+| **单图床终态跳过** | `flushPendingUpdates` 经 `mergeServiceProgress(..., { skipSettled: true })` 按图床深合并；该图床已是 ✓ / ✗ / 已跳过 就丢弃它的节流进度 | 整项还在传、某个图床已落定——上面两层都挡不住这种情况 |
 
-## 解决方案
+配套约定：`updateServiceProgress` 只提交本次变化的字段（`progress` / `status` / `metadata.step*`），**不带入入队那一刻的整条快照**；否则即使按图床合并，快照里旧的 `link` / `error` 也会被写回去。
 
-### 方案：在设置最终状态时清除节流队列
+重试不受影响：`resetServiceForRetry` / `resetItemForRetry` 用 `updateItem` 同步把状态改回「等待中...」（非终态），之后的重试进度照常落地。
 
-在 `markItemFailed` 和 `markItemComplete` 被调用时，**立即清除**该 item 的所有待处理节流更新。
+## 测试
 
-#### 1. 添加清除函数 (`useQueueState.ts`)
+`tests/unit/core/uploadQueueManager.spec.ts` 里「同一帧里先报进度、随后失败」「100%「完成」进度不能抹掉链接与 fileKey」「重试重置后的新进度照常落地」三条钉住单图床那一层。
 
-```typescript
-/**
- * 清除指定 item 的所有待处理节流更新
- */
-function clearPendingUpdatesForItem(itemId: string): void {
-  pendingUpdates.delete(itemId);
-}
-```
+## 经验
 
-#### 2. 在关键状态更新时调用 (`uploadQueue.ts`)
-
-```typescript
-markItemFailed(itemId: string, errorMessage: string): void {
-  // ...
-  // 关键：清除过时的节流更新
-  this.queueState.clearPendingUpdatesForItem(itemId);
-
-  this.updateItem(itemId, { status: 'error', ... });
-}
-
-markItemComplete(itemId: string, primaryUrl: string): void {
-  // ...
-  // 关键：清除过时的节流更新
-  this.queueState.clearPendingUpdatesForItem(itemId);
-
-  // ...
-}
-```
-
-#### 3. 双重保险：RAF 回调中跳过已完成的 item (`useQueueState.ts`)
-
-```typescript
-function flushPendingUpdates() {
-  pendingUpdates.forEach((updates, itemId) => {
-    // ...
-    // 如果状态已经是最终态，跳过所有待处理更新
-    if (currentItem.status === 'error' || currentItem.status === 'success') {
-      return;
-    }
-    // ...
-  });
-}
-```
-
-## 修改文件
-
-- `src/composables/upload/useQueueState.ts` - 添加 `clearPendingUpdatesForItem` 函数
-- `src/core/UploadQueue.ts` - 在 `markItemFailed` 和 `markItemComplete` 中调用清除函数
-- `src/services/RetryService.ts` - 重试失败后检查并恢复 error 状态
-
-## 效果
-
-- ✅ 首次上传失败后，队列正确显示失败状态
-- ✅ 重试失败后，队列正确恢复失败状态
-- ✅ 上传成功后，状态不会被过时更新覆盖
-
-## 经验教训
-
-1. **节流更新需要考虑清除时机** - 当有明确的"最终状态"时，应清除待处理更新
-2. **RAF 回调时序不可控** - 不能假设它在特定代码之前或之后执行
-3. **状态机需要完整的状态转换** - `handleServiceResult` 应该同时更新服务状态和整体状态
+1. 节流层与同步写入共存时，节流回放必须是「合并 + 跳过已落定」，不能是「替换」。
+2. RAF 回调时序不可控，不能假设它在某段代码之前或之后执行。
+3. 判断「已落定」要按图床看，整项状态只是其中一种特例。

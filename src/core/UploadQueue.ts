@@ -241,17 +241,15 @@ export class UploadQueueManager {
       statusText = step;
     }
 
-    // 修复竞态条件：只更新当前服务的进度，不覆盖其他服务的状态
-    // updateItem 会自动做深度合并，所以只需传递要更新的服务即可
+    // 只传本次变化的字段：节流层落地时按图床深合并（含 metadata），
+    // 不带入入队那一刻的整条快照，免得把之后写入的 link / error 盖回旧值
     const updates: Partial<QueueItem> = {
       serviceProgress: {
         [serviceId]: {
-          ...item.serviceProgress[serviceId],
           serviceId,
           progress: safePercent,
           status: statusText,
           metadata: {
-            ...item.serviceProgress[serviceId]?.metadata,
             step: step,
             stepIndex: stepIndex,
             totalSteps: totalSteps

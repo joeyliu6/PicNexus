@@ -2,7 +2,7 @@
 
 import { ref, computed, type Ref } from 'vue';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
-import { isStatusError } from '@/utils/uploadStatus';
+import { isStatusError, isStatusSuccess } from '@/utils/uploadStatus';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 
 // 全局队列状态（单例）
@@ -34,40 +34,54 @@ const pendingUpdates: Map<string, Partial<QueueItem>[]> = new Map();
 /** 是否已经调度了 RAF 更新 */
 let rafScheduled = false;
 
+/** 单个图床已落定（✓ / ✗ / 已跳过）：之后到达的节流进度都是过时的 */
+function isServiceSettled(progress: ServiceProgress | undefined): boolean {
+  const status = progress?.status;
+  return isStatusSuccess(status) || isStatusError(status) || Boolean(status?.includes('跳过'));
+}
+
+/**
+ * 把 updates 里每个图床的进度逐个深合并进 current（含 metadata）。
+ * skipSettled：已落定的图床丢弃本次更新——节流回放用，防止旧进度盖掉
+ * 在它之后同步写入的失败 / 成功链接。
+ */
+function mergeServiceProgress(
+  current: QueueItem['serviceProgress'] | undefined,
+  updates: QueueItem['serviceProgress'],
+  options: { skipSettled?: boolean } = {}
+): QueueItem['serviceProgress'] {
+  const merged: QueueItem['serviceProgress'] = { ...current };
+  for (const [key, value] of Object.entries(updates)) {
+    const currentProgress = current?.[key];
+    if (options.skipSettled && isServiceSettled(currentProgress)) continue;
+    const mergedMetadata = value?.metadata || currentProgress?.metadata
+      ? { ...currentProgress?.metadata, ...value?.metadata }
+      : undefined;
+    merged[key] = {
+      ...currentProgress,
+      ...value,
+      serviceId: key,
+      progress: value?.progress ?? currentProgress?.progress ?? 0,
+      status: value?.status ?? currentProgress?.status ?? '',
+      ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {})
+    };
+  }
+  return merged;
+}
+
 /**
  * 合并多个更新到一个对象
  */
 function mergeUpdates(updates: Partial<QueueItem>[]): Partial<QueueItem> {
   return updates.reduce((merged, update) => {
-    // 合并 serviceProgress（深度合并）
-    if (update.serviceProgress && merged.serviceProgress) {
-      merged.serviceProgress = {
-        ...merged.serviceProgress,
-        ...Object.fromEntries(
-          Object.entries(update.serviceProgress).map(([key, value]) => {
-            const currentProgress = merged.serviceProgress?.[key];
-            const mergedMetadata = value?.metadata || currentProgress?.metadata
-              ? { ...currentProgress?.metadata, ...value?.metadata }
-              : undefined;
-            return [
-              key,
-              {
-                ...currentProgress,
-                ...value,
-                serviceId: key,
-                progress: value?.progress ?? currentProgress?.progress ?? 0,
-                status: value?.status ?? currentProgress?.status ?? '',
-                ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {})
-              }
-            ];
-          })
-        )
-      };
-      // 删除 update 中的 serviceProgress，因为已经合并
-      const { serviceProgress: _, ...rest } = update;
-      return { ...merged, ...rest };
-    }
-    return { ...merged, ...update };
+    const { serviceProgress, ...rest } = update;
+    return {
+      ...merged,
+      ...rest,
+      ...(serviceProgress
+        ? { serviceProgress: mergeServiceProgress(merged.serviceProgress, serviceProgress) }
+        : {})
+    };
   }, {} as Partial<QueueItem>);
 }
 
@@ -92,12 +106,10 @@ function flushPendingUpdates() {
 
       const mergedUpdate = mergeUpdates(updates);
 
-      // 合并 serviceProgress
+      // 整项还在传时，单个图床可能已经落定（同帧里先报进度、随后失败/成功），
+      // 按图床跳过，不能整条替换成攒下的旧快照
       const updatedServiceProgress = mergedUpdate.serviceProgress
-        ? {
-            ...currentItem.serviceProgress,
-            ...mergedUpdate.serviceProgress
-          }
+        ? mergeServiceProgress(currentItem.serviceProgress, mergedUpdate.serviceProgress, { skipSettled: true })
         : currentItem.serviceProgress;
 
       queueItems.value[index] = {
@@ -161,31 +173,7 @@ export function useQueueState() {
 
       // 深拷贝 serviceProgress，包括内部的 metadata 对象
       const updatedServiceProgress = updates.serviceProgress
-        ? {
-            ...currentItem.serviceProgress,
-            ...Object.fromEntries(
-              Object.entries(updates.serviceProgress).map(([key, value]) => {
-                const currentProgress = currentItem.serviceProgress?.[key];
-                // 对 metadata 也进行深拷贝
-                const mergedMetadata = value?.metadata || currentProgress?.metadata
-                  ? { ...currentProgress?.metadata, ...value?.metadata }
-                  : undefined;
-
-                return [
-                  key,
-                  {
-                    ...currentProgress,
-                    ...value,
-                    serviceId: key,
-                    progress: value?.progress ?? currentProgress?.progress ?? 0,
-                    status: value?.status ?? currentProgress?.status ?? '',
-                    // 如果有 metadata，使用深拷贝的版本
-                    ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {})
-                  }
-                ];
-              })
-            )
-          }
+        ? mergeServiceProgress(currentItem.serviceProgress, updates.serviceProgress)
         : currentItem.serviceProgress;
 
       queueItems.value[index] = {

@@ -236,6 +236,62 @@ describe('UploadQueueManager', () => {
       });
     });
 
+    it('同一帧里先报进度、随后失败：下一帧回放旧进度不能把失败盖回上传中', async () => {
+      const id = manager.addFile('/img/a.png', 'a.png', ['github', 'smms'])!;
+      manager.updateServiceProgress(id, 'smms', 30, '上传中');
+      manager.updateServiceProgress(id, 'github', 0, '准备上传...');
+      manager.updateItem(id, {
+        serviceProgress: { github: { serviceId: 'github', progress: 0, status: '✗ 失败', error: '401' } },
+      });
+
+      await flushRaf();
+
+      const item = manager.getItem(id)!;
+      expect(item.serviceProgress.github).toMatchObject({ status: '✗ 失败', error: '401' });
+      // 其他图床的进度照常落地
+      expect(item.serviceProgress.smms).toMatchObject({ progress: 30, status: '上传中' });
+    });
+
+    it('图床成功写入链接后，下一帧回放的 100%「完成」进度不能抹掉链接与 fileKey', async () => {
+      const id = manager.addFile('/img/a.png', 'a.png', ['github', 'smms'])!;
+      manager.updateServiceProgress(id, 'smms', 40, '上传中');
+      manager.updateServiceProgress(id, 'github', 100, '完成');
+      manager.updateItem(id, {
+        serviceProgress: {
+          github: {
+            serviceId: 'github',
+            progress: 100,
+            status: '✓ 完成',
+            link: 'https://gh.example/a.png',
+            metadata: { fileKey: 'gh-key' },
+          },
+        },
+      });
+
+      await flushRaf();
+
+      const github = manager.getItem(id)!.serviceProgress.github!;
+      expect(github.status).toBe('✓ 完成');
+      expect(github.link).toBe('https://gh.example/a.png');
+      expect(github.metadata).toMatchObject({ fileKey: 'gh-key' });
+    });
+
+    it('重试重置后的新进度照常落地', async () => {
+      const id = manager.addFile('/img/a.png', 'a.png', ['github', 'smms'])!;
+      manager.updateItem(id, {
+        status: 'uploading',
+        serviceProgress: { github: { serviceId: 'github', progress: 0, status: '✗ 失败', error: '401' } },
+      });
+      manager.resetServiceForRetry(id, 'github');
+      manager.updateServiceProgress(id, 'github', 50, '上传中');
+
+      await flushRaf();
+
+      expect(manager.getItem(id)!.serviceProgress.github).toMatchObject({
+        progress: 50, status: '上传中', isRetrying: true,
+      });
+    });
+
     it('找不到队列项时静默返回，不产生任何更新', () => {
       const throttled = vi.spyOn(manager, 'updateItemThrottled');
 
