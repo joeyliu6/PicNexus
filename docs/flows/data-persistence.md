@@ -98,10 +98,11 @@ flowchart TD
     subgraph 写入路径
         W1[上传成功 → onServiceResult 回调]
         W1 --> W2{第一个成功的服务?}
-        W2 -- 是 --> W3["saveHistoryItemImmediate<br/>构造 HistoryItem: id + services + metadata"]
-        W2 -- 否 --> W4["addResultToHistoryItem<br/>追加 service URL 到已有记录"]
-        W3 --> W5[historyDB.insert → SQLite INSERT]
-        W4 --> W6[historyDB.updateServiceUrls → SQLite UPDATE]
+        W0["单图床重试成功 → RetryService<br/>只认队列项的 historyId"] --> W3
+        W2 -- 是 --> W3["saveHistoryItemImmediate<br/>记录不存在：用 historyId 新建（结果 + metadata）<br/>已存在：按 serviceId 合并"]
+        W2 -- 否 --> W4["addResultToHistoryItem<br/>追加 service 结果到已有记录"]
+        W3 --> W5[historyDB.insertOrIgnore / update]
+        W4 --> W6[historyDB.updateResults → SQLite UPDATE]
         W5 & W6 --> W7["emitHistoryUpdated → cacheEvents 通知"]
     end
 

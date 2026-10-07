@@ -300,6 +300,20 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 
 ---
 
+## 重试
+
+> **关键源文件**：`src/services/RetryService.ts`、`src/composables/history/useHistorySaver.ts`（`saveHistoryItemImmediate`）、`src/composables/upload/UploadExecutor.ts`
+
+入口：图床卡片上的重试按钮（某个图床一失败就出现，**不等整项上传结束**）和「批量重传」（逐个重试每项失败的图床）。
+
+**不变量：**
+
+1. **一个队列项只对应一条历史记录，键是 `historyId`。** 上传任务一开始就分配 `historyId`，但第一个图床成功才建记录。重试只认这个 id：记录在就合并，不在（首次全部失败）就用它新建。**不按文件路径找记录**——同一文件以前传过时，路径会命中那条旧记录并改掉它的主链接。
+2. **首次上传与重试谁先到谁建记录，后到的合并。** 两边都经 `saveHistoryItemImmediate`，共用 per-id 串行锁；它遇到已存在的记录会合并，而不是被 `INSERT OR IGNORE` 静默丢掉。
+3. **上传收尾不覆盖重试链路的结果。** 整次上传全失败时，已成功或仍在重试的图床保持原状；整次上传成功时，仍在重试的图床不标「已跳过」，整项保持「上传中」直到重试收口。
+4. **主图床按配置顺序选**，候选是队列项里所有已成功的图床（含上传中途重试成功的），历史、缩略图、自动复制的链接三者一致。重试在整次上传结束后才成功时，排在配置首位或尚无主链接则由重试提升为主图床。
+5. **重试与新上传一样按当前压缩设置压缩。** 压缩产物由重试自己登记、传完即删，不进会话级清理列表（否则另一批上传结束时会把重试正在读的文件删掉）；队列与历史始终记原图路径。
+
 ## 排查指南
 
 | 现象 | 可能原因 | 对照图表位置 |
@@ -311,6 +325,11 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 部分图床失败 | 单个服务 StructuredError | 图1 节点 AA → AC |
 | 历史记录缺少某图床 URL | `addResultToHistoryItem` 未触发 | 图1 节点 AD → AF |
 | 历史主图床与复制链接不一致 | `reconcileHistoryPrimary` 未完成 | 图1 节点 AH1 |
+| 重试显示成功但历史里找不到 / 改掉了同一文件的旧记录 | 重试没按队列项 `historyId` 写（按路径找记录会命中旧记录） | 重试 → 不变量 1 |
+| 上传中点了重试，最后某个图床的链接不在历史里 | 后到的一方没有合并进已有记录（被 `INSERT OR IGNORE` 吞掉） | 重试 → 不变量 2 |
+| 重试中的图床被标成「已跳过（未配置）」或「✗ 失败」 | 上传收尾时没跳过 `isRetrying` / 已成功的图床 | 重试 → 不变量 3 |
+| 单个图床失败后又变回「上传中」一直转圈、没有重试按钮 | 节流进度回放盖掉了最终状态，见 [upload-queue-status-race-condition.md](../reference/troubleshooting/upload-queue-status-race-condition.md) | 图2 进度循环 |
+| 同一条历史里各图床文件大小 / 格式不一 | 重试没走压缩（或压缩设置在两次之间改过） | 重试 → 不变量 5 |
 | S3 图床链接在浏览器里变成下载而不是显图 | 对象缺 Content-Type；确认 `curl -I` 返回的是否为 `application/octet-stream`。**先看是什么时候传的**：改动前的旧对象不会因升级自愈，补救见 [s3-legacy-content-type.md](../reference/troubleshooting/s3-legacy-content-type.md) | S3 系图床 → Content-Type |
 | GUI 传的图正常，Typora / Obsidian / CLI 传的图仍变下载框 | 2026-08-18 前编辑器链路的 `s3_put_object` 漏传 Content-Type（GUI 侧 08-13 就修了，这条晚 5 天）；升级后已修，旧对象仍需按上一行处理 | S3 系图床 → Content-Type |
 | S3 桶里出现 `20260813_a3f9_` 之类的前缀 | 预期行为，key 唯一化前缀 | S3 系图床 → 对象名唯一化 |
