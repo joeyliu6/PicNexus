@@ -5,7 +5,7 @@ import type { UserConfig, ServiceType } from '@/config/types';
 import type { SingleServiceResult, MultiUploadResult } from '@/core/MultiServiceUploader';
 import { MultiServiceUploader } from '@/core/MultiServiceUploader';
 import type { UploadQueueManager} from '@/core/UploadQueue';
-import { type ServiceProgress } from '@/core/UploadQueue';
+import { type QueueItem, type ServiceProgress } from '@/core/UploadQueue';
 import type { CopyLinkItem } from '@/composables/useCopyLink';
 import type { UploadSessionSummary } from '@/utils/uploadSummary';
 import { useServiceHealth } from '@/composables/service/useServiceHealth';
@@ -21,8 +21,28 @@ import {
 import { AUTH_CONFIG_ERROR_CODES } from '@/types/serviceHealth';
 import { createLogger } from '@/utils/logger';
 import { summarizeAllServicesFailed } from '@/utils/uploadFailureMessage';
+import { isStatusSuccess } from '@/utils/uploadStatus';
+import { resolveQueueStatus } from '@/services/retryStatus';
 
 const log = createLogger('UploadExecutor');
+
+/**
+ * 按配置顺序（enabledServices）取队列项里第一个已成功且有链接的图床。
+ * 与 MultiServiceUploader 选主图床的规则一致，只是把上传中途单独重试成功的图床也算进来；
+ * 队列项缺失时退回本次上传的结果。
+ */
+function pickPrimaryFromQueue(
+  item: QueueItem | undefined,
+  result: MultiUploadResult
+): { serviceId: string; url: string } {
+  for (const serviceId of item?.enabledServices ?? []) {
+    const progress = item?.serviceProgress[serviceId];
+    if (isStatusSuccess(progress?.status) && progress?.link) {
+      return { serviceId, url: progress.link };
+    }
+  }
+  return { serviceId: result.primaryService, url: result.primaryUrl };
+}
 
 /**
  * UploadExecutor 所需的上下文依赖（由门面注入）
@@ -279,9 +299,12 @@ export async function processUploadQueue(
           }
         }
 
-        if (historyCreated && result.primaryUrl) {
+        // 主图床按配置顺序取；上传中途被单独重试成功的图床不在 result 里，但要算进来
+        const primary = pickPrimaryFromQueue(queueManager.getItem(itemId), result);
+
+        if (historyCreated && primary.url) {
           try {
-            await reconcileHistoryPrimary(historyId, result.primaryService, result.primaryUrl);
+            await reconcileHistoryPrimary(historyId, primary.serviceId, primary.url);
           } catch (reconcileError) {
             log.error(`[历史记录] ${fileName} 主图床收口失败，但不影响上传:`, reconcileError);
           }
@@ -289,9 +312,7 @@ export async function processUploadQueue(
 
         // 双重保险：确保 UI 状态一致
         // 注意：不需要遍历 result.results，因为 handleServiceResult 已经处理了
-
-        // 通知队列管理器上传成功（谁先上传完用谁的链接）
-        const thumbUrl = result.primaryUrl;
+        const thumbUrl = primary.url;
 
         if (uploadSummary && result.partialFailures?.length) {
           const failureCounts = new Map(
@@ -312,11 +333,11 @@ export async function processUploadQueue(
         }
 
         // 收集主力图床链接（用于自动复制，serviceId 用于统一前缀处理）
-        if (result.primaryUrl) {
+        if (primary.url) {
           orderedCollectedLinks[queueIndex] = {
-            url: result.primaryUrl,
+            url: primary.url,
             fileName,
-            serviceId: result.primaryService as ServiceType,
+            serviceId: primary.serviceId as ServiceType,
           };
         }
 
@@ -365,6 +386,9 @@ export async function processUploadQueue(
         if (item) {
           const updatedServiceProgress = { ...(item.serviceProgress || {}) };
           attemptedServices.forEach(serviceId => {
+            // 上传还没结束就被单独重试的图床：已成功或仍在重试的，结果归重试链路，这里不能改成失败
+            const current = updatedServiceProgress[serviceId];
+            if (isStatusSuccess(current?.status) || current?.isRetrying) return;
             updatedServiceProgress[serviceId] = {
               ...updatedServiceProgress[serviceId],
               serviceId,
@@ -379,6 +403,14 @@ export async function processUploadQueue(
         }
 
         queueManager.markItemFailed(itemId, errorMsg);
+        // 有图床仍在重试时整项保持「上传中」，等重试链路收口
+        const failedItem = queueManager.getItem(itemId);
+        if (failedItem) {
+          const nextStatus = resolveQueueStatus(failedItem.enabledServices, failedItem.serviceProgress);
+          if (nextStatus === 'uploading') {
+            queueManager.updateItem(itemId, { status: nextStatus });
+          }
+        }
         if (uploadSummary) {
           uploadSummary.failed += 1;
         }

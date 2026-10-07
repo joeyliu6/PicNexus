@@ -6,6 +6,7 @@
 import { useQueueState } from '@/composables/upload/useQueueState';
 import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
+import { isStatusError, isStatusSuccess } from '@/utils/uploadStatus';
 
 const log = createLogger('UploadQueue');
 
@@ -306,9 +307,10 @@ export class UploadQueueManager {
           status: '✓ 完成',
           isRetrying: false // 清除重试标记
         };
-      } else if ((currentProgress?.progress ?? 0) === 0 && currentStatus === '等待中...') {
+      } else if ((currentProgress?.progress ?? 0) === 0 && currentStatus === '等待中...' && !currentProgress?.isRetrying) {
         // 上传到此处仍是初始 '等待中...' 状态 = 该服务被 filterConfiguredServices 过滤、从未启动过 task
         // 此时整体上传已成功（至少一个图床成功才会进 markItemComplete），把未启动的服务标为已跳过，避免 UI 永远卡在 '等待中...'
+        // 例外：上传还没结束就被单独重试、重试刚重置成 '等待中...' 的服务，结果归重试链路
         serviceProgressUpdates[serviceId] = {
           ...currentProgress,
           serviceId,
@@ -330,9 +332,16 @@ export class UploadQueueManager {
       ...(latestItem ? buildLinkFields(latestItem) : {})
     };
 
+    // 上传还没结束就被单独重试、尚未出结果的服务：整项保持上传中，由重试链路收口
+    // （整项一旦是 success，节流守卫会吞掉它的重试进度）
+    const hasPendingRetry = item.enabledServices.some(serviceId => {
+      const progress = item.serviceProgress[serviceId];
+      return progress?.isRetrying && !isStatusSuccess(progress.status) && !isStatusError(progress.status);
+    });
+
     // 只传递需要更新的服务进度，让 updateItem 做深度合并
     this.updateItem(itemId, {
-      status: 'success',
+      status: hasPendingRetry ? 'uploading' : 'success',
       serviceProgress: serviceProgressUpdates,
       ...linkFields,
       weiboStatus: item.enabledServices.includes('weibo') ? '✓ 完成' : '已跳过',  // 向后兼容
