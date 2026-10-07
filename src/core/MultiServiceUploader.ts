@@ -201,10 +201,12 @@ export class MultiServiceUploader {
                 structuredError = convertToNamiError(error);
                 break;
               default: {
-                // 其他图床使用通用错误
+                // 其他图床使用通用错误。认证类单独归 AUTH_FAILED，设置页健康状态才会变红：
+                // BaseUploader.uploadViaRust 把 Rust 的 AppError::Auth 包成「认证失败: …」，
+                // 部分上传器（牛客/知乎）再在外层加自己的前缀，所以按包含判断而非前缀。
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 structuredError = createStructuredError(
-                  UploadErrorCode.UPLOAD_FAILED,
+                  errorMsg.includes('认证失败') ? UploadErrorCode.AUTH_FAILED : UploadErrorCode.UPLOAD_FAILED,
                   `${serviceId} 上传失败: ${errorMsg}`,
                   {
                     details: errorMsg,

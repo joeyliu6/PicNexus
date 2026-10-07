@@ -194,6 +194,38 @@ describe('MultiServiceUploader', () => {
     ).rejects.toThrow('所有图床上传均失败');
   });
 
+  it.each([
+    // BaseUploader.uploadViaRust 把 Rust 的 AppError::Auth 包成「认证失败: …」，bilibili/chaoxing/smms/imgur/github 原样抛出
+    ['smms', '认证失败: SM.MS Token 无效或已过期'],
+    // nowcoder/zhihu 在外面再包一层自己的前缀
+    ['nowcoder', '牛客图床上传失败: 认证失败: Cookie 无效或已过期（无法解析响应）'],
+  ])('%s 的认证失败映射为 AUTH_FAILED，让设置页健康状态变红', async (serviceId, message) => {
+    mockCreate.mockReturnValue(makeMockUploader({ uploadError: new Error(message) }) as never);
+    const results: SingleServiceResult[] = [];
+
+    await expect(uploader.uploadToMultipleServices(
+      '/tmp/test.jpg',
+      [serviceId] as ServiceType[],
+      makeConfig({ nowcoder: { cookie: 't=1' } }),
+      undefined,
+      result => { results.push(result); },
+    )).rejects.toThrow();
+
+    expect(results[0].structuredError?.code).toBe('AUTH_FAILED');
+  });
+
+  it('非认证类失败仍归 UPLOAD_FAILED', async () => {
+    mockCreate.mockReturnValue(makeMockUploader({ uploadError: new Error('SM.MS上传失败: 网络超时') }) as never);
+    const results: SingleServiceResult[] = [];
+
+    await expect(uploader.uploadToMultipleServices(
+      '/tmp/test.jpg', ['smms'] as ServiceType[], makeConfig(), undefined,
+      result => { results.push(result); },
+    )).rejects.toThrow();
+
+    expect(results[0].structuredError?.code).toBe('UPLOAD_FAILED');
+  });
+
   // ---------- 4. 部分成功 ----------
 
   it('部分服务成功时返回 isPartialSuccess=true 和 partialFailures', async () => {
