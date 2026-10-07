@@ -359,14 +359,17 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
         error: result.error || undefined,
       };
 
-      // 先把 chip 状态写到本地 override，UI 立即看到结果
-      localStatusOverride.value = { ...localStatusOverride.value, [serviceId]: entry };
-      applyCurrentItemPatch({
-        linkCheckStatus: {
-          ...(item.value?.linkCheckStatus ?? {}),
-          [serviceId]: entry,
-        },
-      });
+      // 先把 chip 状态写到本地 override，UI 立即看到结果。
+      // 检测期间用户可能已翻到下一张：那时只落库到被检测的那条，不能画到当前图上
+      if (item.value?.id === cur.id) {
+        localStatusOverride.value = { ...localStatusOverride.value, [serviceId]: entry };
+        applyCurrentItemPatch({
+          linkCheckStatus: {
+            ...(item.value?.linkCheckStatus ?? {}),
+            [serviceId]: entry,
+          },
+        });
+      }
 
       // 串行化 DB 写入：等上一笔回写完成再读 → 合并 → 写。
       // 失败也要继续放行队列，避免一次抛错导致所有后续写永远卡住。

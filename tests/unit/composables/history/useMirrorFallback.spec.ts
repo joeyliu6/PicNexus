@@ -487,6 +487,33 @@ describe('useMirrorFallback - checkMirror', () => {
     expect(harness.api().checkingServices.value.has('qiyu')).toBe(false);
   });
 
+  it('检测结果回来前翻到下一张图：结果只落库到原图，不画到当前图上', async () => {
+    let release!: () => void;
+    invokeMock.mockImplementationOnce(() => new Promise(r => { release = () => r({
+      link: 'https://qiyu.example/pic.png', is_valid: false, status_code: 404,
+      error_type: 'http_4xx', browser_might_work: false,
+    }); }));
+    dbGetByIdMock.mockResolvedValue(makeItem());
+    const harness = mountHarness();
+
+    const pending = harness.api().checkMirror('qiyu');
+    await nextTick();
+    // 用户翻到 B
+    harness.item.value = { ...makeItem(), id: 'hist-2', linkCheckStatus: {} };
+    await nextTick();
+
+    release();
+    await pending;
+    await nextTick();
+
+    expect(dbUpdateMock).toHaveBeenCalledWith('hist-1', expect.objectContaining({
+      linkCheckStatus: expect.objectContaining({ qiyu: expect.objectContaining({ isValid: false }) }),
+    }));
+    expect(harness.item.value?.id).toBe('hist-2');
+    expect(harness.item.value?.linkCheckStatus).toEqual({});
+    expect(harness.api().mirrors.value.find(m => m.serviceId === 'qiyu')?.checkState).not.toBe('invalid');
+  });
+
   it('invoke 抛错：toast.error + finally 清理 checkingServices', async () => {
     invokeMock.mockRejectedValueOnce(new Error('network broken'));
     const harness = mountHarness();
