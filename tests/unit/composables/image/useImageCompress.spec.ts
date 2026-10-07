@@ -93,6 +93,48 @@ describe('useImageCompress', () => {
     expect(result).toEqual({ filePath: 'C:/tmp/small.jpg', compressed: false });
   });
 
+  it('prepareSingleUpload：读不到文件大小时照样压缩（与批量上传口径一致），产物由调用方 cleanup 删除', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'get_image_metadata') throw new Error('decode failed');
+      if (command === 'compress_image') {
+        return {
+          outputPath: 'C:/tmp/retry-out.jpg',
+          originalSize: 5_000_000,
+          compressedSize: 1_000_000,
+          ratio: 0.2,
+          width: 10,
+          height: 10,
+          format: 'jpg',
+        };
+      }
+      return 1;
+    });
+
+    const { useImageCompress } = await import('@/composables/image/useImageCompress');
+    const { prepareSingleUpload } = useImageCompress();
+
+    const prepared = await prepareSingleUpload('C:/tmp/unknown-size.jpg', {
+      enabled: true,
+      activePresetId: 'p1',
+      presets: [makePreset({ skipIfSmallerKB: 2048 })],
+    });
+
+    expect(prepared.uploadPath).toBe('C:/tmp/retry-out.jpg');
+    await prepared.cleanup();
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['C:/tmp/retry-out.jpg'] });
+  });
+
+  it('prepareSingleUpload：压缩关闭时原样返回，不调后端', async () => {
+    const { useImageCompress } = await import('@/composables/image/useImageCompress');
+    const { prepareSingleUpload } = useImageCompress();
+
+    const prepared = await prepareSingleUpload('C:/tmp/a.jpg', { enabled: false, activePresetId: 'p1', presets: [] });
+    await prepared.cleanup();
+
+    expect(prepared.uploadPath).toBe('C:/tmp/a.jpg');
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it('skips gif without calling backend command', async () => {
     const { useImageCompress } = await import('@/composables/image/useImageCompress');
     const { compressImage } = useImageCompress();

@@ -198,7 +198,9 @@ export function useImageCompress() {
       return { uploadPath: filePath, cleanup: async () => {} };
     }
     const outputs: string[] = [];
-    const fileSize = (await getImageMetadata(filePath).catch(() => null))?.file_size;
+    // getImageMetadata 读失败时不抛错而是返回 file_size: 0；0 按「不知道大小」处理，
+    // 与批量上传一致（否则「小于 N KB 跳过」会把读不到大小的图当小图跳过压缩）
+    const fileSize = (await getImageMetadata(filePath)).file_size || undefined;
     const { filePath: uploadPath } = await compressImage(filePath, resolveActivePreset(compression), fileSize, outputs);
     return { uploadPath, cleanup: () => deleteCompressedFiles(outputs) };
   }
