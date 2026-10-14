@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, inject, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
+import { inject, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import { useHistoryManager } from '@/composables/history/useHistory';
-import { useLinkCheckBulkActions } from '@/composables/link-check/useLinkCheckBulkActions';
+import type { BulkDeleteConfirmCopy } from '@/composables/history/useHistoryResultOps';
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
+import type { ImageEntry } from '@/composables/link-check/imageHealth';
+import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
-import type { LinkCheckRow, StatusFilter } from '@/types/linkCheck';
+import type { LinkCheckRow } from '@/types/linkCheck';
 import BatchMigratePanel from './link-check/BatchMigratePanel.vue';
-import HistoryCheckPanel from './link-check/HistoryCheckPanel.vue';
+import HistoryCheckPanel, { type PrimaryChange } from './link-check/HistoryCheckPanel.vue';
 import MdRescueInline from './link-check/MdRescueInline.vue';
 import { exportTextFile } from '@/utils/userFiles';
 import { historyDB } from '@/services/database';
@@ -19,6 +21,7 @@ import { getErrorMessage } from '@/types/errors';
 const log = createLogger('LinkCheckView');
 
 const toast = useToast();
+const configManager = useConfigManager();
 
 type LinkCheckTab = 'monitor' | 'rescue' | 'migrate';
 
@@ -46,13 +49,12 @@ if (linkCheckTargetTab) {
 }
 
 const {
-  isChecking: monitorChecking,
-  isPaused: monitorPaused,
+  isChecking,
+  isPaused,
   isLoading,
   isPhase2Loading,
-  phase2Duration,
   loadError,
-  progress: monitorProgress,
+  progress,
   progressSource,
   checkRows,
   loadHistoryRows,
@@ -65,99 +67,121 @@ const {
   exportCsv,
   removeRowsByKeys,
   setFadingOutRows,
-  setPrimaryService,
+  setPrimaryServices,
   onViewActivated,
   onViewDeactivated,
 } = useLinkCheckManager();
 
-const { deleteHistoryResult, bulkDeleteHistoryResults } = useHistoryManager();
+const { bulkDeleteHistoryResults } = useHistoryManager();
 
-const monitorIsChecking = computed(
-  () => monitorChecking.value && progressSource.value !== 'rescue',
-);
+/** 改用备份 / 移除记录进行中：期间锁住会改数据的按钮，免得同一批记录被并发改写 */
+const isActing = ref(false);
 
-async function handleExportCsv(rows: LinkCheckRow[] = checkRows.value): Promise<void> {
-  const csv = exportCsv(rows);
-  const path = await exportTextFile(`link-check-${Date.now()}.csv`, [{ name: 'CSV', extensions: ['csv'] }], csv);
+const nameOf = (serviceId: string) => getServiceDisplayName(serviceId, configManager.config.value);
+
+async function handleExportCsv(rows: LinkCheckRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const path = await exportTextFile(`link-check-${Date.now()}.csv`, [{ name: 'CSV', extensions: ['csv'] }], exportCsv(rows));
   if (!path) return;
   toast.success('导出成功', `已保存至 ${path}`);
 }
 
-async function handleExportCsvSelected(rows: LinkCheckRow[]): Promise<void> {
-  const csv = exportCsv(rows);
-  const path = await exportTextFile(`link-check-selected-${Date.now()}.csv`, [{ name: 'CSV', extensions: ['csv'] }], csv);
-  if (!path) return;
-  toast.success('导出成功', `已保存至 ${path}`);
-}
-
-async function handleRecheckSingle(
-  row: LinkCheckRow,
-  filter?: StatusFilter,
-): Promise<void> {
-  await recheckSingle(row, filter ?? undefined);
-}
-
-async function deleteRowsByTargets(rows: LinkCheckRow[]): Promise<boolean> {
-  const report = await bulkDeleteHistoryResults(
-    rows.map((r) => ({ historyId: r.historyId, serviceId: r.serviceId })),
-  );
-  if (!report) return false;
-
-  // 只移除已处理完毕的行（真删除 + 目标本就不存在）；失败的记录保留供重试（toast 已提示）
-  const resolved = new Set(report.resolvedHistoryIds);
-  const removedRows = rows.filter((r) => resolved.has(r.historyId));
-  if (removedRows.length > 0) {
-    setFadingOutRows(removedRows, true);
-    await new Promise((resolve) => setTimeout(resolve, 380));
-    removeRowsByKeys(removedRows);
-  }
-  return report.failedHistoryIds.length === 0;
-}
-
-async function handleDeleteRow(row: LinkCheckRow): Promise<void> {
-  const outcome = await deleteHistoryResult(row.historyId, row.serviceId);
-  if (!outcome) return;
-  setFadingOutRows([row], true);
-  await new Promise((resolve) => setTimeout(resolve, 380));
-  removeRowsByKeys([row]);
+/** 重查一张图：它的每一份链接各查一次，行上的动画由检测引擎驱动 */
+async function handleRecheckImage(rows: LinkCheckRow[]): Promise<void> {
+  await Promise.all(rows.map((row) => recheckSingle(row, 'all')));
 }
 
 /**
- * 主链接坏了 → 改用能访问的备份当主链接
+ * 主链接打不开 → 改用能打开的备份（单张，或结论卡上的「把 N 张改用备份」）
  *
- * 不弹确认：随时能在浏览页 / 这里再改回来，而且什么都不删。
- * 提示要发：那一行往往不在当前「有问题」筛选里，「主链接」标签挪过去用户看不见。
+ * 不弹确认：随时能在浏览页改回来，而且什么都不删。逐张切换，一张失败不拖累其余，最后如实报数。
  */
-async function handlePromoteBackup(row: LinkCheckRow, serviceId: string): Promise<void> {
+async function handlePromote(changes: PrimaryChange[]): Promise<void> {
+  if (changes.length === 0 || isActing.value) return;
+  isActing.value = true;
+  const done = new Map<string, string>();
+  let firstError = '';
   try {
-    await historyDB.switchPrimaryService(row.historyId, serviceId);
-    setPrimaryService(row.historyId, serviceId);
-    await emitHistoryUpdated([row.historyId]).catch((e) => log.warn('history-updated 事件发送失败', e));
-    toast.success('已改用备份', `主链接换成了 ${getServiceDisplayName(serviceId)}，以后复制的就是这条`);
-  } catch (error) {
-    log.error('切换主链接失败', error);
-    toast.error('没改成', getErrorMessage(error));
+    for (const change of changes) {
+      try {
+        await historyDB.switchPrimaryService(change.historyId, change.serviceId);
+        done.set(change.historyId, change.serviceId);
+      } catch (error) {
+        if (!firstError) firstError = getErrorMessage(error);
+        log.error('切换主链接失败', { historyId: change.historyId, error });
+      }
+    }
+    setPrimaryServices(done);
+    if (done.size > 0) {
+      await emitHistoryUpdated([...done.keys()]).catch((e) => log.warn('history-updated 事件发送失败', e));
+    }
+  } finally {
+    isActing.value = false;
+  }
+
+  const failed = changes.length - done.size;
+  if (done.size === 0) {
+    toast.error('没改成', firstError);
+    return;
+  }
+  const summary = changes.length === 1
+    ? `已改用 ${nameOf(changes[0].serviceId)}`
+    : `已把 ${done.size} 张图改用备份`;
+  if (failed > 0) {
+    toast.warn(`${summary}，${failed} 张没改成`, firstError);
+  } else {
+    toast.success(summary, '以后复制、插入的都是能打开的那份；文档里的旧链接可以到「文档修复」换掉');
   }
 }
 
-async function recheckRows(rows: LinkCheckRow[]): Promise<void> {
-  await checkSubset({
-    targets: rows.map((row) => ({
-      historyId: row.historyId,
-      serviceId: row.serviceId,
-    })),
-  });
+type RemoveScope = { kind: 'image'; entry: ImageEntry } | { kind: 'lost'; images: number };
+
+/** 确认框按图片说话：「移除 N 条链接」对用户没有意义 */
+function removeCopy(rows: LinkCheckRow[], scope: RemoveScope): BulkDeleteConfirmCopy {
+  if (scope.kind === 'lost') {
+    return {
+      header: `清理 ${scope.images} 张找不回的图片？`,
+      message: '这些图片在每个图床上都已经不存在了，留着记录也打不开。只会从 PicNexus 的记录里移除，移除后无法撤销。',
+      acceptLabel: `清理 ${scope.images} 张`,
+    };
+  }
+  const { entry } = scope;
+  if (rows.length === entry.rows.length) {
+    return {
+      header: '从记录中移除这张图？',
+      message: `「${entry.fileName}」的链接都打不开了。只会从 PicNexus 的记录里移除，图床上的文件不受影响；移除后无法撤销。`,
+      acceptLabel: '移除',
+    };
+  }
+  return {
+    header: `移除 ${rows.length} 个失效的链接？`,
+    message: `「${entry.fileName}」在 ${rows.map((r) => nameOf(r.serviceId)).join('、')} 上的链接已经打不开。只移除这几条记录，能打开的链接都保留；图床上的文件不受影响，移除后无法撤销。`,
+    acceptLabel: '移除',
+  };
 }
 
-const {
-  isBulkActing,
-  bulkRecheck,
-  bulkCopyUrls,
-  bulkDelete,
-} = useLinkCheckBulkActions({
-  recheckRows,
-  deleteRows: deleteRowsByTargets,
-});
+async function handleRemoveLinks(rows: LinkCheckRow[], scope: RemoveScope): Promise<void> {
+  if (rows.length === 0 || isActing.value) return;
+  isActing.value = true;
+  try {
+    const report = await bulkDeleteHistoryResults(
+      rows.map((r) => ({ historyId: r.historyId, serviceId: r.serviceId })),
+      removeCopy(rows, scope),
+    );
+    if (!report) return;
+
+    // 只移除已处理完毕的行（真删除 + 目标本就不存在）；失败的记录保留供重试（toast 已提示）
+    const resolved = new Set(report.resolvedHistoryIds);
+    const removedRows = rows.filter((r) => resolved.has(r.historyId));
+    if (removedRows.length > 0) {
+      setFadingOutRows(removedRows, true);
+      await new Promise((resolve) => setTimeout(resolve, 380));
+      removeRowsByKeys(removedRows);
+    }
+  } finally {
+    isActing.value = false;
+  }
+}
 
 onMounted(() => {
   void loadHistoryRows();
@@ -193,28 +217,25 @@ onDeactivated(onViewDeactivated);
         v-if="activeTab === 'monitor'"
         key="monitor"
         :check-rows="checkRows"
-        :is-checking="monitorIsChecking"
-        :is-paused="monitorPaused"
+        :is-checking="isChecking"
+        :is-paused="isPaused"
         :is-loading="isLoading"
         :load-error="loadError"
         :is-phase2-loading="isPhase2Loading"
-        :phase2-duration="phase2Duration"
-        :progress="monitorProgress"
+        :progress="progress"
         :progress-source="progressSource"
-        :is-action-locked="isBulkActing"
+        :is-action-locked="isActing"
         @check-all="checkAllHistoryLinks"
         @check-subset="(filter) => checkSubset(filter)"
         @cancel-check="cancelCheck"
         @pause-check="pauseCheck"
         @resume-check="resumeCheck"
-        @recheck-single="handleRecheckSingle"
+        @recheck-image="handleRecheckImage"
+        @promote="handlePromote"
+        @remove-links="handleRemoveLinks"
         @export-csv="handleExportCsv"
-        @export-csv-selected="handleExportCsvSelected"
-        @delete-row="handleDeleteRow"
-        @bulk-recheck="bulkRecheck"
-        @bulk-copy="bulkCopyUrls"
-        @bulk-delete="bulkDelete"
-        @promote-backup="handlePromoteBackup"
+        @navigate="(tab) => { activeTab = tab; }"
+        @retry="loadHistoryRows"
       />
 
       <MdRescueInline v-else-if="activeTab === 'rescue'" key="rescue" />
@@ -230,10 +251,6 @@ onDeactivated(onViewDeactivated);
   height: 100%;
   overflow: hidden;
   background: var(--bg-app);
-
-  /* 侧边栏 80px + 顶部标签栏 48px，会把面板中心推到窗口中心的右下方约 40px。 */
-  --link-check-empty-center-shift-x: 40px;
-  --link-check-empty-center-shift-y: 40px;
 }
 
 .lc-tab-bar {

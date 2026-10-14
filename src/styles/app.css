@@ -1347,6 +1347,13 @@ button:focus-visible {
   margin-top: var(--space-2xs);
 }
 
+/* 弹出菜单里的危险项（移除记录等）：菜单挂在 body 上，组件 scoped 样式够不着，只能写在这里。
+   用法：菜单项 `{ label, icon, class: 'menu-item-danger' }` */
+.p-menu .menu-item-danger .p-menu-item-icon,
+.p-menu .menu-item-danger .p-menu-item-label {
+  color: var(--error);
+}
+
 /* ===== 3. 弹窗统一外壳（AppDialog）=====
 
    唯一真相源：全项目所有弹窗共用这一套外壳规格与按钮规格，改这里 = 全体跟着变。
