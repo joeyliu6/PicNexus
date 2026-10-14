@@ -321,6 +321,9 @@ async function handleCopyUrl(historyId: string, serviceId: string) {
   margin: 0 calc(var(--space-xl) * -1);
   padding: 0 var(--space-xl) var(--space-lg-xl);
   overflow-y: auto;
+
+  /* 滚动条出现、消失时行宽不变，右侧按钮不跳 */
+  scrollbar-gutter: stable;
 }
 
 .progress-empty {
