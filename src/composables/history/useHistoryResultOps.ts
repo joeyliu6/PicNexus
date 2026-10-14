@@ -1,5 +1,5 @@
 // 按图床结果粒度删除（链接检测专用）：
-// 一条 HistoryItem 可能挂了多个图床上传结果；这里提供"只摘除其中一项"的能力。
+// 一条 HistoryItem 可能挂了多个图床上传结果；这里提供"只摘除其中几项"的能力。
 // 被摘除者若恰为 primaryService，会从剩余 success 结果里补选；若结果数归零，则降级为整条删除。
 
 import type { Ref } from 'vue';
@@ -32,8 +32,6 @@ export interface ResultDeleteTarget {
   historyId: string;
   serviceId: string;
 }
-
-export type ResultDeleteOutcome = 'deleted' | 'updated' | false;
 
 /**
  * 批量移除确认框的文案，调用方可整套换掉
@@ -135,65 +133,6 @@ export function createResultOps(ctx: ResultOpsContext) {
       emitHistoryUpdated(updatedItemIds).catch((e) => {
         log.warn('[历史记录] 跨窗口通知失败(updated):', e);
       });
-    }
-  }
-
-  async function deleteHistoryResult(
-    historyId: string,
-    serviceId: string,
-  ): Promise<ResultDeleteOutcome> {
-    try {
-      if (!historyId || !serviceId) {
-        toast.showConfig('error', TOAST_MESSAGES.history.invalidId);
-        return false;
-      }
-
-      const existing = await historyDB.getById(historyId);
-      if (!existing) {
-        toast.showConfig('error', TOAST_MESSAGES.history.invalidId);
-        return false;
-      }
-
-      const isLast = existing.results.length <= 1;
-      const confirmMsg = isLast
-        ? '这是这张图最后一个图床链接，移除后它会从 PicNexus 的历史记录里消失。只改记录，图床上的文件不会被删除；移除后无法撤销。'
-        : '只从 PicNexus 的记录里移除这条链接，图床上的文件不会被删除，其他图床的链接也会保留。移除后无法撤销。';
-
-      const confirmed = await confirm(confirmMsg, {
-        header: isLast ? '移除整条记录？' : '移除这条链接？',
-        acceptLabel: '移除',
-        acceptClass: 'p-button-danger',
-      });
-      if (!confirmed) return false;
-
-      const { nextItem, matched } = stripServiceFromItem(existing, serviceId);
-      if (!matched) {
-        log.warn('[历史记录] 目标图床不存在，跳过删除', { historyId, serviceId });
-        return false;
-      }
-
-      if (nextItem === null) {
-        await historyDB.delete(historyId);
-        await applyChanges([historyId], []);
-        toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
-        return 'deleted';
-      }
-
-      await historyDB.update(historyId, {
-        results: nextItem.results,
-        linkCheckStatus: nextItem.linkCheckStatus,
-        linkCheckSummary: nextItem.linkCheckSummary,
-        primaryService: nextItem.primaryService,
-        generatedLink: nextItem.generatedLink,
-      });
-      await applyChanges([], [historyId]);
-      toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
-      return 'updated';
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      log.error('[历史记录] 删除图床结果失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(msg));
-      return false;
     }
   }
 
@@ -323,5 +262,5 @@ export function createResultOps(ctx: ResultOpsContext) {
     }
   }
 
-  return { deleteHistoryResult, bulkDeleteHistoryResults };
+  return { bulkDeleteHistoryResults };
 }

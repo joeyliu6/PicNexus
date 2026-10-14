@@ -24,8 +24,8 @@ import {
  * - `@/types/linkCheckSummary`：必须跑真实的 recomputeLinkCheckSummary，否则「跨文件约定」
  *   那一组用例就是空的（见 HistoryDatabase.ts:367 的一致性声明）。
  *
- * 注意 createResultOps 只返回 2 个方法；applyChanges 是闭包内私有 helper，
- * 只能经 deleteHistoryResult / bulkDeleteHistoryResults 两个出口间接验证。
+ * 注意 createResultOps 只返回 bulkDeleteHistoryResults；applyChanges 是闭包内私有 helper，
+ * 只能经它间接验证。单个链接的剥离与降级也走它（传一个 target）。
  */
 
 const {
@@ -159,115 +159,17 @@ beforeEach(() => {
   emitHistoryUpdatedMock.mockResolvedValue(undefined);
 });
 
-// ─── ① deleteHistoryResult 前置校验 ──────────────────────
+// ─── ① 剥离与降级（单个 target） ───────────────────────
 
-describe('createResultOps - deleteHistoryResult 前置校验', () => {
-  it('rejects an empty historyId with an invalid-id toast and never touches the database', async () => {
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    const result = await deleteHistoryResult('', 'jd');
-
-    expect(result).toBe(false);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', TOAST_MESSAGES.history.invalidId);
-    expect(getByIdMock).not.toHaveBeenCalled();
-    expect(confirmMock).not.toHaveBeenCalled();
-  });
-
-  it('rejects an empty serviceId with an invalid-id toast', async () => {
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    const result = await deleteHistoryResult('hist-multi', '');
-
-    expect(result).toBe(false);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', TOAST_MESSAGES.history.invalidId);
-    expect(getByIdMock).not.toHaveBeenCalled();
-  });
-
-  // 参数非法与「记录不存在」共用同一条 invalidId 文案，用户侧无法区分两种失败。
-  // 这里固化现状，将来若拆分文案，这条用例会主动报警。
-  it('reuses the invalid-id toast when the record cannot be found', async () => {
-    getByIdMock.mockResolvedValue(null);
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    const result = await deleteHistoryResult('missing', 'jd');
-
-    expect(result).toBe(false);
-    expect(getByIdMock).toHaveBeenCalledWith('missing');
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', TOAST_MESSAGES.history.invalidId);
-    expect(confirmMock).not.toHaveBeenCalled();
-  });
-
-  it('warns that the whole record will be removed when only one result is left', async () => {
-    getByIdMock.mockResolvedValue(makeSingleServiceItem());
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    await deleteHistoryResult('hist-single', 'jd');
-
-    expect(confirmMock).toHaveBeenCalledWith(
-      expect.stringContaining('最后一个图床链接'),
-      expect.objectContaining({ header: '移除整条记录？', acceptLabel: '移除' }),
-    );
-  });
-
-  it('promises the other mirrors are kept when more than one result exists', async () => {
-    getByIdMock.mockResolvedValue(makeMultiServiceItem());
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    await deleteHistoryResult('hist-multi', 'qiyu');
-
-    expect(confirmMock).toHaveBeenCalledWith(
-      expect.stringContaining('其他图床的链接也会保留'),
-      expect.objectContaining({ header: '移除这条链接？' }),
-    );
-  });
-
-  it('writes nothing and stays silent when the user cancels the confirmation', async () => {
-    getByIdMock.mockResolvedValue(makeMultiServiceItem());
-    confirmMock.mockResolvedValue(false);
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    const result = await deleteHistoryResult('hist-multi', 'qiyu');
-
-    expect(result).toBe(false);
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(deleteMock).not.toHaveBeenCalled();
-    // 取消是用户自己的动作，UI 已经反馈过了，不再补一条 toast
-    expect(toastShowConfigMock).not.toHaveBeenCalled();
-  });
-
-  // matched === false 走的是「log.warn 后静默返回」，UI 侧完全没有反馈。
-  // 这是现状而非期望行为，先钉住，将来若补 toast 这条用例会提醒同步修改。
-  it('returns false without any toast when the target service is not on the record', async () => {
-    getByIdMock.mockResolvedValue(makeMultiServiceItem());
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    const result = await deleteHistoryResult('hist-multi', 'not-there');
-
-    expect(result).toBe(false);
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(deleteMock).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).not.toHaveBeenCalled();
-  });
-});
-
-// ─── ② deleteHistoryResult 剥离与降级 ────────────────────
-
-describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
+describe('createResultOps - 剥离与降级', () => {
   it('deletes the whole record when the last result is stripped', async () => {
     getByIdMock.mockResolvedValue(makeSingleServiceItem());
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-single', 'jd');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-single', serviceId: 'jd' }]);
 
-    expect(result).toBe('deleted');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(deleteMock).toHaveBeenCalledWith('hist-single');
     expect(updateMock).not.toHaveBeenCalled();
     expect(toastShowConfigMock).toHaveBeenCalledWith(
@@ -280,11 +182,11 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
     const item = makeMultiServiceItem();
     getByIdMock.mockResolvedValue(item);
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-multi', 'qiyu');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
-    expect(result).toBe('updated');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(deleteMock).not.toHaveBeenCalled();
     expect(updateMock).toHaveBeenCalledWith('hist-multi', expect.any(Object));
 
@@ -299,11 +201,11 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
     const qiyuUrl = item.results[1].result!.url;
     getByIdMock.mockResolvedValue(item);
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-multi', 'jd');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'jd' }]);
 
-    expect(result).toBe('updated');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     const payload = updatePayload();
     // 补选取剩余 results 里的第一个 success + url，没有优先级排序
     expect(payload.primaryService).toBe('qiyu');
@@ -320,13 +222,13 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
       ],
     }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-failed-rest', 'jd');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-failed-rest', serviceId: 'jd' }]);
 
     // 剥完还剩一条 results，但没有可接班的 success → 仍然整条删，
     // 避免留下 generatedLink='' 的孤儿记录
-    expect(result).toBe('deleted');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(deleteMock).toHaveBeenCalledWith('hist-failed-rest');
     expect(updateMock).not.toHaveBeenCalled();
   });
@@ -348,11 +250,11 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
       ],
     }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-no-url', 'jd');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-no-url', serviceId: 'jd' }]);
 
-    expect(result).toBe('deleted');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(deleteMock).toHaveBeenCalledWith('hist-no-url');
   });
 
@@ -365,9 +267,9 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
       },
     }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'qiyu');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
     const payload = updatePayload();
     expect(Object.keys(payload.linkCheckStatus ?? {}).sort()).toEqual(['jd', 'weibo']);
@@ -379,9 +281,9 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
   it('still sends the linkCheckStatus key when the record never had one', async () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem({ linkCheckStatus: undefined }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'qiyu');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
     const payload = updatePayload();
     expect(Object.prototype.hasOwnProperty.call(payload, 'linkCheckStatus')).toBe(true);
@@ -391,11 +293,11 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
   it('reports a failure toast and leaves state untouched when getById throws', async () => {
     getByIdMock.mockRejectedValue(new Error('db offline'));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-multi', 'qiyu');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ removedCount: 0, resolvedHistoryIds: [], failedHistoryIds: ['hist-multi'] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
       TOAST_MESSAGES.common.deleteFailed('db offline'),
@@ -408,11 +310,11 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem());
     updateMock.mockRejectedValue(new Error('db locked'));
     const { ctx, refreshServiceCounts } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-multi', 'qiyu');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ removedCount: 0, resolvedHistoryIds: [], failedHistoryIds: ['hist-multi'] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
       TOAST_MESSAGES.common.deleteFailed('db locked'),
@@ -426,11 +328,11 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
     getByIdMock.mockResolvedValue(makeSingleServiceItem());
     deleteMock.mockRejectedValue(new Error('disk full'));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-single', 'jd');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-single', serviceId: 'jd' }]);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ removedCount: 0, resolvedHistoryIds: [], failedHistoryIds: ['hist-single'] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
       TOAST_MESSAGES.common.deleteFailed('disk full'),
@@ -438,24 +340,9 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
     expect(ctx.totalCount.value).toBe(5);
     expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
   });
-
-  // 非 Error 抛出物（Rust 侧 invoke 常抛字符串）也要能拼出可读的 detail
-  it('stringifies non-Error rejections into the failure toast', async () => {
-    getByIdMock.mockRejectedValue('plain string failure');
-    const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
-
-    const result = await deleteHistoryResult('hist-multi', 'qiyu');
-
-    expect(result).toBe(false);
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'error',
-      TOAST_MESSAGES.common.deleteFailed('plain string failure'),
-    );
-  });
 });
 
-// ─── ③ bulkDeleteHistoryResults ──────────────────────────
+// ─── ② bulkDeleteHistoryResults ──────────────────────────
 
 describe('createResultOps - bulkDeleteHistoryResults', () => {
   it('warns and returns false for an empty selection without asking for confirmation', async () => {
@@ -787,15 +674,15 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
   });
 });
 
-// ─── ④ applyChanges 副作用（经两个出口间接验证） ─────────
+// ─── ③ applyChanges 副作用 ───────────────────────────────
 
 describe('createResultOps - applyChanges 副作用', () => {
   it('drops the count, favorites, detail cache and broadcasts on a whole-record delete', async () => {
     getByIdMock.mockResolvedValue(makeSingleServiceItem());
     const { ctx, detailCache, removedFavoriteBatches, refreshServiceCounts } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-single', 'jd');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-single', serviceId: 'jd' }]);
 
     expect(ctx.totalCount.value).toBe(4);
     expect(removedFavoriteBatches).toEqual([['hist-single']]);
@@ -809,9 +696,9 @@ describe('createResultOps - applyChanges 副作用', () => {
   it('clamps totalCount at zero instead of going negative', async () => {
     getByIdMock.mockResolvedValue(makeSingleServiceItem());
     const { ctx } = makeCtx(0);
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-single', 'jd');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-single', serviceId: 'jd' }]);
 
     expect(ctx.totalCount.value).toBe(0);
   });
@@ -820,9 +707,9 @@ describe('createResultOps - applyChanges 副作用', () => {
   it('only invalidates the detail cache on a partial update', async () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem());
     const { ctx, detailCache, removedFavoriteBatches, refreshServiceCounts } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'qiyu');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
     expect(ctx.totalCount.value).toBe(5);
     expect(removedFavoriteBatches).toEqual([]);
@@ -838,11 +725,11 @@ describe('createResultOps - applyChanges 副作用', () => {
     getByIdMock.mockResolvedValue(makeSingleServiceItem());
     emitHistoryDeletedMock.mockRejectedValue(new Error('no other window'));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-single', 'jd');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-single', serviceId: 'jd' }]);
 
-    expect(result).toBe('deleted');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'success',
       TOAST_MESSAGES.common.deleteSuccess(1),
@@ -853,11 +740,11 @@ describe('createResultOps - applyChanges 副作用', () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem());
     emitHistoryUpdatedMock.mockRejectedValue(new Error('no other window'));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    const result = await deleteHistoryResult('hist-multi', 'qiyu');
+    const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
-    expect(result).toBe('updated');
+    expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'success',
       TOAST_MESSAGES.common.deleteSuccess(1),
@@ -865,7 +752,7 @@ describe('createResultOps - applyChanges 副作用', () => {
   });
 });
 
-// ─── ⑤ 跨文件约定：linkCheckSummary 重算 ─────────────────
+// ─── ④ 跨文件约定：linkCheckSummary 重算 ─────────────────
 
 describe('createResultOps - 跨文件约定：linkCheckSummary 重算', () => {
   // HistoryDatabase.ts:367 声明 removeMirror 的 summary 同步「与 stripServiceFromItem 保持一致」。
@@ -887,9 +774,9 @@ describe('createResultOps - 跨文件约定：linkCheckSummary 重算', () => {
       linkCheckSummary: previousSummary,
     }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'weibo');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'weibo' }]);
 
     const payload = updatePayload();
     // 写死的期望值：删掉一条 valid 之后 3/2/1/0 → 2/1/1/0，lastCheckTime 原样保留
@@ -916,9 +803,9 @@ describe('createResultOps - 跨文件约定：linkCheckSummary 重算', () => {
       linkCheckSummary: previousSummary,
     }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'qiyu');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
     // 剩 jd(valid) + weibo(没有 status 条目) → 2 / 1 / 0 / 1
     expect(payloadSummary()).toEqual(expect.objectContaining({
@@ -940,9 +827,9 @@ describe('createResultOps - 跨文件约定：linkCheckSummary 重算', () => {
       linkCheckSummary: previousSummary,
     }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'weibo');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'weibo' }]);
 
     expect(payloadSummary()).toEqual(expect.objectContaining({
       totalLinks: 2,
@@ -956,9 +843,9 @@ describe('createResultOps - 跨文件约定：linkCheckSummary 重算', () => {
   it('keeps the summary undefined when the record was never checked', async () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem({ linkCheckSummary: undefined }));
     const { ctx } = makeCtx();
-    const { deleteHistoryResult } = createResultOps(ctx);
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
-    await deleteHistoryResult('hist-multi', 'qiyu');
+    await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
     const payload = updatePayload();
     expect(Object.prototype.hasOwnProperty.call(payload, 'linkCheckSummary')).toBe(true);

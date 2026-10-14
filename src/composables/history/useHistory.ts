@@ -369,7 +369,7 @@ export function useHistoryManager() {
   });
 
   // 按图床结果粒度删除（链接检测专用）
-  const { deleteHistoryResult, bulkDeleteHistoryResults } = createResultOps({
+  const { bulkDeleteHistoryResults } = createResultOps({
     totalCount,
     dataVersion,
     detailCache,
@@ -581,7 +581,6 @@ export function useHistoryManager() {
     clearHistory,
     bulkExportJSON,
     bulkDeleteRecords,
-    deleteHistoryResult,
     bulkDeleteHistoryResults,
 
     // 时间轴相关
