@@ -209,7 +209,7 @@ describe('createResultOps - deleteHistoryResult 前置校验', () => {
 
     expect(confirmMock).toHaveBeenCalledWith(
       expect.stringContaining('最后一个图床链接'),
-      expect.objectContaining({ header: '确认删除整条记录', acceptLabel: '删除' }),
+      expect.objectContaining({ header: '移除整条记录？', acceptLabel: '移除' }),
     );
   });
 
@@ -221,8 +221,8 @@ describe('createResultOps - deleteHistoryResult 前置校验', () => {
     await deleteHistoryResult('hist-multi', 'qiyu');
 
     expect(confirmMock).toHaveBeenCalledWith(
-      expect.stringContaining('其他图床结果会保留'),
-      expect.objectContaining({ header: '确认删除链接' }),
+      expect.stringContaining('其他图床的链接也会保留'),
+      expect.objectContaining({ header: '移除这条链接？' }),
     );
   });
 
@@ -494,8 +494,8 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
 
     expect(result).toBe(false);
     expect(confirmMock).toHaveBeenCalledWith(
-      expect.stringContaining('将删除选中的 1 条图床链接'),
-      expect.objectContaining({ header: '批量删除链接', acceptLabel: '删除 1 条' }),
+      expect.stringContaining('图床上的文件不会被删除'),
+      expect.objectContaining({ header: '移除 1 条链接？', acceptLabel: '移除 1 条' }),
     );
     expect(getByIdMock).not.toHaveBeenCalled();
   });

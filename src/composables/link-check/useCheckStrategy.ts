@@ -31,7 +31,7 @@ const FILTER_TOOLTIP: Record<string, (count: string) => string> = {
 };
 
 const SCOPE_FILTER_LABEL: Record<string, string> = {
-  problems: '问题',
+  problems: '有问题',
   invalid: '失效',
   suspicious: '可疑',
   timeout: '超时',
@@ -93,7 +93,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
 
     items.push({ kind: 'recheck', label: '重新检测', icon: 'pi-refresh', count });
     items.push({ kind: 'copy', label: '复制链接', icon: 'pi-copy', count });
-    items.push({ kind: 'delete', label: '删除', icon: 'pi-trash', count, danger: true });
+    items.push({ kind: 'delete', label: '移除记录', icon: 'pi-trash', count, danger: true });
 
     return items;
   }

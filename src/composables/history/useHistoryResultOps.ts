@@ -144,12 +144,12 @@ export function createResultOps(ctx: ResultOpsContext) {
 
       const isLast = existing.results.length <= 1;
       const confirmMsg = isLast
-        ? '这是该图片的最后一个图床链接，删除后整条历史记录会被一起移除。此操作不可撤销，是否继续？'
-        : '仅删除此图床的这条链接，图片的其他图床结果会保留。此操作不可撤销，是否继续？';
+        ? '这是这张图最后一个图床链接，移除后它会从 PicNexus 的历史记录里消失。只改记录，图床上的文件不会被删除；移除后无法撤销。'
+        : '只从 PicNexus 的记录里移除这条链接，图床上的文件不会被删除，其他图床的链接也会保留。移除后无法撤销。';
 
       const confirmed = await confirm(confirmMsg, {
-        header: isLast ? '确认删除整条记录' : '确认删除链接',
-        acceptLabel: '删除',
+        header: isLast ? '移除整条记录？' : '移除这条链接？',
+        acceptLabel: '移除',
         acceptClass: 'p-button-danger',
       });
       if (!confirmed) return false;
@@ -214,10 +214,10 @@ export function createResultOps(ctx: ResultOpsContext) {
       if (grouped.size === 0) return false;
 
       const confirmed = await confirm(
-        `将删除选中的 ${targets.length} 条图床链接，部分图片可能因此整条被移除。此操作不可撤销，是否继续？`,
+        `将从 PicNexus 的记录里移除 ${targets.length} 条图床链接，图床上的文件不会被删除；只剩这些链接的图片会从历史记录里消失。移除后无法撤销。`,
         {
-          header: '批量删除链接',
-          acceptLabel: `删除 ${targets.length} 条`,
+          header: `移除 ${targets.length} 条链接？`,
+          acceptLabel: `移除 ${targets.length} 条`,
           acceptClass: 'p-button-danger',
         },
       );

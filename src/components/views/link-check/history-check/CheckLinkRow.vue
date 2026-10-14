@@ -135,8 +135,8 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
       <button
         class="row-action delete-btn"
         :disabled="disabled"
-        :aria-label="`删除 ${serviceName} 上的这条链接`"
-        v-tooltip.top="'删除这条链接'"
+        :aria-label="`从记录中移除 ${serviceName} 的这条链接`"
+        v-tooltip.top="'从记录中移除（不删图床上的文件）'"
         @click.stop="emit('delete')"
       >
         <i class="pi pi-trash"></i>

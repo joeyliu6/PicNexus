@@ -177,7 +177,7 @@ describe('HistoryCheckPanel', () => {
     await wrapper.get('.overflow-toggle').trigger('click');
     await flushPromisesAndTicks();
     await wrapper.findAll('.overflow-dropdown-item')
-      .find(item => item.text().includes('删除'))!
+      .find(item => item.text().includes('移除'))!
       .trigger('click');
 
     expect(wrapper.emitted('export-csv')).toEqual([[[row]]]);
