@@ -7,7 +7,9 @@ import {
   isDefunctHost,
   statusBadgeLabel,
   statusDotColor,
+  statusTone,
   statusTooltip,
+  statusWord,
 } from '@/composables/link-check/useLinkStatusDisplay';
 import type { CheckLinkResult } from '@/types/linkCheck';
 
@@ -135,5 +137,34 @@ describe('useLinkStatusDisplay', () => {
     expect(formatTimeRemaining(45_000)).toMatch(/^45\s/);
     expect(formatTimeRemaining(125_000)).toMatch(/^2\s/);
     expect(formatTimeRemaining(120_000)).toMatch(/^2\s/);
+  });
+});
+
+describe('statusWord / statusTone', () => {
+  it.each([
+    [undefined, '未检测', 'unchecked'],
+    [makeResult({ is_valid: true, error_type: 'success', status_code: 200 }), '正常', 'ok'],
+    [makeResult({ error_type: 'http_4xx', status_code: 404 }), '不存在', 'error'],
+    [makeResult({ error_type: 'http_4xx', status_code: 410 }), '已删除', 'error'],
+    [makeResult({ error_type: 'http_4xx', status_code: 401 }), '需要登录', 'error'],
+    [makeResult({ error_type: 'http_4xx', status_code: 403 }), '拒绝访问', 'error'],
+    [makeResult({ error_type: 'http_4xx', status_code: 403, browser_might_work: true }), '防盗链', 'suspicious'],
+    [makeResult({ error_type: 'http_4xx', status_code: 418 }), '失效', 'error'],
+    [makeResult({ error_type: 'http_5xx', status_code: 502 }), '图床故障', 'error'],
+    [makeResult({ error_type: 'redirect', status_code: 301, browser_might_work: true }), '跳转', 'suspicious'],
+    [makeResult({ error_type: 'timeout' }), '超时', 'warning'],
+    [makeResult({ error_type: 'network' }), '连不上', 'error'],
+    [makeResult({ error_type: 'blocked' }), '已拦截', 'error'],
+    [makeResult({ error_type: 'suspicious', status_code: 200 }), '可疑', 'suspicious'],
+  ])('%#: 把检测结果说成白话', (result, word, tone) => {
+    expect(statusWord(result)).toBe(word);
+    expect(statusTone(result)).toBe(tone);
+  });
+
+  it('标签不超过 4 个字，状态药丸宽度才排得齐', () => {
+    for (const code of [401, 403, 404, 410, 429, 500, 502, 503]) {
+      const word = statusWord(makeResult({ error_type: code >= 500 ? 'http_5xx' : 'http_4xx', status_code: code }));
+      expect(word.length).toBeLessThanOrEqual(4);
+    }
   });
 });

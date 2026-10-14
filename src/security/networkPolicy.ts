@@ -158,7 +158,7 @@ export function getConfirmedWebdavHttpHosts(
  * 供 {@link safeImageUrl} 的调用方一次拿全，省得每个视图各收集一遍、漏一类就少放行一批图。
  *
  * **调用方清单**（新增渲染图片的视图时请一并接上，否则那个视图等于不设防）：
- * - `HistoryTableView` / `QueueCard` → `ThumbnailImage` 的 `confirmedHttpHosts` prop
+ * - `HistoryTableView` / `QueueCard` / `CheckLinkRow`（链接检测）→ `ThumbnailImage` 的 `confirmedHttpHosts` prop
  * - `FavoritesView` / `TimelineView` → `useThumbnailFallbackChain` 的 `confirmedHttpHosts` 选项
  *
  * 后两个是 2026-08-19 补上的：给 CSP 的 `img-src` 放开 `http:` 之前，CSP 是收藏页 /

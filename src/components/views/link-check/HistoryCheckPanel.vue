@@ -14,6 +14,9 @@ import { useCheckStrategy } from '@/composables/link-check/useCheckStrategy';
 import type { MoreMenuKind } from '@/composables/link-check/useCheckStrategy';
 import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
 import { applyZhihuSourceFromConfig } from '@/utils/zhihuSource';
+import { copyHint, indexRowsByHistory, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
+import { getCopiesThumbnailCandidates } from '@/composables/image/useThumbCache';
+import { getConfirmedHttpHosts } from '@/security/networkPolicy';
 
 const props = defineProps<{
   checkRows: LinkCheckRow[];
@@ -146,14 +149,25 @@ const {
   buildMoreMenuItems,
   buildScopeLabel,
   resolveSmartCheck,
-  statusDotColor,
-  errorBadgeClass,
-  errorLabel,
-  recheckLabel,
-  errorTooltip,
 } = useCheckStrategy({ stats: displayStats, statusFilter });
 
 const showOverflowMenu = ref(false);
+
+// 同一张图的其他图床副本：只读 historyId，随数组引用重建；每行的状态在渲染时按需读取
+const rowsByHistory = computed(() => indexRowsByHistory(checkRows.value));
+const confirmedHttpHosts = computed(() => getConfirmedHttpHosts(configManager.config.value));
+
+function rowThumbSrcs(row: LinkCheckRow): string[] {
+  const copies = thumbnailCopyOrder(row, siblingRows(row, rowsByHistory.value));
+  return getCopiesThumbnailCandidates(
+    copies.map((r) => ({ serviceId: r.serviceId, url: r.rawUrl, fileKey: r.fileKey })),
+    configManager.config.value,
+  );
+}
+
+function rowHint(row: LinkCheckRow) {
+  return copyHint(row, siblingRows(row, rowsByHistory.value));
+}
 
 /** 底栏运行状态 pill —— 仅在链接检测自己检测时显示，rescue/迁移不借此渲染 */
 const statePill = computed<StatePill | null>(() => {
@@ -342,11 +356,9 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :is-action-locked="isActionLocked"
       :suppress-list-motion="suppressListMotion"
       :selected-ids="selectedIds"
-      :status-dot-color="statusDotColor"
-      :error-badge-class="errorBadgeClass"
-      :error-label="errorLabel"
-      :error-tooltip="errorTooltip"
-      :recheck-label="recheckLabel"
+      :row-thumb-srcs="rowThumbSrcs"
+      :row-hint="rowHint"
+      :confirmed-http-hosts="confirmedHttpHosts"
       :copied-key="copiedLinkKey"
       @toggle-select="handleToggleSelect"
       @copy-url="handleCopyUrl"

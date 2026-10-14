@@ -32,6 +32,7 @@ import WechatQrDialog from '@/components/settings/about-update/WechatQrDialog.vu
 import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
+import { copyHint, indexRowsByHistory, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter, BatchCheckProgress } from '@/types/linkCheck';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
@@ -248,31 +249,9 @@ const moreItems: MoreMenuItem[] = [
   { kind: 'delete', label: 'Delete', icon: 'pi-trash', count: 8, danger: true },
 ];
 
-const statusDotColor = (item: LinkCheckRow) => {
-  const check = item.recheckResult ?? item.checkResult;
-  if (!check) return 'var(--text-tertiary)';
-  if (check.is_valid) return 'var(--success)';
-  if (check.error_type === 'timeout') return 'var(--warning)';
-  if (check.error_type === 'suspicious' || check.browser_might_work) return 'var(--pending)';
-  return 'var(--error)';
-};
-const errorBadgeClass = (item: LinkCheckRow) => {
-  const check = item.recheckResult ?? item.checkResult;
-  if (!check) return 'error-badge--unchecked';
-  if (check.is_valid) return 'error-badge--success';
-  if (check.error_type === 'timeout') return 'error-badge--warning';
-  if (check.error_type === 'suspicious' || check.browser_might_work) return 'error-badge--suspicious';
-  return 'error-badge--error';
-};
-const errorLabel = (item: LinkCheckRow) => {
-  const check = item.recheckResult ?? item.checkResult;
-  if (!check) return '-';
-  if (check.is_valid) return '200';
-  if (check.status_code) return String(check.status_code);
-  if (check.error_type === 'timeout') return 'TO';
-  return 'ERR';
-};
-const recheckLabel = (check: CheckLinkResult) => check.is_valid ? 'OK' : 'ERR';
+const linkRowsByHistory = computed(() => indexRowsByHistory(linkRows.value));
+const rowThumbSrcs = (row: LinkCheckRow) => thumbnailCopyOrder(row, siblingRows(row, linkRowsByHistory.value)).map((r) => r.rawUrl);
+const rowHint = (row: LinkCheckRow) => copyHint(row, siblingRows(row, linkRowsByHistory.value));
 
 const historyMode = ref<'table' | 'timeline' | 'favorites'>(
   page === 'timeline' ? 'timeline' : page === 'favorites' ? 'favorites' : 'table'
@@ -878,11 +857,8 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
             :is-action-locked="false"
             :suppress-list-motion="true"
             :selected-ids="selectedIds"
-            :status-dot-color="statusDotColor"
-            :error-badge-class="errorBadgeClass"
-            :error-label="errorLabel"
-            :error-tooltip="() => 'Visual fixture'"
-            :recheck-label="recheckLabel"
+            :row-thumb-srcs="rowThumbSrcs"
+            :row-hint="rowHint"
           />
           <CheckBottomBar
             v-model:current-page="currentPage"

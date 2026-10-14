@@ -92,6 +92,10 @@ export interface LinkCheckRow {
   rawUrl: string;
   fileName: string;
   fallbackUrl?: string;
+  /** 这一份是不是主链接（用户复制出去、写进文档的那条） */
+  isPrimary?: boolean;
+  /** 部分图床生成缩略图要用（如微博 pid） */
+  fileKey?: string;
   checkResult?: CheckLinkResult;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;

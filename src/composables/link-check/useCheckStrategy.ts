@@ -1,6 +1,5 @@
 import { computed, type ComputedRef, type Ref } from 'vue';
-import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
-import { statusTooltip as baseStatusTooltip } from '@/composables/link-check/useLinkStatusDisplay';
+import type { StatusFilter } from '@/types/linkCheck';
 import type { CheckStatsResult } from './useCheckStats';
 
 const CONTEXT_AWARE_FILTERS = new Set<StatusFilter>(['problems', 'invalid', 'suspicious', 'timeout', 'unchecked']);
@@ -125,65 +124,11 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     return { action: 'check-all' };
   }
 
-  function statusDotColor(row: LinkCheckRow): string {
-    const result = row.recheckResult ?? row.checkResult;
-    if (!result) return 'var(--text-tertiary)';
-    if (result.is_valid) return 'var(--success)';
-    if (result.error_type === 'timeout') return 'var(--warning)';
-    if (result.error_type === 'suspicious' || result.browser_might_work) return 'var(--pending)';
-    return 'var(--error)';
-  }
-
-  function getErrorStatus(result: CheckLinkResult | null): string {
-    if (!result) return 'unchecked';
-    if (result.is_valid) return 'success';
-    if (result.error_type === 'timeout') return 'warning';
-    if (result.error_type === 'suspicious' || result.browser_might_work) return 'suspicious';
-    return 'error';
-  }
-
-  function errorBadgeClass(row: LinkCheckRow): string {
-    const result = row.recheckResult ?? row.checkResult ?? null;
-    return `error-badge--${getErrorStatus(result)}`;
-  }
-
-  function errorLabel(row: LinkCheckRow): string {
-    const result = row.recheckResult ?? row.checkResult;
-    if (!result) return '—';
-    if (result.is_valid) return result.status_code ? String(result.status_code) : '200';
-    if (result.status_code) return String(result.status_code);
-    if (result.error_type === 'timeout') return '超时';
-    if (result.error_type === 'network') return '网络';
-    if (result.error_type === 'blocked') return '拦截';
-    if (result.error_type === 'suspicious' || result.browser_might_work) return '可疑';
-    return '失效';
-  }
-
-  function recheckLabel(result: CheckLinkResult): string {
-    if (result.is_valid) return '可用';
-    if (result.error_type === 'timeout') return '超时';
-    if (result.error_type === 'network') return '断连';
-    if (result.error_type === 'blocked') return '拦截';
-    // 这里没有 status_code 快捷分支，不点名就会被下面的 browser_might_work 吞成「可疑」
-    if (result.error_type === 'redirect') return '跳转';
-    if (result.error_type === 'suspicious' || result.browser_might_work) return '可疑';
-    return '失效';
-  }
-
-  function errorTooltip(row: LinkCheckRow): string {
-    return baseStatusTooltip(row.recheckResult ?? row.checkResult ?? null);
-  }
-
   return {
     smartCheckLabel,
     smartCheckTooltip,
     buildMoreMenuItems,
     buildScopeLabel,
     resolveSmartCheck,
-    statusDotColor,
-    errorBadgeClass,
-    errorLabel,
-    recheckLabel,
-    errorTooltip,
   };
 }

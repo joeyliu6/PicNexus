@@ -28,6 +28,50 @@ export function getStatusDisplay(cr: CheckLinkResult | null | undefined): Status
   return STATUS_DISPLAY_MAP[cr.error_type] ?? { color: 'red', label: '失效' };
 }
 
+/** 状态色调：决定圆点与状态药丸的颜色，链接检测与文档修复共用 */
+export type StatusTone = 'ok' | 'error' | 'warning' | 'suspicious' | 'unchecked';
+
+export function statusTone(cr: CheckLinkResult | null | undefined): StatusTone {
+  if (!cr) return 'unchecked';
+  if (cr.is_valid) return 'ok';
+  if (cr.error_type === 'timeout') return 'warning';
+  if (cr.error_type === 'redirect' || cr.error_type === 'suspicious' || cr.browser_might_work) return 'suspicious';
+  return 'error';
+}
+
+/** HTTP 状态码 → 白话（只收用户能据此判断后果的几类，其余落到 4xx/5xx 兜底） */
+const HTTP_STATUS_WORDS: Record<number, string> = {
+  401: '需要登录',
+  403: '拒绝访问',
+  404: '不存在',
+  410: '已删除',
+  429: '被限流',
+};
+
+/**
+ * 状态白话标签（≤4 个字）
+ *
+ * Why 不直接显示状态码：维护页的读者要回答的是「这张图还能不能看」，
+ * 「502」「403」得懂 HTTP 才读得出后果。状态码与详细原因仍在 `statusTooltip` 里。
+ */
+export function statusWord(cr: CheckLinkResult | null | undefined): string {
+  if (!cr) return '未检测';
+  if (cr.is_valid) return '正常';
+  // redirect 先判：3xx 也置了 browser_might_work，落到下面会被说成「防盗链」
+  if (cr.error_type === 'redirect') return '跳转';
+  if (cr.browser_might_work) return cr.status_code === 403 ? '防盗链' : '可疑';
+  if (cr.error_type === 'timeout') return '超时';
+  if (cr.error_type === 'network') return '连不上';
+  if (cr.error_type === 'blocked') return '已拦截';
+  if (cr.error_type === 'suspicious') return '可疑';
+  if (cr.status_code) {
+    const word = HTTP_STATUS_WORDS[cr.status_code];
+    if (word) return word;
+    if (cr.status_code >= 500) return '图床故障';
+  }
+  return '失效';
+}
+
 export function statusBadgeLabel(cr: CheckLinkResult | null | undefined): string {
   if (!cr) return '失败';
   if (cr.is_valid) return cr.status_code ? String(cr.status_code) : '200';

@@ -396,6 +396,24 @@ function generateThumbnailUrls(
   return [primary];
 }
 
+/**
+ * 按给定顺序把一张图的多份图床副本展开成缩略图候选（去重）
+ *
+ * 供只拿到「副本列表」、没有完整 HistoryItem 的场景（如链接检测的行）使用；
+ * 顺序由调用方决定——通常把已确认可访问的副本排前面，少走几轮失败重试。
+ */
+export function getCopiesThumbnailCandidates(
+  copies: ReadonlyArray<{ serviceId: string; url: string; fileKey?: string }>,
+  config: ThumbConfig,
+): string[] {
+  const seen = new Set<string>();
+  for (const copy of copies) {
+    if (!copy.url) continue;
+    for (const url of generateThumbnailUrls(copy.serviceId, copy.url, copy.fileKey, config)) seen.add(url);
+  }
+  return [...seen];
+}
+
 /** 同 {@link generateThumbnailUrls}，中等尺寸（时间轴/收藏页/悬浮预览）版本 */
 function generateMediumThumbnailUrls(
   serviceId: string,

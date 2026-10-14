@@ -73,6 +73,8 @@ export function buildCheckItemsSync(
         rawUrl,
         fileName: item.localFileName,
         fallbackUrl,
+        isPrimary: result.serviceId === item.primaryService,
+        fileKey: result.result.fileKey,
       });
     }
   }

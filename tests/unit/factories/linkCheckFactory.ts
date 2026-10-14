@@ -57,6 +57,8 @@ export function createLinkCheckRow(overrides: Partial<LinkCheckRow> = {}): LinkC
     rawUrl: overrides.rawUrl ?? url,
     fileName: overrides.fileName ?? `image-${linkCheckSequence}.jpg`,
     fallbackUrl: overrides.fallbackUrl,
+    isPrimary: overrides.isPrimary,
+    fileKey: overrides.fileKey,
     checkResult: overrides.checkResult,
     recheckResult: overrides.recheckResult,
     recheckLoading: overrides.recheckLoading,

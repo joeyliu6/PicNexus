@@ -142,6 +142,21 @@ describe('buildCheckItemsSync', () => {
     expect(rows[0].fileName).toBe('img.jpg');
   });
 
+  it('标出主链接并带上 fileKey（行上显示「主链接」与缩略图要用）', () => {
+    const item = makeItem({
+      primaryService: 'github',
+      results: [
+        { serviceId: 'r2', status: 'success', result: { serviceId: 'r2', fileKey: 'k1', url: 'https://r2.example.com/a.jpg' } },
+        { serviceId: 'github', status: 'success', result: { serviceId: 'github', fileKey: 'k2', url: 'https://cdn.github.com/b.jpg' } },
+      ],
+    });
+    const { rows } = buildCheckItemsSync([item], EMPTY_CONFIG);
+    expect(rows.map((r) => [r.serviceId, r.isPrimary, r.fileKey])).toEqual([
+      ['r2', false, 'k1'],
+      ['github', true, 'k2'],
+    ]);
+  });
+
   it('多个图床结果各自生成独立行', () => {
     const item = makeItem({
       results: [

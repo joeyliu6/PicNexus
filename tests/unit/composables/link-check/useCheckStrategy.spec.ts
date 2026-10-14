@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ref, computed } from 'vue';
 import { useCheckStrategy } from '@/composables/link-check/useCheckStrategy';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
-import type { StatusFilter, LinkCheckRow } from '@/types/linkCheck';
+import type { StatusFilter } from '@/types/linkCheck';
 
 function makeStats(overrides: Partial<CheckStatsResult> = {}): CheckStatsResult {
   return {
@@ -98,121 +98,5 @@ describe('resolveSmartCheck', () => {
     const statusFilter = ref<StatusFilter>('problems');
     const { resolveSmartCheck } = useCheckStrategy({ stats, statusFilter });
     expect(resolveSmartCheck()).toEqual({ action: 'check-subset', filter: 'problems' });
-  });
-});
-
-// ─── 行状态展示函数 ────────────────────────────────────────────────────────────
-
-describe('statusDotColor', () => {
-  const { statusDotColor } = makeStrategy();
-
-  it('未检测时返回 tertiary 颜色', () => {
-    const row: LinkCheckRow = { historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '' };
-    expect(statusDotColor(row)).toBe('var(--text-tertiary)');
-  });
-
-  it('有效时返回 success 颜色', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: true, error_type: 'success', browser_might_work: false },
-    };
-    expect(statusDotColor(row)).toBe('var(--success)');
-  });
-
-  it('超时时返回 warning 颜色', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: false, error_type: 'timeout', browser_might_work: false },
-    };
-    expect(statusDotColor(row)).toBe('var(--warning)');
-  });
-
-  it('失效时返回 error 颜色', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false },
-    };
-    expect(statusDotColor(row)).toBe('var(--error)');
-  });
-});
-
-describe('errorLabel', () => {
-  const { errorLabel } = makeStrategy();
-
-  it('未检测时返回 —', () => {
-    const row: LinkCheckRow = { historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '' };
-    expect(errorLabel(row)).toBe('—');
-  });
-
-  it('有效且有状态码时返回状态码字符串', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false },
-    };
-    expect(errorLabel(row)).toBe('200');
-  });
-
-  it('超时时返回"超时"', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: false, error_type: 'timeout', browser_might_work: false },
-    };
-    expect(errorLabel(row)).toBe('超时');
-  });
-
-  it('失效时返回"失效"', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false },
-    };
-    expect(errorLabel(row)).toBe('失效');
-  });
-
-  it('recheckResult 优先于 checkResult', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false },
-      recheckResult: { link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false },
-    };
-    expect(errorLabel(row)).toBe('200');
-  });
-});
-
-describe('recheckLabel', () => {
-  const { recheckLabel } = makeStrategy();
-
-  it('有效时返回"可用"', () => {
-    expect(recheckLabel({ link: '', is_valid: true, error_type: 'success', browser_might_work: false })).toBe('可用');
-  });
-
-  it('超时时返回"超时"', () => {
-    expect(recheckLabel({ link: '', is_valid: false, error_type: 'timeout', browser_might_work: false })).toBe('超时');
-  });
-
-  it('网络错误时返回"断连"', () => {
-    expect(recheckLabel({ link: '', is_valid: false, error_type: 'network', browser_might_work: false })).toBe('断连');
-  });
-
-  it('失效时返回"失效"', () => {
-    expect(recheckLabel({ link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false })).toBe('失效');
-  });
-});
-
-describe('errorTooltip', () => {
-  const { errorTooltip } = makeStrategy();
-
-  it('recheckResult 优先于 checkResult，展示最新拦截原因', () => {
-    const row: LinkCheckRow = {
-      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
-      checkResult: { link: '', is_valid: false, error_type: 'network', browser_might_work: false },
-      recheckResult: {
-        link: '', is_valid: false, error_type: 'blocked',
-        error: '外部 HTTP 图片地址已禁用，请改用 HTTPS',
-        browser_might_work: false,
-      },
-    };
-
-    expect(errorTooltip(row)).toContain('策略拦截');
-    expect(errorTooltip(row)).toContain('已禁用');
   });
 });

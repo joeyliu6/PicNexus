@@ -3,7 +3,8 @@ import { mountWithDefaults } from '../../helpers/vueMount';
 import CheckLinkList from '@/components/views/link-check/history-check/CheckLinkList.vue';
 import { createCheckLinkResult, createLinkCheckRow } from '../../factories/linkCheckFactory';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
-import type { LinkCheckRow } from '@/types/linkCheck';
+import type { LinkCheckRow, StatusFilter } from '@/types/linkCheck';
+import type { CopyHint } from '@/composables/link-check/rowCopies';
 
 const emptyStats: CheckStatsResult = {
   total: 0,
@@ -25,6 +26,9 @@ function mountList(options: {
   isActionLocked?: boolean;
   copiedKey?: string | null;
   loadError?: string | null;
+  statusFilter?: StatusFilter;
+  rowThumbSrcs?: (row: LinkCheckRow) => string[];
+  rowHint?: (row: LinkCheckRow) => CopyHint | null;
 } = {}) {
   const rows = options.rows ?? [];
 
@@ -37,7 +41,7 @@ function mountList(options: {
         total: rows.length,
         checked: rows.filter(row => row.checkResult).length,
       },
-      statusFilter: 'invalid',
+      statusFilter: options.statusFilter ?? 'invalid',
       isLoading: false,
       loadError: options.loadError ?? null,
       isChecking: options.isChecking ?? false,
@@ -45,11 +49,8 @@ function mountList(options: {
       suppressListMotion: false,
       selectedIds: options.selectedIds ?? new Set<string>(),
       copiedKey: options.copiedKey ?? null,
-      statusDotColor: vi.fn(() => 'var(--error)'),
-      errorBadgeClass: vi.fn(() => 'error-badge--error'),
-      errorLabel: vi.fn(() => '404'),
-      errorTooltip: vi.fn(() => '链接失效'),
-      recheckLabel: vi.fn(() => '失效'),
+      rowThumbSrcs: options.rowThumbSrcs ?? vi.fn(() => []),
+      rowHint: options.rowHint ?? vi.fn(() => null),
     },
     global: {
       stubs: {
@@ -92,7 +93,8 @@ describe('CheckLinkList', () => {
 
   it('空筛选和无数据分别展示对应 empty 状态', () => {
     const filteredEmpty = mountList({
-      stats: { ...emptyStats, total: 2, checked: 2, valid: 2 },
+      statusFilter: 'valid',
+      stats: { ...emptyStats, total: 2, checked: 2, invalid: 2, problems: 2 },
       filteredRows: [],
     });
     const noData = mountList({ stats: emptyStats });
@@ -170,4 +172,51 @@ describe('CheckLinkList', () => {
     expect(wrapper.get('.recheck-btn').attributes('disabled')).toBeDefined();
     expect(wrapper.get('.delete-btn').attributes('disabled')).toBeDefined();
   });
+
+  it('状态用白话显示，重检结果优先，主链接与后果提示可见', () => {
+    const broken = createLinkCheckRow({
+      historyId: 'hist-1',
+      serviceId: 'webdav:a',
+      isPrimary: true,
+      checkResult: createCheckLinkResult({ is_valid: false, status_code: 502, error_type: 'http_5xx' }),
+    });
+    const fixed = createLinkCheckRow({
+      historyId: 'hist-2',
+      checkResult: createCheckLinkResult({ is_valid: false, status_code: 404, error_type: 'http_4xx' }),
+      recheckResult: createCheckLinkResult({ is_valid: true, status_code: 200 }),
+    });
+    const wrapper = mountList({
+      rows: [broken, fixed],
+      rowHint: (row) => (row.historyId === 'hist-1' ? { text: '其他图床正常', tone: 'ok', tooltip: '' } : null),
+    });
+
+    const rows = wrapper.findAll('.link-row');
+    expect(rows[0].get('.status-pill').text()).toBe('图床故障');
+    expect(rows[0].get('.status-pill').classes()).toContain('status-pill--error');
+    expect(rows[0].find('.primary-tag').exists()).toBe(true);
+    expect(rows[0].get('.copy-hint').text()).toBe('其他图床正常');
+    expect(rows[1].get('.status-pill').text()).toBe('正常');
+    expect(rows[1].find('.primary-tag').exists()).toBe(false);
+    expect(rows[1].find('.copy-hint').exists()).toBe(false);
+    expect(rows[0].text()).not.toContain('502');
+  });
+
+  it('问题筛选下检测过且没有问题 → 正面空态，而不是「当前筛选暂无结果」', () => {
+    const wrapper = mountList({
+      statusFilter: 'problems',
+      stats: { ...emptyStats, total: 15, checked: 13, valid: 13, unchecked: 2 },
+      filteredRows: [],
+    });
+    expect(wrapper.text()).toContain('没有发现问题');
+    expect(wrapper.text()).toContain('还有 2 条未检测');
+    expect(wrapper.text()).not.toContain('当前筛选暂无结果');
+
+    const valid = mountList({
+      statusFilter: 'valid',
+      stats: { ...emptyStats, total: 15, checked: 13, valid: 13, unchecked: 2 },
+      filteredRows: [],
+    });
+    expect(valid.text()).toContain('当前筛选暂无结果');
+  });
 });
+
