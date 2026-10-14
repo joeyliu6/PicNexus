@@ -41,8 +41,7 @@ export interface FileHealth {
 /** 修复策略 */
 export type RepairStrategy =
   | { type: 'priority'; order: string[] }
-  | { type: 'fastest' }
-  | { type: 'manual'; selections: Map<string, string> };
+  | { type: 'fastest' };
 
 /** 修复完成后的收据 */
 export interface RepairReceipt {

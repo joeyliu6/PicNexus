@@ -2,14 +2,12 @@
 // Markdown 链接救援主容器
 // 子组件：RescueIdleZone（拖放区）、RescueBrokenGroups（分组列表）、RescueFixingCards（修复卡片）
 
-import { ref, computed, watch } from 'vue';
+import { computed, watch } from 'vue';
 import Button from 'primevue/button';
-import MdRepairDialog from './MdRepairDialog.vue';
 import RescueIdleZone from './rescue/RescueIdleZone.vue';
 import RescueBrokenGroups from './rescue/RescueBrokenGroups.vue';
 import RescueFixingCards from './rescue/RescueFixingCards.vue';
 import { useMdRescueManager } from '@/composables/md-rescue/useMdRescue';
-import type { RepairStrategy } from '@/composables/md-rescue/shared';
 import { useRescueScanHeader } from '@/composables/md-rescue/useRescueScanHeader';
 import { removeMruEntry, type MruEntry } from '@/composables/md-rescue/useMdRescueMru';
 import { useToast } from '@/composables/useToast';
@@ -18,11 +16,11 @@ import { exists } from '@tauri-apps/plugin-fs';
 
 const {
   phase, imageLinks, isAnalyzing, isCollecting, collectProgress,
-  isChecking, fileHealthList, availableBackupServices,
+  isChecking, fileHealthList,
   fixingProgress, repairReceipt, healedFiles, hostPreference, includeSubfolders, includeCodeBlocks,
   bottomStats, selectMdFile, selectFolder, handleDropPaths,
   loadFilePath, loadFolderPath,
-  analyzeFile, applyRepairStrategy, loadHostPreference, saveHostPreference,
+  analyzeFile, applyDefaultBackups, preferServiceForAll, loadHostPreference, saveHostPreference,
   cancelCollect, cancelScan, cancelFix, undoReplace, executeReplace,
   reset: resetRescue, scanStage, scanProgress, skippedDirs, selectAny,
 } = useMdRescueManager();
@@ -79,14 +77,11 @@ const bottomProgressIndeterminate = computed(() =>
 );
 
 watch(() => scanStage.value, async (stage) => {
-  if (stage === 'complete') {
+  if (stage === 'complete' || stage === 'cancelled') {
+    // 扫完（含取消后保留的部分结果）立刻定好每张图的替换来源：列表所见即修复所改
     await loadHostPreference();
-    tempPreference.value = hostPreference.value.length > 0
-      ? [...hostPreference.value]
-      : [...availableBackupServices.value];
-    triggerScanFinishing('complete');
-  } else if (stage === 'cancelled') {
-    triggerScanFinishing('cancelled');
+    applyDefaultBackups(hostPreference.value);
+    triggerScanFinishing(stage);
   }
 });
 
@@ -150,26 +145,24 @@ const failedRepairTooltip = computed(() =>
     .join('\n') ?? '',
 );
 
-// ---- 修复策略 ----
+// ---- 修复 ----
 
-const showRepairDialog = ref(false);
-const tempPreference = ref<string[]>([]);
-
-const rescuableLinks = computed(() =>
-  imageLinks.value.filter(
-    (l) => l.checkResult && !l.checkResult.is_valid
-      && l.backupLinks?.some((b) => b.checkResult?.is_valid),
-  ),
-);
-
-async function handleRepairConfirm(strategy: RepairStrategy, preference: string[]) {
-  if (strategy.type === 'priority') {
-    hostPreference.value = preference;
-    await saveHostPreference();
-  }
-  applyRepairStrategy(strategy);
+/**
+ * 不再弹策略确认框：每行要换成哪张图已经摆在列表上（可逐行改），
+ * 修改前自动备份原文件、完成后可一键撤销——确认框只会是多余的一步。
+ */
+async function handleRepair() {
+  if (!hasRescuable.value) return;
   await executeReplace();
 }
+
+async function handlePreferService(serviceId: string) {
+  preferServiceForAll(serviceId);
+  await saveHostPreference();
+}
+
+const repairButtonLabel = computed(() => `修复 ${rescuableCount.value} 处`);
+const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修改前自动备份原文件，可一键撤销';
 </script>
 
 <template>
@@ -201,8 +194,8 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
             <i class="pi pi-check-circle wk-done-icon" />
             <span class="wk-title">{{ failedRepairFileCount > 0 ? '修复部分完成' : '修复完成' }}</span>
             <span v-if="repairReceipt" class="wk-subtitle">
-              共修复 {{ repairReceipt.linksFixed }} 张图片链接
-              <template v-if="failedRepairFileCount > 0"> · {{ failedRepairFileCount }} 个文件失败</template>
+              共修复 {{ repairReceipt.linksFixed }} 处，撤销可恢复原文件
+              <template v-if="failedRepairFileCount > 0"> · {{ failedRepairFileCount }} 个文件没改成</template>
             </span>
           </div>
           <div class="wk-actions">
@@ -221,6 +214,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
             :is-collecting="isCollecting"
             :healed-files="healedFiles"
             :empty-icon="emptyIcon" :empty-title="emptyTitle" :empty-desc="emptyDesc"
+            @prefer-service="handlePreferService"
           />
 
           <!-- done 备份提示 -->
@@ -262,22 +256,22 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
             <span class="rescue-stat"><i class="pi pi-wrench rescue-stat-icon" />正在修复 {{ fixingProgress.current }} / {{ fixingProgress.total }}</span>
           </template>
           <template v-else-if="isRepaired">
-            <span class="rescue-stat rescue-stat--success"><i class="pi pi-check-circle rescue-stat-icon" />已修复 {{ bottomStats.repairedCount }} 条链接</span>
+            <span class="rescue-stat rescue-stat--success"><i class="pi pi-check-circle rescue-stat-icon" />已修复 {{ bottomStats.repairedCount }} 处</span>
             <template v-if="bottomStats.manualCount > 0">
               <span class="rescue-stat-sep" />
-              <span class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.manualCount }} 需手动</span>
+              <span class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.manualCount }} 处需手动处理</span>
             </template>
             <template v-if="failedRepairLinkCount > 0">
               <span class="rescue-stat-sep" />
-              <span class="rescue-stat rescue-stat--warning" v-tooltip.top="failedRepairTooltip"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ failedRepairLinkCount }} 未完成</span>
+              <span class="rescue-stat rescue-stat--warning" v-tooltip.top="failedRepairTooltip"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ failedRepairLinkCount }} 处没改成</span>
             </template>
           </template>
           <template v-else-if="scanStage === 'complete' || scanStage === 'cancelled'">
-            <span v-if="bottomStats.problemCount > 0" class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.problemCount }} 条问题链接</span>
-            <span v-else class="rescue-stat rescue-stat--success"><i class="pi pi-check-circle rescue-stat-icon" />全部正常</span>
-            <template v-if="bottomStats.problemFileCount > 0">
+            <span v-if="bottomStats.problemCount > 0" class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.problemFileCount }} 个文件里有 {{ bottomStats.problemCount }} 处失效</span>
+            <span v-else class="rescue-stat rescue-stat--success"><i class="pi pi-check-circle rescue-stat-icon" />图片全部正常</span>
+            <template v-if="bottomStats.problemCount > 0">
               <span class="rescue-stat-sep" />
-              <span class="rescue-stat">{{ bottomStats.problemFileCount }} 个文件受影响</span>
+              <span class="rescue-stat" :class="{ 'rescue-stat--success': rescuableCount > 0 }">{{ rescuableCount > 0 ? `${rescuableCount} 处可自动修复` : '都没有可用备份' }}</span>
             </template>
           </template>
           <template v-else-if="bottomStats.checkedCount > 0 || bottomStats.totalImages > 0">
@@ -302,14 +296,14 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
           <template v-else-if="phase === 'scanning' && scanStage === 'cancelled'">
             <span v-if="scanProgress" class="mr-cancelled-hint">已检测 {{ scanProgress.checked }} / {{ scanProgress.total }}</span>
             <button class="btn-ghost btn-sm" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
-            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '基于已检测的部分结果修复' : '已检测部分无可修复链接'" @click="showRepairDialog = true">
-              <i class="pi pi-wrench" /> 修复链接
+            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '基于已检测的部分结果修复 · 修改前自动备份' : '已检测部分无可修复链接'" @click="handleRepair">
+              <i class="pi pi-wrench" /> {{ hasRescuable ? repairButtonLabel : '修复链接' }}
             </button>
           </template>
           <template v-else-if="phase === 'scanning' && scanStage === 'complete'">
             <button :class="['btn-sm', hasRescuable ? 'btn-ghost' : 'btn-primary']" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
-            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '自动修复有备用链接的图片' : '当前没有可自动修复的链接'" @click="showRepairDialog = true">
-              <i class="pi pi-wrench" /> 修复链接
+            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? repairButtonTooltip : '这些失效图片在 PicNexus 里都没有可用备份'" @click="handleRepair">
+              <i class="pi pi-wrench" /> {{ hasRescuable ? repairButtonLabel : '修复链接' }}
             </button>
           </template>
           <template v-else-if="phase === 'fixing'">
@@ -323,14 +317,6 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
     </div>
     </Transition>
 
-    <MdRepairDialog
-      v-model:visible="showRepairDialog"
-      :available-backup-services="availableBackupServices"
-      :rescuable-count="rescuableCount"
-      :rescuable-links="rescuableLinks"
-      :initial-preference="tempPreference"
-      @confirm="handleRepairConfirm"
-    />
   </div>
 </template>
 

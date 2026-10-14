@@ -88,7 +88,6 @@ export const VISUAL_STATES = {
     'empty',
     'scanning',
     'bad-link-groups',
-    'repair-confirm-dialog',
     'fixing',
     'complete',
     'partial-failed',

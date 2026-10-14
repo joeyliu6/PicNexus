@@ -14,26 +14,6 @@ import {
 } from './shared';
 
 /**
- * 按图床偏好为每张失效图片选择最佳备用链接
- */
-export function applyHostPreference(links: MdImageLinkWithFile[], preference: string[]): void {
-  for (const link of links) {
-    if (!link.backupLinks?.length || link.checkResult?.is_valid) continue;
-
-    const backups = preference.length === 0
-      ? link.backupLinks
-      : [...link.backupLinks].sort((a, b) => {
-          const ai = preference.indexOf(a.serviceId);
-          const bi = preference.indexOf(b.serviceId);
-          return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-        });
-
-    const best = backups.find((b) => b.checkResult?.is_valid);
-    link.selectedBackup = best?.url;
-  }
-}
-
-/**
  * 从配置加载图床偏好
  *
  * ⚠️ `configManager` 必须由调用方在 setup 栈期间取好传进来，**不要在这里
@@ -58,9 +38,6 @@ export async function saveHostPreference(configManager: ConfigManagerApi): Promi
 
 /**
  * 按策略为单张失效图片挑选备用链接（纯函数，不写 selectedBackup）
- *
- * `applyRepairStrategy`（真正应用）与确认对话框的替换摘要预览共用这份挑选逻辑——
- * 预览必须跟点「开始修复」后实际发生的完全一致，不能各写一份而悄悄走样。
  */
 export function pickBackupForLink(
   link: MdImageLinkWithFile,
@@ -88,69 +65,56 @@ export function pickBackupForLink(
       );
       return sorted[0]?.url;
     }
-    case 'manual':
-      return strategy.selections.get(link.url);
   }
 }
 
-/**
- * 根据修复策略为每张失效图片选择备用链接
- */
-export function applyRepairStrategy(strategy: RepairStrategy): void {
-  const links = [...imageLinks.value];
-
-  for (const link of links) {
-    const picked = pickBackupForLink(link, strategy);
-    if (picked) link.selectedBackup = picked;
-  }
-
-  imageLinks.value = links;
-}
-
-export interface RepairSummary {
-  files: Array<{
-    path: string;
-    fileName: string;
-    replacements: Array<{ lineNumber: number; oldUrl: string; newUrl: string; serviceId: string }>;
-  }>;
-  totalReplacements: number;
-  totalFiles: number;
+function hasValidSelection(link: MdImageLinkWithFile): boolean {
+  return Boolean(link.selectedBackup)
+    && (link.backupLinks?.some((b) => b.checkResult?.is_valid && b.url === link.selectedBackup) ?? false);
 }
 
 /**
- * 按给定策略预览替换摘要（纯函数，不写 imageLinks/selectedBackup）
+ * 扫描结束时给每张可修复的图定好替换来源：有保存的首选顺序就按它，没有就挑最快的
  *
- * 供确认对话框实时预览用：传入的 `strategy` 必须是用户当前选中的那个（含手动/优先级顺序），
- * 否则摘要会跟点「开始修复」后 `applyRepairStrategy` 实际产生的结果对不上。
+ * Why 扫描一结束就定、而不是等点「修复」时再算：列表上显示的替换来源必须就是
+ * 真正会写进文件的那一条——所见即所改，才敢不弹确认框直接修。
+ * 用户已经手动选过的（仍然有效）不覆盖。
  */
-export function summarizeRepairStrategy(
-  links: MdImageLinkWithFile[],
-  strategy: RepairStrategy,
-): RepairSummary {
-  const fileMap = new Map<string, RepairSummary['files'][number]>();
-
+export function applyDefaultBackups(preference: string[]): void {
+  const strategy: RepairStrategy = preference.length > 0
+    ? { type: 'priority', order: preference }
+    : { type: 'fastest' };
+  const links = [...imageLinks.value];
+  let changed = false;
   for (const link of links) {
+    if (hasValidSelection(link)) continue;
     const picked = pickBackupForLink(link, strategy);
-    if (!picked) continue;
-    const backup = link.backupLinks?.find((b) => b.url === picked);
-    if (!backup) continue;
-
-    let entry = fileMap.get(link.sourceFile);
-    if (!entry) {
-      entry = { path: link.sourceFile, fileName: link.sourceFileName, replacements: [] };
-      fileMap.set(link.sourceFile, entry);
+    if (picked && picked !== link.selectedBackup) {
+      link.selectedBackup = picked;
+      changed = true;
     }
-    entry.replacements.push({
-      lineNumber: link.lineNumber,
-      oldUrl: link.url,
-      newUrl: picked,
-      serviceId: backup.serviceId,
-    });
   }
+  if (changed) imageLinks.value = links;
+}
 
-  const files = Array.from(fileMap.values());
-  const totalReplacements = files.reduce((sum, f) => sum + f.replacements.length, 0);
-  return { files, totalReplacements, totalFiles: files.length };
+/**
+ * 「以后都优先用这个图床」：把它提到首选顺序最前，并立刻应用到所有在它上面有可用备份的图
+ *
+ * 只改内存里的 hostPreference，持久化由调用方 saveHostPreference 负责（要 configManager）。
+ */
+export function preferServiceForAll(serviceId: string): number {
+  hostPreference.value = [serviceId, ...hostPreference.value.filter((id) => id !== serviceId)];
+  const links = [...imageLinks.value];
+  let changed = 0;
+  for (const link of links) {
+    if (!link.checkResult || link.checkResult.is_valid) continue;
+    const backup = link.backupLinks?.find((b) => b.serviceId === serviceId && b.checkResult?.is_valid);
+    if (!backup || backup.url === link.selectedBackup) continue;
+    link.selectedBackup = backup.url;
+    changed++;
+  }
+  if (changed > 0) imageLinks.value = links;
+  return changed;
 }
 
 export function toggleExclude(url: string): void {

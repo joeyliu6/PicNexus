@@ -424,7 +424,6 @@ describe('useMdRescueManager', () => {
         healed: false,
       },
     ]);
-    expect(manager.availableBackupServices.value).toEqual(['mirror']);
     expect(manager.unrescuableLinks.value.map((l) => l.url)).toEqual(['https://timeout.example/b.png']);
   });
 });

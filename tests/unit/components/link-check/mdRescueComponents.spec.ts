@@ -11,7 +11,6 @@ import RescueIdleZone from '@/components/views/link-check/rescue/RescueIdleZone.
 import RescueBrokenGroups from '@/components/views/link-check/rescue/RescueBrokenGroups.vue';
 import RescueFixingCards from '@/components/views/link-check/rescue/RescueFixingCards.vue';
 import RescueLastRepairCard from '@/components/views/link-check/rescue/RescueLastRepairCard.vue';
-import MdRepairDialog from '@/components/views/link-check/MdRepairDialog.vue';
 import type { FileHealth, MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 import type { CheckLinkResult } from '@/types/linkCheck';
 
@@ -76,23 +75,6 @@ const CheckboxStub = {
       @change="$emit('update:modelValue', $event.target.checked)"
     />
   `,
-};
-
-const DialogStub = defineComponent({
-  props: {
-    visible: Boolean,
-  },
-  emits: ['update:visible', 'show'],
-  mounted() {
-    if (this.visible) this.$emit('show');
-  },
-  template: '<div v-if="visible" class="dialog-stub"><slot /><slot name="footer" /></div>',
-});
-
-const RadioButtonStub = {
-  props: ['modelValue', 'value'],
-  emits: ['update:modelValue'],
-  template: '<input class="radio-stub" type="radio" :checked="modelValue === value" @change="$emit(\'update:modelValue\', value)" />',
 };
 
 function result(overrides: Partial<CheckLinkResult> = {}): CheckLinkResult {
@@ -233,6 +215,48 @@ describe('Markdown rescue P1 components', () => {
     expect(getInvokeMock()).toHaveBeenCalledWith('open_path', { path: 'C:/docs' });
   });
 
+  it('RescueBrokenGroups 用白话说状态；修好的行显示「已修复 · 已换成 X」而不是原错误码', () => {
+    const fixed = mdLink({
+      url: 'https://dead.example.com/fixed.png',
+      checkResult: result({ link: 'https://dead.example.com/fixed.png', status_code: 502, error_type: 'http_5xx' }),
+      backupLinks: [validBackup('https://cdn.example.com/fixed.png')],
+      selectedBackup: 'https://cdn.example.com/fixed.png',
+    });
+    const pending = mdLink({
+      url: 'https://dead.example.com/pending.png',
+      sourceFile: 'C:/docs/b.md',
+      sourceFileName: 'b.md',
+      backupLinks: [validBackup('https://cdn.example.com/pending.png')],
+    });
+    const baseProps = {
+      phase: 'done',
+      scanStage: 'complete',
+      isCollecting: false,
+      emptyIcon: 'pi pi-search',
+      emptyTitle: 'empty',
+      emptyDesc: 'empty desc',
+    };
+
+    const before = mountWithDefaults(RescueBrokenGroups, {
+      props: { ...baseProps, imageLinks: [fixed, pending], isRepaired: false, healedFiles: new Set() },
+    });
+    const beforeRows = before.findAll('.mr-row');
+    expect(beforeRows[0].get('.status-pill').text()).toBe('图床故障');
+    expect(beforeRows[0].get('.mr-backup-chip').text()).toContain('GitHub');
+    expect(before.text()).toContain('1 处失效');
+    expect(before.text()).not.toContain('502');
+
+    const after = mountWithDefaults(RescueBrokenGroups, {
+      props: { ...baseProps, imageLinks: [fixed, pending], isRepaired: true, healedFiles: new Set(['C:/docs/a.md']) },
+    });
+    const afterRows = after.findAll('.mr-row');
+    expect(afterRows[0].get('.status-pill').text()).toBe('已修复');
+    expect(afterRows[0].get('.mr-fixed-to').text()).toContain('已换成 GitHub');
+    expect(after.text()).toContain('已修复 1 处');
+    // b.md 没被修好（不在 healedFiles）：仍是可修复态，不能被说成已修复
+    expect(afterRows[1].find('.mr-fixed-to').exists()).toBe(false);
+  });
+
   it('RescueBrokenGroups shows the AppError message when open_path fails, not [object Object]', async () => {
     // Rust 的 AppError 序列化后是 { type, data: { message } }，不是 Error 实例
     getInvokeMock().mockImplementation(async (command) => {
@@ -322,74 +346,6 @@ describe('Markdown rescue P1 components', () => {
     expect(cards[1].classes()).toContain('fixing-card--pending');
     expect(cards[2].classes()).toContain('fixing-card--done');
     expect(wrapper.find('.fixing-link-row').exists()).toBe(true);
-  });
-
-  it('MdRepairDialog confirms non-happy repair strategies and closes itself', async () => {
-    const wrapper = mountWithDefaults(MdRepairDialog, {
-      props: {
-        visible: true,
-        availableBackupServices: ['github', 'smms'],
-        rescuableCount: 1,
-        rescuableLinks: [
-          mdLink({
-            backupLinks: [
-              validBackup('https://cdn.example.com/a.png'),
-              validBackup('https://smms.example.com/a.png'),
-            ],
-          }),
-        ],
-        initialPreference: ['smms', 'github'],
-      },
-      global: {
-        stubs: {
-          Dialog: DialogStub,
-          Button: ButtonStub,
-          RadioButton: RadioButtonStub,
-        },
-      },
-    });
-    await flushPromisesAndTicks();
-
-    await wrapper.findAll('.repair-strategy-option')[1].trigger('click');
-    await wrapper.findAll('.button-stub').at(-1)!.trigger('click');
-
-    expect(wrapper.emitted('confirm')).toEqual([[{ type: 'fastest' }, ['smms', 'github']]]);
-    expect(wrapper.emitted('update:visible')?.at(-1)).toEqual([false]);
-  });
-
-  it('MdRepairDialog preserves an inline selected backup as manual default', async () => {
-    const wrapper = mountWithDefaults(MdRepairDialog, {
-      props: {
-        visible: true,
-        availableBackupServices: ['github', 'smms'],
-        rescuableCount: 1,
-        rescuableLinks: [
-          mdLink({
-            selectedBackup: 'https://smms.example.com/a.png',
-            backupLinks: [
-              validBackup('https://cdn.example.com/a.png'),
-              validBackup('https://smms.example.com/a.png'),
-            ],
-          }),
-        ],
-        initialPreference: ['github', 'smms'],
-      },
-      global: {
-        stubs: {
-          Dialog: DialogStub,
-          Button: ButtonStub,
-          RadioButton: RadioButtonStub,
-        },
-      },
-    });
-    await flushPromisesAndTicks();
-
-    await wrapper.findAll('.button-stub').at(-1)!.trigger('click');
-
-    expect(wrapper.emitted('confirm')).toEqual([[
-      { type: 'manual', selections: new Map([['https://dead.example.com/a.png', 'https://smms.example.com/a.png']]) },
-      ['github', 'smms'],
-    ]]);
   });
 
   it('RescueLastRepairCard restores from the persisted backup record', async () => {

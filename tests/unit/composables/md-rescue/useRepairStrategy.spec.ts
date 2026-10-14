@@ -15,11 +15,11 @@ const configManager = {
 
 import type { ConfigManagerApi } from '@/composables/useConfig';
 import {
-  applyHostPreference,
-  applyRepairStrategy,
+  applyDefaultBackups,
   loadHostPreference,
+  pickBackupForLink,
+  preferServiceForAll,
   saveHostPreference,
-  summarizeRepairStrategy,
   toggleExclude,
   excludeAll,
   includeAll,
@@ -70,163 +70,109 @@ function resetState(): void {
   healedFiles.value = new Set();
 }
 
-describe('applyHostPreference', () => {
-  beforeEach(resetState);
-
-  it('无偏好时不改变选择', () => {
-    const links = [makeLink('u1', { backups: [
-      { url: 'b1', serviceId: 'weibo', valid: true },
-      { url: 'b2', serviceId: 'r2', valid: true },
-    ]})];
-    applyHostPreference(links, []);
-    expect(links[0].selectedBackup).toBe('b1');
+describe('pickBackupForLink', () => {
+  const link = () => makeLink('u1', {
+    backups: [
+      { url: 'b-weibo', serviceId: 'weibo', valid: true, responseTime: 300 },
+      { url: 'b-r2', serviceId: 'r2', valid: true, responseTime: 80 },
+      { url: 'b-dead', serviceId: 'jd', valid: false, responseTime: 10 },
+    ],
   });
 
-  it('按偏好顺序选择首个 valid 备份', () => {
-    const links = [makeLink('u1', { backups: [
-      { url: 'b1', serviceId: 'weibo', valid: true },
-      { url: 'b2', serviceId: 'r2', valid: true },
-    ]})];
-    applyHostPreference(links, ['r2', 'weibo']);
-    expect(links[0].selectedBackup).toBe('b2');
+  it('priority：按顺序取首个可用备份，未列入的排最后', () => {
+    expect(pickBackupForLink(link(), { type: 'priority', order: ['r2', 'weibo'] })).toBe('b-r2');
+    expect(pickBackupForLink(link(), { type: 'priority', order: ['jd'] })).toBe('b-weibo');
   });
 
-  it('偏好列表未命中的图床排在后面（9999）', () => {
-    const links = [makeLink('u1', { backups: [
-      { url: 'b1', serviceId: 'weibo', valid: true },
-      { url: 'b2', serviceId: 'r2', valid: true },
-    ]})];
-    applyHostPreference(links, ['weibo']); // r2 未命中
-    expect(links[0].selectedBackup).toBe('b1');
+  it('fastest：只在可用备份里比响应时间', () => {
+    expect(pickBackupForLink(link(), { type: 'fastest' })).toBe('b-r2');
   });
 
-  it('链接已有效 → 跳过', () => {
-    const links = [makeLink('u1', { valid: true, backups: [{ url: 'b1', serviceId: 'r2', valid: true }] })];
-    applyHostPreference(links, ['r2']);
-    expect(links[0].selectedBackup).toBeUndefined();
-  });
-
-  it('无 backupLinks → 跳过', () => {
-    const links = [makeLink('u1')];
-    applyHostPreference(links, ['r2']);
-    expect(links[0].selectedBackup).toBeUndefined();
+  it('链接本身有效 / 没有可用备份 → 不选', () => {
+    expect(pickBackupForLink(makeLink('ok', { valid: true, backups: [{ url: 'b', serviceId: 'r2', valid: true }] }), { type: 'fastest' })).toBeUndefined();
+    expect(pickBackupForLink(makeLink('x', { backups: [{ url: 'b', serviceId: 'r2', valid: false }] }), { type: 'fastest' })).toBeUndefined();
   });
 });
 
-describe('applyRepairStrategy', () => {
+describe('applyDefaultBackups', () => {
   beforeEach(resetState);
 
-  it('priority 策略按顺序选', () => {
-    imageLinks.value = [makeLink('u1', { backups: [
-      { url: 'b-weibo', serviceId: 'weibo', valid: true },
-      { url: 'b-r2', serviceId: 'r2', valid: true },
-    ]})];
-    applyRepairStrategy({ type: 'priority', order: ['r2', 'weibo'] });
+  it('有首选顺序按顺序选，没有就选最快的', () => {
+    imageLinks.value = [makeLink('u1', {
+      backups: [
+        { url: 'b-weibo', serviceId: 'weibo', valid: true, responseTime: 300 },
+        { url: 'b-r2', serviceId: 'r2', valid: true, responseTime: 80 },
+      ],
+    })];
+    applyDefaultBackups(['weibo']);
+    expect(imageLinks.value[0].selectedBackup).toBe('b-weibo');
+
+    imageLinks.value = [makeLink('u1', {
+      backups: [
+        { url: 'b-weibo', serviceId: 'weibo', valid: true, responseTime: 300 },
+        { url: 'b-r2', serviceId: 'r2', valid: true, responseTime: 80 },
+      ],
+    })];
+    applyDefaultBackups([]);
     expect(imageLinks.value[0].selectedBackup).toBe('b-r2');
   });
 
-  it('fastest 策略按 response_time 升序选', () => {
-    imageLinks.value = [makeLink('u1', { backups: [
-      { url: 'slow', serviceId: 'a', valid: true, responseTime: 500 },
-      { url: 'fast', serviceId: 'b', valid: true, responseTime: 50 },
-    ]})];
-    applyRepairStrategy({ type: 'fastest' });
-    expect(imageLinks.value[0].selectedBackup).toBe('fast');
+  it('不覆盖用户已手动选过、且仍然可用的备份；选中项失效时重新选', () => {
+    imageLinks.value = [
+      makeLink('kept', {
+        selectedBackup: 'b-weibo',
+        backups: [
+          { url: 'b-weibo', serviceId: 'weibo', valid: true, responseTime: 300 },
+          { url: 'b-r2', serviceId: 'r2', valid: true, responseTime: 80 },
+        ],
+      }),
+      makeLink('stale', {
+        selectedBackup: 'b-dead',
+        backups: [
+          { url: 'b-dead', serviceId: 'jd', valid: false },
+          { url: 'b-r2', serviceId: 'r2', valid: true },
+        ],
+      }),
+    ];
+    applyDefaultBackups([]);
+    expect(imageLinks.value.map((l) => l.selectedBackup)).toEqual(['b-weibo', 'b-r2']);
   });
 
-  it('manual 策略使用 selections map', () => {
-    imageLinks.value = [makeLink('u1', { backups: [
-      { url: 'b1', serviceId: 'a', valid: true },
-      { url: 'b2', serviceId: 'b', valid: true },
-    ]})];
-    const selections = new Map([['u1', 'b2']]);
-    applyRepairStrategy({ type: 'manual', selections });
-    expect(imageLinks.value[0].selectedBackup).toBe('b2');
-  });
-
-  it('manual 策略 selections 未命中 → 不修改 selectedBackup', () => {
-    imageLinks.value = [makeLink('u1', { backups: [
-      { url: 'b1', serviceId: 'a', valid: true },
-    ]})];
-    applyRepairStrategy({ type: 'manual', selections: new Map() });
-    expect(imageLinks.value[0].selectedBackup).toBeUndefined();
-  });
-
-  it('无 valid 备份的链接被跳过', () => {
-    imageLinks.value = [makeLink('u1', { backups: [{ url: 'b1', serviceId: 'a', valid: false }] })];
-    applyRepairStrategy({ type: 'fastest' });
-    expect(imageLinks.value[0].selectedBackup).toBeUndefined();
-  });
-
-  it('已有效 link 跳过', () => {
-    imageLinks.value = [makeLink('u1', { valid: true, backups: [{ url: 'b1', serviceId: 'a', valid: true }] })];
-    applyRepairStrategy({ type: 'fastest' });
+  it('没有可用备份的链接保持不选（需手动）', () => {
+    imageLinks.value = [makeLink('manual', { backups: [{ url: 'b', serviceId: 'r2', valid: false }] })];
+    applyDefaultBackups([]);
     expect(imageLinks.value[0].selectedBackup).toBeUndefined();
   });
 });
 
-describe('summarizeRepairStrategy', () => {
+describe('preferServiceForAll', () => {
   beforeEach(resetState);
 
-  it('priority 策略：按顺序选首个有效备份并构建摘要', () => {
-    const links = [
-      makeLink('u1', { sourceFile: 'a.md', backups: [
-        { url: 'b1', serviceId: 'weibo', valid: false },
-        { url: 'b2', serviceId: 'r2', valid: true },
-      ]}),
-      makeLink('u2', { sourceFile: 'a.md', backups: [{ url: 'b3', serviceId: 'r2', valid: true }]}),
-      makeLink('u3', { sourceFile: 'b.md', backups: [{ url: 'b4', serviceId: 'weibo', valid: true }]}),
+  it('把图床提到首选最前，并应用到所有在它上面有可用备份的图', () => {
+    hostPreference.value = ['r2', 'weibo'];
+    imageLinks.value = [
+      makeLink('a', {
+        selectedBackup: 'a-r2',
+        backups: [
+          { url: 'a-r2', serviceId: 'r2', valid: true },
+          { url: 'a-weibo', serviceId: 'weibo', valid: true },
+        ],
+      }),
+      makeLink('b', {
+        selectedBackup: 'b-r2',
+        backups: [
+          { url: 'b-r2', serviceId: 'r2', valid: true },
+          { url: 'b-weibo', serviceId: 'weibo', valid: false },
+        ],
+      }),
     ];
-    const summary = summarizeRepairStrategy(links, { type: 'priority', order: [] });
-    expect(summary.totalFiles).toBe(2);
-    expect(summary.totalReplacements).toBe(3);
-    const aFile = summary.files.find(f => f.path === 'a.md');
-    expect(aFile?.replacements).toHaveLength(2);
-  });
 
-  it('无备份 / 全无效 → 不计入', () => {
-    const links = [
-      makeLink('u1'),
-      makeLink('u2', { backups: [{ url: 'b', serviceId: 'a', valid: false }]}),
-    ];
-    const summary = summarizeRepairStrategy(links, { type: 'priority', order: [] });
-    expect(summary.totalReplacements).toBe(0);
-    expect(summary.totalFiles).toBe(0);
-  });
+    const changed = preferServiceForAll('weibo');
 
-  it('摘要必须和 applyRepairStrategy 实际选出的备份一致（同一份策略）', () => {
-    const links = [
-      makeLink('u1', { sourceFile: 'a.md', backups: [
-        { url: 'slow', serviceId: 'a', valid: true, responseTime: 500 },
-        { url: 'fast', serviceId: 'b', valid: true, responseTime: 50 },
-      ]}),
-    ];
-    const strategy = { type: 'fastest' } as const;
-    const summary = summarizeRepairStrategy(links, strategy);
-    expect(summary.files[0]?.replacements[0]?.newUrl).toBe('fast');
-
-    imageLinks.value = links.map((l) => ({ ...l }));
-    applyRepairStrategy(strategy);
-    expect(imageLinks.value[0].selectedBackup).toBe('fast');
-  });
-
-  it('manual 策略：按 selections 里指定的链接生成摘要', () => {
-    const links = [
-      makeLink('u1', { sourceFile: 'a.md', backups: [
-        { url: 'b1', serviceId: 'a', valid: true },
-        { url: 'b2', serviceId: 'b', valid: true },
-      ]}),
-    ];
-    const summary = summarizeRepairStrategy(links, { type: 'manual', selections: new Map([['u1', 'b2']]) });
-    expect(summary.files[0]?.replacements[0]?.newUrl).toBe('b2');
-    expect(summary.files[0]?.replacements[0]?.serviceId).toBe('b');
-  });
-
-  it('不写 imageLinks / selectedBackup（纯函数，供实时预览用）', () => {
-    const links = [makeLink('u1', { sourceFile: 'a.md', backups: [{ url: 'b1', serviceId: 'a', valid: true }]})];
-    summarizeRepairStrategy(links, { type: 'priority', order: [] });
-    expect(links[0].selectedBackup).toBeUndefined();
-    expect(imageLinks.value).toEqual([]);
+    expect(hostPreference.value).toEqual(['weibo', 'r2']);
+    expect(changed).toBe(1);
+    // b 在 weibo 上的备份不可用，保持原选择
+    expect(imageLinks.value.map((l) => l.selectedBackup)).toEqual(['a-weibo', 'b-r2']);
   });
 });
 

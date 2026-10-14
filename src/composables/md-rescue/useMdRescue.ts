@@ -54,10 +54,10 @@ import {
 import { useMdLinkFilter, generateDiff } from './useMdLinkFilter';
 import { executeReplace as executeReplaceImpl, undoReplace as undoReplaceImpl } from './useFileBackup';
 import {
-  applyHostPreference,
   loadHostPreference as loadHostPreferenceImpl,
   saveHostPreference as saveHostPreferenceImpl,
-  applyRepairStrategy,
+  applyDefaultBackups,
+  preferServiceForAll,
   toggleExclude,
   excludeAll,
   includeAll,
@@ -184,17 +184,6 @@ export function useMdRescueManager() {
     ),
   );
 
-  /** 扫描结果中可用的备用图床列表（供配置偏好 Sheet 使用） */
-  const availableBackupServices = computed<string[]>(() => {
-    const services = new Set<string>();
-    for (const link of imageLinks.value) {
-      for (const b of link.backupLinks ?? []) {
-        if (b.checkResult?.is_valid) services.add(b.serviceId);
-      }
-    }
-    return Array.from(services);
-  });
-
   // 底栏统计（依赖 fileHealthList）
   const bottomStats = useBottomStats(fileHealthList);
 
@@ -245,16 +234,6 @@ export function useMdRescueManager() {
   /** 取消修复（当前文件完成后停止） */
   function cancelFix(): void {
     isCancelled.value = true;
-  }
-
-  /**
-   * 应用偏好并开始修复（report → fixing → done）
-   */
-  async function startFix(preference: string[]): Promise<void> {
-    const links = [...imageLinks.value];
-    applyHostPreference(links, preference);
-    imageLinks.value = links;
-    await executeReplace();
   }
 
   /** 拖放处理（handleDropPaths 调用 analyzeFile，留在主文件） */
@@ -427,7 +406,6 @@ export function useMdRescueManager() {
     // 新增：健康状态
     fileHealthList,
     unrescuableLinks,
-    availableBackupServices,
     fixingProgress,
     repairReceipt,
     healedFiles,
@@ -458,9 +436,8 @@ export function useMdRescueManager() {
     loadFolderPath,
     handleDropPaths,
     analyzeFile,
-    startFix,
-    applyHostPreference,
-    applyRepairStrategy,
+    applyDefaultBackups,
+    preferServiceForAll,
     loadHostPreference,
     saveHostPreference,
     executeReplace,

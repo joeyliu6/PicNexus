@@ -88,10 +88,6 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
   if (visualPage === 'backup-sync' && state === 'restore-password-error') {
     await expect(page.locator('.backup-password-dialog .error-box')).toBeVisible();
   }
-  if (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog') {
-    await page.locator('.visual-native-body .bottom-actions .btn-primary').click();
-    await expect(page.locator('.p-dialog')).toBeVisible();
-  }
   if (visualPage === 'dialogs') {
     await expect(page.locator('.p-dialog')).toBeVisible();
   }
@@ -115,8 +111,7 @@ export async function gotoVisualState(page: Page, visualPage: string, state: str
 
 /** 弹窗被 Teleport 到 body，不在 [data-visual-root] 内，这些状态必须整页处理 */
 export function isTeleportedDialogState(visualPage: string, state: string): boolean {
-  return (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog')
-    || visualPage === 'dialogs'
+  return visualPage === 'dialogs'
     || (visualPage === 'backup-sync' && [
       'password-dialog',
       'password-set-dialog',

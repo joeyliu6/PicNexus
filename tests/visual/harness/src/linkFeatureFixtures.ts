@@ -55,7 +55,6 @@ type MarkdownRepairVisualState =
   | 'empty'
   | 'scanning'
   | 'bad-link-groups'
-  | 'repair-confirm-dialog'
   | 'fixing'
   | 'complete'
   | 'partial-failed';

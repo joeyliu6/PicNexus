@@ -45,14 +45,6 @@ export interface DialogCase {
 
 export const CASES: DialogCase[] = [
   {
-    name: 'MdRepairDialog 链接修复策略',
-    page: 'markdown-repair',
-    state: 'repair-confirm-dialog',
-    open: async (page) => {
-      await page.locator('.visual-native-body .bottom-actions .btn-primary').click();
-    },
-  },
-  {
     name: 'BackupPasswordDialog 设置密码', page: 'backup-sync', state: 'password-set-dialog',
   },
   {

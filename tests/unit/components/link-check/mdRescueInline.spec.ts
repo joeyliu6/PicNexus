@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import MdRescueInline from '@/components/views/link-check/MdRescueInline.vue';
 import type { FileHealth, MdImageLinkWithFile } from '@/composables/md-rescue/shared';
@@ -58,12 +58,6 @@ const RescueBrokenGroupsStub = {
 const RescueFixingCardsStub = {
   props: ['fileHealthList', 'imageLinks', 'fixingProgress'],
   template: '<section class="fixing-cards-stub">fixing {{ fixingProgress.current }} / {{ fixingProgress.total }}</section>',
-};
-
-const MdRepairDialogStub = {
-  props: ['visible'],
-  emits: ['update:visible', 'confirm'],
-  template: '<section v-if="visible" class="repair-dialog-stub" />',
 };
 
 function makeLink(url = 'https://dead.example/a.png'): MdImageLinkWithFile {
@@ -137,7 +131,6 @@ function makeManager(overrides: Record<string, unknown> = {}) {
     collectProgress: ref(null),
     isChecking: ref(false),
     fileHealthList: ref<FileHealth[]>([]),
-    availableBackupServices: ref<string[]>([]),
     fixingProgress,
     repairReceipt: ref(null),
     healedFiles: ref(new Set<string>()),
@@ -152,7 +145,8 @@ function makeManager(overrides: Record<string, unknown> = {}) {
     loadFilePath: vi.fn().mockResolvedValue(false),
     loadFolderPath: vi.fn().mockResolvedValue(false),
     analyzeFile: vi.fn(),
-    applyRepairStrategy: vi.fn(),
+    applyDefaultBackups: vi.fn(),
+    preferServiceForAll: vi.fn(),
     loadHostPreference: vi.fn().mockResolvedValue(undefined),
     saveHostPreference: vi.fn().mockResolvedValue(undefined),
     cancelCollect: vi.fn(),
@@ -176,7 +170,6 @@ function mountInline() {
         RescueIdleZone: RescueIdleZoneStub,
         RescueBrokenGroups: RescueBrokenGroupsStub,
         RescueFixingCards: RescueFixingCardsStub,
-        MdRepairDialog: MdRepairDialogStub,
       },
     },
   });
@@ -254,7 +247,7 @@ describe('MdRescueInline state rendering', () => {
     const wrapper = mountInline();
 
     expect(wrapper.text()).toContain('修复完成');
-    expect(wrapper.text()).toContain('共修复 2 张图片链接');
+    expect(wrapper.text()).toContain('共修复 2 处');
     expect(wrapper.text()).toContain('原文件已备份至 .../.picnexus-backup/20260428_120000');
     await wrapper.get('.wk-actions .button-stub').trigger('click');
     await wrapper.get('.bottom-actions .btn-ghost').trigger('click');
@@ -300,7 +293,31 @@ describe('MdRescueInline state rendering', () => {
     const wrapper = mountInline();
 
     expect(wrapper.text()).toContain('修复部分完成');
-    expect(wrapper.text()).toContain('1 个文件失败');
-    expect(wrapper.text()).toContain('2 未完成');
+    expect(wrapper.text()).toContain('1 个文件没改成');
+    expect(wrapper.text()).toContain('2 处没改成');
+  });
+
+  it('扫描结束立刻按首选顺序定好替换来源；「修复 N 处」不弹框直接修', async () => {
+    const manager = makeManager({
+      phase: ref('scanning'),
+      scanStage: ref('checking'),
+      hostPreference: ref(['mirror']),
+    });
+    manager.imageLinks.value = [makeLink()];
+    rescueMocks.manager = manager;
+
+    const wrapper = mountInline();
+    manager.scanStage.value = 'complete';
+    await nextTick();
+    await Promise.resolve();
+
+    expect(manager.loadHostPreference).toHaveBeenCalled();
+    expect(manager.applyDefaultBackups).toHaveBeenCalledWith(['mirror']);
+
+    const repair = wrapper.get('.bottom-actions .btn-primary');
+    expect(repair.text()).toContain('修复 1 处');
+    await repair.trigger('click');
+    expect(manager.executeReplace).toHaveBeenCalledTimes(1);
   });
 });
+
