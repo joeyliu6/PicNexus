@@ -218,5 +218,21 @@ describe('CheckLinkList', () => {
     });
     expect(valid.text()).toContain('当前筛选暂无结果');
   });
+
+  it('行对象被原地改写（批量检测回填）后，状态跟着刷新', async () => {
+    // 回归：useLinkCheck 原地改 row.checkResult 再换数组引用，
+    // 单行组件若只拿 row 引用，检测完成后会一直停在「未检测」
+    const row = createLinkCheckRow({ historyId: 'hist-1' });
+    const wrapper = mountList({ rows: [row] });
+    expect(wrapper.get('.status-pill').text()).toBe('未检测');
+
+    row.checkResult = createCheckLinkResult({ is_valid: true });
+    await wrapper.setProps({ visibleRows: [row], filteredRows: [row] });
+    expect(wrapper.get('.status-pill').text()).toBe('正常');
+
+    row.recheckLoading = true;
+    await wrapper.setProps({ visibleRows: [row], filteredRows: [row] });
+    expect(wrapper.get('.recheck-btn').classes()).toContain('spinning');
+  });
 });
 

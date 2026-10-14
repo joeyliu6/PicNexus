@@ -1,15 +1,24 @@
 <script setup lang="ts">
 // 链接检测列表的单行：缩略图 + 文件名 / 图床 + 后果提示 + 白话状态 + 悬停操作
 import { computed } from 'vue';
-import type { LinkCheckRow } from '@/types/linkCheck';
+import type { CheckLinkResult, LinkCheckRow } from '@/types/linkCheck';
 import type { CopyHint } from '@/composables/link-check/rowCopies';
 import { statusTone, statusTooltip, statusWord } from '@/composables/link-check/useLinkStatusDisplay';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import ServiceLogo from '@/components/common/ServiceLogo.vue';
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 
+/**
+ * Why 检测结果要单独传、不从 row 上读：useLinkCheck 是**原地改**行对象再换数组引用
+ * （见 applyRecentResults / updateRow），row 这个 prop 的引用不变，子组件不会重渲染。
+ * 会变的字段必须由父组件在自己的渲染里读出来再传下来，才能跟着刷新。
+ */
 const props = defineProps<{
   row: LinkCheckRow;
+  result: CheckLinkResult | undefined;
+  recheckResult: CheckLinkResult | undefined;
+  recheckLoading: boolean;
+  recheckFading: boolean;
   selected: boolean;
   disabled: boolean;
   copied: boolean;
@@ -27,12 +36,11 @@ const emit = defineEmits<{
   (e: 'delete'): void;
 }>();
 
-const result = computed(() => props.row.recheckResult ?? props.row.checkResult);
-const tone = computed(() => statusTone(result.value));
-const word = computed(() => statusWord(result.value));
-const tooltip = computed(() => statusTooltip(result.value) || null);
+const tone = computed(() => statusTone(props.result));
+const word = computed(() => statusWord(props.result));
+const tooltip = computed(() => statusTooltip(props.result) || null);
 const serviceName = computed(() => getServiceDisplayName(props.row.serviceId));
-const recheckTone = computed(() => (props.row.recheckResult ? statusTone(props.row.recheckResult) : null));
+const recheckTone = computed(() => (props.recheckResult ? statusTone(props.recheckResult) : null));
 </script>
 
 <template>
@@ -93,13 +101,13 @@ const recheckTone = computed(() => (props.row.recheckResult ? statusTone(props.r
       <span class="status-dot" aria-hidden="true"></span>{{ word }}
     </span>
 
-    <div class="row-actions" :class="{ 'is-pinned': row.recheckLoading || row.recheckResult }">
+    <div class="row-actions" :class="{ 'is-pinned': recheckLoading || recheckResult }">
       <span
-        v-if="row.recheckResult"
-        v-tooltip.top="`重检完成：${statusWord(row.recheckResult)}`"
+        v-if="recheckResult"
+        v-tooltip.top="`重检完成：${statusWord(recheckResult)}`"
         class="recheck-result-badge"
         :class="{
-          'badge-fading': row.recheckBadgeFading,
+          'badge-fading': recheckFading,
           'badge-valid': recheckTone === 'ok',
           'badge-invalid': recheckTone === 'error',
           'badge-timeout': recheckTone === 'warning',
@@ -111,7 +119,7 @@ const recheckTone = computed(() => (props.row.recheckResult ? statusTone(props.r
       <button
         v-else
         class="row-action recheck-btn"
-        :class="{ spinning: row.recheckLoading }"
+        :class="{ spinning: recheckLoading }"
         :disabled="disabled"
         :aria-label="`重新检测 ${row.fileName}`"
         v-tooltip.top="'重新检测'"
