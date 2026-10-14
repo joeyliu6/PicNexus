@@ -46,7 +46,8 @@ function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
 }
 
 export function useCheckFilter({ checkRows, isChecking, isHighThroughput }: UseCheckFilterOptions) {
-  const statusFilter = ref<StatusFilter>('invalid');
+  // 默认看「有问题」：失效 / 超时 / 可疑合在一起，维护页最该先回答的就是这一类
+  const statusFilter = ref<StatusFilter>('problems');
   const selectedServiceId = ref<string | null>(null);
   const showServiceMenu = ref(false);
   const searchInput = ref('');

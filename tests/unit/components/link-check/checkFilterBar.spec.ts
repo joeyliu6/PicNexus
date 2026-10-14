@@ -104,4 +104,24 @@ describe('CheckFilterBar', () => {
     expect(wrapper.get('.chip-bar').attributes('aria-busy')).toBe('true');
     expect(wrapper.findAll('.skeleton-stub').length).toBeGreaterThan(0);
   });
+
+  it('只有一类问题时不重复展示子分类；停在子分类上时保留它', () => {
+    const single = { ...stats, invalid: 2, timeout: 0, suspicious: 0, problems: 2 };
+    const wrapper = mountFilterBar({ stats: single, statusFilter: 'problems' });
+    expect(wrapper.get('.chip--problems').text()).toContain('有问题');
+    expect(wrapper.find('.chip--error').exists()).toBe(false);
+
+    const pinned = mountFilterBar({ stats: single, statusFilter: 'invalid' });
+    expect(pinned.find('.chip--error').exists()).toBe(true);
+
+    const mixed = mountFilterBar({ statusFilter: 'problems' });
+    expect(mixed.findAll('.chip--sub')).toHaveLength(3);
+  });
+
+  it('没有问题时「有问题」仍然在，计数为 0', () => {
+    const clean = { ...stats, invalid: 0, timeout: 0, suspicious: 0, problems: 0 };
+    const wrapper = mountFilterBar({ stats: clean, statusFilter: 'problems' });
+    expect(wrapper.get('.chip--problems').text()).toMatch(/有问题\s*0/);
+  });
 });
+

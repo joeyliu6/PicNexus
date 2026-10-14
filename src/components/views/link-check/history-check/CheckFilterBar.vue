@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
@@ -65,6 +65,20 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 
 const serviceTotal = () => props.stats.total;
 
+/**
+ * 只有一类问题时，「失效 / 超时 / 可疑」子筛选与「有问题」完全重合，展示出来只是重复。
+ * 当前正停在某个子筛选上时照样保留，否则用户会看不到自己选中的是哪个。
+ */
+const showProblemBreakdown = computed(() => {
+  const kinds = [props.stats.invalid, props.stats.timeout, props.stats.suspicious].filter((n) => n > 0).length;
+  return kinds >= 2;
+});
+
+function showSubChip(filter: 'invalid' | 'timeout' | 'suspicious', count: number): boolean {
+  if (statusFilter.value === filter) return true;
+  return showProblemBreakdown.value && count > 0;
+}
+
 function selectStatusFilter(filter: StatusFilter): void {
   if (statusFilter.value === filter) return;
   statusFilter.value = filter;
@@ -84,48 +98,45 @@ function selectStatusFilter(filter: StatusFilter): void {
 
       <template v-else>
         <button
-          v-if="stats.problems > 0"
           class="filter-chip chip--problems"
           :class="{ active: statusFilter === 'problems' }"
           :aria-pressed="statusFilter === 'problems'"
           @click="selectStatusFilter('problems')"
         >
           <span class="chip-dot problem-dot"></span>
-          问题
+          有问题
           {{ stats.problems }}
         </button>
 
         <button
-          class="filter-chip chip--error"
+          v-if="showSubChip('invalid', stats.invalid)"
+          class="filter-chip chip--error chip--sub"
           :class="{ active: statusFilter === 'invalid' }"
           :aria-pressed="statusFilter === 'invalid'"
           @click="selectStatusFilter('invalid')"
         >
-          <span class="chip-dot" style="background: var(--error)"></span>
           失效
           {{ stats.invalid }}
         </button>
 
         <button
-          v-if="stats.suspicious > 0"
-          class="filter-chip chip--suspicious"
+          v-if="showSubChip('suspicious', stats.suspicious)"
+          class="filter-chip chip--suspicious chip--sub"
           :class="{ active: statusFilter === 'suspicious' }"
           :aria-pressed="statusFilter === 'suspicious'"
           @click="selectStatusFilter('suspicious')"
         >
-          <span class="chip-dot" style="background: var(--pending)"></span>
           可疑
           {{ stats.suspicious }}
         </button>
 
         <button
-          v-if="stats.timeout > 0"
-          class="filter-chip chip--timeout"
+          v-if="showSubChip('timeout', stats.timeout)"
+          class="filter-chip chip--timeout chip--sub"
           :class="{ active: statusFilter === 'timeout' }"
           :aria-pressed="statusFilter === 'timeout'"
           @click="selectStatusFilter('timeout')"
         >
-          <span class="chip-dot" style="background: var(--warning)"></span>
           超时
           {{ stats.timeout }}
         </button>
@@ -289,6 +300,11 @@ function selectStatusFilter(filter: StatusFilter): void {
   background: var(--error-alpha-10);
   color: var(--error);
   border-color: var(--error-alpha-15);
+}
+
+/* 子分类：「有问题」的细分，视觉上退半步 */
+.filter-chip.chip--sub:not(.active) {
+  background: transparent;
 }
 
 .problem-dot {
