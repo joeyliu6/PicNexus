@@ -101,10 +101,14 @@ function thumbSrcsOf(link: MdImageLinkWithFile): string[] {
   return getCopiesThumbnailCandidates(copies, configManager.config.value);
 }
 
+/** 修完后：修好几张、剩下的是没备份（本来就换不了）还是没写进去，分开说；不说「已修复 0 / 2」这种像是失败的话 */
 function groupCountLabel(group: GroupedFile): string {
   if (!props.isRepaired) return `${group.rows.length} 张打不开`;
   const fixed = group.rows.filter((r) => r.status === 'replaced').length;
-  return fixed === group.rows.length ? `已修复 ${fixed} 张` : `已修复 ${fixed} / ${group.rows.length}`;
+  const left = group.rows.length - fixed;
+  if (left === 0) return `已修复 ${fixed} 张`;
+  const leftText = group.rows.every((r) => r.status !== 'rescuable') ? `${left} 张没有备份` : `${left} 张没修好`;
+  return fixed === 0 ? leftText : `已修复 ${fixed} 张 · ${leftText}`;
 }
 
 // ---- 换替换来源 ----

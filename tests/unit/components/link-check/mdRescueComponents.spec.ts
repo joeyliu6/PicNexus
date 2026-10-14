@@ -234,11 +234,36 @@ describe('Markdown rescue P1 components', () => {
     expect(afterRows[0].get('.status-pill').text()).toBe('');
     expect(afterRows[0].get('.status-pill').classes()).toContain('status-pill--placeholder');
     expect(afterRows[0].get('.mr-fixed-to').text()).toContain('已换成 GitHub');
-    expect(after.text()).toContain('已修复 1 张');
+    expect(after.findAll('.mr-group-count').map((c) => c.text())).toEqual(['已修复 1 张', '1 张没修好']);
     // b.md 没被修好（不在 healedFiles）：不能被说成已修复，也不能再摆出「→ 图床」让人以为还没修
     expect(afterRows[1].find('.mr-fixed-to').exists()).toBe(false);
     expect(afterRows[1].find('.mr-backup-chip').exists()).toBe(false);
     expect(afterRows[1].get('.mr-fix-failed').text()).toContain('没改成');
+  });
+
+  it('修完后文档标签说清剩下的是什么：没有备份的不说成「已修复 0 / N」', () => {
+    const fixed = mdLink({
+      url: 'https://dead.example.com/fixed.png',
+      backupLinks: [validBackup('https://cdn.example.com/fixed.png')],
+      selectedBackup: 'https://cdn.example.com/fixed.png',
+    });
+    const noBackupSameDoc = mdLink({ url: 'https://dead.example.com/manual-a.png', backupLinks: [] });
+    const noBackupOnly = mdLink({
+      url: 'https://dead.example.com/manual-c.png',
+      sourceFile: 'C:/docs/c.md',
+      sourceFileName: 'c.md',
+      backupLinks: [],
+    });
+    const wrapper = mountWithDefaults(RescueBrokenGroups, {
+      props: {
+        imageLinks: [fixed, noBackupSameDoc, noBackupOnly],
+        isRepaired: true,
+        healedFiles: new Set(['C:/docs/a.md']),
+      },
+    });
+
+    expect(wrapper.findAll('.mr-group-count').map((c) => c.text()))
+      .toEqual(['已修复 1 张 · 1 张没有备份', '1 张没有备份']);
   });
 
   it('RescueBrokenGroups shows the AppError message when open_path fails, not [object Object]', async () => {
