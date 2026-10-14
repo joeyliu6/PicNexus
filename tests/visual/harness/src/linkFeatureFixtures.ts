@@ -403,16 +403,19 @@ export function applyMarkdownRepairFixture(rawState: string): void {
   rescueFixingProgress.value = state === 'fixing' ? { current: 2, total: 5 } : { current: 0, total: 0 };
   rescueRepairReceipt.value = state === 'complete' || state === 'partial-failed'
     ? {
-        filesFixed: state === 'complete' ? 3 : 2,
-        linksFixed: state === 'complete' ? 5 : 3,
+        filesFixed: state === 'complete' ? 3 : 1,
+        linksFixed: state === 'complete' ? 5 : 2,
         unrescuableCount: state === 'partial-failed' ? 2 : 0,
         backupPath: 'C:/visual/docs/.picnexus-backup/2026-04-28',
         fileBackupMap: [
           { original: 'C:/visual/docs/launch-notes.md', backup: 'C:/visual/docs/.picnexus-backup/launch-notes.md' },
-          { original: 'C:/visual/docs/api-reference.md', backup: 'C:/visual/docs/.picnexus-backup/api-reference.md' },
+          ...(state === 'complete'
+            ? [{ original: 'C:/visual/docs/api-reference.md', backup: 'C:/visual/docs/.picnexus-backup/api-reference.md' }]
+            : []),
         ],
+        // 没写进去的是 api-reference.md：它的 3.jpg 选好了备份却停在「没改成」；weekly-report.md 只有一张没备份的图，本来就不用写
         failedFiles: state === 'partial-failed'
-          ? [{ file: 'C:/visual/docs/weekly-report.md', links: 2, error: 'EACCES' }]
+          ? [{ file: 'C:/visual/docs/api-reference.md', links: 1, error: 'EACCES' }]
           : [],
       }
     : null;
