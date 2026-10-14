@@ -26,7 +26,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'toggle-select', key: string, event: MouseEvent): void;
+  (e: 'toggle-select', key: string, event: MouseEvent | KeyboardEvent): void;
   (e: 'copy-url', row: LinkCheckRow): void;
   (e: 'recheck-single', row: LinkCheckRow): void;
   (e: 'delete-row', row: LinkCheckRow): void;
@@ -106,7 +106,7 @@ const emit = defineEmits<{
         :thumb-srcs="rowThumbSrcs(row)"
         :hint="rowHint(row)"
         :confirmed-http-hosts="confirmedHttpHosts"
-        @toggle-select="(event: MouseEvent) => emit('toggle-select', rowKey(row), event)"
+        @toggle-select="(event: MouseEvent | KeyboardEvent) => emit('toggle-select', rowKey(row), event)"
         @copy-url="emit('copy-url', row)"
         @recheck="emit('recheck-single', row)"
         @delete="emit('delete-row', row)"

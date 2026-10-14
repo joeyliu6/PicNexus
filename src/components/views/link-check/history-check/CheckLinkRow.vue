@@ -32,7 +32,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'toggle-select', event: MouseEvent): void;
+  (e: 'toggle-select', event: MouseEvent | KeyboardEvent): void;
   (e: 'copy-url'): void;
   (e: 'recheck'): void;
   (e: 'delete'): void;
@@ -54,7 +54,14 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
       'fading-out': fading,
       'leaving-unchecked': leaving,
     }"
+    tabindex="0"
+    role="checkbox"
+    :aria-checked="selected"
+    :aria-disabled="disabled"
+    :aria-label="`${row.fileName}，${serviceName}，${word}`"
     @click="!disabled && emit('toggle-select', $event)"
+    @keydown.space.self.prevent="!disabled && emit('toggle-select', $event)"
+    @keydown.enter.self.prevent="!disabled && emit('toggle-select', $event)"
   >
     <div class="row-thumb">
       <ThumbnailImage
@@ -159,6 +166,15 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
 
 .link-row:hover {
   background: var(--hover-overlay-subtle);
+}
+
+.link-row:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.link-row:focus-visible .row-actions {
+  opacity: 1;
 }
 
 .link-row.row-selected {

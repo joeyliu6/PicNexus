@@ -406,7 +406,7 @@ export function useCheckFilter({ checkRows, isChecking, isHighThroughput }: UseC
   });
   const selectedCount = computed(() => selectedIds.value.size);
 
-  function handleToggleSelect(key: string, event: MouseEvent): void {
+  function handleToggleSelect(key: string, event: MouseEvent | KeyboardEvent): void {
     const result = shiftSelect(
       key,
       event.shiftKey,

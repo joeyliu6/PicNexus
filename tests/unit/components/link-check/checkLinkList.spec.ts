@@ -246,5 +246,25 @@ describe('CheckLinkList', () => {
     expect(some.findAll('.link-row.row-selected')).toHaveLength(1);
     expect(some.findAll('.thumb-check')).toHaveLength(2);
   });
+
+  it('行可以用键盘聚焦并用空格 / 回车选中', async () => {
+    const row = createLinkCheckRow({ historyId: 'hist-1', serviceId: 'jd' });
+    const wrapper = mountList({ rows: [row] });
+    const el = wrapper.get('.link-row');
+    expect(el.attributes('tabindex')).toBe('0');
+    expect(el.attributes('role')).toBe('checkbox');
+
+    await el.trigger('keydown', { key: ' ' });
+    await el.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('toggle-select')).toHaveLength(2);
+
+    // 焦点在行内按钮上时按空格，是在按那个按钮，不能顺带选中整行
+    await wrapper.get('.recheck-btn').trigger('keydown', { key: ' ' });
+    expect(wrapper.emitted('toggle-select')).toHaveLength(2);
+
+    const locked = mountList({ rows: [row], isChecking: true });
+    await locked.get('.link-row').trigger('keydown', { key: ' ' });
+    expect(locked.emitted('toggle-select')).toBeUndefined();
+  });
 });
 
