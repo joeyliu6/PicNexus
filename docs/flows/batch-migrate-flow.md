@@ -32,7 +32,7 @@ flowchart TD
 
     F --> G{allBackedUp?<br/>所有图床 pending=0}
     G -- 是 --> G1["提示：已全部备份"]
-    G -- 否 --> H["用户点击「开始迁移」"]
+    G -- 否 --> H["用户点击「开始补传备份 / 开始恢复备份」"]
 
     H --> I["migrating 阶段<br/>startMigrate()"]
     I --> J["预加载流水线 + chunk 处理<br/>（见图 4）"]
@@ -108,7 +108,7 @@ flowchart TD
 
 ### UI 筛选维度（MigrateFilterPopover）
 
-配置阶段的「从这里」栏目标签右侧有一个 `pi-sliders-h` 图标，点击打开 Popover 面板，聚合以下精细化筛选：
+配置阶段的「来源图床」栏目标签右侧有一个 `pi-sliders-h` 图标，点击打开 Popover 面板，聚合以下精细化筛选：
 
 | 维度 | Composable 状态 | 作用面 | 默认值 |
 |------|----------------|--------|--------|
@@ -401,11 +401,11 @@ chip 分桶映射（`displayList` 内部）：
 
 | 条件 | pill |
 |------|------|
-| `mode='migrating'` + 未暂停/取消 | `● 运行中`（呼吸绿点） |
+| `mode='migrating'` + 未暂停/取消 | `● 迁移中 3 / 18`（呼吸绿点；数字 = 成功 + 失败 + 跳过 / 总数，`progressLabel`） |
 | `mode='migrating'` + `isCancelling` | `⏳ 正在取消…`（红色 tone，优先级最高：用户点取消时同步禁用暂停/继续按钮并把取消按钮替成 disabled 占位） |
 | `mode='migrating'` + `isPausing` | `⏳ 正在暂停…` |
-| `mode='migrating'` + `isPaused` | `⏸ 已暂停` |
-| `mode='done'` | 无 pill（统计条里有用时） |
+| `mode='migrating'` + `isPaused` | `⏸ 已暂停 3 / 18` |
+| `mode='done'` | 无 pill；左侧改为一句结论 `migrateResultSummary`（「全部完成 · 3 张已备份」/「完成 · 3 张已备份 · 2 张失败」/「已取消 · …」/「连续失败，已自动停下 · …」） |
 
 > `isCancelling = isCancelled && isMigrating`——用户点"取消迁移"后 `isCancelled` 立即置 true，但在途的 `processBatch` Promise.all 需要等所有目标自然落定（或 HTTP 超时），这段"等落定"窗口由此 pill + disabled 占位反馈给用户。`finalizeResult` 里 `isMigrating=false` 后 pill 自动消失。
 
