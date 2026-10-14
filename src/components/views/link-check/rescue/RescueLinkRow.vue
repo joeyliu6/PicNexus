@@ -311,10 +311,13 @@ const backupName = computed(() => (props.selectedBackup ? getServiceDisplayName(
   cursor: help;
 }
 
+/* 固定宽度：需手动的行多一个「打开源文件」按钮，不定宽会把左边整列推歪 */
 .mr-row-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2xs);
+  width: 88px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--duration-fast);
