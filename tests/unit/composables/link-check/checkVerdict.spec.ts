@@ -120,6 +120,19 @@ describe('buildCheckVerdict', () => {
     });
   });
 
+  it('检查中报节奏：还要多久；卡在慢图床时直说在等，不给一个不靠谱的时间', () => {
+    const s = summary({ kinds: { fixable: 1, ok: 4 } });
+    const run = (extra: { etaSeconds?: number | null; stalled?: boolean }) => buildCheckVerdict({
+      summary: s, running: { done: 5, total: 17, paused: false, ...extra }, loadingRest: false,
+    }).subtitle;
+
+    expect(run({ etaSeconds: 40 })).toBe('目前有 1 张图片打不开 · 预计不到 1 分钟');
+    expect(run({ etaSeconds: 150 })).toBe('目前有 1 张图片打不开 · 预计还要 3 分钟');
+    expect(run({ etaSeconds: 5400 })).toBe('目前有 1 张图片打不开 · 预计还要 1 小时 30 分钟');
+    expect(run({ etaSeconds: 150, stalled: true })).toBe('目前有 1 张图片打不开 · 有些图床响应慢，正在等它们');
+    expect(run({ etaSeconds: null })).toBe('目前有 1 张图片打不开');
+  });
+
   it('其余记录还在读：数字不全，不能抢先说「全部正常」或「从没检查过」', () => {
     const readingAllUnchecked = buildCheckVerdict({
       summary: summary({ images: 3, links: 3, uncheckedLinks: 3, kinds: { unchecked: 3 } }),

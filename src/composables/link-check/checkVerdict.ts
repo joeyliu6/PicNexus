@@ -41,9 +41,26 @@ export interface CheckVerdict {
 
 export interface VerdictInput {
   summary: ImageSummary;
-  running: { done: number; total: number; paused: boolean } | null;
+  running: {
+    done: number;
+    total: number;
+    paused: boolean;
+    /** 预计还要多少秒（见 useProgressPace）；还估不出来时为 null */
+    etaSeconds?: number | null;
+    /** 一阵子没有新结果：卡在慢图床 */
+    stalled?: boolean;
+  } | null;
   /** 第二批记录还在后台读：此时数字不全，不能抢先下「全部正常」「从没检查过」的结论 */
   loadingRest: boolean;
+}
+
+function etaText(seconds: number): string {
+  if (seconds < 60) return '预计不到 1 分钟';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `预计还要 ${minutes} 分钟`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `预计还要 ${hours} 小时 ${rest} 分钟` : `预计还要 ${hours} 小时`;
 }
 
 function checkedAgo(timestamp: number): string {
@@ -63,13 +80,19 @@ export function buildCheckVerdict({ summary, running, loadingRest }: VerdictInpu
 
   if (running) {
     // 检查途中计数里混着上一轮的旧结果，所以说「目前」而不是「本次发现」
+    const parts = [unreachable > 0 ? `目前有 ${unreachable} 张图片打不开` : '目前没发现打不开的图片'];
+    if (!running.paused) {
+      // 卡住时不报时间：那个数是按之前的速度算的，此刻并不可信
+      if (running.stalled) parts.push('有些图床响应慢，正在等它们');
+      else if (running.etaSeconds != null) parts.push(etaText(running.etaSeconds));
+    }
     return {
       tone: running.paused ? 'paused' : 'running',
       hero: false,
       title: running.paused
         ? `已暂停 · ${running.done} / ${running.total}`
         : `正在检查链接 ${running.done} / ${running.total}`,
-      subtitle: unreachable > 0 ? `目前有 ${unreachable} 张图片打不开` : '目前没发现打不开的图片',
+      subtitle: parts.join(' · '),
       primary: running.paused ? { action: 'resume', label: '继续' } : { action: 'pause', label: '暂停' },
       secondary: { action: 'cancel', label: '停止' },
       hint: null,

@@ -18,6 +18,7 @@ import LinkCheckSkeleton from './history-check/LinkCheckSkeleton.vue';
 import { buildCheckVerdict, type CheckVerdict, type VerdictAction } from '@/composables/link-check/checkVerdict';
 import { isLostForGood, promoteTarget, type ImageEntry, type ImageKind } from '@/composables/link-check/imageHealth';
 import { PROBLEM_KINDS, useImageList } from '@/composables/link-check/useImageList';
+import { useProgressPace } from '@/composables/link-check/useProgressPace';
 import { thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
 import { getCopiesThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { getServiceDisplayName } from '@/constants/serviceNames';
@@ -71,6 +72,9 @@ const {
 
 const showServiceMenu = ref(false);
 
+const monitorProgress = computed(() => (isMonitorChecking.value ? props.progress : null));
+const { etaSeconds, stalled } = useProgressPace(monitorProgress);
+
 type CardAction = VerdictAction | 'retry';
 
 /** 一行都没读出来又报错时，卡片如实说读取失败，而不是「还没有图片」 */
@@ -84,7 +88,13 @@ const verdict = computed<Omit<CheckVerdict, 'primary'> & { primary: { action: Ca
   return buildCheckVerdict({
     summary: summary.value,
     running: isMonitorChecking.value
-      ? { done: props.progress?.checked ?? 0, total: props.progress?.total ?? 0, paused: props.isPaused }
+      ? {
+        done: props.progress?.checked ?? 0,
+        total: props.progress?.total ?? 0,
+        paused: props.isPaused,
+        etaSeconds: etaSeconds.value,
+        stalled: stalled.value,
+      }
       : null,
     loadingRest: props.isPhase2Loading,
   });
