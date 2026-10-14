@@ -1,97 +1,62 @@
 <script setup lang="ts">
 /**
- * E1 选择阶段 — 左栏来源 + 右栏目标（双列网格）
+ * 补充备份 · 选择阶段：顶部结论卡（要做什么 + 开始备份）→ 备份到哪里 → 更多选项（默认收起）
+ *
+ * 用户唯一必须做的决定是「备份到哪」；来源默认全部图床，时间 / 份数 / 范围这类细分收进「更多选项」。
  */
 import { computed, inject } from 'vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
-import { formatNumber, isPublicService } from './utils';
+import SummaryCard from '@/components/views/link-check/common/SummaryCard.vue';
+import { isPublicService } from './utils';
 import { MIGRATE_KEY } from './keys';
-import SourceList from './components/SourceList.vue';
 import TargetCard from './components/TargetCard.vue';
-import MigrateFilterPopover from './components/MigrateFilterPopover.vue';
+import MigrateOptions from './components/MigrateOptions.vue';
+import { buildSetupVerdict, migrateFilterNote } from '@/composables/batch-migrate/migrateVerdict';
 
 const ctx = inject(MIGRATE_KEY)!;
 
 const {
   isInitialized, isFilterApplied, isRefiltering, maxSuccessCount, sourceServiceFilter,
   availableSourceServices, configuredServices,
-  unconfiguredServices, checkedTargets, totalPending, isAllBackedUp,
+  unconfiguredServices, checkedTargets, totalPending,
   initError, initConfiguring, healthStatusMap, healthTooltipMap,
   timestampAfterMs, migrateScope,
 } = ctx;
 
-const hasPublicTarget = computed(() =>
-  checkedTargets.value.some(s => isPublicService(s.serviceId))
-);
-
-const noSourceSelected = computed(() =>
-  availableSourceServices.value.length > 0 && sourceServiceFilter.value.length === 0
-);
-
-const isRecoveryScope = computed(() => migrateScope.value === 'broken-with-valid-source');
-const migrateActionText = computed(() => isRecoveryScope.value ? '恢复备份' : '补传备份');
-
 const emit = defineEmits<{ start: [] }>();
 
-function navigateToSettings() {
-  tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
-}
+const noSourceSelected = computed(() =>
+  availableSourceServices.value.length > 0 && sourceServiceFilter.value.length === 0,
+);
 
-function toggleSourceFilter(serviceId: string) {
-  const idx = sourceServiceFilter.value.indexOf(serviceId);
-  if (idx >= 0) {
-    sourceServiceFilter.value = sourceServiceFilter.value.filter(id => id !== serviceId);
-  } else {
-    sourceServiceFilter.value = [...sourceServiceFilter.value, serviceId];
-  }
-}
+const filterNote = computed(() => migrateFilterNote({
+  sourceNames: sourceServiceFilter.value
+    .map((id) => availableSourceServices.value.find((s) => s.id === id)?.displayName ?? id),
+  allSourcesSelected: sourceServiceFilter.value.length === availableSourceServices.value.length,
+  timestampAfterMs: timestampAfterMs.value,
+  maxSuccessCount: maxSuccessCount.value,
+  scope: migrateScope.value,
+}));
 
-function toggleAllSources(selectAll: boolean) {
-  sourceServiceFilter.value = selectAll
-    ? availableSourceServices.value.map(s => s.id)
-    : [];
-}
-
-const displayedSourceList = computed(() => {
-  return sourceServiceFilter.value.length === 0
-    ? availableSourceServices.value.map(s => s.displayName)
-    : sourceServiceFilter.value
-        .map(id => availableSourceServices.value.find(s => s.id === id)?.displayName ?? id);
-});
-
-const displayedSourceNames = computed(() => displayedSourceList.value.join('、'));
-
-const displayedSourceShort = computed(() => {
-  const list = displayedSourceList.value;
-  if (list.length <= 3) return list.join('、');
-  return `${list.slice(0, 2).join('、')} 等 ${list.length} 个图床`;
-});
-
-const displayedTargetShort = computed(() => {
-  const list = checkedTargets.value.map(s => s.displayName);
-  if (list.length <= 3) return list.join('、');
-  return `${list.slice(0, 2).join('、')} 等 ${list.length} 个`;
-});
-
-const bottomFullText = computed(() => {
-  if (checkedTargets.value.length === 0) return '选择迁移目标，开始备份';
-  return `从 ${displayedSourceNames.value} ${migrateActionText.value} ${formatNumber(totalPending.value)} 张至 ${checkedTargets.value.map(s => s.displayName).join('、')}`;
-});
-
-function getServiceHealthStatus(serviceId: string): 'verified' | 'pending' | 'error' {
+function healthOf(serviceId: string): 'verified' | 'pending' | 'error' {
   return (healthStatusMap.value[serviceId] as 'verified' | 'pending' | 'error') ?? 'pending';
 }
 
-function canStart(): boolean {
-  if (noSourceSelected.value) return false;
-  if (totalPending.value === 0 || checkedTargets.value.length === 0) return false;
-  // 防止对健康检查异常（error）的目标硬发起迁移，避免连续失败空耗带宽
-  return checkedTargets.value.every(s => getServiceHealthStatus(s.serviceId) !== 'error');
-}
+/** 连接异常的目标不能开始：迁移会一路失败，白白耗流量 */
+const usableTargets = computed(() => checkedTargets.value.filter((s) => healthOf(s.serviceId) !== 'error'));
 
-function checkedNames(): string {
-  return checkedTargets.value.map(s => s.displayName).join('、');
+const verdict = computed(() => buildSetupVerdict({
+  targets: usableTargets.value.map((s) => s.displayName),
+  pending: totalPending.value,
+  refreshing: isRefiltering.value,
+  noSource: noSourceSelected.value,
+  publicTargets: usableTargets.value.filter((s) => isPublicService(s.serviceId)).map((s) => s.displayName),
+  filterNote: filterNote.value,
+}));
+
+function navigateToSettings() {
+  tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
 }
 
 function handleTargetToggle(serviceId: string) {
@@ -101,358 +66,166 @@ function handleTargetToggle(serviceId: string) {
 </script>
 
 <template>
-  <div class="panel-body">
-    <!-- 初始化错误 -->
+  <div class="setup-body">
     <EmptyState v-if="initError" icon="pi pi-exclamation-triangle" :title="initError">
-      <button class="btn-primary" @click="initConfiguring">重试</button>
+      <button class="summary-retry" type="button" @click="initConfiguring">重试</button>
     </EmptyState>
 
-    <!-- 骨架屏：冷启动（!isFilterApplied）或首次 init 期间；热刷新时两者均为 true 故不显示 -->
-    <div v-else-if="!isInitialized || !isFilterApplied" class="sk-layout" aria-busy="true" aria-live="polite">
-      <div class="sk-left">
-        <div class="sk-column-head">
-          <div class="sk-column-label" />
-          <div class="sk-toggle-all" />
-          <div class="sk-filter-trigger" />
+    <!-- 冷启动骨架：轮廓与真实布局一致（结论卡 → 目标卡片） -->
+    <div v-else-if="!isInitialized || !isFilterApplied" class="setup-skeleton" aria-busy="true" aria-live="polite">
+      <div class="sk-card">
+        <div class="sk-icon" />
+        <div class="sk-text">
+          <div class="sk-line sk-line--title" />
+          <div class="sk-line sk-line--subtitle" />
         </div>
-        <div v-for="i in 8" :key="i" class="sk-source-row">
-          <div class="sk-checkbox" />
-          <div class="sk-icon" />
-          <div class="sk-line sk-line--name" />
-          <div class="sk-count">
-            <div class="sk-line sk-line--count-num" />
-            <div class="sk-line sk-line--count-unit" />
-          </div>
-        </div>
+        <div class="sk-button" />
       </div>
-      <div class="sk-divider" aria-hidden="true" />
-      <div class="sk-right">
-        <div class="sk-column-label-slot">
-          <div class="sk-column-label" />
-        </div>
-        <div class="sk-target-grid">
-          <div v-for="i in 4" :key="i" class="sk-target-card">
-            <div class="sk-target-top">
-              <div class="sk-target-icon" />
-              <div class="sk-line sk-line--title" />
-              <div class="sk-dot" />
-            </div>
-            <div class="sk-target-count">
-              <div class="sk-line sk-line--target-num" />
-              <div class="sk-line sk-line--target-unit" />
-            </div>
-          </div>
-          <div class="sk-target-card">
-            <div class="sk-target-top">
-              <div class="sk-target-icon sk-icon--ghost" />
-              <div class="sk-line sk-line--title" />
-            </div>
-            <div class="sk-target-count">
-              <div class="sk-line sk-line--target-unit sk-line--target-unit-add" />
-            </div>
-          </div>
-        </div>
+      <div class="sk-line sk-line--label" />
+      <div class="target-grid">
+        <div v-for="i in 4" :key="i" class="sk-target" />
       </div>
     </div>
 
-    <!-- 空状态 -->
-    <EmptyState
+    <SummaryCard
       v-else-if="configuredServices.length === 0"
-      class="migrate-empty-state"
+      tone="neutral"
+      hero
       icon="pi pi-cog"
-      title="暂无可用图床"
+      title="先配置一个图床"
+      subtitle="补充备份会把图片复制到另一个图床，先在设置里配好一个"
     >
-      <p class="migrate-empty-desc">
-        请在设置中<button class="migrate-empty-link" @click="navigateToSettings">配置图床</button>
-      </p>
-    </EmptyState>
+      <template #actions>
+        <button type="button" class="summary-btn summary-btn--primary" @click="navigateToSettings">去设置</button>
+      </template>
+    </SummaryCard>
 
-    <!-- 分栏布局 -->
-    <div v-else class="split-layout">
-      <!-- 左栏：迁移来源 -->
-      <SourceList
-        :sources="availableSourceServices"
-        :selectedIds="sourceServiceFilter"
-        @toggle="toggleSourceFilter"
-        @toggle-all="toggleAllSources"
-      >
-        <template #filter-trigger>
-          <MigrateFilterPopover
-            :maxSuccessCount="maxSuccessCount"
-            :timestampAfterMs="timestampAfterMs"
-            :migrateScope="migrateScope"
-            @update:maxSuccessCount="maxSuccessCount = $event"
-            @update:timestampAfterMs="timestampAfterMs = $event"
-            @update:migrateScope="migrateScope = $event"
-          />
+    <template v-else>
+      <SummaryCard :tone="verdict.tone" icon="pi pi-copy" :title="verdict.title" :subtitle="verdict.subtitle">
+        <template v-if="verdict.note" #extra>
+          <p class="summary-note">
+            <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+            {{ verdict.note.text }}
+          </p>
         </template>
-      </SourceList>
+        <template v-if="verdict.primary" #actions>
+          <span v-tooltip.top="verdict.primary.hint ?? null">
+            <button
+              type="button"
+              class="summary-btn summary-btn--primary"
+              :disabled="verdict.primary.disabled"
+              @click="emit('start')"
+            >
+              {{ verdict.primary.label }}
+            </button>
+          </span>
+        </template>
+      </SummaryCard>
 
-      <!-- 两栏之间的方向引导 -->
-      <div class="split-divider" aria-hidden="true">
-        <i class="pi pi-arrow-right split-arrow" />
-      </div>
-
-      <!-- 右栏：迁移目标 -->
-      <div class="split-right">
-        <div v-if="configuredServices.length > 0" class="column-label">备份到</div>
-        <div v-if="isAllBackedUp" class="backed-up-banner">
-          <i class="pi pi-check-circle" />
-          <span v-if="availableSourceServices.length === 0">当前无需备份的图片</span>
-          <span v-else>当前条件下所有图片已备份</span>
-        </div>
-
-        <div class="target-grid">
-          <TargetCard
-            v-for="svc in configuredServices"
-            :key="svc.serviceId"
-            :serviceId="svc.serviceId"
-            :displayName="svc.displayName"
-            :pendingCount="svc.pendingCount"
-            :backedUpCount="svc.backedUpCount"
-            :checked="svc.checked"
-            :healthStatus="getServiceHealthStatus(svc.serviceId)"
-            :healthTooltip="healthTooltipMap[svc.serviceId]"
-            :noSourceSelected="noSourceSelected"
-            :isRefiltering="isRefiltering"
-            @toggle="handleTargetToggle(svc.serviceId)"
-          />
-          <!-- 未配置图床卡片 -->
-          <div
-            v-if="unconfiguredServices.length > 0"
-            class="target-card-add"
-            tabindex="0"
-            role="button"
-            @click="navigateToSettings"
-            @keydown.enter.prevent="navigateToSettings"
-          >
-            <div class="target-card-add-top">
-              <span class="target-card-add-icon">＋</span>
-              <span class="target-card-add-label">添加新图床</span>
+      <div class="setup-scroll">
+        <section class="target-section" aria-labelledby="target-section-label">
+          <h3 id="target-section-label" class="section-label">备份到哪里</h3>
+          <div class="target-grid">
+            <TargetCard
+              v-for="svc in configuredServices"
+              :key="svc.serviceId"
+              :serviceId="svc.serviceId"
+              :displayName="svc.displayName"
+              :pendingCount="svc.pendingCount"
+              :backedUpCount="svc.backedUpCount"
+              :checked="svc.checked"
+              :healthStatus="healthOf(svc.serviceId)"
+              :healthTooltip="healthTooltipMap[svc.serviceId]"
+              :noSourceSelected="noSourceSelected"
+              :isRefiltering="isRefiltering"
+              @toggle="handleTargetToggle(svc.serviceId)"
+            />
+            <div
+              v-if="unconfiguredServices.length > 0"
+              class="target-card-add"
+              tabindex="0"
+              role="button"
+              @click="navigateToSettings"
+              @keydown.enter.prevent="navigateToSettings"
+            >
+              <div class="target-card-add-top">
+                <span class="target-card-add-icon">＋</span>
+                <span class="target-card-add-label">添加图床</span>
+              </div>
+              <span class="target-card-add-hint">还有 {{ unconfiguredServices.length }} 个没配置</span>
             </div>
-            <span class="target-card-add-hint">还有 {{ unconfiguredServices.length }} 个未配置</span>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
+        </section>
 
-  <!-- 底栏骨架：与 sk-layout 同步 -->
-  <div v-if="!isInitialized || !isFilterApplied" class="bottom" aria-busy="true" aria-live="polite">
-    <div class="bottom-main">
-      <div class="sk-bottom-text" />
-      <div class="sk-bottom-btn" />
-    </div>
-  </div>
-
-  <!-- 底栏 -->
-  <div v-else-if="configuredServices.length > 0" class="bottom">
-    <div class="bottom-main">
-      <span class="bottom-stat" :title="bottomFullText">
-        <template v-if="noSourceSelected">
-          {{ checkedTargets.length === 0 ? '先在左边勾选来源图床' : '先在左边勾选来源图床，再开始' }}
-        </template>
-        <template v-else-if="checkedTargets.length === 0">
-          在右边选好要备份到哪里 · 原图床上的图片不会被删除
-        </template>
-        <template v-else>
-          <span class="bottom-dim">从</span>
-          <strong class="bottom-hl" :title="displayedSourceNames">{{ displayedSourceShort }}</strong>
-          <span class="bottom-dim">{{ migrateActionText }}</span>
-          <strong class="bottom-hl">{{ formatNumber(totalPending) }}</strong>
-          <span class="bottom-dim">张至</span>
-          <strong class="bottom-hl" :title="checkedNames()">{{ displayedTargetShort }}</strong>
-        </template>
-      </span>
-      <div class="bottom-actions">
-        <i
-          v-if="canStart() && hasPublicTarget"
-          class="pi pi-exclamation-circle bottom-warn-icon"
-          v-tooltip.top="'公共图床随时可能失效，且单日上传数量有限，大量迁移可能中途失败'"
-          aria-label="公共图床风险提示"
+        <MigrateOptions
+          v-model:selected-sources="sourceServiceFilter"
+          v-model:timestamp-after-ms="timestampAfterMs"
+          v-model:max-success-count="maxSuccessCount"
+          v-model:scope="migrateScope"
+          :sources="availableSourceServices"
+          :note="filterNote"
         />
-        <button
-          class="btn-primary"
-          :disabled="!canStart()"
-          v-tooltip.top="canStart() ? '只复制，不删除：原图床上的图片保持不动' : null"
-          @click="emit('start')"
-        >
-          <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11" style="flex-shrink:0;display:block"><path d="M3 2l10 6-10 6V2z"/></svg>
-          开始{{ migrateActionText }}
-        </button>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-@import url('./migrate-shared.css');
-
-.panel-body {
-  flex: 1; overflow: hidden auto; padding: 0 var(--space-lg-xl) 0 0;
-  display: flex; flex-direction: column;
-  min-width: 0;
-}
-
-/* 冷启动骨架屏：镜像真实布局的几何结构，避免加载完成后 UI 跳跃 */
-.sk-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); overflow: hidden; }
-.sk-left { flex: 0 0 42%; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
-.sk-divider { flex: 0 0 auto; width: calc(var(--text-lg) + var(--space-sm) * 2); }
-.sk-right { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
-
-/* 共用 shimmer：用 border-subtle-light 作底（比 bg-surface-low 色深更多，更明显） */
-.sk-column-label, .sk-filter-trigger, .sk-toggle-all, .sk-checkbox, .sk-icon, .sk-target-icon, .sk-dot, .sk-line, .sk-bottom-text, .sk-bottom-btn {
-  background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
-  background-size: 200% 100%;
-  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
-}
-.sk-column-label, .sk-filter-trigger, .sk-checkbox, .sk-icon, .sk-target-icon, .sk-line, .sk-bottom-text { border-radius: var(--radius-sm); }
-
-.sk-column-head {
+.setup-body {
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
-
-.sk-column-label { width: 44px; height: 9px; }
-.sk-toggle-all { width: 28px; height: 9px; margin-left: auto; border-radius: var(--radius-sm); }
-.sk-filter-trigger { width: 24px; height: 24px; border-radius: var(--radius-sm-md); }
-
-.sk-column-label-slot {
-  display: flex;
-  align-items: center;
-  height: 19px;
-  margin-bottom: var(--space-sm);
-  flex-shrink: 0;
-}
-
-.sk-source-row {
-  display: flex; align-items: center; gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm-md);
-  min-height: 37px;
-}
-.sk-source-row + .sk-source-row { margin-top: var(--space-2xs); }
-
-.sk-checkbox { width: 16px; height: 16px; flex-shrink: 0; }
-.sk-icon { width: 16px; height: 16px; flex-shrink: 0; }
-.sk-target-icon { width: 18px; height: 18px; flex-shrink: 0; }
-.sk-icon--ghost { opacity: 0.5; }
-.sk-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
-
-.sk-line--name { flex: 1; height: 10px; max-width: 150px; }
-.sk-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); margin-left: auto; flex-shrink: 0; }
-.sk-line--count-num { width: 46px; height: 10px; }
-.sk-line--count-unit { width: 12px; height: 8px; opacity: 0.72; }
-.sk-line--title { flex: 1; min-width: 0; height: 11px; max-width: 132px; }
-.sk-target-count { display: inline-flex; align-items: center; gap: var(--space-2xs); min-width: 0; min-height: 21px; }
-.sk-line--target-num { width: 34px; height: 10px; }
-.sk-line--target-unit { width: 68px; height: 10px; opacity: 0.72; }
-.sk-line--target-unit-add { width: 92px; }
-
-.sk-target-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex-direction: column;
   gap: var(--space-md);
+  flex: 1;
+  min-height: 0;
 }
 
-/* 底栏骨架：文字条 + 按钮块 */
-.sk-bottom-text { flex: 1; max-width: 172px; height: 10px; }
-.sk-bottom-btn { width: 87px; height: 28px; border-radius: var(--radius-sm-md); flex-shrink: 0; }
-
-/* 骨架卡片用虚线弱化边框，避免看起来像"已加载的空卡" */
-.sk-target-card {
-  display: flex; flex-direction: column; gap: var(--space-sm);
-  padding: var(--space-md-lg) var(--space-lg);
-  border-radius: var(--radius-md);
-  border: 1px dashed var(--border-subtle);
-  background: transparent;
-  min-height: 81px;
-  min-width: 0;
+.setup-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  flex: 1;
+  min-height: 0;
+  margin: 0 calc(var(--space-xl) * -1);
+  padding: var(--space-xs) var(--space-xl) var(--space-lg-xl);
+  overflow-y: auto;
 }
-.sk-target-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; min-height: 22px; }
 
-/* 分栏布局 */
-.split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); overflow: hidden; }
-
-/* 两栏之间的方向引导 */
-.split-divider {
-  flex: 0 0 auto;
+.summary-note {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 var(--space-sm);
-}
-
-.split-arrow {
-  font-size: var(--text-lg);
-  color: var(--primary-alpha-40);
-}
-
-/* 栏目标签（与左栏「从这里」成对出现） */
-.column-label {
+  gap: var(--space-xs-sm);
+  margin: var(--space-xs) 0 0;
   font-size: var(--text-xs);
-  color: var(--text-muted);
-  font-weight: var(--weight-regular);
-  margin-bottom: var(--space-sm);
-  letter-spacing: 0.02em;
+  color: var(--warning);
 }
 
-/* 右栏 */
-.split-right {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; overflow: hidden auto;
-}
-
-.backed-up-banner {
-  display: flex; align-items: center; gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm-md);
-  margin-bottom: var(--space-sm);
-  background: var(--success-alpha-10);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-.backed-up-banner i { font-size: var(--text-base); color: var(--success); flex-shrink: 0; }
-
-.migrate-empty-desc {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  margin: 0;
-  text-align: center;
-}
-
-.migrate-empty-state {
-  flex: 0 0 auto;
-  min-height: 148px;
-  padding: var(--space-lg) var(--space-xl);
-}
-
-.migrate-empty-state :deep(.empty-state__icon) {
-  font-size: var(--text-3xl);
-  margin-bottom: 0;
-}
-
-.migrate-empty-link {
-  background: none;
+.summary-retry {
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
   border: none;
-  padding: 0;
-  font: inherit;
-  font-size: inherit;
-  color: var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--text-on-primary);
+  font-family: inherit;
   cursor: pointer;
-  transition: color var(--duration-normal) ease;
 }
 
-.migrate-empty-link:hover {
-  color: var(--primary-hover, #3b82f6);
-  text-decoration: underline;
+.target-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.section-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
 }
 
 .target-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--space-md);
 }
 
@@ -477,6 +250,7 @@ function handleTargetToggle(serviceId: string) {
   color: var(--primary);
   background: var(--hover-overlay-subtle);
 }
+
 .target-card-add-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 
 .target-card-add-icon {
@@ -503,34 +277,76 @@ function handleTargetToggle(serviceId: string) {
   color: var(--text-tertiary);
 }
 
-/* 底栏公共图床风险图标（按钮左侧 tooltip 触发） */
-.bottom-warn-icon {
-  font-size: var(--text-base);
-  color: var(--text-muted);
+/* ---- 骨架 ---- */
+.setup-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.setup-skeleton :where(.sk-icon, .sk-line, .sk-button, .sk-target) {
+  background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
+  background-size: 200% 100%;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.sk-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md-lg);
+  padding: var(--space-lg) var(--space-lg-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.sk-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   flex-shrink: 0;
-  cursor: help;
 }
 
-/* 底栏追加：溢出省略（覆盖共享样式的 inline-flex） */
-.bottom-main { gap: var(--space-md); align-items: center; }
-
-.bottom-stat {
+.sk-text {
   flex: 1;
-  min-width: 0;
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  font-weight: var(--weight-regular);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
-.bottom-actions { flex-shrink: 0; }
-.bottom-dim { color: var(--text-muted); margin: 0 var(--space-xs); }
 
-.bottom-hl {
-  color: var(--primary);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
+.sk-line {
+  height: 12px;
+}
+
+.sk-line--title {
+  width: 200px;
+  height: 16px;
+}
+
+.sk-line--subtitle {
+  width: 300px;
+}
+
+.sk-line--label {
+  width: 64px;
+  height: 10px;
+}
+
+.sk-button {
+  width: 88px;
+  height: 32px;
+  border-radius: var(--radius-md);
+}
+
+.sk-target {
+  height: 76px;
+  border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-skeleton :where(.sk-icon, .sk-line, .sk-button, .sk-target) {
+    animation: none;
+  }
 }
 </style>

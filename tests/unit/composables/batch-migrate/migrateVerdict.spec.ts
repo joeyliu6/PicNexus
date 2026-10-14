@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDoneVerdict, buildRunVerdict, buildSetupVerdict } from '@/composables/batch-migrate/migrateVerdict';
+import { buildDoneVerdict, buildRunVerdict, buildSetupVerdict, migrateFilterNote } from '@/composables/batch-migrate/migrateVerdict';
 import type { MigrateItemStatus, MigrateSkipReason } from '@/types/batchMigrate';
 
 const setup = (overrides: Partial<Parameters<typeof buildSetupVerdict>[0]> = {}) => buildSetupVerdict({
@@ -25,7 +25,7 @@ const run = (overrides: Partial<Parameters<typeof buildRunVerdict>[0]> = {}) => 
   ...overrides,
 });
 
-function items(spec: { success?: number; failed?: number; skipped?: Array<MigrateSkipReason | undefined> }): MigrateItemStatus[] {
+function items(spec: { success?: number; failed?: number; partial?: number; skipped?: Array<MigrateSkipReason | undefined> }): MigrateItemStatus[] {
   const list: MigrateItemStatus[] = [];
   let n = 0;
   const push = (status: MigrateItemStatus['status'], skipReason?: MigrateSkipReason) => {
@@ -38,17 +38,21 @@ function items(spec: { success?: number; failed?: number; skipped?: Array<Migrat
   return list;
 }
 
-const done = (spec: Parameters<typeof items>[0], pauseReason?: 'user-cancelled' | 'consecutive-failures' | 'runtime-error', retrying = 0) =>
-  buildDoneVerdict({
+/** spec.success 里含 spec.partial 张「部分目标失败」：引擎把它们记作成功，同时放进失败清单 */
+const done = (spec: Parameters<typeof items>[0], pauseReason?: 'user-cancelled' | 'consecutive-failures' | 'runtime-error', retrying = 0) => {
+  const snapshot = items(spec);
+  const failures = [
+    ...snapshot.filter((i) => i.status === 'failed'),
+    ...snapshot.filter((i) => i.status === 'success').slice(0, spec.partial ?? 0),
+  ].map((i) => ({
+    historyId: i.historyId, fileName: i.fileName, error: 'x', details: [], isPartial: i.status === 'success',
+  }));
+  return buildDoneVerdict({
     targets: ['Cloudflare R2'],
-    result: {
-      successCount: spec.success ?? 0,
-      failedCount: spec.failed ?? 0,
-      pauseReason,
-      itemsSnapshot: items(spec),
-    },
+    result: { successCount: spec.success ?? 0, failedCount: spec.failed ?? 0, pauseReason, itemsSnapshot: snapshot, failures, durationMs: 42_000 },
     retrying,
   });
+};
 
 describe('buildSetupVerdict', () => {
   it('还没选目标：说清这页能做什么，按钮先灰着并说明为什么', () => {
@@ -112,11 +116,11 @@ describe('buildRunVerdict', () => {
 });
 
 describe('buildDoneVerdict', () => {
-  it('全部成功：一句结论 + 完成', () => {
+  it('全部成功：一句结论 + 用时 + 完成', () => {
     expect(done({ success: 15, skipped: ['already-there'] })).toMatchObject({
       tone: 'ok',
       title: '已备份 15 张到 Cloudflare R2',
-      subtitle: '另外 1 张本来就有',
+      subtitle: '另外 1 张本来就有 · 用时 42 秒',
       primary: { action: 'done', label: '完成' },
       secondary: null,
     });
@@ -129,6 +133,14 @@ describe('buildDoneVerdict', () => {
       subtitle: '1 张本来就有 · 失败的原因列在下面',
       primary: { action: 'retry-failed', label: '重试失败的 2 张' },
       secondary: { action: 'done', label: '完成' },
+    });
+  });
+
+  it('部分目标没传上的也算没成功：卡片、失败清单、重试按钮三处数字一致', () => {
+    expect(done({ success: 3, partial: 1, failed: 2, skipped: ['already-there'] })).toMatchObject({
+      title: '2 张已备份，3 张没成功',
+      subtitle: '其中 1 张只传成了一部分 · 1 张本来就有 · 失败的原因列在下面',
+      primary: { action: 'retry-failed', label: '重试失败的 3 张' },
     });
   });
 
@@ -156,5 +168,38 @@ describe('buildDoneVerdict', () => {
     expect(done({ success: 3, failed: 2 }, undefined, 2).primary).toEqual({
       action: 'retry-failed', label: '正在重试 2 张…', disabled: true,
     });
+  });
+});
+
+describe('migrateFilterNote', () => {
+  const DAY = 86_400_000;
+  const NOW = Date.UTC(2026, 9, 14);
+  const note = (overrides: Partial<Parameters<typeof migrateFilterNote>[0]> = {}) => migrateFilterNote({
+    sourceNames: ['京东', '微博'],
+    allSourcesSelected: true,
+    timestampAfterMs: null,
+    maxSuccessCount: 999,
+    scope: 'all-backups',
+    now: NOW,
+    ...overrides,
+  });
+
+  it('什么都没设 → null（卡片上不出现「只备份……」）', () => {
+    expect(note()).toBeNull();
+  });
+
+  it('设了几项就说几项，按「来源 · 时间 · 份数 · 范围」的顺序', () => {
+    expect(note({ allSourcesSelected: false, sourceNames: ['京东'] })).toBe('来自京东');
+    expect(note({ timestampAfterMs: NOW - 30 * DAY })).toBe('最近 30 天上传的');
+    expect(note({ maxSuccessCount: 1 })).toBe('只有 1 份的');
+    expect(note({ maxSuccessCount: 3 })).toBe('不超过 3 份的');
+    expect(note({ scope: 'broken-with-valid-source' })).toBe('已经坏了一份的');
+    expect(note({
+      allSourcesSelected: false, sourceNames: ['京东'], timestampAfterMs: NOW - 7 * DAY, maxSuccessCount: 1,
+    })).toBe('来自京东 · 最近 7 天上传的 · 只有 1 份的');
+  });
+
+  it('时间按最接近的整天数说，不说「最近 29.97 天」', () => {
+    expect(note({ timestampAfterMs: NOW - 30 * DAY + 3_600_000 })).toBe('最近 30 天上传的');
   });
 });

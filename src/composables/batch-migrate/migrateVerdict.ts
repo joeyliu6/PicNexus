@@ -3,9 +3,10 @@
 // 纯函数：文案与按钮在这里定，组件只负责摆出来。内部类型沿用 migrate 词源，界面上一律叫「备份」。
 
 import type { SummaryTone } from '@/components/views/link-check/common/SummaryCard.vue';
-import type { MigrateResult } from '@/types/batchMigrate';
+import type { MigrateResult, MigrateScope } from '@/types/batchMigrate';
 import { joinCjk, listServiceNames } from '@/utils/cjkSpacing';
 import { estimateText, remainingText } from '@/utils/durationText';
+import { formatTime } from '@/components/views/link-check/migrate/utils';
 
 export type MigrateVerdictAction = 'start' | 'pause' | 'resume' | 'cancel' | 'retry-failed' | 'done';
 
@@ -146,15 +147,18 @@ export function buildRunVerdict(input: RunVerdictInput): MigrateVerdict {
 
 export interface DoneVerdictInput {
   targets: string[];
-  result: Pick<MigrateResult, 'successCount' | 'failedCount' | 'pauseReason' | 'itemsSnapshot'>;
+  result: Pick<MigrateResult, 'successCount' | 'failedCount' | 'pauseReason' | 'itemsSnapshot' | 'failures' | 'durationMs'>;
   /** 正在原地重试的张数 */
   retrying: number;
 }
 
 export function buildDoneVerdict({ targets: targetNames, result, retrying }: DoneVerdictInput): MigrateVerdict {
   const targets = listServiceNames(targetNames);
-  const success = result.successCount;
-  const failed = result.failedCount;
+  // 部分目标没传上的图：引擎记作成功、同时放进失败清单。它没按要求备份齐，算「没成功」，
+  // 这样卡片、「失败」列表、「重试失败的 N 张」三处数字一致
+  const partial = result.failures.filter(f => f.isPartial).length;
+  const success = result.successCount - partial;
+  const failed = result.failures.length;
   let alreadyThere = 0;
   let notDone = 0;
   for (const item of result.itemsSnapshot) {
@@ -193,6 +197,7 @@ export function buildDoneVerdict({ targets: targetNames, result, retrying }: Don
 
   if (failed > 0) {
     const notes: string[] = [];
+    if (partial > 0) notes.push(`其中 ${partial.toLocaleString()} 张只传成了一部分`);
     if (alreadyThere > 0) notes.push(`${alreadyThere.toLocaleString()} 张本来就有`);
     notes.push('失败的原因列在下面');
     return verdict({
@@ -209,10 +214,39 @@ export function buildDoneVerdict({ targets: targetNames, result, retrying }: Don
   if (success === 0) {
     return verdict({ tone: 'ok', title: joinCjk('这些图片在', targets, '上本来就有'), primary: finish });
   }
+  const notes: string[] = [];
+  if (alreadyThere > 0) notes.push(`另外 ${alreadyThere.toLocaleString()} 张本来就有`);
+  if (result.durationMs > 0) notes.push(`用时 ${formatTime(result.durationMs)}`);
   return verdict({
     tone: 'ok',
     title: joinCjk(`已备份 ${success.toLocaleString()} 张到`, targets),
-    subtitle: alreadyThere > 0 ? `另外 ${alreadyThere.toLocaleString()} 张本来就有` : '',
+    subtitle: notes.join(' · '),
     primary: finish,
   });
+}
+
+export interface FilterNoteInput {
+  /** 勾选的来源图床（显示名） */
+  sourceNames: string[];
+  allSourcesSelected: boolean;
+  timestampAfterMs: number | null;
+  maxSuccessCount: number;
+  scope: MigrateScope;
+  now?: number;
+}
+
+/** 「更多选项」里设过的条件，说成白话；什么都没设返回 null */
+export function migrateFilterNote(input: FilterNoteInput): string | null {
+  const parts: string[] = [];
+  if (!input.allSourcesSelected && input.sourceNames.length > 0) {
+    parts.push(joinCjk('来自', listServiceNames(input.sourceNames)));
+  }
+  if (input.timestampAfterMs !== null) {
+    const days = Math.max(1, Math.round(((input.now ?? Date.now()) - input.timestampAfterMs) / 86_400_000));
+    parts.push(`最近 ${days} 天上传的`);
+  }
+  if (input.maxSuccessCount === 1) parts.push('只有 1 份的');
+  else if (input.maxSuccessCount < 999) parts.push(`不超过 ${input.maxSuccessCount} 份的`);
+  if (input.scope === 'broken-with-valid-source') parts.push('已经坏了一份的');
+  return parts.length > 0 ? parts.join(' · ') : null;
 }

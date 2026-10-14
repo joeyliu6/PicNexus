@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref, type Component } from 'vue';
+import { computed, ref, type Component } from 'vue';
+import type { MenuItem } from 'primevue/menuitem';
 import { mountWithDefaults } from '../../../helpers/vueMount';
 import { getEmitMock, getInvokeMock } from '../../../helpers/tauriMock';
-import SourceList from '@/components/views/link-check/migrate/components/SourceList.vue';
 import TargetCard from '@/components/views/link-check/migrate/components/TargetCard.vue';
-import MigrateFilterBar from '@/components/views/link-check/migrate/components/MigrateFilterBar.vue';
-import MigrateBottomBar from '@/components/views/link-check/migrate/components/MigrateBottomBar.vue';
-import MigrateFilterPopover from '@/components/views/link-check/migrate/components/MigrateFilterPopover.vue';
+import MigrateOptions from '@/components/views/link-check/migrate/components/MigrateOptions.vue';
+import MigrateItemRow from '@/components/views/link-check/migrate/components/MigrateItemRow.vue';
 import MigrateSelectPhase from '@/components/views/link-check/migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from '@/components/views/link-check/migrate/MigrateProgressPhase.vue';
 import { MIGRATE_KEY, type MigrateContext } from '@/components/views/link-check/migrate/keys';
-import type { MigrateItemStatus, MigrateResult, MigrateScope, MigrateTargetService } from '@/types/batchMigrate';
+import type { MigrateItemStatus, MigrateResult, MigrateTargetService } from '@/types/batchMigrate';
 import { flushPromisesAndTicks } from '../../../helpers/wait';
 
 vi.mock('@/composables/useToast', () => ({
@@ -18,6 +17,7 @@ vi.mock('@/composables/useToast', () => ({
     warn: vi.fn(),
     error: vi.fn(),
     silent: vi.fn(),
+    success: vi.fn(),
   }),
 }));
 
@@ -38,29 +38,10 @@ vi.mock('@/services/database', () => ({
   },
 }));
 
-const CheckboxStub = {
-  props: ['modelValue'],
-  emits: ['update:modelValue'],
-  template: `
-    <input
-      class="checkbox-stub"
-      type="checkbox"
-      :checked="modelValue"
-      @click.stop
-      @change="$emit('update:modelValue', $event.target.checked)"
-    />
-  `,
-};
-
+/** 弹出菜单：只留下 model，测试直接调菜单项的 command */
 const MenuStub = {
+  props: ['model'],
   template: '<div class="menu-stub" />',
-  methods: {
-    toggle: vi.fn(),
-  },
-};
-
-const PopoverStub = {
-  template: '<div class="popover-stub"><slot /></div>',
   methods: {
     toggle: vi.fn(),
   },
@@ -73,6 +54,7 @@ function createStatus(overrides: Partial<MigrateItemStatus> = {}): MigrateItemSt
     fileName: overrides.fileName ?? `${historyId}.jpg`,
     sourceUrl: overrides.sourceUrl ?? `https://img.example.com/${historyId}.jpg`,
     status: overrides.status ?? 'success',
+    skipReason: overrides.skipReason,
     error: overrides.error,
     errorType: overrides.errorType,
     failureDetails: overrides.failureDetails,
@@ -171,7 +153,6 @@ function mountWithMigrateContext(component: Component, ctx: MigrateContext, opti
         [MIGRATE_KEY as symbol]: ctx,
       },
       stubs: {
-        Checkbox: CheckboxStub,
         Menu: MenuStub,
         ...optionGlobal.stubs,
       },
@@ -179,80 +160,33 @@ function mountWithMigrateContext(component: Component, ctx: MigrateContext, opti
   });
 }
 
-describe('batch migrate P1 components', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+function selectContext(overrides: Partial<MigrateContext> = {}, targets?: MigrateTargetService[]) {
+  const targetServices = ref<MigrateTargetService[]>(targets ?? [
+    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 2, backedUpCount: 1, checked: true },
+    { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: false },
+  ]);
+  return createMigrateContext({
+    phase: ref('configuring'),
+    configuredServices: computed(() => targetServices.value.filter(service => service.isConfigured)),
+    unconfiguredServices: computed(() => targetServices.value.filter(service => !service.isConfigured)),
+    checkedTargets: computed(() => targetServices.value.filter(service => service.checked && service.isConfigured)),
+    totalPending: computed(() => Math.max(0, ...targetServices.value.filter(service => service.checked).map(service => service.pendingCount))),
+    ...overrides,
   });
+}
 
-  it('SourceList emits single and bulk source selection changes', async () => {
-    const wrapper = mountWithDefaults(SourceList, {
-      props: {
-        sources: [
-          { id: 'jd', displayName: 'JD', count: 10 },
-          { id: 'github', displayName: 'GitHub', count: 4 },
-        ],
-        selectedIds: ['jd'],
-      },
-      global: {
-        stubs: {
-          Checkbox: CheckboxStub,
-          InlineEmptyState: { template: '<div class="inline-empty-stub" />' },
-        },
-      },
-    });
+const menuModel = (wrapper: ReturnType<typeof mountWithDefaults>) =>
+  wrapper.findComponent(MenuStub).props('model') as MenuItem[];
 
-    expect(wrapper.findAll('.source-row')[0].classes()).toContain('source-row--selected');
+describe('补充备份 · 目标卡片', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
 
-    await wrapper.findAll('.source-row')[1].trigger('click');
-    await wrapper.get('.toggle-all-btn').trigger('click');
-
-    expect(wrapper.emitted('toggle')).toEqual([['github']]);
-    expect(wrapper.emitted('toggleAll')).toEqual([[true]]);
-  });
-
-  it('SourceList keeps the filter entry visible in empty state', () => {
-    const wrapper = mountWithDefaults(SourceList, {
-      props: {
-        sources: [],
-        selectedIds: [],
-      },
-      slots: {
-        'filter-trigger': '<button class="filter-trigger-stub">filter</button>',
-      },
-      global: {
-        stubs: {
-          InlineEmptyState: { template: '<div class="inline-empty-stub" />' },
-        },
-      },
-    });
-
-    expect(wrapper.find('.column-label').exists()).toBe(true);
-    expect(wrapper.find('.filter-trigger-stub').exists()).toBe(true);
-    expect(wrapper.find('.toggle-all-btn').exists()).toBe(false);
-    expect(wrapper.find('.source-empty-state').exists()).toBe(true);
-    expect(wrapper.find('.source-row').exists()).toBe(false);
-  });
-
-  it('TargetCard toggles healthy targets and blocks error targets', async () => {
+  it('能用的目标可以勾选；连接异常的点不了，并说明去设置里检查', async () => {
     const healthy = mountWithDefaults(TargetCard, {
-      props: {
-        serviceId: 'github',
-        displayName: 'GitHub',
-        pendingCount: 3,
-        backedUpCount: 0,
-        checked: false,
-        healthStatus: 'verified',
-      },
+      props: { serviceId: 'github', displayName: 'GitHub', pendingCount: 3, backedUpCount: 0, checked: false, healthStatus: 'verified' },
     });
     const error = mountWithDefaults(TargetCard, {
-      props: {
-        serviceId: 'smms',
-        displayName: 'SM.MS',
-        pendingCount: 3,
-        backedUpCount: 2,
-        checked: false,
-        healthStatus: 'error',
-      },
+      props: { serviceId: 'smms', displayName: 'SM.MS', pendingCount: 3, backedUpCount: 2, checked: false, healthStatus: 'error' },
     });
 
     await healthy.get('.target-card').trigger('click');
@@ -263,286 +197,168 @@ describe('batch migrate P1 components', () => {
     expect(error.get('.target-card').attributes('aria-disabled')).toBe('true');
     expect(healthy.get('.target-count-stack').text()).toBe('3张待备份');
     expect(error.get('.target-count-stack').text()).toBe('连接异常，先去设置里检查');
-    expect(healthy.text()).not.toContain('0张已备份');
-    expect(healthy.get('.target-card').attributes('data-tooltip')).toBeUndefined();
-    expect(healthy.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).toBeUndefined();
-    expect(healthy.get('.target-card').attributes('aria-label')).not.toContain('0 张已在该图床，无需迁移');
-    // 短名字卡片上已完整显示，tooltip 不重复它
-    expect(healthy.get('.target-card-tooltip-hitbox').attributes('data-tooltip') ?? '').not.toContain('GitHub');
-    expect(healthy.get('.target-card-tooltip-hitbox').attributes('data-tooltip') ?? '').not.toContain('3 张待备份');
-    expect(error.get('.target-card').attributes('data-tooltip')).toBeUndefined();
-    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).toBe('图床异常，请先检查配置\n2 张已在该图床，无需迁移');
-    expect(error.get('.target-card').attributes('aria-label')).toContain('2 张已在该图床，无需迁移');
-    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).not.toContain('SM.MS');
-    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).not.toContain('3 张待备份');
-    expect(healthy.text()).not.toContain('无需备份');
+    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).toBe('图床异常，请先检查配置\n2 张已经存在这里，不用再补');
   });
 
-  it('TargetCard separates card tooltip hitbox from the status dot tooltip', async () => {
-    const wrapper = mountWithDefaults(TargetCard, {
-      props: {
-        serviceId: 'github',
-        displayName: 'GitHub',
-        pendingCount: 3,
-        backedUpCount: 2,
-        checked: false,
-        healthStatus: 'verified',
-        healthTooltip: '可用 · 4分钟前',
-      },
+  it('都已经存过的目标直接说「都已经存过了」', () => {
+    const done = mountWithDefaults(TargetCard, {
+      props: { serviceId: 'github', displayName: 'GitHub', pendingCount: 0, backedUpCount: 5, checked: false, healthStatus: 'verified' },
     });
-
-    const hitbox = wrapper.get('.target-card-tooltip-hitbox');
-    const dot = wrapper.get('.target-status-dot');
-
-    expect(wrapper.get('.target-card').attributes('data-tooltip')).toBeUndefined();
-    expect(hitbox.attributes('data-tooltip')).toBe('2 张已在该图床，无需迁移');
-    expect(dot.attributes('data-tooltip')).toBe('可用 · 4分钟前');
+    expect(done.get('.target-count-stack').text()).toContain('都已经存过了');
   });
 
-  // .target-name 有 ellipsis，而 hitbox(inset:0) 盖住整卡 —— 名字放不下时
-  // tooltip 第一行是看到完整 profile 名的唯一入口
-  it('TargetCard surfaces the full name in the tooltip only when it is too long to fit', async () => {
+  it('名字放不下时，悬停提示第一行给全名', () => {
     const longName = '我家里那台群晖 NAS 上的 WebDAV 图床';
     const wrapper = mountWithDefaults(TargetCard, {
-      props: {
-        serviceId: 'webdav:abc123',
-        displayName: longName,
-        pendingCount: 3,
-        backedUpCount: 0,
-        checked: false,
-        healthStatus: 'verified',
-      },
+      props: { serviceId: 'webdav:abc123', displayName: longName, pendingCount: 3, backedUpCount: 0, checked: false, healthStatus: 'verified' },
     });
-
     expect(wrapper.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).toBe(longName);
   });
+});
 
-  it('MigrateFilterPopover emits recovery scope and shows active badge', async () => {
-    const wrapper = mountWithDefaults(MigrateFilterPopover, {
-      props: {
-        maxSuccessCount: 999,
-        timestampAfterMs: null,
-        migrateScope: 'all-backups',
-      },
-      global: {
-        stubs: {
-          Popover: PopoverStub,
-        },
-      },
-    });
+describe('补充备份 · 更多选项', () => {
+  const base = {
+    sources: [{ id: 'jd', displayName: '京东', count: 3 }, { id: 'weibo', displayName: '微博', count: 2 }],
+    selectedSources: ['jd', 'weibo'],
+    timestampAfterMs: null,
+    maxSuccessCount: 999,
+    scope: 'all-backups' as const,
+    note: null,
+  };
 
-    const allScopeButton = wrapper.findAll('button').find(button => button.text() === '补全备份');
-    const recoveryButton = wrapper.findAll('button').find(button => button.text() === '抢救失效图片');
-    expect(wrapper.text()).toContain('处理范围');
-    expect(allScopeButton?.attributes('data-tooltip')).toBe('为符合条件、但目标图床还没有备份的图片补传一份。');
-    expect(recoveryButton).toBeTruthy();
-    expect(recoveryButton?.attributes('data-tooltip')).toContain('依据最近一次已保存的链接检测结果');
-    await recoveryButton!.trigger('click');
+  it('默认收起，只露一句「可以做什么」；展开后能改来源、时间、份数、范围', async () => {
+    const wrapper = mountWithDefaults(MigrateOptions, { props: base });
+    expect(wrapper.find('.options-body').exists()).toBe(false);
+    expect(wrapper.get('.options-hint').text()).toContain('只备份某些图床上的图');
 
-    expect(wrapper.emitted('update:migrateScope')?.[0]).toEqual(['broken-with-valid-source']);
-    await wrapper.setProps({ migrateScope: 'broken-with-valid-source' });
-    expect(wrapper.find('.filter-trigger-badge').text()).toContain('抢救失效图片');
-    expect(wrapper.get('.filter-trigger').attributes('data-tooltip')).toContain('当前筛选：抢救失效图片');
+    await wrapper.get('.options-toggle').trigger('click');
+    const choices = () => wrapper.findAll('.choice');
+    await choices().find(c => c.text().includes('京东'))!.trigger('click');
+    await choices().find(c => c.text() === '最近 30 天')!.trigger('click');
+    await choices().find(c => c.text() === '只有 1 份的')!.trigger('click');
+    await choices().find(c => c.text() === '只补已经坏了一份的')!.trigger('click');
+
+    expect(wrapper.emitted('update:selectedSources')![0]).toEqual([['weibo']]);
+    expect(wrapper.emitted('update:timestampAfterMs')![0][0]).toBeTypeOf('number');
+    expect(wrapper.emitted('update:maxSuccessCount')![0]).toEqual([1]);
+    expect(wrapper.emitted('update:scope')![0]).toEqual(['broken-with-valid-source']);
   });
 
-  it('MigrateFilterBar updates status, source service, and search models', async () => {
-    const wrapper = mountWithDefaults(MigrateFilterBar, {
-      props: {
-        activeFilter: 'all',
-        selectedSourceServiceId: null,
-        showServiceMenu: false,
-        searchInput: '',
-        counts: { all: 4, processing: 1, success: 1, failed: 1, skipped: 1 },
-        showProcessing: true,
-        sourceServiceOptions: [
-          { serviceId: 'jd', label: 'JD', count: 3 },
-          { serviceId: 'github', label: 'GitHub', count: 1 },
-        ],
-      },
-    });
+  it('设过条件：标题写「已设：……」，并能一键恢复默认', async () => {
+    const wrapper = mountWithDefaults(MigrateOptions, { props: { ...base, selectedSources: ['jd'], note: '来自京东' } });
+    expect(wrapper.get('.options-note').text()).toBe('已设：来自京东');
 
-    await wrapper.get('.mf-chip--failed').trigger('click');
-    await wrapper.get('.mf-filter-chip').trigger('click');
-    await wrapper.findAll('.mf-sdi')[2].trigger('click');
-    await wrapper.get('input.mf-search__input').setValue('failed');
+    await wrapper.get('.options-toggle').trigger('click');
+    await wrapper.get('.options-reset').trigger('click');
 
-    expect(wrapper.emitted('update:activeFilter')).toEqual([['failed']]);
-    expect(wrapper.emitted('update:showServiceMenu')).toEqual([[true], [false]]);
-    expect(wrapper.emitted('update:selectedSourceServiceId')).toEqual([['github']]);
-    expect(wrapper.emitted('update:searchInput')?.at(-1)).toEqual(['failed']);
+    expect(wrapper.emitted('update:selectedSources')!.at(-1)).toEqual([['jd', 'weibo']]);
+    expect(wrapper.emitted('update:timestampAfterMs')!.at(-1)).toEqual([null]);
+    expect(wrapper.emitted('update:maxSuccessCount')!.at(-1)).toEqual([999]);
+    expect(wrapper.emitted('update:scope')!.at(-1)).toEqual(['all-backups']);
   });
+});
 
-  it('MigrateSelectPhase blocks start until a source is selected', async () => {
-    const sourceServiceFilter = ref<string[]>([]);
-    const targetServices = ref<MigrateTargetService[]>([
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 3, backedUpCount: 0, checked: true },
+describe('补充备份 · 选择页', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('没选目标：卡片说清这页做什么，「开始备份」灰着', () => {
+    const ctx = selectContext({}, [
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 2, backedUpCount: 1, checked: false },
     ]);
-    const ctx = createMigrateContext({
-      phase: ref('configuring'),
-      sourceServiceFilter,
-      availableSourceServices: ref([{ id: 'jd', displayName: 'JD', count: 3 }]),
-      configuredServices: computed(() => targetServices.value),
-      unconfiguredServices: computed(() => []),
-      checkedTargets: computed(() => targetServices.value.filter(service => service.checked)),
-      totalPending: computed(() => 3),
-      isAllBackedUp: computed(() => false),
-      healthStatusMap: ref({ r2: 'verified' }),
-      healthTooltipMap: ref({ r2: 'ready' }),
-    });
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx);
 
-    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx, {
-      global: {
-        stubs: {
-          MigrateFilterPopover: { template: '<button class="filter-popover-stub" />' },
-        },
-      },
-    });
+    expect(wrapper.get('.summary-title').text()).toBe('给图片多存一份');
+    expect(wrapper.get('.summary-btn--primary').attributes('disabled')).toBeDefined();
+  });
 
-    const startButton = wrapper.get('.bottom-actions .btn-primary');
-    expect(startButton.attributes('disabled')).toBeDefined();
+  it('选好目标：卡片直接说要复制几张到哪，点「开始备份」开始', async () => {
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, selectContext());
 
-    await wrapper.get('.source-row').trigger('click');
-    await flushPromisesAndTicks();
-
-    expect(sourceServiceFilter.value).toEqual(['jd']);
-    expect(startButton.attributes('disabled')).toBeUndefined();
-
-    await startButton.trigger('click');
+    expect(wrapper.get('.summary-title').text()).toBe('把 2 张图复制到 GitHub');
+    expect(wrapper.get('.summary-subtitle').text()).toContain('原来的图片不动');
+    await wrapper.get('.summary-btn--primary').trigger('click');
     expect(wrapper.emitted('start')).toHaveLength(1);
   });
 
-  it('MigrateSelectPhase uses scope-specific bottom action copy', async () => {
-    const migrateScope = ref<MigrateScope>('broken-with-valid-source');
-    const targetServices = ref<MigrateTargetService[]>([
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 3, backedUpCount: 0, checked: true },
-    ]);
-    const ctx = createMigrateContext({
-      phase: ref('configuring'),
-      migrateScope,
+  it('只选了部分来源：卡片上写出只备份哪些，免得忘了自己设过', () => {
+    const ctx = selectContext({
       sourceServiceFilter: ref(['jd']),
-      availableSourceServices: ref([{ id: 'jd', displayName: 'JD', count: 3 }]),
-      configuredServices: computed(() => targetServices.value),
-      unconfiguredServices: computed(() => []),
-      checkedTargets: computed(() => targetServices.value.filter(service => service.checked)),
-      totalPending: computed(() => 3),
-      isAllBackedUp: computed(() => false),
-      healthStatusMap: ref({ r2: 'verified' }),
-      healthTooltipMap: ref({ r2: 'ready' }),
+      availableSourceServices: ref([{ id: 'jd', displayName: '京东', count: 3 }, { id: 'weibo', displayName: '微博', count: 2 }]),
     });
-
-    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx, {
-      global: {
-        stubs: {
-          MigrateFilterPopover: { template: '<button class="filter-popover-stub" />' },
-        },
-      },
-    });
-
-    expect(wrapper.get('.bottom-stat').text()).toContain('恢复备份');
-
-    migrateScope.value = 'all-backups';
-    await flushPromisesAndTicks();
-
-    expect(wrapper.get('.bottom-stat').text()).toContain('补传备份');
-  });
-
-  it('MigrateSelectPhase keeps source filters reachable when current filters return no sources', () => {
-    const targetServices = ref<MigrateTargetService[]>([
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 0, backedUpCount: 0, checked: true },
-    ]);
-    const ctx = createMigrateContext({
-      phase: ref('configuring'),
-      sourceServiceFilter: ref([]),
-      availableSourceServices: ref([]),
-      configuredServices: computed(() => targetServices.value),
-      unconfiguredServices: computed(() => []),
-      checkedTargets: computed(() => targetServices.value.filter(service => service.checked)),
-      totalPending: computed(() => 0),
-      isAllBackedUp: computed(() => true),
-      healthStatusMap: ref({ r2: 'verified' }),
-      healthTooltipMap: ref({ r2: 'ready' }),
-    });
-
-    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx, {
-      global: {
-        stubs: {
-          MigrateFilterPopover: { template: '<button class="filter-popover-stub" />' },
-        },
-      },
-    });
-
-    expect(wrapper.find('.column-label').exists()).toBe(true);
-    expect(wrapper.find('.filter-popover-stub').exists()).toBe(true);
-    expect(wrapper.find('.source-empty-state').exists()).toBe(true);
-    expect(wrapper.find('.source-row').exists()).toBe(false);
-    expect(wrapper.find('.target-card').exists()).toBe(true);
-    expect(wrapper.find('.backed-up-banner').exists()).toBe(true);
-    expect(wrapper.get('.bottom-actions .btn-primary').attributes('disabled')).toBeDefined();
-  });
-
-  it('MigrateSelectPhase uses inline settings link for unconfigured empty state', async () => {
-    const ctx = createMigrateContext({
-      phase: ref('configuring'),
-      configuredServices: computed(() => []),
-      unconfiguredServices: computed(() => []),
-      checkedTargets: computed(() => []),
-      totalPending: computed(() => 0),
-      isAllBackedUp: computed(() => false),
-    });
-
     const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx);
+    expect(wrapper.get('.summary-subtitle').text()).toContain('只备份来自京东');
+    expect(wrapper.get('.options-note').text()).toBe('已设：来自京东');
+  });
 
-    expect(wrapper.text()).toContain('暂无可用图床');
-    expect(wrapper.text()).toContain('请在设置中配置图床');
-    expect(wrapper.find('.migrate-empty-link').exists()).toBe(true);
-    expect(wrapper.find('.btn-primary').exists()).toBe(false);
+  it('来源全取消了：按钮灰着，说清去哪改', () => {
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, selectContext({ sourceServiceFilter: ref([]) }));
+    expect(wrapper.get('.summary-title').text()).toBe('没选来源图床');
+    expect(wrapper.get('.summary-btn--primary').attributes('disabled')).toBeDefined();
+  });
 
-    await wrapper.get('.migrate-empty-link').trigger('click');
+  it('都已经存过了：不给开始按钮', () => {
+    const ctx = selectContext({}, [
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 0, backedUpCount: 3, checked: true },
+    ]);
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx);
+    expect(wrapper.get('.summary-title').text()).toBe('这些图片都已经存到 GitHub 了');
+    expect(wrapper.find('.summary-btn--primary').exists()).toBe(false);
+  });
 
+  it('一个图床都没配：大号卡片引导去设置', async () => {
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, selectContext({}, []));
+    expect(wrapper.get('.summary-title').text()).toBe('先配置一个图床');
+    await wrapper.get('.summary-btn--primary').trigger('click');
     expect(getEmitMock()).toHaveBeenCalledWith('navigate-to', { view: 'settings', tab: 'hosting' });
   });
+});
 
-  it('MigrateProgressPhase filters terminal results and retries failed rows', async () => {
+describe('补充备份 · 进行中 / 完成', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const doneItems = () => [
+    createStatus({ historyId: 'h-success', fileName: 'success-alpha.jpg', status: 'success', existingServiceIds: ['jd'] }),
+    createStatus({
+      historyId: 'h-failed',
+      fileName: 'failed-beta.jpg',
+      status: 'failed',
+      error: 'GitHub · bad token',
+      errorType: 'upload',
+      serviceResults: { github: 'failed', smms: 'pending' },
+      existingServiceIds: ['jd'],
+    }),
+    createStatus({ historyId: 'h-skipped', fileName: 'skipped-gamma.jpg', status: 'skipped', skipReason: 'already-there', existingServiceIds: ['github'] }),
+  ];
+
+  it('完成且有失败：直接列失败的，主按钮重试全部失败的，行上也能单独重试', async () => {
+    const retryFailed = vi.fn();
     const retrySingleFailed = vi.fn();
-    const items = [
-      createStatus({ historyId: 'h-success', fileName: 'success-alpha.jpg', status: 'success', existingServiceIds: ['jd'] }),
-      createStatus({
-        historyId: 'h-failed',
-        fileName: 'failed-beta.jpg',
-        status: 'failed',
-        error: 'upload failed',
-        errorType: 'upload',
-        serviceResults: { github: 'failed', smms: 'pending' },
-        existingServiceIds: ['github'],
-      }),
-      createStatus({ historyId: 'h-skipped', fileName: 'skipped-gamma.jpg', status: 'skipped', existingServiceIds: ['jd'] }),
-    ];
     const ctx = createMigrateContext({
       phase: ref('done'),
-      migrateResult: ref(createMigrateResult(items)),
+      migrateResult: ref(createMigrateResult(doneItems())),
+      retryFailed,
       retrySingleFailed,
     });
 
     const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx);
     await flushPromisesAndTicks();
 
-    expect(wrapper.text()).toContain('success-alpha.jpg');
-    expect(wrapper.text()).toContain('failed-beta.jpg');
-    expect(wrapper.text()).toContain('skipped-gamma.jpg');
-
-    await wrapper.get('.mf-chip--failed').trigger('click');
-    await flushPromisesAndTicks();
-
-    expect(wrapper.text()).not.toContain('success-alpha.jpg');
-    expect(wrapper.text()).toContain('failed-beta.jpg');
+    expect(wrapper.get('.summary-title').text()).toBe('1 张已备份，1 张没成功');
     expect(wrapper.findAll('.mi-row')).toHaveLength(1);
+    expect(wrapper.get('.mi-row__status-text').text()).toBe('没成功 · GitHub · bad token');
+
+    await wrapper.get('.summary-btn--primary').trigger('click');
+    expect(retryFailed).toHaveBeenCalledWith(['h-failed']);
 
     await wrapper.get('.mi-row__retry-btn').trigger('click');
-
     expect(retrySingleFailed).toHaveBeenCalledWith('h-failed');
+
+    await wrapper.findAll('.view-option')[0].trigger('click');
+    expect(wrapper.findAll('.mi-row')).toHaveLength(3);
+    expect(wrapper.text()).toContain('目标图床上本来就有');
   });
 
-  it('MigrateProgressPhase treats partial successes as retryable failed-filter rows', async () => {
+  it('部分目标失败也算失败、能重试', async () => {
     const retrySingleFailed = vi.fn();
     const partial = createStatus({
       historyId: 'h-partial',
@@ -556,25 +372,12 @@ describe('batch migrate P1 components', () => {
     });
     const result = createMigrateResult([partial]);
     result.failures = [{
-      historyId: 'h-partial',
-      fileName: 'partial-delta.jpg',
-      error: 'GitHub · bad token',
-      errorType: 'upload',
-      details: [{ serviceId: 'github', message: 'bad token' }],
-      isPartial: true,
-      failedTargets: ['github'],
+      historyId: 'h-partial', fileName: 'partial-delta.jpg', error: 'GitHub · bad token', errorType: 'upload',
+      details: [{ serviceId: 'github', message: 'bad token' }], isPartial: true, failedTargets: ['github'],
     }];
-    result.partialFailures = [{ historyId: 'h-partial', fileName: 'partial-delta.jpg', failedTargets: ['github'] }];
-    const ctx = createMigrateContext({
-      phase: ref('done'),
-      migrateResult: ref(result),
-      retrySingleFailed,
-    });
+    const ctx = createMigrateContext({ phase: ref('done'), migrateResult: ref(result), retrySingleFailed });
 
     const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx);
-    await flushPromisesAndTicks();
-
-    await wrapper.get('.mf-chip--failed').trigger('click');
     await flushPromisesAndTicks();
 
     expect(wrapper.text()).toContain('partial-delta.jpg');
@@ -582,29 +385,13 @@ describe('batch migrate P1 components', () => {
     expect(retrySingleFailed).toHaveBeenCalledWith('h-partial');
   });
 
-  it('MigrateProgressPhase exports the final report through Tauri file APIs', async () => {
-    getInvokeMock().mockResolvedValue('C:/tmp/migrate.csv');
-    const items = [
-      createStatus({ historyId: 'h-success', fileName: 'success-alpha.jpg', status: 'success', existingServiceIds: ['jd'] }),
-    ];
-    const ctx = createMigrateContext({
-      phase: ref('done'),
-      migrateResult: ref(createMigrateResult(items)),
-    });
-    const BottomBarExportStub = defineComponent({
-      emits: ['export'],
-      template: '<button class="export-csv" type="button" @click="$emit(\'export\', \'csv\')">export</button>',
-    });
+  it('完成后卡片「⋯」里能导出报告', async () => {
+    getInvokeMock().mockResolvedValue('C:/tmp/backup.csv');
+    const ctx = createMigrateContext({ phase: ref('done'), migrateResult: ref(createMigrateResult(doneItems())) });
+    const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx);
 
-    const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx, {
-      global: {
-        stubs: {
-          MigrateBottomBar: BottomBarExportStub,
-        },
-      },
-    });
-
-    await wrapper.get('.export-csv').trigger('click');
+    const exportCsv = menuModel(wrapper).find(item => item.label === '导出报告（CSV）')!;
+    exportCsv.command?.({ originalEvent: new Event('click'), item: exportCsv });
     await flushPromisesAndTicks();
 
     expect(getInvokeMock()).toHaveBeenCalledWith('export_text_file', expect.objectContaining({
@@ -613,42 +400,61 @@ describe('batch migrate P1 components', () => {
     expect((getInvokeMock().mock.calls[0][1] as { content: string }).content).toContain('success-alpha.jpg');
   });
 
-  it('MigrateBottomBar covers pause, resume, cancel, retrying, and export states', async () => {
-    const running = mountWithDefaults(MigrateBottomBar, {
-      props: { mode: 'migrating', isPaused: false, isPausing: false, isCancelling: false },
+  it('全部成功：一句结论，「完成」回到选择页', async () => {
+    const resetToConfiguring = vi.fn();
+    const ctx = createMigrateContext({
+      phase: ref('done'),
+      migrateResult: ref(createMigrateResult([doneItems()[0]])),
+      resetToConfiguring,
     });
+    const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx);
 
-    await running.findAll('button')[0].trigger('click');
-    await running.findAll('button')[1].trigger('click');
+    expect(wrapper.get('.summary-title').text()).toBe('已备份 1 张到 GitHub、SM.MS');
+    await wrapper.get('.summary-btn--primary').trigger('click');
+    expect(resetToConfiguring).toHaveBeenCalled();
+  });
 
-    expect(running.emitted('pause')).toHaveLength(1);
-    expect(running.emitted('cancel')).toHaveLength(1);
-
-    const paused = mountWithDefaults(MigrateBottomBar, {
-      props: { mode: 'migrating', isPaused: true, isPausing: false, isCancelling: false },
+  it('进行中：卡片报进度，暂停 / 停止 / 继续都接到对应动作', async () => {
+    const pauseMigrate = vi.fn();
+    const cancelMigrate = vi.fn();
+    const resumeMigrate = vi.fn();
+    const isPaused = ref(false);
+    const ctx = createMigrateContext({
+      phase: ref('migrating'),
+      allItemStatuses: ref([createStatus({ historyId: 'h1', status: 'uploading' })]),
+      cumulativeCounts: ref({ success: 1, failed: 0, skipped: 0 }),
+      globalProgress: ref({ current: 1, total: 3, percent: 33 }),
+      pauseMigrate,
+      cancelMigrate,
+      resumeMigrate,
+      isPaused,
     });
-    await paused.findAll('button')[0].trigger('click');
-    expect(paused.emitted('resume')).toHaveLength(1);
+    const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx);
 
-    const pending = mountWithDefaults(MigrateBottomBar, {
-      props: { mode: 'done', canRetryAll: true, retryingCount: 2 },
-      global: { stubs: { Menu: MenuStub } },
+    expect(wrapper.get('.summary-title').text()).toBe('正在备份到 GitHub · 1 / 3');
+    expect(wrapper.get('.mi-row__status-text').text()).toBe('上传中…');
+    await wrapper.get('.summary-btn--primary').trigger('click');
+    await wrapper.get('.summary-btn--ghost').trigger('click');
+    expect(pauseMigrate).toHaveBeenCalled();
+    expect(cancelMigrate).toHaveBeenCalled();
+
+    isPaused.value = true;
+    await flushPromisesAndTicks();
+    await wrapper.get('.summary-btn--primary').trigger('click');
+    expect(resumeMigrate).toHaveBeenCalled();
+  });
+});
+
+describe('补充备份 · 一行一张图', () => {
+  it('停止后没轮到的说「没来得及处理」，复制成功的说复制到了哪', () => {
+    const late = mountWithDefaults(MigrateItemRow, {
+      props: { item: { historyId: 'h1', fileName: 'late.jpg', status: 'skipped', skipReason: 'not-attempted', error: '备份已停止，没来得及处理' }, targetServiceIds: ['github'] },
     });
+    expect(late.get('.mi-row__status-text').text()).toBe('备份已停止，没来得及处理');
 
-    const retryAll = pending.findAll('button').find(button => button.classes().includes('btn-ghost') && button.attributes('disabled') !== undefined);
-    expect(retryAll?.exists()).toBe(true);
-
-    const ExportMenuStub = defineComponent({
-      props: ['model'],
-      template: '<button class="menu-csv" type="button" @click="model[0].command()">csv</button>',
+    const copied = mountWithDefaults(MigrateItemRow, {
+      props: { item: { historyId: 'h2', fileName: 'ok.jpg', status: 'success', serviceResults: { github: 'success' }, existingServiceIds: ['jd'] }, targetServiceIds: ['github'] },
     });
-    const done = mountWithDefaults(MigrateBottomBar, {
-      props: { mode: 'done', canRetryAll: false, retryingCount: 0 },
-      global: { stubs: { Menu: ExportMenuStub } },
-    });
-
-    await done.get('.menu-csv').trigger('click');
-
-    expect(done.emitted('export')).toEqual([['csv']]);
+    expect(copied.get('.mi-row__status-text').text()).toBe('已复制到 GitHub');
   });
 });

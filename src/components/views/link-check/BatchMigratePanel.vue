@@ -100,7 +100,7 @@ function handleStartClick() {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  padding: var(--space-lg-xl) 0 var(--space-lg-xl) var(--space-xl);
-  gap: var(--space-md-lg);
+  padding: var(--space-lg-xl) var(--space-xl) 0;
+  gap: var(--space-md);
 }
 </style>

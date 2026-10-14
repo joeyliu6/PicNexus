@@ -25,7 +25,7 @@ const badgeText = computed(() => healthLabels[props.healthStatus] ?? '已配置'
 const isDisabled = computed(() => props.healthStatus === 'error');
 const errorTooltip = computed(() => isDisabled.value ? '图床异常，请先检查配置' : undefined);
 const backedUpLine = computed(() =>
-  props.backedUpCount > 0 ? `${formatNumber(props.backedUpCount)} 张已在该图床，无需迁移` : undefined,
+  props.backedUpCount > 0 ? `${formatNumber(props.backedUpCount)} 张已经存在这里，不用再补` : undefined,
 );
 const cardTooltip = computed(() => {
   const lines = [
@@ -33,7 +33,7 @@ const cardTooltip = computed(() => {
     // 盖住，这里是看完整 profile 名的唯一入口；放得下时卡片本身已经显示了，不重复。
     mayTruncateServiceName(props.displayName) ? props.displayName : undefined,
     errorTooltip.value,
-    props.noSourceSelected ? '请先选择来源' : undefined,
+    props.noSourceSelected ? '没选来源图床' : undefined,
     backedUpLine.value,
   ].filter((line): line is string => Boolean(line));
   return lines.length > 0 ? lines.join('\n') : undefined;
@@ -41,7 +41,7 @@ const cardTooltip = computed(() => {
 const cardAriaLabel = computed(() => {
   const parts = [
     props.displayName,
-    props.noSourceSelected ? '请先选择来源' : `${formatNumber(props.pendingCount)} 张待备份`,
+    props.noSourceSelected ? '没选来源图床' : `${formatNumber(props.pendingCount)} 张待备份`,
     backedUpLine.value,
   ].filter((part): part is string => Boolean(part));
   if (errorTooltip.value) parts.splice(1, 0, errorTooltip.value);
@@ -92,7 +92,7 @@ function handleClick() {
       <template v-if="noSourceSelected">
         <span class="target-count">
           <span class="target-count-num">—</span>
-          <span class="target-count-unit">请先选择来源</span>
+          <span class="target-count-unit">没选来源图床</span>
         </span>
       </template>
       <template v-else-if="isDisabled">
@@ -101,7 +101,7 @@ function handleClick() {
       <template v-else-if="pendingCount === 0 && !isRefiltering">
         <span class="target-count target-count--summary">
           <i class="pi pi-check-circle target-done-icon" aria-hidden="true" />
-          <span class="target-count-unit">已全部有备份</span>
+          <span class="target-count-unit">都已经存过了</span>
         </span>
       </template>
       <template v-else>

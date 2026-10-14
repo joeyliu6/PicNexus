@@ -1,16 +1,17 @@
 <script setup lang="ts">
 /**
- * 批量迁移 · 统一条目行（单行链接检测风格）
+ * 补充备份 · 一行 = 一张图（与链接检测的行同一个样子）
  *
- * 布局：[6px 圆点] [缩略图] [filename 省略号] [spacer] [existing chips » target chips] [重试按钮 · 仅失败+done]
- * - 圆点颜色：pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄
- * - 错误信息改为悬停红点的 tooltip（useErrorPresentation 已提供）
- * - 复制 URL 入口下沉到可点击的服务徽章，单条重试用缩小版 24px 图标按钮
+ * 布局：[缩略图] [文件名 / ● 一句白话状态] [spacer] [已在的图床 » 目标图床] [重试 · 仅失败 + 完成后]
+ * - 白话状态：等待中 / 上传中… / 已复制到 X / 没成功 · 原因 / 本来就有 / 没来得及处理；完整原因在悬停提示
+ * - 圆点颜色：等待灰 / 进行中蓝 / 成功绿 / 失败红 / 跳过黄
+ * - 复制链接入口在可点击的图床徽章上
  */
 import { computed } from 'vue';
 import { makeCopyBadgeKey } from '@/composables/useCopyBadgeFeedback';
 import { errorTooltipText } from '@/components/views/link-check/migrate/composables/useErrorPresentation';
 import { getServiceDisplayName } from '@/constants/serviceNames';
+import { joinCjk, listServiceNames } from '@/utils/cjkSpacing';
 import MigrateServiceChip from './MigrateServiceChip.vue';
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import type { MigrateRowItem } from './migrateRowTypes';
@@ -101,10 +102,45 @@ const failedTooltip = computed(() => {
   if (!isFailed.value) return '';
   return errorTooltipText(props.item);
 });
+const SKIP_TEXT: Record<NonNullable<MigrateRowItem['skipReason']>, string> = {
+  'already-there': '目标图床上本来就有',
+  'not-attempted': '没来得及处理',
+  'not-needed': '已经不需要补了',
+  deleted: '处理前这条记录被删除了',
+};
+
 const skippedTooltip = computed(() => {
   if (props.item.status !== 'skipped') return undefined;
-  return props.item.error || '已在目标图床，已跳过';
+  return props.item.error || SKIP_TEXT[props.item.skipReason ?? 'already-there'];
 });
+
+const nameOf = (sid: string) => getServiceDisplayName(sid) || sid;
+
+/** 行上那句白话：这张图现在怎么样了 */
+const statusLine = computed(() => {
+  switch (props.item.status) {
+    case 'pending': return '等待中';
+    case 'downloading': return '下载中…';
+    case 'converting': return '转换格式…';
+    case 'uploading': return '上传中…';
+    case 'skipped': return props.item.error && props.item.skipReason !== 'already-there'
+      ? props.item.error
+      : SKIP_TEXT[props.item.skipReason ?? 'already-there'];
+    case 'failed': return props.item.error ? `没成功 · ${props.item.error}` : '没成功';
+    case 'success': {
+      const done = targetChips.value.filter(t => t.variant === 'new').map(t => nameOf(t.serviceId));
+      const failed = targetChips.value.filter(t => t.variant === 'failed').map(t => nameOf(t.serviceId));
+      if (done.length === 0) return '已完成';
+      const copied = joinCjk('已复制到', listServiceNames(done));
+      return failed.length > 0 ? joinCjk(copied, '，', listServiceNames(failed), '没成功') : copied;
+    }
+    default: return '';
+  }
+});
+
+const statusTooltip = computed(() => (isFailed.value && failedTooltip.value
+  ? { value: failedTooltip.value, autoHide: false }
+  : skippedTooltip.value));
 
 /** 圆点颜色：沿用链接检测 statusDotColor 的 CSS 变量模式 */
 const dotColor = computed(() => {
@@ -168,13 +204,6 @@ function chipCopyKey(serviceId: string): string {
       'mi-row--retrying': retrying,
     }"
   >
-    <!-- 6px 状态圆点 -->
-    <span
-      class="mi-dot"
-      :style="{ background: dotColor }"
-      v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : skippedTooltip"
-    />
-
     <div class="mi-thumb">
       <ThumbnailImage
         :srcs="thumbSrcs"
@@ -188,8 +217,13 @@ function chipCopyKey(serviceId: string): string {
       </ThumbnailImage>
     </div>
 
-    <!-- 文件名 -->
-    <span class="mi-row__name">{{ item.fileName }}</span>
+    <div class="mi-row__main">
+      <span class="mi-row__name">{{ item.fileName }}</span>
+      <span class="mi-row__status" v-tooltip.top="statusTooltip">
+        <span class="mi-dot" :style="{ background: dotColor }" aria-hidden="true" />
+        <span class="mi-row__status-text">{{ statusLine }}</span>
+      </span>
+    </div>
 
     <span class="mi-row__spacer" />
 
@@ -253,8 +287,8 @@ function chipCopyKey(serviceId: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-sm-md);
-  padding: 0 var(--space-sm) 0 var(--space-md);
-  height: 52px;
+  padding: var(--space-xs) var(--space-sm);
+  min-height: 56px;
 
   /* 父容器 .focus-list 是 flex column，子项默认 flex-shrink:1 会被压缩，固定高度失效 */
   flex-shrink: 0;
@@ -266,8 +300,8 @@ function chipCopyKey(serviceId: string): string {
 
 /* ── 缩略图（与链接检测 / 文档修复同尺寸） ── */
 .mi-thumb {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   border-radius: var(--radius-sm-md);
   overflow: hidden;
@@ -303,7 +337,15 @@ function chipCopyKey(serviceId: string): string {
   flex-shrink: 0;
 }
 
-/* ── 文件名 ── */
+/* ── 文件名 + 白话状态 ── */
+.mi-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
 .mi-row__name {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -311,11 +353,25 @@ function chipCopyKey(serviceId: string): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex-shrink: 1;
-  min-width: 0;
 }
 
-.mi-row__spacer { flex: 1; }
+.mi-row__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.mi-row__status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mi-row__spacer { flex: 0 0 var(--space-xs); }
 
 /* ── 服务流向 ── */
 .mi-row__services {

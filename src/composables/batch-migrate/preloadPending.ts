@@ -9,8 +9,8 @@
  * 只保留 id 不保留完整 HistoryItem：处理阶段按 chunk 再经 getItemsByIds 拉取，
  * 避免 25k+ 条历史场景下 HistoryItem.results 数组常驻内存（峰值几百 MB）。
  *
- * 加载期间 allItemStatuses 持续增长，UI 的「全部」计数会从 100 → N 递增，
- * 配合 MigrateStatusFilterChips 的 total 提示显示「已加载 / 总数」。
+ * 加载期间 allItemStatuses 持续增长，列表「全部」的计数会从 100 → N 递增；
+ * 结论卡的进度分母用 migrateStats.totalCount，不受加载进度影响。
  */
 import { triggerRef } from 'vue';
 import type { Ref, ShallowRef } from 'vue';

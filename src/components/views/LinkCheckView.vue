@@ -207,8 +207,8 @@ onDeactivated(onViewDeactivated);
         文档修复
       </button>
       <button class="lc-tab" :class="{ active: activeTab === 'migrate' }" @click="activeTab = 'migrate'">
-        <i class="pi pi-arrow-right-arrow-left"></i>
-        批量迁移
+        <i class="pi pi-clone"></i>
+        补充备份
       </button>
     </div>
 
