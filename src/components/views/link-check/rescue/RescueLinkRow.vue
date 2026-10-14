@@ -21,6 +21,8 @@ const props = defineProps<{
   result: CheckLinkResult | undefined;
   selectedBackup: MdBackupLink | undefined;
   backupCount: number;
+  /** 已经点过修复、这一行却仍是可修复态：它所在的文件没写成功 */
+  repairFailed?: boolean;
   thumbSrcs: string[];
   confirmedHttpHosts?: ReadonlySet<string>;
 }>();
@@ -69,8 +71,16 @@ const backupName = computed(() => (props.selectedBackup ? getServiceDisplayName(
     </span>
 
     <div class="mr-fix">
+      <span
+        v-if="repairFailed"
+        class="mr-fix-failed"
+        v-tooltip.top="'这个文件没能写入，内容保持原样；重新扫描后可以再试'"
+      >
+        <i class="pi pi-times-circle" aria-hidden="true"></i>
+        没改成
+      </span>
       <button
-        v-if="status === 'rescuable' && selectedBackup"
+        v-else-if="status === 'rescuable' && selectedBackup"
         type="button"
         class="mr-backup-chip"
         :aria-label="`替换为 ${backupName}，点击更换`"
@@ -303,6 +313,16 @@ const backupName = computed(() => (props.selectedBackup ? getServiceDisplayName(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mr-fix-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--error);
+  cursor: help;
 }
 
 .mr-no-backup {

@@ -253,8 +253,10 @@ describe('Markdown rescue P1 components', () => {
     expect(afterRows[0].get('.status-pill').text()).toBe('已修复');
     expect(afterRows[0].get('.mr-fixed-to').text()).toContain('已换成 GitHub');
     expect(after.text()).toContain('已修复 1 处');
-    // b.md 没被修好（不在 healedFiles）：仍是可修复态，不能被说成已修复
+    // b.md 没被修好（不在 healedFiles）：不能被说成已修复，也不能再摆出「→ 图床」让人以为还没修
     expect(afterRows[1].find('.mr-fixed-to').exists()).toBe(false);
+    expect(afterRows[1].find('.mr-backup-chip').exists()).toBe(false);
+    expect(afterRows[1].get('.mr-fix-failed').text()).toContain('没改成');
   });
 
   it('RescueBrokenGroups shows the AppError message when open_path fails, not [object Object]', async () => {

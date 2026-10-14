@@ -191,7 +191,10 @@ const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修�
       <Transition name="fade">
         <div v-if="phase === 'done'" class="wk-header">
           <div class="wk-title-group">
-            <i class="pi pi-check-circle wk-done-icon" />
+            <i
+              class="pi wk-done-icon"
+              :class="failedRepairFileCount > 0 ? 'pi-exclamation-triangle wk-done-icon--partial' : 'pi-check-circle'"
+            />
             <span class="wk-title">{{ failedRepairFileCount > 0 ? '修复部分完成' : '修复完成' }}</span>
             <span v-if="repairReceipt" class="wk-subtitle">
               共修复 {{ repairReceipt.linksFixed }} 处，撤销可恢复原文件
@@ -342,6 +345,7 @@ const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修�
 .wk-title { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-main); white-space: nowrap; }
 .wk-subtitle { font-size: var(--text-sm); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .wk-done-icon { font-size: var(--text-lg-xl); color: var(--success); }
+.wk-done-icon--partial { color: var(--warning); }
 .wk-actions { display: flex; gap: var(--space-sm); flex-shrink: 0; }
 
 .wk-body {

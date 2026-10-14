@@ -235,6 +235,7 @@ defineExpose({
             :result="row.link.checkResult"
             :selected-backup="selectedBackupOf(row.link)"
             :backup-count="validBackups(row.link).length"
+            :repair-failed="isRepaired && row.status === 'rescuable'"
             :thumb-srcs="thumbSrcsOf(row.link)"
             :confirmed-http-hosts="confirmedHttpHosts"
             @choose-backup="openChooser($event, row.link)"
