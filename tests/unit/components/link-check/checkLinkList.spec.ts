@@ -234,5 +234,17 @@ describe('CheckLinkList', () => {
     await wrapper.setProps({ visibleRows: [row], filteredRows: [row] });
     expect(wrapper.get('.recheck-btn').classes()).toContain('spinning');
   });
+
+  it('已有选中项时每行都进入多选外观（露出勾选圈）', () => {
+    const a = createLinkCheckRow({ historyId: 'hist-1', serviceId: 'jd' });
+    const b = createLinkCheckRow({ historyId: 'hist-2', serviceId: 'jd' });
+    const none = mountList({ rows: [a, b] });
+    expect(none.findAll('.link-row.selection-active')).toHaveLength(0);
+
+    const some = mountList({ rows: [a, b], selectedIds: new Set(['hist-1|jd']) });
+    expect(some.findAll('.link-row.selection-active')).toHaveLength(2);
+    expect(some.findAll('.link-row.row-selected')).toHaveLength(1);
+    expect(some.findAll('.thumb-check')).toHaveLength(2);
+  });
 });
 

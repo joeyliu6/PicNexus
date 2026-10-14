@@ -98,6 +98,7 @@ const emit = defineEmits<{
         :recheck-loading="!!row.recheckLoading"
         :recheck-fading="!!row.recheckBadgeFading"
         :selected="selectedIds.has(rowKey(row))"
+        :selection-active="selectedIds.size > 0"
         :disabled="isChecking || isActionLocked"
         :copied="copiedKey === `link-check:${rowKey(row)}`"
         :fading="!suppressListMotion && !!row.fadingOut"

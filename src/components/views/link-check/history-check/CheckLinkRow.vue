@@ -20,6 +20,8 @@ const props = defineProps<{
   recheckLoading: boolean;
   recheckFading: boolean;
   selected: boolean;
+  /** 列表里已有选中项：此时每行都露出勾选圈，提示「点行即可加选」 */
+  selectionActive: boolean;
   disabled: boolean;
   copied: boolean;
   fading: boolean;
@@ -48,6 +50,7 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
     class="link-row"
     :class="{
       'row-selected': selected,
+      'selection-active': selectionActive,
       'fading-out': fading,
       'leaving-unchecked': leaving,
     }"
@@ -64,6 +67,7 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
           <i class="pi pi-image row-thumb-placeholder" aria-hidden="true"></i>
         </template>
       </ThumbnailImage>
+      <span class="thumb-check" aria-hidden="true"><i class="pi pi-check"></i></span>
     </div>
 
     <div class="row-main">
@@ -167,6 +171,7 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
 
 /* 缩略图 */
 .row-thumb {
+  position: relative;
   width: 40px;
   height: 40px;
   flex-shrink: 0;
@@ -183,6 +188,42 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* 勾选圈：悬停或已在多选时出现在缩略图角上，选中后填满（同「照片」的多选手感） */
+.thumb-check {
+  position: absolute;
+  top: var(--space-2xs);
+  left: var(--space-2xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 与其他勾选圈一致 */
+  border: 1.5px solid var(--photo-overlay-border);
+  background: var(--bg-overlay-checkbox);
+  color: transparent;
+  opacity: 0;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
+}
+
+.thumb-check .pi {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+}
+
+.link-row:hover .thumb-check,
+.link-row.selection-active .thumb-check,
+.link-row.row-selected .thumb-check {
+  opacity: 1;
+}
+
+.link-row.row-selected .thumb-check {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-on-primary);
 }
 
 .row-thumb-placeholder {
