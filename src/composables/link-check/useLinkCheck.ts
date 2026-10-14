@@ -936,6 +936,7 @@ export function useLinkCheckManager() {
       if (target.recheckLoading || target.recheckResult) continue;
       const { history_id: _hid, service_id: _sid, ...result } = itemResult;
       target.checkResult = result;
+      target.checkedAt = now;
       target.recentlyCompletedAt = now;
       target.uncheckedLeavingAt = undefined;
       rowsInHold.add(target);
@@ -995,7 +996,7 @@ export function useLinkCheckManager() {
       // Case B：整行淡出 → 提交最终状态 → filteredRows 重算，行消失
       if (!updateRow(row, (t) => { t.fadingOut = true; })) return;
       await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.ROW_FADE));
-      updateRow(row, (t) => { t.checkResult = result; t.recheckResult = undefined; t.fadingOut = false; });
+      updateRow(row, (t) => { t.checkResult = result; t.checkedAt = Date.now(); t.recheckResult = undefined; t.fadingOut = false; });
     } else {
       // Case A：徽章淡出 → 左侧状态更新，行留在列表
       if (!updateRow(row, (t) => { t.recheckBadgeFading = true; })) return;
@@ -1003,6 +1004,7 @@ export function useLinkCheckManager() {
       updateRow(row, (t) => {
         t.pinnedSortWeight = SEVERITY[t.checkResult?.error_type ?? 'success'] ?? 5; // 锁定排序位置
         t.checkResult = result;
+        t.checkedAt = Date.now();
         t.recheckResult = undefined;
         t.recheckBadgeFading = false;
       });

@@ -533,6 +533,43 @@ describe('useLinkCheckManager.checkSubset', () => {
     expect(m.progress.value?.current_url).toBe('current');
   });
 
+  it('检测途中逐条到达的结果带上检查时间（结论卡的「N 天前检查」要用）', async () => {
+    const m = await freshManager();
+    let progressHandler: ((event: { payload: any }) => void) | undefined;
+    listenMock.mockImplementationOnce(async (_event, handler) => {
+      progressHandler = handler as (event: { payload: any }) => void;
+      return vi.fn();
+    });
+    vi.spyOn(Date, 'now').mockReturnValue(4242);
+
+    m.checkRows.value = [makeRow({ historyId: 'h1', serviceId: 'r2' })];
+    // 行索引只在整表替换的入口重建（真实流程走 loadHistoryRows）；这里直接赋值，借一次空删除让它重建
+    m.removeRowsByKeys([{ historyId: 'none', serviceId: 'none' }]);
+    const row = m.checkRows.value[0];
+    const itemResult = {
+      link: row.url, history_id: 'h1', service_id: 'r2',
+      is_valid: true, status_code: 200, error_type: 'success' as const, browser_might_work: false,
+    };
+    let checkedAtMidway: number | undefined;
+    invokeMock.mockImplementationOnce(async (_command, payload) => {
+      const batchId = (payload as { request: { batch_id: string } }).request.batch_id;
+      progressHandler?.({
+        payload: { batch_id: batchId, checked: 1, total: 1, current_url: row.url, recent_results: [itemResult] },
+      });
+      checkedAtMidway = row.checkedAt;
+      return {
+        batch_id: batchId, results: [itemResult],
+        total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+      };
+    });
+
+    await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+
+    expect(checkedAtMidway).toBe(4242);
+    expect(m.checkRows.value[0].checkedAt).toBe(4242);
+    vi.mocked(Date.now).mockRestore();
+  });
+
   it('[BUG 回归] 非当前 batch_id 的最终结果不会写入 UI/DB', async () => {
     const m = await freshManager();
     m.checkRows.value = [

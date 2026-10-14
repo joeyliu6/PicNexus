@@ -34,6 +34,24 @@ describe('exportCsv', () => {
     expect(lines[0]).toContain('响应时间（ms）');
   });
 
+  it('检测时间取这条结果查出来的时间；没有就留空', () => {
+    const checked: LinkCheckRow = {
+      historyId: 'h1', serviceId: 'r2', fileName: 'a.jpg',
+      url: 'https://r2.example.com/a.jpg', rawUrl: 'https://r2.example.com/a.jpg',
+      checkResult: { link: 'https://r2.example.com/a.jpg', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false },
+      checkedAt: new Date(2026, 9, 14, 8, 5, 9).getTime(),
+    };
+    const unchecked: LinkCheckRow = {
+      historyId: 'h2', serviceId: 'r2', fileName: 'b.jpg',
+      url: 'https://r2.example.com/b.jpg', rawUrl: 'https://r2.example.com/b.jpg',
+    };
+
+    const [, first, second] = exportCsv([checked, unchecked]).split('\n');
+
+    expect(first.endsWith(',2026-10-14 08:05:09')).toBe(true);
+    expect(second.endsWith(',')).toBe(true);
+  });
+
   it('有效链接状态为"有效"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',

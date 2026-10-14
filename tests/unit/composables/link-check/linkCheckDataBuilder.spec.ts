@@ -203,6 +203,28 @@ describe('restoreCheckStatus', () => {
     expect(rows[0].checkResult!.response_time).toBe(50);
   });
 
+  it('恢复检查时间：结论卡的「N 天前检查」要用', () => {
+    const items: HistoryItem[] = [{
+      id: 'h1',
+      timestamp: 0,
+      localFileName: 'x.jpg',
+      primaryService: 'r2',
+      generatedLink: '',
+      results: [],
+      linkCheckStatus: {
+        r2: { isValid: true, lastCheckTime: 1234, statusCode: 200, errorType: 'success' },
+      },
+    }];
+    const rows: LinkCheckRow[] = [{
+      historyId: 'h1', serviceId: 'r2', url: 'https://r2.example.com/x.jpg',
+      rawUrl: 'https://r2.example.com/x.jpg', fileName: 'x.jpg',
+    }];
+
+    restoreCheckStatus(rows, items);
+
+    expect(rows[0].checkedAt).toBe(1234);
+  });
+
   it("errorType 'pending' 转换为 'network'", () => {
     const items: HistoryItem[] = [{
       id: 'h1',
@@ -255,6 +277,24 @@ describe('applyResultsToRows', () => {
     applyResultsToRows(rows, results);
     expect(rows[0].checkResult).toBeDefined();
     expect(rows[0].checkResult!.is_valid).toBe(true);
+  });
+
+  it('写入结果时记下检查时间', () => {
+    const rows: LinkCheckRow[] = [{
+      historyId: 'h1', serviceId: 'r2',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'img.jpg',
+    }];
+    const results = [{
+      link: 'https://r2.example.com/img.jpg',
+      history_id: 'h1',
+      service_id: 'r2',
+      is_valid: true,
+      error_type: 'success' as const,
+      browser_might_work: false,
+    }];
+
+    applyResultsToRows(rows, results, 5678);
+    expect(rows[0].checkedAt).toBe(5678);
   });
 
   it('serviceId 不匹配时不设置 checkResult', () => {

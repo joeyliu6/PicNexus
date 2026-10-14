@@ -3,6 +3,7 @@
 import type { HistoryItem } from '@/config/types';
 import { historyDB } from '@/services/database';
 import { createLogger } from '@/utils/logger';
+import { formatTimestampFull } from '@/utils/formatters';
 import type {
   BatchCheckResult,
   CheckLinkResult,
@@ -181,7 +182,7 @@ function statusLabel(r: CheckLinkResult | undefined): string {
  *
  * - UTF-8 BOM 前缀：Windows Excel 不会乱码（项目中文优先，必须加）
  * - 字段全部走 csvEscape：防止文件名/URL 里的引号、逗号、换行打乱列
- * - 检测时间字段：取本条 checkResult 上的实际时间（如有），否则置空，不再用导出当下时间
+ * - 检测时间字段：取这条结果查出来的时间（`checkedAt`），没有就置空，不用导出当下的时间冒充
  * - 单行重检过就导出重检结果：与界面口径一致（`statusDotColor` / `errorLabel` /
  *   `errorTooltip` 都是 `recheckResult ?? checkResult`）。否则用户点了重检、看到
  *   状态变了，导出的却还是旧状态，会以为导出坏了。
@@ -203,7 +204,7 @@ export function exportCsv(rows: LinkCheckRow[]): string {
       csvEscape(statusLabel(r)),
       r?.status_code != null ? String(r.status_code) : '',
       r?.response_time != null ? String(r.response_time) : '',
-      '', // 检测时间：当前 row 数据结构未携带 lastCheckTime，留空避免与导出当下时间混淆
+      row.checkedAt ? formatTimestampFull(new Date(row.checkedAt)) : '',
     ].join(',');
   });
 

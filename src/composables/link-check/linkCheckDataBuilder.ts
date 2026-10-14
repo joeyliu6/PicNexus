@@ -101,16 +101,24 @@ export function restoreCheckStatus(rows: LinkCheckRow[], items: HistoryItem[]): 
       // 防盗链命中必须从持久化字段恢复，否则微博/B站等会从「可疑」错落成「失效」
       browser_might_work: saved.browserMightWork === true,
     };
+    // 0 是遗留的 'pending' 记录，没有真实检查时间
+    if (saved.lastCheckTime > 0) row.checkedAt = saved.lastCheckTime;
   }
 }
 
-export function applyResultsToRows(rows: LinkCheckRow[], results: BatchCheckResult['results']): void {
+export function applyResultsToRows(
+  rows: LinkCheckRow[],
+  results: BatchCheckResult['results'],
+  now: number = Date.now(),
+): void {
   const rowMap = new Map(rows.map((row) => [linkCheckRowKey(row), row]));
 
   for (const itemResult of results) {
     const key = resultRowKey(itemResult);
     if (!key) continue;
     const row = rowMap.get(key);
-    if (row) row.checkResult = itemResult as CheckLinkResult;
+    if (!row) continue;
+    row.checkResult = itemResult as CheckLinkResult;
+    row.checkedAt = now;
   }
 }

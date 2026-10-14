@@ -97,6 +97,8 @@ export interface LinkCheckRow {
   /** 部分图床生成缩略图要用（如微博 pid） */
   fileKey?: string;
   checkResult?: CheckLinkResult;
+  /** checkResult 是什么时候查出来的（毫秒时间戳）；结论卡的「N 天前检查」取全部行里最新的一个 */
+  checkedAt?: number;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;
   recheckBadgeFading?: boolean;

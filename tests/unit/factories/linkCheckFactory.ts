@@ -60,6 +60,7 @@ export function createLinkCheckRow(overrides: Partial<LinkCheckRow> = {}): LinkC
     isPrimary: overrides.isPrimary,
     fileKey: overrides.fileKey,
     checkResult: overrides.checkResult,
+    checkedAt: overrides.checkedAt,
     recheckResult: overrides.recheckResult,
     recheckLoading: overrides.recheckLoading,
     recheckBadgeFading: overrides.recheckBadgeFading,
