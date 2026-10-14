@@ -28,7 +28,7 @@ describe('migrate report export', () => {
 
     expect(csv).toContain('部分成功');
     expect(csv).toContain('部分图床失败');
-    expect(csv).toContain('部分成功: 1');
+    expect(csv).toContain('# 成功 1 · 本来就有 0 · 失败 0 · 部分成功 1');
   });
 
   it('TXT 单独列出部分成功项目', () => {
@@ -58,5 +58,27 @@ describe('migrate report export', () => {
 
     expect(csv).toContain('"a.png",失败,上传失败,"GitHub · bad token"');
     expect(csv).not.toContain('部分图床失败');
+  });
+
+  it('跳过的按原因说：本来就有 / 没处理，不把停止后没轮到的说成「已在目标图床」', () => {
+    const result = makeResult();
+    result.successCount = 0;
+    result.skippedCount = 2;
+    result.partialFailures = [];
+    result.itemsSnapshot = [
+      { historyId: 'h1', fileName: 'had.png', status: 'skipped', skipReason: 'already-there', serviceResults: {} },
+      { historyId: 'h2', fileName: 'late.png', status: 'skipped', skipReason: 'not-attempted', serviceResults: {} },
+    ];
+
+    const txt = buildTxtReport(result);
+    expect(txt.split('\n')[0]).toBe('PicNexus · 补充备份报告');
+    expect(txt).toContain('成功 0 · 本来就有 1 · 没处理 1 · 失败 0');
+    expect(txt).toContain('[本来就有 1]');
+    expect(txt).toContain('[没处理 1]');
+    expect(txt).not.toContain('无需迁移');
+
+    const csv = buildCsvReport(result);
+    expect(csv).toContain('"had.png",本来就有,,');
+    expect(csv).toContain('"late.png",没处理,,');
   });
 });
