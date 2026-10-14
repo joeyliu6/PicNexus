@@ -1,6 +1,6 @@
 # 链接检测流程（深度展开）
 
-> 链接检测的深层机制图解：服务感知请求、并发控制、单条重检动画、智能策略决策。
+> 链接检测的深层机制图解：服务感知请求、并发控制、单条重检、按图片归类与结论卡。
 > 基础检测主流程见 [auxiliary-flows.md 图 11](./auxiliary-flows.md#图-11链接检测流程)，本文档是其深度展开。
 
 ---
@@ -126,7 +126,7 @@ flowchart TD
 | `error_type` | `"redirect"` | 界面显示「跳转」、tooltip 解释「浏览器会自动跟随」、CSV 导出写「跳转」 |
 | `browser_might_work` | `true` | 让**所有按排除法写的**筛选/计数（`!is_valid && ≠timeout && ≠suspicious && !browser_might_work` 才算失效）自动把它排除出「失效」 |
 
-> ⚠️ 新增按 `error_type` **逐个点名**的分支时（CSV `statusLabel`、界面白话标签 `statusWord` 这类逐个点名的函数），漏点名 `redirect` 就会悄悄退回「失效」。按排除法写的地方（`useCheckFilter` / `useCheckStats` / Rust 汇总统计）靠 `browser_might_work` 自动归位，不用改。
+> ⚠️ 新增按 `error_type` **逐个点名**的分支时（CSV `statusLabel`、界面白话标签 `statusWord` 这类逐个点名的函数），漏点名 `redirect` 就会悄悄退回「失效」。按排除法写的地方（`imageHealth.linkVerdict` / Rust 汇总统计）靠 `browser_might_work` 自动归位，不用改。
 >
 > tooltip 里 `redirect` 必须判在 `browser_might_work` **之前**：两者都为 true，落到通用分支会输出「防盗链限制 (301)」，把用户引去查根本不存在的防盗链设置。
 
@@ -151,68 +151,27 @@ flowchart TD
 
 ---
 
-## 图 2：单条重检动画状态机
+## 图 2：单条重检
 
-展示 `recheckSingle` 中从用户点击到行状态最终更新的完整时序。排查「重检后行闪烁」「行莫名消失」「徽章不消失」时查看。
+行上的「重试」或「⋯ → 重新检查」把这张图的每一份链接各查一次（`LinkCheckView.handleRecheckImage` → 每行 `recheckSingle`）。排查「重检后行闪一下就没了」「转圈不停」时查看。
 
-> **关键源文件**：`src/composables/link-check/useLinkCheck.ts`（`recheckSingle`、`wouldLeaveFilter`、`updateRow`）
+> **关键源文件**：`src/composables/link-check/useLinkCheck.ts`（`recheckSingle`、`showRecheckResult`、`updateRow`）
 
 ```mermaid
 flowchart TD
-    A["用户点击重检按钮"] --> B{recheckLoading<br/>或 recheckResult<br/>已存在?}
+    A["点「重试」/「重新检查」"] --> B{这一行已在重检?<br/>recheckLoading / recheckResult}
     B -- 是 --> B1["跳过（防并发）"]
-    B -- 否 --> C["recheckLoading = true<br/>按钮显示转圈"]
-
-    C --> D["并行执行"]
-    D --> D1["invoke('check_image_link')<br/>Rust 检测单链接"]
-    D --> D2["等待 400ms<br/>最低显示时间"]
-    D1 & D2 --> E["recheckLoading = false<br/>recheckResult = result<br/>显示结果徽章"]
-
-    E --> F["等待 1000ms<br/>用户读取结果"]
-
-    F --> G{"wouldLeaveFilter?<br/>结果是否使行离开当前筛选"}
-
-    %% Case A：行留在列表
-    G -- "否（Case A）" --> H["recheckBadgeFading = true<br/>徽章淡出动画"]
-    H --> H1["等待 300ms"]
-    H1 --> H2["pinnedSortWeight = SEVERITY<br/>锁定排序位置"]
-    H2 --> H3["checkResult = result<br/>清除 recheckResult / recheckBadgeFading<br/>左侧状态圆点更新"]
-
-    %% Case B：行淡出消失
-    G -- "是（Case B）" --> I["fadingOut = true<br/>整行淡出"]
-    I --> I1["等待 350ms"]
-    I1 --> I2["checkResult = result<br/>清除 recheckResult / fadingOut"]
-    I2 --> I3["filteredRows 重算<br/>行从列表中消失"]
-
-    %% 收尾
-    H3 --> J["异步更新 DB<br/>historyDB.update(linkCheckStatus)"]
-    I3 --> J
-
-    %% 错误分支
-    D1 -.-> ERR["catch: 清除所有动画标志<br/>recheckLoading/recheckResult<br/>recheckBadgeFading/fadingOut/pinnedSortWeight"]
-
-    style E fill:#e3f2fd,stroke:#1976d2
-    style H3 fill:#e8f5e9,stroke:#2e7d32
-    style I3 fill:#fff3e0,stroke:#ef6c00
-    style ERR fill:#ffebee,stroke:#c62828
+    B -- 否 --> C["recheckLoading = true<br/>行上显示「检查中」"]
+    C --> D["并行：invoke('check_image_link')<br/>+ 至少转 400ms"]
+    D --> E["结果写库（updateHistoryCheckStatus）"]
+    E --> F["recheckResult = 结果<br/>行上那句话按新结果说"]
+    F --> G["停 1200ms：用户看清它变成了什么"]
+    G --> H["checkResult = 结果，记 checkedAt<br/>清掉 recheckResult"]
+    H --> I["列表按已落定结果重新归类<br/>修好的图离开「有问题」"]
+    D -.-> ERR["出错：清掉 recheckLoading / recheckResult<br/>toast「检测失败」"]
 ```
 
-### wouldLeaveFilter 判定规则
-
-> 「疑似」列同时覆盖 `error_type = suspicious` 和 `browser_might_work = true`（防盗链 403 / 3xx 跳转）。
-
-| 当前筛选 | 结果为有效 | 结果为失效 | 结果为超时 | 结果为疑似 |
-|---------|-----------|-----------|-----------|-----------|
-| `all` | 留 | 留 | 留 | 留 |
-| `null` | 留 | 留 | 留 | 留 |
-| `problems` | **离开** | 留 | 留 | 留 |
-| `unchecked` | **离开** | **离开** | **离开** | **离开** |
-| `valid` | 留 | **离开** | **离开** | **离开** |
-| `invalid` | **离开** | 留 | **离开** | **离开** |
-| `timeout` | **离开** | **离开** | 留 | **离开** |
-| `suspicious` | **离开** | **离开** | **离开** | 留 |
-
-> 📌 **默认筛选是 `'problems'`（「有问题」= 失效 + 超时 + 可疑），不是 `null`**（`useCheckFilter.ts` 的 `ref<StatusFilter>('problems')`）。`null` 在 `wouldLeaveFilter` 里走的是「什么都不离开」的早退分支，实际界面上进不到这个状态。「失效 / 超时 / 可疑」子筛选只在存在两类以上问题时才显示（`CheckFilterBar` 的 `showProblemBreakdown`），只有一类时它与「有问题」完全重合。
+**为什么要停 1200ms 再落定**：列表的归类、排序、计数都只看已落定的 `checkResult`（`imageKind` 默认口径），行上显示用最新结果（`describeImage` 用 `recheckResult ?? checkResult`）。停的这一下里行待在原位显示新状态；直接落定的话，修好的图会在用户眼前瞬间消失，看不出发生了什么。
 
 ---
 
@@ -298,42 +257,25 @@ flowchart TD
 
 - **Rust 端**：每个任务完成后将 `BatchCheckItemResult` 推入 `pending_results` 缓冲（Mutex<Vec>）；触发节流广播时 `std::mem::take` 整批 drain 出来塞入 payload。事件频率仍由 `PROGRESS_EMIT_EVERY_N`（默认 10）控制，单次 IPC 数量不增加。
 - **前端端**：`useLinkCheck` 在 `link-check://progress` 回调里调用 `applyRecentResults`，按 `${url}::${historyId}` 用 `rowIndexMap` 做 O(1) 定位，对命中行 mutate `checkResult` 后通过 `createRafScheduler()` 把"换数组引用"动作（`checkRows.value = checkRows.value.slice()`）合并到下一帧执行——同帧多次 mutation 只触发一次重渲染，跨过 `HistoryCheckPanel` 的 prop 边界唤醒下游 computed。
-- **行级过渡（hold-with-fade）**：每条 mutation 同时打 `recentlyCompletedAt = Date.now()` 时间戳，并加入 `rowsInHold` Set。`liveFilter` 在「未检测」tab 内特别保留 `recentlyCompletedAt !== undefined` 的行，让用户能看到"灰点变绿/红"的状态变化。一个 250ms 间隔的 sweep interval 扫过 `rowsInHold`，到 `HOLD_MS=2000` 后清零时间戳→liveFilter 自然把它过滤掉→`<TransitionGroup name="row-list">` 走 leave 动画淡出（`opacity` 300ms + `position:absolute` 让下方行平滑上移）。目标 tab（valid/invalid 等）没有 hold 概念，新结果命中 matchesStatusFilter 立即出现。
-- **取消时立即归位**：`cancelCheck` 调 `clearAllHolds()` 把所有 recentlyCompletedAt 清零，残留过渡态行 ≤ 一帧内全部归位，不再拖 2s。
-- **Vue 3 同值跳过陷阱（历史教训）**：早期实现用 `lockedFilteredRows` 在检测期间冻结整个 filteredRows；Vue 3 的 `refreshComputed` 在 `hasChanged(newValue, oldValue)` 返回 false 时**不会**bump dep version，下游 visibleRows 收不到通知，即使 filteredRows 被标脏也不会重算——表现为"行级状态不更新，翻页才看到"。改为 hold-with-fade 后，每次 liveFilter 都返回 `.slice().sort()` 的新数组引用，hasChanged 总是 true，下游正常传播。
-
-**为什么这样设计反馈节奏**：
-- 2000ms hold 让用户"看清"新状态（dot 变色 + 徽章），低于这个时长容易看不清就消失了
-- 300ms 淡出对应 `--duration-medium`，与项目其他过渡保持一致
-- 高速场景（59/s）下，同一帧的多条 mutation 共享几乎相同的时间戳→2000ms 后整批同步淡出，节奏稳定不会一闪一闪
-- 不引入额外动画噱头，符合"动效只在传递空间关系时才加"的设计原则——TransitionGroup 的 leave + move 传递的是"行进出列表"的空间关系，是必要的
+- **列表跟得上但不乱跳**：列表把行按图片分组（`useImageList` → `groupRowsByImage`）。检查进行中进度很密，分组最多每 300ms 重建一次（`CHECKING_REBUILD_MS`），检查一结束立即重建；检查中也不按类重排，结果进来行原地变色，结束后才分段排好。
 - **flush 时机**：检测结束（成功/取消/出错）走 `finalizeCheck`，里面调 `scheduler.flush()` 强制落地最后一批 mutation，避免还在 rAF 队列时就被 `applyResultsToRows` 的全量重赋值覆盖。
 
-**为什么这样设计**：单纯 `triggerRef(checkRows)` 在同作用域有效，但跨组件 prop 时 Vue 走引用比对——同一数组引用 = prop 没变 = 子组件不重渲染。早期实现踩过这个坑（chips/行徽章僵死），改成数组引用替换 + rAF 节流后才真正实时。冻结可见集合是为了"用户体验稳定"——失效行检测变绿时不应该当场消失，让用户能持续看到刚才在看的那批数据。
+**为什么换数组引用**：单纯 `triggerRef(checkRows)` 在同作用域有效，但跨组件 prop 时 Vue 走引用比对——同一数组引用 = prop 没变 = 子组件不重渲染。早期实现踩过这个坑（行状态僵死），改成数组引用替换 + rAF 节流后才真正实时。
 
 **与批量迁移共享实现**：[utils/rafScheduler.ts](../../src/utils/rafScheduler.ts) 提供通用 `createRafScheduler`，被 [composables/batch-migrate/rafThrottle.ts](../../src/composables/batch-migrate/rafThrottle.ts) 与 [composables/link-check/useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts) 共用。任何"高频 shallowRef 数组刷新 → 跨 prop 边界生效"的场景都应优先复用。
 
-### 进度反馈：速率 / ETA / 失速预警
+### 进度反馈：还要多久 / 是否卡住
 
-逐行 dot 变色由于 per-host 限速 + 锁定快照排序，单看一屏感知不到检测在动；底栏聚合的数字反馈才是"系统是否活跃"的可靠锚点。
+几万条链接里逐行变色看不出整体在动，结论卡的副标题直接回答「还要多久」。
 
-> **关键源文件**：[useCheckStats.ts](../../src/composables/link-check/useCheckStats.ts)（`progressRate` / `etaSeconds` / `stalled` / `rateLabel` / `etaLabel`）、[CheckBottomBar.vue](../../src/components/views/link-check/history-check/CheckBottomBar.vue)
+> **关键源文件**：[useProgressPace.ts](../../src/composables/link-check/useProgressPace.ts)、[checkVerdict.ts](../../src/composables/link-check/checkVerdict.ts)
 
 | 字段 | 含义 | 计算方式 |
 |------|------|---------|
-| `progressRate` | 平滑后的检测速率（条/秒） | EWMA：每次 progress 事件取 `(Δchecked / Δt)` 做指数加权移动平均，α=0.3 |
-| `etaSeconds` | 预估剩余秒数 | `(total - checked) / progressRate`；速率为 0 时为 null |
-| `stalled` | 失速标志 | 每次 progress 事件重置 `setTimeout(10s)`，超时未刷新则置 true |
-| `rateLabel` | 紧凑文字 | `>=10` 显示整数 `18/s`；`<10` 显示一位小数 `2.4/s` |
-| `etaLabel` | 紧凑文字 | `<60s` → `45s`；`<60min` → `26m`；否则 `1h26m` |
+| `etaSeconds` | 预计还要多少秒 | 每次进度事件取 `Δchecked / Δt` 做指数平滑（α=0.3），`剩余条数 / 速度`；第一条事件只建基线 |
+| `stalled` | 卡在慢图床 | 每次有新结果就重置 10s 计时器，到时未刷新即为 true |
 
-**为什么聚合到底栏而非逐行**：
-1. 用户的核心问题是"系统在干活吗 + 还要多久"，速率和 ETA 一并直答
-2. 速率为 0 比"逐行 spinner 不动" 更早暴露真正的卡死（HTTP 全部 timeout 等场景）
-3. 失速预警把 per-host 限流的副作用显式化——"在等微博等慢域名"，消除卡死焦虑
-4. 不引入动画噱头，符合"动效只在传递空间关系时才加"的设计原则
-
-**何时清零**：检测结束/取消时 `progress.value = null`（[useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts)），watcher 重置所有派生状态；下次开检从首次 progress 事件重新建立基线。
+卡住时副标题写「有些图床响应慢，正在等它们」而不报时间——那个数按之前的速度算，此刻不可信。检查结束（`progress = null`）一切归零，下次从头算。
 
 ### 批次归属：三个守卫，三种处置
 
@@ -347,7 +289,7 @@ flowchart TD
 | 2 | `historyClearedGeneration` 变了 | 检测途中历史被清空 | ❌ | ❌ **整批作废** |
 | 3 | `latestStartedBatchSession` 变了 | 取消后又开了新批次 | ❌ | ✅ **仍然落库** |
 
-**为什么第 3 条要落库**（这是修掉的 bug）：用户在几万条的全量检测中途点「取消」，toast 引导他"可通过「仅未检测」继续剩余部分"；他照做，新批次开跑、会话号变了。而旧批次的**在途 HTTP 请求几十秒后才陆续返回**（reqwest 不可中断，见图 3 说明）。旧实现在这里把结果连同落库一起跳过——旧批次已经完成的几千条真实检测结果全部丢弃，重启后回退成「未检测」，用户白等一轮。
+**为什么第 3 条要落库**（这是修掉的 bug）：用户在几万条的全量检测中途点「停止」，接着点结论卡上的「检查剩下的 N 个」，新批次开跑、会话号变了。而旧批次的**在途 HTTP 请求几十秒后才陆续返回**（reqwest 不可中断，见图 3 说明）。旧实现在这里把结果连同落库一起跳过——旧批次已经完成的几千条真实检测结果全部丢弃，重启后回退成「未检测」，用户白等一轮。
 
 这些结果早就通过 `applyRecentResults` 就地 patch 进 UI 了，所以补写入库不是制造分叉，反而是把 UI 与 DB 拉回一致。
 
@@ -377,58 +319,47 @@ flowchart TD
 
 ---
 
-## 图 4：智能检测策略决策
+## 图 4：结论卡决策
 
-展示 `useCheckStrategy` 中检测主按钮的动态决策逻辑。开发者修改检测入口 UI 时参考。
+页面顶部的结论卡先一句话说清现在怎么样，再给这一刻最该点的按钮。文案与按钮全部由纯函数 `buildCheckVerdict` 决定，组件只负责摆出来。修改结论卡前看这里。
 
-> **关键源文件**：`src/composables/link-check/useCheckStrategy.ts`（`smartCheckLabel`、`resolveSmartCheck`）
->
-> **设计决策**：检测主按钮是唯一入口，没有"检测全部 / 重检问题链接"等下拉备选。要重检某一类问题链接，先点顶部 chip 切到对应筛选 tab，主按钮的 label 与 action 会自动适配。
+> **关键源文件**：`src/composables/link-check/checkVerdict.ts`（`buildCheckVerdict`）、`src/components/views/link-check/HistoryCheckPanel.vue`
 
 ```mermaid
 flowchart TD
-    A["计算 smartCheckLabel"] --> B{statusFilter 在<br/>CONTEXT_AWARE_FILTERS 中?<br/>invalid/suspicious/timeout/unchecked}
-    B -- 是 --> B2{对应 count > 0?}
-    B2 -- 是 --> C["返回对应标签<br/>如「重检失效链接 (42)」"]
-    B2 -- "否（count=0 回退）" --> D
-    B -- 否 --> D{unchecked === total?}
-    D -- 是 --> E["「开始检测」"]
-    D -- 否 --> F{unchecked > 0?}
-    F -- 是 --> G["「继续检测」"]
-    F -- 否 --> H{problems > 0?}
-    H -- 是 --> I["「重检问题链接 (N)」"]
-    H -- 否 --> J["「重新检测全部」"]
-
-    K["resolveSmartCheck 决定实际 action"] --> L{statusFilter 在<br/>CONTEXT_AWARE_FILTERS?}
-    L -- 是 --> L1["check-subset + filter"]
-    L -- 否 --> M{unchecked === total?}
-    M -- 是 --> M1["check-all"]
-    M -- 否 --> N{unchecked > 0?}
-    N -- 是 --> N1["check-subset + unchecked"]
-    N -- 否 --> O{problems > 0?}
-    O -- 是 --> O1["check-subset + problems"]
-    O -- 否 --> O2["check-all"]
-
-    style C fill:#e3f2fd,stroke:#1976d2
-    style E fill:#e8f5e9,stroke:#2e7d32
-    style G fill:#e3f2fd,stroke:#1976d2
-    style I fill:#fff3e0,stroke:#ef6c00
-    style J fill:#e0e0e0,stroke:#616161
+    A[buildCheckVerdict] --> R{正在检查?}
+    R -- 是 --> R1["「正在检查链接 5 / 17」<br/>副标题：目前几张打不开 + 预计还要多久<br/>按钮：暂停 / 停止"]
+    R -- 否 --> E{一张图都没有?}
+    E -- 是 --> E1["大号卡：还没有图片可以检查"]
+    E -- 否 --> L{第二批记录还在读<br/>且暂无打不开的?}
+    L -- 是 --> L1["正在读取检查记录…<br/>（数字不全，不下结论）"]
+    L -- 否 --> N{一条都没检查过?}
+    N -- 是 --> N1["大号卡：检查图片还能不能打开<br/>按钮：开始检查"]
+    N -- 否 --> P{有打不开的?<br/>fixable + broken}
+    P -- 是 --> P1["「N 张图片打不开」<br/>主按钮：有可修的 → 把 N 张改用备份<br/>否则 → 检查剩下的 / 重新检查"]
+    P -- 否 --> O["全部正常 / 没有打不开的图片 / 已检查的都能打开<br/>主按钮：有没查的 → 检查剩下的 N 个"]
+    O --> H{提示}
+    H --> H1["有失效备份 → 去文档修复（换掉文档里的旧链接）"]
+    H --> H2["部分图只有一份 → 去补充备份<br/>（全部都只有一份的人不提醒）"]
 ```
+
+- 副标题只放和决定有关的：几张能修、几张没救、什么时候查的（`checkedAt` 取最新）。受限的在列表里有自己一段，没查完的由按钮「检查剩下的 N 个」交代。
+- 读取失败且一行都没有时，面板换成「没读出检查记录 + 重试」，不说「还没有图片」。
+- 卡片的「⋯」：只重查有问题的、导出当前列表（CSV）、清理找不回的图片（每一份都是 404 / 410 才算）。
 
 ---
 
-## 图 5：按行精准删除（per-link 删除语义）
+## 图 5：精准移除链接（per-link 删除语义）
 
-展示链接检测视图中"删除一行"的数据层行为。链接检测列表的逻辑单位是**单个图床链接**（一张图如果上传到 N 个图床，会展开成 N 行），因此删除操作必须精准到 `(historyId, serviceId)`，而不是整条 `HistoryItem`。
+展示链接检测里「移除记录」的数据层行为。列表按图片一行，但一张图在 N 个图床各有一份链接；移除只针对打不开的那几份，所以必须精准到 `(historyId, serviceId)`，而不是整条 `HistoryItem`——能打开的那份要留着。
 
-> **关键源文件**：`src/composables/history/useHistoryResultOps.ts`（`deleteHistoryResult`、`bulkDeleteHistoryResults`、`stripServiceFromItem`）；`src/composables/link-check/useLinkCheck.ts`（`removeRowsByKeys`、`setFadingOutRows`）；`src/components/views/LinkCheckView.vue`（`handleDeleteRow`、`deleteRowsByTargets`）
+> **关键源文件**：`src/composables/history/useHistoryResultOps.ts`（`deleteHistoryResult`、`bulkDeleteHistoryResults`、`stripServiceFromItem`）；`src/composables/link-check/useLinkCheck.ts`（`removeRowsByKeys`、`setFadingOutRows`）；`src/components/views/LinkCheckView.vue`（`handleRemoveLinks`、`removeCopy`）
 
 ```mermaid
 flowchart TD
-    A["点单行垃圾桶 / 批量删除"] --> B["收集 (historyId, serviceId) 列表"]
+    A["行「⋯」移除失效的链接<br/>/ 卡片「⋯」清理找不回的图片"] --> B["收集 (historyId, serviceId) 列表"]
     B --> C["按 historyId 分组<br/>同一张图多行合并为一次 update"]
-    C --> D["弹确认<br/>单行：区分『最后一个图床』文案<br/>批量：『可能整条被移除』"]
+    C --> D["弹确认（文案按图片说：<br/>「从记录中移除这张图？」/「清理 N 张找不回的图片？」）"]
     D -- 取消 --> Z1["退出，不改数据"]
     D -- 确认 --> E["读 HistoryItem"]
     E --> F["stripServiceFromItem<br/>从 results[] 过滤掉该 serviceId"]
@@ -470,21 +401,32 @@ flowchart TD
 
 ### 为什么不共用 `deleteHistoryItem`
 
-`deleteHistoryItem` / `bulkDeleteRecords` 的语义是"删图"（Timeline、收藏、历史视图的逻辑单位是图片）。链接检测的逻辑单位是**链接**——同一张图的多个图床链接应当可以独立删除，共用会导致"删一个失效微博链接，顺手把有效的 GitHub 链接也删了"这种体验事故。
+`deleteHistoryItem` / `bulkDeleteRecords` 的语义是"删图"（Timeline、收藏、历史视图）。链接检测虽然按图片列出，移除的却是**打不开的那几份链接**——共用会导致"移除失效的微博链接，顺手把能用的 GitHub 链接也删了"这种体验事故。只有每一份都打不开时，记录才随最后一份链接一起消失。
 
 ---
 
-## 行上的后果提示与「改用备份」
+## 按图片归类与「改用备份」
 
-同一张图在每个图床各占一行。行本身只说这一份的状态；**这一份坏了、图还在不在**由 `rowCopies.ts` 按同 `historyId` 的其他行回答，只对当前页可见行求值：
+一张图在每个图床各有一份链接，列表按图片一行。这一行的状态由它的几份链接推出来（`imageHealth.ts`，纯函数）：
 
-| 情况 | 行上显示 | 函数 |
-|------|---------|------|
-| 坏了，其他图床有能用的 | 绿色「其他图床正常」/「N 个备份可用」 | `copyHint` |
-| 坏了，只有这一份 / 备份也都坏了 | 红色「无备份」/「备份也失效」 | `copyHint` |
-| 坏的正好是**主链接**，且有能用的备份 | 再多一个「改用 X」按钮 | `promotableBackup` |
+| 单条链接 `linkVerdict` | 判据 |
+|------|------|
+| `ok` | `is_valid` |
+| `limited` | 防盗链（`browser_might_work`）或 3xx 跳转：浏览器多半能看 |
+| `gone` | 图床回了 HTTP 4xx 且是 404 / 410。**必须是 `http_4xx`**：超时之类结果带着旧状态码不算，清理记录靠它把关 |
+| `failing` | 其余打不开的：超时、连不上、图床故障、限流、拒绝访问、返回的不像图片…… |
 
-「改用 X」走 `historyDB.switchPrimaryService` 切主图床 → `setPrimaryService` 同步行上的「主链接」标记 → `emitHistoryUpdated`。不弹确认（随时可改回、什么都不删），但要发 toast：被提为主的那一行通常不在「有问题」筛选里，用户看不到标签挪过去。防盗链 / 跳转不算坏，不提示也不建议换。
+| 一张图 `imageKind` | 条件 | 行上的按钮 |
+|------|------|------|
+| 能改用备份 `fixable` | 主链接 gone / failing，有备份 ok | 「改用 X」（按记录顺序第一份能用的） |
+| 打不开 `broken` | 主链接 gone / failing，没有能用的备份 | failing 给「重试」；gone 不给 |
+| 可能受限 `limited` | 主链接 limited | 无（不建议换） |
+| 备份失效 `backup-broken` | 主链接 ok，有备份 gone / failing | 无（⋯ 里可移除失效的那份） |
+| 正常 / 没检查 | — | 无 |
+
+- 行上那句白话（「微博上的图已不存在，京东上的备份能用」）由 `describeImage` 生成；中英文交界补空格只看片段交界，不改用户自己起的图床名。悬停详情逐份列出状态。
+- 「改用 X」与「把 N 张改用备份」都走 `LinkCheckView.handlePromote`：逐张 `historyDB.switchPrimaryService`，一张失败不拖累其余，成功的一次性 `setPrimaryServices` 同步到行并 `emitHistoryUpdated`，toast 如实报改成了几张。不弹确认：随时能改回，什么都不删。
+- 「有问题」视图收 fixable / broken / limited / backup-broken；没问题时列表自动显示全部，用户手动切过就照用户的。
 
 ---
 
@@ -492,9 +434,9 @@ flowchart TD
 
 | 现象 | 可能原因 | 对照位置 |
 |------|---------|---------|
-| 检测完成后计数变了、但列表里那几行还停在「未检测」 | `useLinkCheck` 是**原地改**行对象再换数组引用；`CheckLinkRow` 若只拿 `row` 引用就不会重渲染。会变的字段（结果、重检中、徽章淡出）必须由 `CheckLinkList` 读出来单独传 | `CheckLinkRow.vue` 顶部注释、`checkLinkList.spec.ts` 回归用例 |
+| 检查中列表比结论卡慢一拍 | 设计行为：检查进行中分组最多每 300ms 重建一次（`CHECKING_REBUILD_MS`），检查结束立即重建。若结束后仍不更新，查 `useImageList` 是否还在监听 `checkRows` 的引用变化 | `useImageList.ts` |
 | **所有链接都显示「网络不通」，浏览器却能正常打开** | 本机 TUN + fake-ip 把域名解析进 `198.18.0.0/15`，旧版 DNS 预检误判为内网。已由 `validate_probe_url` 去掉预检修复；若复现说明改动被回退 | 图 1 策略校验节点 + 出站策略校验小节 |
-| **公网** `http://` 链接一律失效 | 公网明文 HTTP 判 `error_type = blocked`（设计行为，tooltip 写明原因）；局域网字面量与已确认主机名 2026-08-21 起已放行 | error_type 取值表 / 出站策略校验小节 |
+| **公网** `http://` 链接一律失效 | 公网明文 HTTP 判 `error_type = blocked`（设计行为，tooltip 写明原因）；局域网字面量与已确认主机名放行 | error_type 取值表 / 出站策略校验小节 |
 | 局域网 / NAS 图床（`http://192.168.x.x` 或已确认的 `http://nas.local`）被判「策略拦截」 | 不应出现——字面量走 `AllowPrivate` 判据；主机名要查两件事：该 profile 是否已过 fake-ip 逃生舱确认、5 个 invoke 调用点是否漏传 `confirmed_http_hosts` 名单 | 出站策略校验小节的 scheme 矩阵 |
 | 「从 URL 下载图片」开代理时全失败 | `validate_fetch_url` 的 DNS 裁决未豁免 fake-ip 池。**注意 v4 和 v6 两个池都要豁免**——只盖 v4 时，双栈机器上 AAAA 记录仍是 `fdfe:dcba:9876::/64`，循环里照样被拒 | `dns_answer_is_forbidden` / `is_fake_ip_pool_ip` |
 | WebDAV 报「该地址属于代理软件的 fake-ip 地址池」 | 设计行为，不是故障：本机 TUN 让域名解析失真，程序无法确认它是不是局域网。改填 NAS 内网 IP 或改用 HTTPS | `url_policy.rs` / docs/TODO.md |
@@ -506,16 +448,14 @@ flowchart TD
 | S3 系图床（R2/COS/OSS/七牛/自定义 S3）整批标「疑似」 | 对象缺 Content-Type，以 `application/octet-stream` 落桶。**这是上传侧的问题，不是检测误报**；旧对象升级不自愈，补救见 [s3-legacy-content-type.md](../reference/troubleshooting/s3-legacy-content-type.md) | error_type 取值表 |
 | 返回 `Image/JPEG` 之类大小写变体的图被标「疑似」 | 不应出现——判据已走 `content_type_mime()` 归一化。若复现，检查是不是新加了绕过该函数、直接比原串的分支 | error_type 取值表下的归一化告警 |
 | GitHub CDN 链接误报失效 | 前端未传 `fallback_url`（rawUrl 缺失） | 图 1 Fallback 分支 |
-| 重检后行莫名消失 | `wouldLeaveFilter=true`，行淡出到其他 Tab | 图 2 Case B 分支 |
-| 重检徽章闪烁太快看不到 | 400ms 最低转圈 + 1000ms 读取时间 = 1.4s，检查是否被跳过 | 图 2 时间等待节点 |
-| 重检后排序位置跳动 | `pinnedSortWeight` 未设置或被清除 | 图 2 Case A `pinnedSortWeight` |
 | 检测速度异常慢 | 单域名大量链接被 `per_host_limit=3` 限制 | 图 3 域名信号量 |
 | 取消后仍有检测在跑 | 已进入 HTTP 请求的任务无法中断，只能等其自然结束 | 图 3 三次取消检查 |
 | 暂停后进度仍在少量增长 | HTTP 在途任务不可中断，pause 只阻塞尚未进入 HTTP 的任务 | 图 3 暂停 / 恢复：轮询语义 |
 | 暂停后点取消无响应 | 不应出现——cancel 优先 pause；若确实发生检查 `await_resume_or_cancel` 返回值 | 图 3 暂停 / 恢复：轮询语义 |
-| 按钮显示「继续检测」但想全量检测 | 等未检测全部跑完，按钮会自动变成「重新检测全部」；想跳过这步，可点顶部「失效/可疑」chip 切 tab 直接重检该类 | 图 4 主按钮决策 |
-| 删除一条链接后同图其他行也消失了 | 逻辑退化成按 `historyId` 删整条——检查是否调的 `deleteHistoryResult` 而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
-| 批量删除后部分行没消失，弹了「部分删除失败」 | 设计行为：处理失败的记录（DB 未改动）保留在列表里供重试，只有真落库的行会淡出 | 图 5 批量部分失败不变量 / `deleteRowsByTargets` |
+| 卡片按钮是「检查剩下的 N 个」，想全部重查 | 有没查过的链接时主按钮先查剩下的；全部重查点旁边的「全部重新检查」 | 图 4 结论卡决策 |
+| 重检后那一行停了一下才挪走 | 设计行为：结果先在原位停 1200ms 再落定，落定后才按新结果归类 | 图 2 |
+| 移除失效的链接后，同一张图能打开的链接也没了 | 逻辑退化成按 `historyId` 删整条——检查走的是 `bulkDeleteHistoryResults`（按 `(historyId, serviceId)`）而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
+| 清理后部分图还在，弹了「部分删除失败」 | 设计行为：处理失败的记录（DB 未改动）保留在列表里供重试，只有真落库的行会淡出 | 图 5 批量部分失败不变量 / `LinkCheckView.handleRemoveLinks` |
 | 删主力图床后 Timeline 卡片缩略图没换 | `primaryService` 未切换或 `emitHistoryUpdated` 未发 | 图 5 补选主力 + 事件分流 |
 | 删完所有图床后历史里还有空壳 | `results[]` 归零兜底未触发，检查 `stripServiceFromItem` 返回值 | 图 5 结果归零分支 |
 | 别的页面删了图，检测页还显示（最多 5 分钟） | `history-deleted` 分支没接上，或 ids 读成了 `payload.ids`（正确是 `payload.data.ids`） | 跨窗口事件同步 |
