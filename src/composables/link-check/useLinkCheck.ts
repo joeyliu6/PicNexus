@@ -1084,11 +1084,16 @@ export function useLinkCheckManager() {
 
   /**
    * 主图床已在库里切换后，同步行上的「主链接」标记（不重新加载整表）
+   *
+   * 一次收一批（historyId → 新主图床）：「把 N 张改用备份」只遍历整表一遍。
+   * 动到的行换新对象，好让按行渲染的组件刷新；行序不变，行索引不用重建。
    */
-  function setPrimaryService(historyId: string, serviceId: string): void {
+  function setPrimaryServices(changes: ReadonlyMap<string, string>): void {
+    if (changes.size === 0) return;
     let changed = false;
     const rows = checkRows.value.map((row) => {
-      if (row.historyId !== historyId) return row;
+      const serviceId = changes.get(row.historyId);
+      if (serviceId === undefined) return row;
       const isPrimary = row.serviceId === serviceId;
       if (row.isPrimary === isPrimary) return row;
       changed = true;
@@ -1150,7 +1155,7 @@ export function useLinkCheckManager() {
     removeRowsByHistoryIds,
     removeRowsByKeys,
     setFadingOutRows,
-    setPrimaryService,
+    setPrimaryServices,
     onViewActivated,
     onViewDeactivated,
   };

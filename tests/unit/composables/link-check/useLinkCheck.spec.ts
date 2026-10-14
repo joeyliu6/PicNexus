@@ -281,19 +281,31 @@ describe('useLinkCheckManager.removeRowsByKeys', () => {
   });
 });
 
-describe('useLinkCheckManager.setPrimaryService', () => {
-  it('只挪同一条记录的「主链接」标记，换新对象以便单行组件刷新', async () => {
+describe('useLinkCheckManager.setPrimaryServices', () => {
+  it('一次挪好几张图的「主链接」标记；只换动到的行对象，没动的保持原样', async () => {
     const m = await freshManager();
     m.checkRows.value = [
       makeRow({ historyId: 'h1', serviceId: 'webdav:a', isPrimary: true }),
       makeRow({ historyId: 'h1', serviceId: 'jd', isPrimary: false }),
-      makeRow({ historyId: 'h2', serviceId: 'jd', isPrimary: true }),
+      makeRow({ historyId: 'h2', serviceId: 'weibo', isPrimary: true }),
+      makeRow({ historyId: 'h2', serviceId: 'jd', isPrimary: false }),
+      makeRow({ historyId: 'h3', serviceId: 'jd', isPrimary: true }),
     ];
     const before = m.checkRows.value;
-    m.setPrimaryService('h1', 'jd');
-    expect(m.checkRows.value.map((r) => r.isPrimary)).toEqual([false, true, true]);
+
+    m.setPrimaryServices(new Map([['h1', 'jd'], ['h2', 'jd']]));
+
+    expect(m.checkRows.value.map((r) => r.isPrimary)).toEqual([false, true, false, true, true]);
     expect(m.checkRows.value[0]).not.toBe(before[0]);
-    expect(m.checkRows.value[2]).toBe(before[2]);
+    expect(m.checkRows.value[4]).toBe(before[4]);
+  });
+
+  it('没有任何变化时不换数组引用（免得列表白白重建）', async () => {
+    const m = await freshManager();
+    m.checkRows.value = [makeRow({ historyId: 'h1', serviceId: 'jd', isPrimary: true })];
+    const before = m.checkRows.value;
+    m.setPrimaryServices(new Map([['h1', 'jd']]));
+    expect(m.checkRows.value).toBe(before);
   });
 });
 
