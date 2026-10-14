@@ -44,13 +44,11 @@ const RescueIdleZoneStub = {
 };
 
 const RescueBrokenGroupsStub = {
-  props: ['imageLinks', 'isRepaired', 'phase', 'scanStage', 'isCollecting', 'healedFiles', 'emptyTitle', 'emptyDesc'],
+  props: ['imageLinks', 'isRepaired', 'healedFiles'],
   template: `
     <section class="broken-groups-stub">
-      <span class="stub-phase">{{ phase }}</span>
-      <span class="stub-stage">{{ scanStage }}</span>
+      <span class="stub-repaired">{{ isRepaired }}</span>
       <span class="stub-count">{{ imageLinks.length }}</span>
-      <span class="stub-empty">{{ emptyTitle }}|{{ emptyDesc }}</span>
     </section>
   `,
 };
@@ -192,7 +190,7 @@ describe('MdRescueInline state rendering', () => {
     expect(manager.analyzeFile).not.toHaveBeenCalled();
   });
 
-  it('scanning 状态渲染坏链分组、底部扫描进度和取消动作', async () => {
+  it('检查中：卡片报进度，下面陆续列出打不开的图，「取消」停止检查', async () => {
     const manager = makeManager({
       phase: ref('scanning'),
       scanStage: ref('checking'),
@@ -204,14 +202,14 @@ describe('MdRescueInline state rendering', () => {
     const wrapper = mountInline();
 
     expect(wrapper.find('.broken-groups-stub').exists()).toBe(true);
-    expect(wrapper.get('.stub-stage').text()).toBe('checking');
-    expect(wrapper.text()).toContain('已检测 1 / 1 图片');
-    await wrapper.get('.bottom-actions .btn-ghost').trigger('click');
+    expect(wrapper.get('.summary-title').text()).toBe('正在检查图片 · 1 / 2');
+    expect(wrapper.get('.summary-progress').exists()).toBe(true);
+    await wrapper.get('.summary-btn--ghost').trigger('click');
 
     expect(manager.cancelScan).toHaveBeenCalled();
   });
 
-  it('fixing 状态渲染修复卡片、进度和取消修复动作', async () => {
+  it('修复中：卡片按文档报进度，「取消」停止修复', async () => {
     const manager = makeManager({
       phase: ref('fixing'),
       fixingProgress: ref({ current: 1, total: 2 }),
@@ -223,13 +221,13 @@ describe('MdRescueInline state rendering', () => {
     const wrapper = mountInline();
 
     expect(wrapper.find('.fixing-cards-stub').exists()).toBe(true);
-    expect(wrapper.text()).toContain('正在修复 1 / 2');
-    await wrapper.get('.btn-danger').trigger('click');
+    expect(wrapper.get('.summary-title').text()).toBe('正在修复 · 1 / 2 个文档');
+    await wrapper.get('.summary-btn--ghost').trigger('click');
 
     expect(manager.cancelFix).toHaveBeenCalled();
   });
 
-  it('done 状态显示修复完成、备份位置，并允许撤销和点「完成」回到首页', async () => {
+  it('修好了：卡片一句结论、写出备份位置；「撤销」「完成」都接上了', async () => {
     const manager = makeManager({
       phase: ref('done'),
       repairReceipt: ref({
@@ -246,19 +244,18 @@ describe('MdRescueInline state rendering', () => {
 
     const wrapper = mountInline();
 
-    expect(wrapper.text()).toContain('修复完成');
-    expect(wrapper.text()).toContain('共修复 2 处');
-    expect(wrapper.text()).toContain('原文件已备份至 .../.picnexus-backup/20260428_120000');
-    await wrapper.get('.wk-actions .button-stub').trigger('click');
-    const finish = wrapper.get('.bottom-actions .btn-primary');
-    expect(finish.text()).toContain('完成');
+    expect(wrapper.get('.summary-title').text()).toBe('已修复 0 张图片');
+    expect(wrapper.text()).toContain('原文件备份在 .../.picnexus-backup/20260428_120000');
+    await wrapper.get('.summary-btn--ghost').trigger('click');
+    const finish = wrapper.get('.summary-btn--primary');
+    expect(finish.text()).toBe('完成');
     await finish.trigger('click');
 
     expect(manager.undoReplace).toHaveBeenCalled();
     expect(manager.reset).toHaveBeenCalled();
   });
 
-  it('done 状态没有备份映射时禁用撤销按钮', () => {
+  it('修好了但没有备份映射：「撤销」灰着', () => {
     const manager = makeManager({
       phase: ref('done'),
       repairReceipt: ref({
@@ -274,10 +271,10 @@ describe('MdRescueInline state rendering', () => {
 
     const wrapper = mountInline();
 
-    expect(wrapper.get('.wk-actions .button-stub').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('.summary-btn--ghost').attributes('disabled')).toBeDefined();
   });
 
-  it('done 部分失败时显示部分完成且统计未完成链接', () => {
+  it('有文档没写进去：卡片如实说，并列出是哪几个文档', () => {
     const manager = makeManager({
       phase: ref('done'),
       repairReceipt: ref({
@@ -294,12 +291,13 @@ describe('MdRescueInline state rendering', () => {
 
     const wrapper = mountInline();
 
-    expect(wrapper.text()).toContain('修复部分完成');
-    expect(wrapper.text()).toContain('1 个文件没改成');
-    expect(wrapper.text()).toContain('2 处没改成');
+    expect(wrapper.get('.summary-title').text()).toBe('1 个文档没改成');
+    // 卡片上说人话，系统错误码留在悬停提示里
+    expect(wrapper.get('.summary-subtitle').text()).toBe('没有写入权限 · 改好的可以撤销');
+    expect(wrapper.text()).toContain('没改成的文档：.../docs/b.md');
   });
 
-  it('扫描结束立刻按首选顺序定好替换来源；「修复 N 处」不弹框直接修', async () => {
+  it('扫描结束立刻按首选顺序定好替换来源；「修复 N 张」不弹框直接修', async () => {
     const manager = makeManager({
       phase: ref('scanning'),
       scanStage: ref('checking'),
@@ -316,19 +314,17 @@ describe('MdRescueInline state rendering', () => {
     expect(manager.loadHostPreference).toHaveBeenCalled();
     expect(manager.applyDefaultBackups).toHaveBeenCalledWith(['mirror']);
 
-    const repair = wrapper.get('.bottom-actions .btn-primary');
-    expect(repair.text()).toContain('修复 1 处');
+    const repair = wrapper.get('.summary-btn--primary');
+    expect(repair.text()).toBe('修复 1 张');
     await repair.trigger('click');
     expect(manager.executeReplace).toHaveBeenCalledTimes(1);
   });
 
-  it('扫完没有问题时不摆「修复」按钮，只留「重新选择」', () => {
+  it('扫完没有问题：卡片说都能打开，只留「换一批文档」', () => {
     const manager = makeManager({ phase: ref('scanning'), scanStage: ref('complete') });
     rescueMocks.manager = manager;
     const wrapper = mountInline();
-    const buttons = wrapper.findAll('.bottom-actions button');
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0].text()).toContain('重新选择');
+    expect(wrapper.find('.summary-btn--primary').exists()).toBe(false);
+    expect(wrapper.get('.summary-btn--ghost').text()).toBe('换一批文档');
   });
 });
-

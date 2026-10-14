@@ -63,9 +63,8 @@ describe('useFlatBrokenRows', () => {
       }),
     ]);
     const isRepaired = ref(true);
-    const { flatBrokenLinks, rescuableChipLabel } = useFlatBrokenRows(links, isRepaired);
+    const { flatBrokenLinks } = useFlatBrokenRows(links, isRepaired);
     expect(flatBrokenLinks.value[0].status).toBe('replaced');
-    expect(rescuableChipLabel.value).toBe('已修复');
   });
 
   it('isRepaired 但文件未 healed 时不把 selectedBackup 误标为 replaced', () => {
@@ -79,48 +78,14 @@ describe('useFlatBrokenRows', () => {
     expect(flatBrokenLinks.value[0].status).toBe('rescuable');
   });
 
-  it('rescuableChipLabel 默认"可修复"', () => {
-    const { rescuableChipLabel } = useFlatBrokenRows(shallowRef([]), ref(false));
-    expect(rescuableChipLabel.value).toBe('可修复');
-  });
-
-  it('selectFilter 切换筛选并重置分页', () => {
-    const links = shallowRef<MdImageLinkWithFile[]>([
-      makeLink('a.md', 'u1', { backups: [{ url: 'b1', valid: true }] }),
-      makeLink('a.md', 'u2'),
-    ]);
-    const { filteredRows, activeFilter, selectFilter, displayRowLimit, loadMoreRows } =
-      useFlatBrokenRows(links, ref(false));
-
-    expect(activeFilter.value).toBe('all');
-    expect(filteredRows.value).toHaveLength(2);
-
-    selectFilter('manual');
-    expect(filteredRows.value).toHaveLength(1);
-    expect(filteredRows.value[0].status).toBe('manual');
-
-    selectFilter('rescuable');
-    expect(filteredRows.value[0].status).toBe('rescuable');
-
+  it('超过 200 行时分批显示，「显示更多」每次多放 200 行', () => {
+    const links = shallowRef<MdImageLinkWithFile[]>(
+      Array.from({ length: 300 }, (_, i) => makeLink(`file${i % 3}.md`, `u${i}`)),
+    );
+    const { displayRowLimit, loadMoreRows } = useFlatBrokenRows(links, ref(false));
+    expect(displayRowLimit.value).toBe(200);
     loadMoreRows();
-    expect(displayRowLimit.value).toBeGreaterThan(200);
-
-    // 相同 filter 再 select 无变化
-    const before = displayRowLimit.value;
-    selectFilter('rescuable');
-    expect(displayRowLimit.value).toBe(before);
-  });
-
-  it('firstOfFile 标记：同文件内仅第一行为 true', () => {
-    const links = shallowRef<MdImageLinkWithFile[]>([
-      makeLink('a.md', 'u1'),
-      makeLink('a.md', 'u2'),
-      makeLink('b.md', 'u3'),
-    ]);
-    const { filteredRows } = useFlatBrokenRows(links, ref(false));
-    expect(filteredRows.value[0].firstOfFile).toBe(true);
-    expect(filteredRows.value[1].firstOfFile).toBe(false);
-    expect(filteredRows.value[2].firstOfFile).toBe(true);
+    expect(displayRowLimit.value).toBe(400);
   });
 
   it('groupedRows 按 sourceFile 分组', () => {
@@ -139,8 +104,8 @@ describe('useFlatBrokenRows', () => {
     const links = shallowRef<MdImageLinkWithFile[]>(
       Array.from({ length: 300 }, (_, i) => makeLink(`file${i % 3}.md`, `u${i}`)),
     );
-    const { visibleGroupedRows, totalFilteredRowCount } = useFlatBrokenRows(links, ref(false));
-    expect(totalFilteredRowCount.value).toBe(300);
+    const { visibleGroupedRows, totalRowCount } = useFlatBrokenRows(links, ref(false));
+    expect(totalRowCount.value).toBe(300);
     const shown = visibleGroupedRows.value.reduce((sum, g) => sum + g.rows.length, 0);
     expect(shown).toBeLessThanOrEqual(200);
   });

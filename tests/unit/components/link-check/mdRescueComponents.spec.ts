@@ -129,7 +129,7 @@ describe('Markdown rescue P1 components', () => {
     lastRepairMocks.undoLastRepair.mockResolvedValue({ restored: 0, failed: 0, failedPairs: [] });
   });
 
-  it('RescueIdleZone emits empty-state entry actions and option toggles', async () => {
+  it('RescueIdleZone：选文档的三个入口；两个选项收在「选项」里，改过的会写在后面', async () => {
     const wrapper = mountWithDefaults(RescueIdleZone, {
       props: {
         isAnalyzing: false,
@@ -151,6 +151,11 @@ describe('Markdown rescue P1 components', () => {
     await wrapper.get('.idle-zone').trigger('click');
     await wrapper.get('.idle-secondary-link').trigger('click');
     await wrapper.get('.button-stub').trigger('click');
+
+    expect(wrapper.findAll('.checkbox-stub')).toHaveLength(0);
+    expect(wrapper.get('.options-toggle').text()).toBe('选项');
+
+    await wrapper.get('.options-toggle').trigger('click');
     await wrapper.findAll('.checkbox-stub')[0].setValue(false);
     await wrapper.findAll('.checkbox-stub')[1].setValue(true);
 
@@ -159,9 +164,12 @@ describe('Markdown rescue P1 components', () => {
     expect(wrapper.emitted('selectFolder')).toHaveLength(1);
     expect(wrapper.emitted('update:includeSubfolders')).toEqual([[false]]);
     expect(wrapper.emitted('update:includeCodeBlocks')).toEqual([[true]]);
+
+    await wrapper.setProps({ includeSubfolders: false, includeCodeBlocks: true });
+    expect(wrapper.get('.options-toggle').text()).toBe('选项 · 不含子文件夹、含代码块里的图片');
   });
 
-  it('RescueBrokenGroups renders scanning, grouped broken links, filters, collapse, and row actions', async () => {
+  it('RescueBrokenGroups：按文档分组列出打不开的图，能折叠，行和文档上的操作都接上了', async () => {
     const links = [
       mdLink({
         url: 'https://dead.example.com/rescuable.png',
@@ -177,36 +185,18 @@ describe('Markdown rescue P1 components', () => {
     ];
 
     const wrapper = mountWithDefaults(RescueBrokenGroups, {
-      props: {
-        imageLinks: links,
-        isRepaired: false,
-        phase: 'scanning',
-        scanStage: 'checking',
-        isCollecting: false,
-        healedFiles: new Set(),
-        emptyIcon: 'pi pi-search',
-        emptyTitle: 'empty',
-        emptyDesc: 'empty desc',
-      },
+      props: { imageLinks: links, isRepaired: false, healedFiles: new Set() },
     });
 
-    expect(wrapper.find('.mr-scan-spinner').exists()).toBe(true);
+    expect(wrapper.find('.mr-chip').exists()).toBe(false);
     expect(wrapper.findAll('.mr-row')).toHaveLength(2);
     expect(wrapper.findAll('.mr-group')).toHaveLength(2);
-
-    await wrapper.findAll('.mr-chip')[2].trigger('click');
-    await flushPromisesAndTicks();
-
-    expect(wrapper.findAll('.mr-row')).toHaveLength(1);
     expect(wrapper.find('.mr-no-backup').exists()).toBe(true);
 
-    await wrapper.get('.mr-group-header').trigger('click');
+    await wrapper.findAll('.mr-group-header')[1].trigger('click');
     await flushPromisesAndTicks();
+    expect(wrapper.findAll('.mr-row')).toHaveLength(1);
 
-    expect(wrapper.find('.mr-row').exists()).toBe(false);
-
-    await wrapper.findAll('.mr-chip')[0].trigger('click');
-    await flushPromisesAndTicks();
     await wrapper.findAll('.mr-row-icon-btn')[0].trigger('click');
 
     expect(getClipboardMocks().writeText).toHaveBeenCalledWith('https://dead.example.com/rescuable.png');
@@ -215,7 +205,7 @@ describe('Markdown rescue P1 components', () => {
     expect(getInvokeMock()).toHaveBeenCalledWith('open_path', { path: 'C:/docs' });
   });
 
-  it('RescueBrokenGroups 用白话说状态；修好的行显示「已修复 · 已换成 X」而不是原错误码', () => {
+  it('RescueBrokenGroups 用白话说状态；修好的行只说「已换成 X」，不再叠一个「已修复」', () => {
     const fixed = mdLink({
       url: 'https://dead.example.com/fixed.png',
       checkResult: result({ link: 'https://dead.example.com/fixed.png', status_code: 502, error_type: 'http_5xx' }),
@@ -228,31 +218,23 @@ describe('Markdown rescue P1 components', () => {
       sourceFileName: 'b.md',
       backupLinks: [validBackup('https://cdn.example.com/pending.png')],
     });
-    const baseProps = {
-      phase: 'done',
-      scanStage: 'complete',
-      isCollecting: false,
-      emptyIcon: 'pi pi-search',
-      emptyTitle: 'empty',
-      emptyDesc: 'empty desc',
-    };
-
     const before = mountWithDefaults(RescueBrokenGroups, {
-      props: { ...baseProps, imageLinks: [fixed, pending], isRepaired: false, healedFiles: new Set() },
+      props: { imageLinks: [fixed, pending], isRepaired: false, healedFiles: new Set() },
     });
     const beforeRows = before.findAll('.mr-row');
     expect(beforeRows[0].get('.status-pill').text()).toBe('图床故障');
     expect(beforeRows[0].get('.mr-backup-chip').text()).toContain('GitHub');
-    expect(before.text()).toContain('1 处失效');
+    expect(before.text()).toContain('1 张打不开');
     expect(before.text()).not.toContain('502');
 
     const after = mountWithDefaults(RescueBrokenGroups, {
-      props: { ...baseProps, imageLinks: [fixed, pending], isRepaired: true, healedFiles: new Set(['C:/docs/a.md']) },
+      props: { imageLinks: [fixed, pending], isRepaired: true, healedFiles: new Set(['C:/docs/a.md']) },
     });
     const afterRows = after.findAll('.mr-row');
-    expect(afterRows[0].get('.status-pill').text()).toBe('已修复');
+    expect(afterRows[0].get('.status-pill').text()).toBe('');
+    expect(afterRows[0].get('.status-pill').classes()).toContain('status-pill--placeholder');
     expect(afterRows[0].get('.mr-fixed-to').text()).toContain('已换成 GitHub');
-    expect(after.text()).toContain('已修复 1 处');
+    expect(after.text()).toContain('已修复 1 张');
     // b.md 没被修好（不在 healedFiles）：不能被说成已修复，也不能再摆出「→ 图床」让人以为还没修
     expect(afterRows[1].find('.mr-fixed-to').exists()).toBe(false);
     expect(afterRows[1].find('.mr-backup-chip').exists()).toBe(false);
@@ -270,13 +252,7 @@ describe('Markdown rescue P1 components', () => {
       props: {
         imageLinks: [mdLink({ url: 'https://dead.example.com/rescuable.png', backupLinks: [] })],
         isRepaired: false,
-        phase: 'done',
-        scanStage: 'idle',
-        isCollecting: false,
         healedFiles: new Set(),
-        emptyIcon: 'pi pi-search',
-        emptyTitle: 'empty',
-        emptyDesc: 'empty desc',
       },
     });
 

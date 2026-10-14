@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
@@ -35,6 +35,15 @@ let dropUnlisten: (() => void) | null = null;
 let isUnmounted = false;
 
 const { record: lastRepairRecord } = useLastRepair();
+
+/** 两个选项大多数人用不到，收起来；改过默认值就在「选项」后面写明，免得忘了 */
+const showOptions = ref(false);
+const optionsNote = computed(() => {
+  const parts: string[] = [];
+  if (!props.includeSubfolders) parts.push('不含子文件夹');
+  if (props.includeCodeBlocks) parts.push('含代码块里的图片');
+  return parts.join('、');
+});
 
 function handleZoneClick() {
   if (props.isAnalyzing || props.isChecking) return;
@@ -106,7 +115,22 @@ onDeactivated(() => { isViewActive.value = false; });
           </button>
         </div>
       </div>
-      <div class="option-row-group">
+      <div class="idle-footer">
+        <span class="scope-hint">
+          <i class="pi pi-shield" aria-hidden="true" />
+          只换 PicNexus 上传过的图片 · 修改前自动备份原文件，可以撤销
+        </span>
+        <button
+          type="button"
+          class="options-toggle"
+          :aria-expanded="showOptions"
+          @click.stop="showOptions = !showOptions"
+        >
+          选项<template v-if="optionsNote"> · {{ optionsNote }}</template>
+          <i class="pi" :class="showOptions ? 'pi-chevron-up' : 'pi-chevron-down'" aria-hidden="true" />
+        </button>
+      </div>
+      <div v-if="showOptions" class="option-row-group">
         <label class="subfolder-option-row" @click.stop>
           <Checkbox
             :model-value="includeSubfolders"
@@ -127,7 +151,6 @@ onDeactivated(() => { isViewActive.value = false; });
           />
           <span>包含代码块里的图片</span>
         </label>
-        <span class="scope-hint">只修复用 PicNexus 上传过的图片 · 修改前自动备份，可撤销</span>
       </div>
     </div>
 
@@ -150,7 +173,7 @@ onDeactivated(() => { isViewActive.value = false; });
   max-width: 850px;
   height: 100%;
   margin: 0 auto;
-  padding: var(--space-lg-xl) var(--space-lg-xl) var(--space-lg-xl) 0;
+  padding: 0 0 var(--space-lg-xl);
   overflow-y: auto;
 }
 
@@ -260,10 +283,41 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-secondary-link:disabled { opacity: 0.5; cursor: not-allowed; }
 .idle-secondary-link:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
+.idle-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-xs);
+}
+
+.options-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+  padding: var(--space-2xs) var(--space-xs);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.options-toggle:hover {
+  color: var(--text-main);
+}
+
+.options-toggle .pi {
+  font-size: var(--text-2xs);
+}
+
 .option-row-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-lg);
   padding: 0 var(--space-xs);
 }
@@ -284,7 +338,9 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .scope-hint {
-  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }

@@ -1,4 +1,4 @@
-// 失效链接行列表的展平、筛选、分组逻辑
+// 打不开的图：展平成行、按文档分组、分批显示
 // 抽离自 RescueBrokenGroups.vue，让组件主文件保持在 500 行硬门禁内
 
 import { ref, computed, type Ref } from 'vue';
@@ -6,7 +6,6 @@ import type { MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 
 export interface FlatRow {
   link: MdImageLinkWithFile;
-  firstOfFile: boolean;
   status: 'rescuable' | 'manual' | 'replaced';
 }
 
@@ -30,7 +29,6 @@ export function useFlatBrokenRows(
   isRepaired: Ref<boolean>,
   healedFiles?: Ref<Set<string>>,
 ) {
-  const activeFilter = ref<'all' | 'rescuable' | 'manual'>('all');
   const displayRowLimit = ref(ROW_DISPLAY_LIMIT);
 
   const flatBrokenData = computed(() => {
@@ -48,7 +46,7 @@ export function useFlatBrokenRows(
       else status = 'manual';
       if (status === 'manual') manual++;
       else rescuable++;
-      rows.push({ link: l, firstOfFile: false, status });
+      rows.push({ link: l, status });
     }
     return { rows, counts: { all: rows.length, rescuable, manual } };
   });
@@ -56,30 +54,9 @@ export function useFlatBrokenRows(
   const flatBrokenLinks = computed(() => flatBrokenData.value.rows);
   const filterCounts = computed(() => flatBrokenData.value.counts);
 
-  const filteredRows = computed<FlatRow[]>(() => {
-    const all = flatBrokenLinks.value;
-    const filter = activeFilter.value;
-    const result: FlatRow[] = [];
-    let prevFile = '';
-    for (let i = 0; i < all.length; i++) {
-      const r = all[i];
-      if (filter === 'rescuable' && r.status === 'manual') continue;
-      if (filter === 'manual' && r.status !== 'manual') continue;
-      result.push({
-        link: r.link,
-        status: r.status,
-        firstOfFile: r.link.sourceFile !== prevFile,
-      });
-      prevFile = r.link.sourceFile;
-    }
-    return result;
-  });
-
-  const rescuableChipLabel = computed(() => (isRepaired.value ? '已修复' : '可修复'));
-
   const groupedRows = computed<GroupedFile[]>(() => {
     const map = new Map<string, GroupedFile>();
-    for (const r of filteredRows.value) {
+    for (const r of flatBrokenLinks.value) {
       const key = r.link.sourceFile;
       let entry = map.get(key);
       if (!entry) {
@@ -96,12 +73,12 @@ export function useFlatBrokenRows(
     return Array.from(map.values());
   });
 
-  const totalFilteredRowCount = computed(() => filteredRows.value.length);
+  const totalRowCount = computed(() => flatBrokenLinks.value.length);
 
   const visibleGroupedRows = computed<GroupedFile[]>(() => {
     const limit = displayRowLimit.value;
     const all = groupedRows.value;
-    if (totalFilteredRowCount.value <= limit) return all;
+    if (totalRowCount.value <= limit) return all;
     const result: GroupedFile[] = [];
     let count = 0;
     for (const group of all) {
@@ -127,29 +104,19 @@ export function useFlatBrokenRows(
     collapsedGroups.value = next;
   }
 
-  function selectFilter(f: 'all' | 'rescuable' | 'manual'): void {
-    if (activeFilter.value === f) return;
-    activeFilter.value = f;
-    displayRowLimit.value = ROW_DISPLAY_LIMIT;
-  }
-
   function loadMoreRows(): void {
     displayRowLimit.value += ROW_DISPLAY_STEP;
   }
 
   return {
-    activeFilter,
     displayRowLimit,
     flatBrokenLinks,
     filterCounts,
-    filteredRows,
-    rescuableChipLabel,
     groupedRows,
     visibleGroupedRows,
-    totalFilteredRowCount,
+    totalRowCount,
     collapsedGroups,
     toggleGroupCollapse,
-    selectFilter,
     loadMoreRows,
   };
 }

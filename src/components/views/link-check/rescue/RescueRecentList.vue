@@ -52,11 +52,10 @@ function handleClearAll() {
 </script>
 
 <template>
-  <section class="recent-list" aria-label="最近打开">
+  <section v-if="visible.length > 0" class="recent-list" aria-label="最近打开">
     <div class="recent-list__header">
       <span class="recent-list__title">最近打开</span>
       <button
-        v-if="visible.length > 0"
         v-tooltip.top="'清空记录'"
         type="button"
         class="recent-list__clear"
@@ -67,7 +66,7 @@ function handleClearAll() {
         <i class="pi pi-trash" />
       </button>
     </div>
-    <ul v-if="visible.length > 0" class="recent-list__items">
+    <ul class="recent-list__items">
       <li v-for="entry in visible" :key="entry.path">
         <button
           type="button"

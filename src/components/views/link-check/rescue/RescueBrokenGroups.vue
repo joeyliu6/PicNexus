@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// 分组链接列表 + 筛选芯片 + 行操作
-// 从 MdRescueInline.vue 提取的最复杂 UI 区块
+// 按文档分组的打不开的图 + 行操作（换替换来源 / 复制 / 打开 / 定位文档）
+// 结论与数量由页面顶部的结论卡交代，这里只列清单，不再做筛选
 
 import { computed, ref, toRef } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { dirname } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
-import EmptyState from '@/components/common/EmptyState.vue';
 import { useToast } from '@/composables/useToast';
 import { useConfigManager } from '@/composables/useConfig';
 import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
@@ -27,13 +26,7 @@ const emit = defineEmits<{
 const props = defineProps<{
   imageLinks: MdImageLinkWithFile[];
   isRepaired: boolean;
-  phase: string;
-  scanStage: string;
-  isCollecting: boolean;
   healedFiles: Set<string>;
-  emptyIcon: string;
-  emptyTitle: string;
-  emptyDesc: string;
 }>();
 
 const toast = useToast();
@@ -41,32 +34,14 @@ const configManager = useConfigManager();
 
 // ---- 列表数据（展平/筛选/分组） ----
 const {
-  activeFilter,
   displayRowLimit,
-  flatBrokenLinks,
   filterCounts,
-  rescuableChipLabel,
-  groupedRows,
   visibleGroupedRows,
-  totalFilteredRowCount,
+  totalRowCount,
   collapsedGroups,
   toggleGroupCollapse,
-  selectFilter,
   loadMoreRows,
 } = useFlatBrokenRows(toRef(props, 'imageLinks'), toRef(props, 'isRepaired'), toRef(props, 'healedFiles'));
-
-// ---- 扫描状态指示器：收集 / 主检测 / 验证备用 / 取消中时显示，扫完即消失 ----
-const scanInProgress = computed(() =>
-  props.isCollecting
-  || (props.phase === 'scanning'
-    && ['checking', 'backups', 'cancelling'].includes(props.scanStage)),
-);
-
-// 无数据时 chip 的计数显示为 —，避免"全部 0/可修复 0/需手动 0"被误读为"全部扫完无问题"
-// 扫描进行中数字的"还会变"由持续 shimmer 扫光承担（见 .mr-chip-count--scanning）
-function chipCount(n: number): string | number {
-  return flatBrokenLinks.value.length === 0 ? '—' : n;
-}
 
 // ---- 行操作 ----
 
@@ -127,9 +102,9 @@ function thumbSrcsOf(link: MdImageLinkWithFile): string[] {
 }
 
 function groupCountLabel(group: GroupedFile): string {
-  if (!props.isRepaired) return `${group.rows.length} 处失效`;
+  if (!props.isRepaired) return `${group.rows.length} 张打不开`;
   const fixed = group.rows.filter((r) => r.status === 'replaced').length;
-  return fixed === group.rows.length ? `已修复 ${fixed} 处` : `已修复 ${fixed} / ${group.rows.length}`;
+  return fixed === group.rows.length ? `已修复 ${fixed} 张` : `已修复 ${fixed} / ${group.rows.length}`;
 }
 
 // ---- 换替换来源 ----
@@ -144,74 +119,10 @@ function openChooser(event: MouseEvent, link: MdImageLinkWithFile): void {
 function chooseBackup(link: MdImageLinkWithFile, url: string): void {
   link.selectedBackup = url;
 }
-
-// 暴露给父组件的数据（父组件底栏统计需要）
-defineExpose({
-  groupedRows,
-  flatBrokenLinks,
-  filterCounts,
-});
 </script>
 
 <template>
-  <!-- 顶部筛选芯片（占位显示，扫描一开始就稳定在顶部） -->
-  <!-- 扫完且没有问题时整条隐藏：三个计数全是「—」，留着只是噪音 -->
-  <div v-if="flatBrokenLinks.length > 0 || scanInProgress" class="mr-action-bar">
-    <div class="mr-chips">
-      <button class="mr-chip" :class="{ active: activeFilter === 'all' }" @click="selectFilter('all')">
-        <span>全部</span>
-        <span class="mr-chip-count">{{ chipCount(filterCounts.all) }}</span>
-      </button>
-      <button
-        class="mr-chip"
-        :class="{ active: activeFilter === 'rescuable', disabled: filterCounts.rescuable === 0 }"
-        :disabled="filterCounts.rescuable === 0"
-        @click="selectFilter('rescuable')"
-      >
-        <span>{{ rescuableChipLabel }}</span>
-        <span class="mr-chip-count">{{ chipCount(filterCounts.rescuable) }}</span>
-      </button>
-      <button
-        class="mr-chip"
-        :class="{ active: activeFilter === 'manual', disabled: filterCounts.manual === 0 }"
-        :disabled="filterCounts.manual === 0"
-        @click="selectFilter('manual')"
-      >
-        <span class="mr-dot mr-dot--amber" />
-        <span>需手动</span>
-        <span class="mr-chip-count">{{ chipCount(filterCounts.manual) }}</span>
-      </button>
-    </div>
-    <Transition name="fade">
-      <i
-        v-if="scanInProgress"
-        class="pi pi-spin pi-spinner mr-scan-spinner"
-        role="status"
-        aria-label="扫描进行中"
-        v-tooltip.left="'正在扫描...'"
-      />
-    </Transition>
-  </div>
-
-  <!-- 内容：空态 / 分组列表 / 筛选为空 -->
-  <Transition name="slide-up" mode="out-in">
-    <EmptyState
-      v-if="flatBrokenLinks.length === 0"
-      key="rescue-empty"
-      :icon="emptyIcon"
-      :title="emptyTitle"
-      :description="emptyDesc"
-    >
-      <template v-if="scanInProgress" #icon>
-        <div class="scan-dots" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </div>
-      </template>
-      <template v-else-if="scanStage === 'complete'" #icon>
-        <i class="pi pi-check-circle mr-empty-ok" aria-hidden="true" />
-      </template>
-    </EmptyState>
-    <div v-else-if="groupedRows.length > 0" key="groups" class="mr-groups">
+  <div class="mr-groups">
       <div v-for="group in visibleGroupedRows" :key="group.filePath" class="mr-group">
         <button type="button" class="mr-group-header" @click="toggleGroupCollapse(group.filePath)">
           <i class="pi mr-group-chev" :class="collapsedGroups.has(group.filePath) ? 'pi-chevron-right' : 'pi-chevron-down'" />
@@ -249,15 +160,10 @@ defineExpose({
           />
         </div>
       </div>
-      <button v-if="totalFilteredRowCount > displayRowLimit" class="mr-load-more" @click="loadMoreRows">
-        显示更多（{{ Math.min(displayRowLimit, totalFilteredRowCount) }} / {{ totalFilteredRowCount }}）
+      <button v-if="totalRowCount > displayRowLimit" class="mr-load-more" @click="loadMoreRows">
+        显示更多（{{ Math.min(displayRowLimit, totalRowCount) }} / {{ totalRowCount }}）
       </button>
-    </div>
-    <div v-else-if="flatBrokenLinks.length > 0" key="empty-filter" class="mr-empty-filter">
-      <i class="pi pi-filter-slash" />
-      <span>此筛选条件下没有记录</span>
-    </div>
-  </Transition>
+  </div>
 
   <RescueBackupChooser
     ref="chooserRef"
@@ -268,68 +174,6 @@ defineExpose({
 </template>
 
 <style scoped>
-/* 操作栏 */
-.mr-action-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--space-lg); flex-shrink: 0; min-height: 32px;
-}
-
-.mr-chips { display: flex; align-items: center; gap: var(--space-xs-sm); flex-wrap: wrap; }
-
-.mr-chip {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px/26px 无精确 spacing token */
-  display: inline-flex; align-items: center; gap: 5px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 13px 为药片型圆角，无 radius token */
-  height: 26px; padding: 0 var(--space-sm-md); border-radius: 13px;
-  font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
-  background: var(--bg-input); color: var(--text-muted);
-  border: 1px solid transparent;
-  font-family: inherit; white-space: nowrap;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
-}
-
-.mr-chip:hover { background: var(--hover-overlay); border-color: var(--border-subtle); }
-
-.mr-chip.active {
-  background: var(--primary-alpha-10); color: var(--primary); border-color: var(--primary-alpha-10);
-}
-
-.mr-chip.active .mr-chip-count { color: var(--primary); opacity: 0.85; }
-
-.mr-chip.disabled, .mr-chip:disabled {
-  opacity: 0.4; cursor: not-allowed; pointer-events: none;
-  background: var(--bg-input); color: var(--text-tertiary); border-color: transparent;
-}
-
-.mr-chip-count { font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
-
-.mr-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--text-tertiary); }
-.mr-dot--amber { background: var(--warning); }
-
-/* 扫描进行中的小旋转图标：贴 Chips 行右侧，扫完即消失 */
-.mr-scan-spinner { font-size: var(--text-lg); color: var(--primary); flex-shrink: 0; }
-
-/* 扫描进行中的三点波浪动画：替代空态大图标的位置 */
-.mr-empty-ok {
-  font-size: var(--text-4xl);
-  color: var(--success);
-}
-
-.scan-dots {
-  display: inline-flex; align-items: center; gap: var(--space-xs);
-  margin-bottom: var(--space-xs);
-}
-
-.scan-dots > span {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 8px 为小点尺寸，项目内 .mr-dot / .mr-status-dot 等先例已使用硬编码小尺寸 */
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--primary);
-  animation: k-pulse-dot var(--duration-breathe) var(--ease-standard) infinite;
-}
-
-.scan-dots > span:nth-child(2) { animation-delay: calc(var(--duration-breathe) * 0.15); }
-.scan-dots > span:nth-child(3) { animation-delay: calc(var(--duration-breathe) * 0.3); }
-
 /* 分组列表 */
 .mr-groups { display: flex; flex-direction: column; gap: var(--space-xs-sm); flex-shrink: 0; }
 
@@ -397,18 +241,4 @@ defineExpose({
 }
 .mr-load-more:hover { color: var(--primary); }
 
-.mr-empty-filter {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--space-sm); padding: var(--space-2xl); color: var(--text-tertiary); font-size: var(--text-xs);
-}
-.mr-empty-filter > .pi { font-size: var(--text-2xl); }
-
-/* 动画 */
-.slide-up-enter-active { transition: opacity var(--duration-medium) ease, transform var(--duration-medium) ease; }
-.slide-up-enter-from { opacity: 0; transform: translateY(12px); }
-.slide-up-leave-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
-.slide-up-leave-to { opacity: 0; transform: translateY(-8px); }
-
-.fade-enter-active, .fade-leave-active { transition: opacity var(--duration-normal) var(--ease-standard); }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

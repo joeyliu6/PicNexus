@@ -34,8 +34,8 @@ const emit = defineEmits<{
   (e: 'edit'): void;
 }>();
 
-const tone = computed(() => (props.status === 'replaced' ? 'ok' : statusTone(props.result)));
-const word = computed(() => (props.status === 'replaced' ? '已修复' : statusWord(props.result)));
+const tone = computed(() => statusTone(props.result));
+const word = computed(() => statusWord(props.result));
 const tooltip = computed(() => statusTooltip(props.result) || null);
 const fileName = computed(() => extractFilenameFromUrl(props.link.url));
 const host = computed(() => extractHost(props.link.url));
@@ -66,7 +66,9 @@ const backupName = computed(() => (props.selectedBackup ? getServiceDisplayName(
       </span>
     </div>
 
-    <span v-tooltip.top="tooltip" class="status-pill" :class="`status-pill--${tone}`">
+    <!-- 修好的行只留右边「✓ 已换成 X」一句；这里留同宽的空位，各行的右列保持对齐 -->
+    <span v-if="status === 'replaced'" class="status-pill status-pill--placeholder" aria-hidden="true"></span>
+    <span v-else v-tooltip.top="tooltip" class="status-pill" :class="`status-pill--${tone}`">
       <span class="status-dot" aria-hidden="true"></span>{{ word }}
     </span>
 
@@ -215,6 +217,10 @@ const backupName = computed(() => (props.selectedBackup ? getServiceDisplayName(
   font-weight: var(--weight-medium);
   white-space: nowrap;
   cursor: default;
+}
+
+.status-pill--placeholder {
+  visibility: hidden;
 }
 
 .status-dot {
