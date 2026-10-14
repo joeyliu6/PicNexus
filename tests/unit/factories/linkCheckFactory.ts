@@ -63,11 +63,7 @@ export function createLinkCheckRow(overrides: Partial<LinkCheckRow> = {}): LinkC
     checkedAt: overrides.checkedAt,
     recheckResult: overrides.recheckResult,
     recheckLoading: overrides.recheckLoading,
-    recheckBadgeFading: overrides.recheckBadgeFading,
     fadingOut: overrides.fadingOut,
-    pinnedSortWeight: overrides.pinnedSortWeight,
-    recentlyCompletedAt: overrides.recentlyCompletedAt,
-    uncheckedLeavingAt: overrides.uncheckedLeavingAt,
   };
 }
 

@@ -88,7 +88,7 @@ async function handleExportCsv(rows: LinkCheckRow[]): Promise<void> {
 
 /** 重查一张图：它的每一份链接各查一次，行上的动画由检测引擎驱动 */
 async function handleRecheckImage(rows: LinkCheckRow[]): Promise<void> {
-  await Promise.all(rows.map((row) => recheckSingle(row, 'all')));
+  await Promise.all(rows.map((row) => recheckSingle(row)));
 }
 
 /**

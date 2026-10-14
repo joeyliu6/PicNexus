@@ -1,13 +1,3 @@
-export type StatusFilter =
-  | 'invalid'
-  | 'suspicious'
-  | 'timeout'
-  | 'unchecked'
-  | 'problems'
-  | 'valid'
-  | 'all'
-  | null;
-
 export const SEVERITY: Record<string, number> = {
   http_4xx: 0,
   http_5xx: 1,
@@ -101,13 +91,7 @@ export interface LinkCheckRow {
   checkedAt?: number;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;
-  recheckBadgeFading?: boolean;
   fadingOut?: boolean;
-  pinnedSortWeight?: number;
-  /** 批量检测刚完成的过渡态时间戳：在原 tab 留 HOLD_MS 后由 timer 清零，让 filter 把它放走 */
-  recentlyCompletedAt?: number;
-  /** 仅用于「未检测」tab：hold 结束后先进入离场动画，再真正移出筛选结果 */
-  uncheckedLeavingAt?: number;
 }
 
 export interface MdImageLink {
@@ -133,14 +117,4 @@ export interface MdReplacement {
   originalUrl: string;
   newUrl: string;
   lineNumber: number;
-}
-
-export interface ServiceStat {
-  serviceId: string;
-  total: number;
-  valid: number;
-  invalid: number;
-  unchecked: number;
-  checked: number;
-  healthRate: number;
 }

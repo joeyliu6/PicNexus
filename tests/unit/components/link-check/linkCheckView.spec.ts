@@ -162,11 +162,11 @@ describe('LinkCheckView page interactions', () => {
     expect(mockState.loadHistoryRows).toHaveBeenCalledTimes(2);
   });
 
-  it('重查一张图 = 它的每一份链接各查一次（不按筛选淡出）', async () => {
+  it('重查一张图 = 它的每一份链接各查一次', async () => {
     const wrapper = await mountLinkCheckView();
     await wrapper.get('.recheck-image').trigger('click');
-    expect(mockState.recheckSingle).toHaveBeenCalledWith(linkCheckRows[0], 'all');
-    expect(mockState.recheckSingle).toHaveBeenCalledWith(linkCheckRows[1], 'all');
+    expect(mockState.recheckSingle).toHaveBeenCalledWith(linkCheckRows[0]);
+    expect(mockState.recheckSingle).toHaveBeenCalledWith(linkCheckRows[1]);
   });
 
   it('改用备份：逐张切换主链接，一次同步到列表并广播，报实际改成的张数', async () => {

@@ -1,6 +1,6 @@
 // useLinkCheckManager 关键流程测试：
 // 单例 store 用 vi.resetModules + 动态 import 隔离每个 case
-// 覆盖：serviceStats 派生计算 / 行操作（删除/淡出）/ 并发守护
+// 覆盖：行操作（删除/淡出/切主链接）/ 检查子集 / 并发守护
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { nextTick } from 'vue';
@@ -123,63 +123,6 @@ beforeEach(() => {
   historyDBGetLinkCheckContextByIdsMock.mockResolvedValue(new Map());
 });
 
-// ─── serviceStats computed ──────────────────────────────────────
-
-describe('useLinkCheckManager.serviceStats', () => {
-  it('checkRows 为空时返回空数组', async () => {
-    const m = await freshManager();
-    expect(m.serviceStats.value).toEqual([]);
-  });
-
-  it('按 serviceId 分组并计算 healthRate（valid/checked × 100）', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [
-      makeRow({ historyId: '1', serviceId: 'r2', checkResult: { link: '', is_valid: true, error_type: 'success', browser_might_work: false } }),
-      makeRow({ historyId: '2', serviceId: 'r2', checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false } }),
-      makeRow({ historyId: '3', serviceId: 'r2' }), // 未检测
-      makeRow({ historyId: '4', serviceId: 'smms', checkResult: { link: '', is_valid: true, error_type: 'success', browser_might_work: false } }),
-    ];
-    await nextTick();
-
-    const stats = m.serviceStats.value;
-    const r2 = stats.find((s) => s.serviceId === 'r2')!;
-    const smms = stats.find((s) => s.serviceId === 'smms')!;
-
-    expect(r2.total).toBe(3);
-    expect(r2.valid).toBe(1);
-    expect(r2.invalid).toBe(1);
-    expect(r2.unchecked).toBe(1);
-    expect(r2.checked).toBe(2);
-    expect(r2.healthRate).toBe(50);
-
-    expect(smms.total).toBe(1);
-    expect(smms.healthRate).toBe(100);
-  });
-
-  it('全部未检测时 healthRate=0（不除零）', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [
-      makeRow({ historyId: '1', serviceId: 'r2' }),
-      makeRow({ historyId: '2', serviceId: 'r2' }),
-    ];
-    await nextTick();
-    expect(m.serviceStats.value[0].healthRate).toBe(0);
-  });
-
-  it('按 healthRate 升序排序（健康率低的服务排前面）', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [
-      makeRow({ historyId: '1', serviceId: 'good', checkResult: { link: '', is_valid: true, error_type: 'success', browser_might_work: false } }),
-      makeRow({ historyId: '2', serviceId: 'bad', checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false } }),
-    ];
-    await nextTick();
-    expect(m.serviceStats.value[0].serviceId).toBe('bad');
-    expect(m.serviceStats.value[1].serviceId).toBe('good');
-  });
-});
-
-// ─── 行删除/淡出 ────────────────────────────────────────────────
-
 describe('useLinkCheckManager.removeRowsByHistoryIds', () => {
   it('按 historyId 移除对应所有行（同 historyId 不同 serviceId 一并删）', async () => {
     const m = await freshManager();
@@ -218,8 +161,6 @@ describe('useLinkCheckManager 响应 history-deleted', () => {
 
     expect(manager.checkRows.value).toHaveLength(1);
     expect(manager.checkRows.value[0].historyId).toBe('h2');
-    // 统计随 checkRows 响应式派生，行没了统计自然跟着掉
-    expect(manager.serviceStats.value.every((s) => s.serviceId === 'r2')).toBe(true);
   });
 
   it('ids 在 data 里而不是 payload 顶层——放错位置会静默失效', async () => {
@@ -306,6 +247,37 @@ describe('useLinkCheckManager.setPrimaryServices', () => {
     const before = m.checkRows.value;
     m.setPrimaryServices(new Map([['h1', 'jd']]));
     expect(m.checkRows.value).toBe(before);
+  });
+});
+
+describe('useLinkCheckManager.recheckSingle', () => {
+  it('结果先在原位停一会儿（行上显示新状态、归类不动），再落定并记下检查时间', async () => {
+    vi.useFakeTimers();
+    try {
+      const m = await freshManager();
+      m.checkRows.value = [makeRow({
+        historyId: 'h1',
+        serviceId: 'r2',
+        checkResult: { link: '', is_valid: false, status_code: 404, error_type: 'http_4xx', browser_might_work: false },
+      })];
+      m.removeRowsByKeys([{ historyId: 'none', serviceId: 'none' }]);
+      invokeMock.mockResolvedValueOnce({ link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false });
+
+      const pending = m.recheckSingle(m.checkRows.value[0]);
+      await vi.advanceTimersByTimeAsync(400);
+
+      expect(m.checkRows.value[0].recheckResult?.is_valid).toBe(true);
+      expect(m.checkRows.value[0].checkResult?.is_valid).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1200);
+      await pending;
+
+      expect(m.checkRows.value[0].checkResult?.is_valid).toBe(true);
+      expect(m.checkRows.value[0].recheckResult).toBeUndefined();
+      expect(m.checkRows.value[0].checkedAt).toBe(Date.now());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -444,47 +416,7 @@ describe('useLinkCheckManager.checkAllHistoryLinks', () => {
 });
 
 describe('useLinkCheckManager.checkSubset', () => {
-  it('[BUG 回归] searchQuery 会限制实际检测列表，而不是检测搜索前的状态全集', async () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
-      const m = await freshManager();
-      const loadPromise = m.loadHistoryRows();
-      await vi.advanceTimersByTimeAsync(400);
-      await loadPromise;
-
-      m.checkRows.value = [
-        makeRow({ historyId: 'h-alpha', serviceId: 'r2', fileName: 'alpha-pending.jpg', url: 'https://r2.example.com/alpha.jpg' }),
-        makeRow({ historyId: 'h-beta', serviceId: 'r2', fileName: 'beta-pending.jpg', url: 'https://r2.example.com/beta.jpg' }),
-        makeRow({ historyId: 'h-alpha-github', serviceId: 'github', fileName: 'alpha-pending.jpg', url: 'https://github.example.com/alpha.jpg' }),
-      ];
-      invokeMock.mockResolvedValueOnce({
-        results: [
-          {
-            link: 'https://r2.example.com/alpha.jpg',
-            history_id: 'h-alpha',
-            service_id: 'r2',
-            is_valid: true,
-            error_type: 'success',
-            browser_might_work: false,
-          },
-        ],
-        total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
-      });
-
-      await m.checkSubset({ statusFilter: 'unchecked', serviceId: 'r2', searchQuery: 'alpha' });
-
-      const [, payload] = invokeMock.mock.calls.find(([command]) => command === 'batch_check_links')!;
-      const requestPayload = payload as { request: { links: unknown[] } };
-      expect(requestPayload.request.links).toEqual([
-        expect.objectContaining({ history_id: 'h-alpha', service_id: 'r2' }),
-      ]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('[BUG 回归] targets 精确到 (historyId, serviceId)，不会把同图其他图床一起重检', async () => {
+  it('按图片重查：指定几张图，就把这几张图的每一份链接都查一遍，别的图不碰', async () => {
     const m = await freshManager();
     m.checkRows.value = [
       makeRow({ historyId: 'h1', serviceId: 'r2', url: 'https://cdn.example.com/a.jpg' }),
@@ -492,26 +424,43 @@ describe('useLinkCheckManager.checkSubset', () => {
       makeRow({ historyId: 'h2', serviceId: 'r2', url: 'https://cdn.example.com/b.jpg' }),
     ];
     invokeMock.mockResolvedValueOnce({
-      results: [
-        {
-          link: 'https://cdn.example.com/a.jpg',
-          history_id: 'h1',
-          service_id: 'r2',
-          is_valid: true,
-          error_type: 'success',
-          browser_might_work: false,
-        },
-      ],
-      total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+      results: [], total: 2, valid: 0, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
     });
 
-    await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    await m.checkSubset({ historyIds: ['h1'] });
 
     const [, payload] = invokeMock.mock.calls.find(([command]) => command === 'batch_check_links')!;
-    const requestPayload = payload as { request: { links: unknown[] } };
-    expect(requestPayload.request.links).toHaveLength(1);
-    expect(requestPayload.request.links[0]).toMatchObject({ history_id: 'h1', service_id: 'r2' });
-    expect(requestPayload.request).toHaveProperty('batch_id');
+    expect((payload as { request: { links: unknown[] } }).request.links).toEqual([
+      expect.objectContaining({ history_id: 'h1', service_id: 'r2' }),
+      expect.objectContaining({ history_id: 'h1', service_id: 'github' }),
+    ]);
+  });
+
+  it('只查没查过的：已有结果的链接不重发请求', async () => {
+    vi.useFakeTimers();
+    try {
+      const m = await freshManager();
+      const loadPromise = m.loadHistoryRows();
+      await vi.advanceTimersByTimeAsync(400);
+      await loadPromise;
+
+      m.checkRows.value = [
+        makeRow({ historyId: 'h-done', serviceId: 'r2', checkResult: { link: '', is_valid: true, error_type: 'success', browser_might_work: false } }),
+        makeRow({ historyId: 'h-new', serviceId: 'r2', url: 'https://r2.example.com/new.jpg' }),
+      ];
+      invokeMock.mockResolvedValueOnce({
+        results: [], total: 1, valid: 0, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+      });
+
+      await m.checkSubset({ statusFilter: 'unchecked' });
+
+      const [, payload] = invokeMock.mock.calls.find(([command]) => command === 'batch_check_links')!;
+      expect((payload as { request: { links: unknown[] } }).request.links).toEqual([
+        expect.objectContaining({ history_id: 'h-new' }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('[BUG 回归] 忽略非当前 batch_id 的进度事件，避免取消后旧批次污染新进度', async () => {
@@ -540,7 +489,7 @@ describe('useLinkCheckManager.checkSubset', () => {
       };
     });
 
-    await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    await m.checkSubset({ historyIds: ['h1'] });
 
     expect(m.progress.value?.current_url).toBe('current');
   });
@@ -575,7 +524,7 @@ describe('useLinkCheckManager.checkSubset', () => {
       };
     });
 
-    await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    await m.checkSubset({ historyIds: ['h1'] });
 
     expect(checkedAtMidway).toBe(4242);
     expect(m.checkRows.value[0].checkedAt).toBe(4242);
@@ -602,7 +551,7 @@ describe('useLinkCheckManager.checkSubset', () => {
       total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
     });
 
-    const result = await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    const result = await m.checkSubset({ historyIds: ['h1'] });
 
     expect(result).toBeNull();
     expect(m.checkRows.value[0].checkResult).toBeUndefined();
@@ -644,10 +593,10 @@ describe('useLinkCheckManager.checkSubset', () => {
         timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
       });
 
-    const oldPromise = m.checkSubset({ targets: [{ historyId: 'h-old', serviceId: 'r2' }] });
+    const oldPromise = m.checkSubset({ historyIds: ['h-old'] });
     await oldBatch.startedPromise;
     await m.cancelCheck();
-    await m.checkSubset({ targets: [{ historyId: 'h-new', serviceId: 'r2' }] });
+    await m.checkSubset({ historyIds: ['h-new'] });
 
     oldBatch.release();
     expect(await oldPromise).toBeNull();
@@ -681,7 +630,7 @@ describe('useLinkCheckManager.checkSubset', () => {
       .mockImplementationOnce(batch.impl)
       .mockResolvedValueOnce(undefined); // history-cleared 分支里的 cancel_batch_check
 
-    const promise = m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    const promise = m.checkSubset({ historyIds: ['h1'] });
     await batch.startedPromise;
 
     emitCacheEvent({ type: 'history-cleared', timestamp: 1 });
@@ -724,7 +673,7 @@ describe('useLinkCheckManager.checkSubset', () => {
     });
     historyDBBatchUpdateLinkCheckStatusMock.mockRejectedValueOnce(new Error('database locked'));
 
-    const result = await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    const result = await m.checkSubset({ historyIds: ['h1'] });
 
     expect(result).toBeNull();
     expect(m.checkRows.value[0].checkResult).toEqual(oldResult);

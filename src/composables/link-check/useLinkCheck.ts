@@ -2,7 +2,7 @@
 // 负责批量检测历史链接有效性，管理检测状态和进度
 
 /* eslint-disable max-lines -- singleton state machine kept together for link monitor behavior */
-import { ref, shallowRef, computed, getCurrentScope, onScopeDispose, type Ref, type ComputedRef } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import { createRafScheduler } from '@/utils/rafScheduler';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -11,16 +11,13 @@ import { useConfigManager } from '@/composables/useConfig';
 import { historyDB } from '@/services/database';
 import { useToast } from '@/composables/useToast';
 import { createLogger } from '@/utils/logger';
-import {
-  SEVERITY,
-  type StatusFilter,
-  type BatchCheckProgress,
-  type BatchCheckResult,
-  type BatchCheckItemResult,
-  type BatchCheckRequestItem,
-  type LinkCheckRow,
-  type CheckLinkResult,
-  type ServiceStat,
+import type {
+  BatchCheckProgress,
+  BatchCheckResult,
+  BatchCheckItemResult,
+  BatchCheckRequestItem,
+  LinkCheckRow,
+  CheckLinkResult,
 } from '@/types/linkCheck';
 import {
   linkCheckRowKey,
@@ -53,7 +50,6 @@ const phase2Duration = ref(0);
 const progress: Ref<BatchCheckProgress | null> = ref(null);
 /** 进度来源标识：区分是链接检测还是文档修复在跑，防止 UI 串扰 */
 const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
-const lastBatchResult: Ref<BatchCheckResult | null> = shallowRef(null);
 const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
 
 let progressUnlisten: UnlistenFn | null = null;
@@ -116,13 +112,10 @@ class LinkCheckPersistenceError extends Error {
 
 interface RowStateSnapshot {
   checkResult?: CheckLinkResult;
+  checkedAt?: number;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;
-  recheckBadgeFading?: boolean;
   fadingOut?: boolean;
-  pinnedSortWeight?: number;
-  recentlyCompletedAt?: number;
-  uncheckedLeavingAt?: number;
 }
 
 function errorMessage(error: unknown): string {
@@ -167,8 +160,11 @@ let lastLoadTime = 0;
 /** 首次加载骨架屏最小可见时长，防止加载太快一闪而过 */
 const MIN_SKELETON_MS = 400;
 
-/** recheckSingle 各阶段动画时长（ms）：转圈最短/结果展示/行淡出/徽章淡出 */
-const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
+/**
+ * recheckSingle 的节奏（ms）：转圈至少 SPIN_MIN，免得一闪而过；结果先在原位停 RESULT_SHOW，
+ * 让用户看清它变成了什么，然后才落定——落定后列表才按新结果把这张图挪走
+ */
+const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1200 } as const;
 
 // 与历史事件同步——不响应会导致检测视图持有"幽灵行"（历史已清空/删除/更新但检测页仍显示旧状态）
 onCacheEvent((p) => {
@@ -176,7 +172,6 @@ onCacheEvent((p) => {
     checkRows.value = [];
     rebuildRowIndex();
     loadError.value = null;
-    lastBatchResult.value = null;
     lastLoadTime = 0;
     // 历史被清空时，必须丢弃正在跑的批量结果——否则 finally 里的 applyResultsToRows
     // 会把这一批 result 重新塞回空的 checkRows，造成「幽灵行」与对已删 historyId 的写库
@@ -207,7 +202,6 @@ export function useLinkCheckManager() {
   function resetCheckState(): void {
     progress.value = null;
     progressSource.value = null;
-    lastBatchResult.value = null;
   }
 
   /**
@@ -231,32 +225,25 @@ export function useLinkCheckManager() {
       linkCheckRowKey(row),
       {
         checkResult: cloneResult(row.checkResult),
+        checkedAt: row.checkedAt,
         recheckResult: cloneResult(row.recheckResult),
         recheckLoading: row.recheckLoading,
-        recheckBadgeFading: row.recheckBadgeFading,
         fadingOut: row.fadingOut,
-        pinnedSortWeight: row.pinnedSortWeight,
-        recentlyCompletedAt: row.recentlyCompletedAt,
-        uncheckedLeavingAt: row.uncheckedLeavingAt,
       },
     ]));
   }
 
   function restoreRowsSnapshot(snapshot: Map<string, RowStateSnapshot>): void {
     if (snapshot.size === 0) return;
-    clearAllHolds();
     checkRows.value = checkRows.value.map((row) => {
       const saved = snapshot.get(linkCheckRowKey(row));
       if (!saved) return row;
 
       row.checkResult = cloneResult(saved.checkResult);
+      row.checkedAt = saved.checkedAt;
       row.recheckResult = cloneResult(saved.recheckResult);
       row.recheckLoading = saved.recheckLoading;
-      row.recheckBadgeFading = saved.recheckBadgeFading;
       row.fadingOut = saved.fadingOut;
-      row.pinnedSortWeight = saved.pinnedSortWeight;
-      row.recentlyCompletedAt = saved.recentlyCompletedAt;
-      row.uncheckedLeavingAt = saved.uncheckedLeavingAt;
       return row;
     });
     rebuildRowIndex();
@@ -491,14 +478,11 @@ export function useLinkCheckManager() {
         return null;
       }
 
-      // 即使被取消，也要处理已完成的结果并入库
-      lastBatchResult.value = result;
+      // 即使被取消，也要处理已完成的结果并入库。
       // 必须重新读 checkRows：检测期间 history-deleted 可能摘掉过行，
       // 拿启动时的 rows 快照重新赋值会把已删的行「复活」
       const currentRows = [...checkRows.value];
       applyResultsToRows(currentRows, result.results);
-      // 全量批量后清除单条重检遗留的排序锁定（否则旧 pinnedSortWeight 会锁死位置）
-      for (const row of currentRows) row.pinnedSortWeight = undefined;
       checkRows.value = currentRows;
       rebuildRowIndex();
 
@@ -506,22 +490,8 @@ export function useLinkCheckManager() {
       await persistResultOrRollback(result, rowSnapshot);
       lastLoadTime = 0; // 检测完成后清除缓存，下次进入重新加载最新状态
 
-      // session 守卫移到结果入库之后：只控制 toast 显示和返回值
-      if (checkSessionId !== mySession) {
-        if (result.cancelled) {
-          toast.warn('已停止检测', `已完成 ${result.results.length} 条，结果已保存。可通过「仅未检测」继续剩余部分`);
-        }
-        return null;
-      }
-
-      if (!result.cancelled) {
-        toast.success(
-          '检测完成',
-          `共 ${result.total} 条：有效 ${result.valid} / 失效 ${result.invalid} / 超时 ${result.timeout} / 可疑 ${result.suspicious}`,
-        );
-      }
-
-      return result;
+      // 不弹「检测完成」：结论卡已经换成新结论，再弹一次是重复反馈
+      return checkSessionId === mySession ? result : null;
     } catch (err) {
       log.error('批量检测失败', err);
       toast.error(
@@ -599,10 +569,7 @@ export function useLinkCheckManager() {
       isPaused.value = false;
       progressSource.value = null;
       clearProgressListener();
-      // 取消时立即清空 hold，让残留过渡态行尽快归位，不再拖 2s
-      clearAllHolds();
       checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
-      // toast 移至检测函数中，入库后再提示（含已入库数量）
       log.info('已发送取消请求');
     } catch (err) {
       log.error('取消失败', err);
@@ -636,59 +603,19 @@ export function useLinkCheckManager() {
     }
   }
 
-  // ============================================
-  // 按图床分组的统计数据
-  // ============================================
-
-  const serviceStats: ComputedRef<ServiceStat[]> = computed(() => {
-    const rows = checkRows.value;
-    if (rows.length === 0) return [];
-
-    const map = new Map<string, { total: number; valid: number; invalid: number; unchecked: number }>();
-
-    for (const row of rows) {
-      const sid = row.serviceId;
-      const entry = map.get(sid) || { total: 0, valid: 0, invalid: 0, unchecked: 0 };
-      entry.total++;
-      if (!row.checkResult) {
-        entry.unchecked++;
-      } else if (row.checkResult.is_valid) {
-        entry.valid++;
-      } else {
-        entry.invalid++;
-      }
-      map.set(sid, entry);
-    }
-
-    return Array.from(map.entries())
-      .map(([serviceId, s]) => {
-        const checked = s.total - s.unchecked;
-        return {
-          serviceId,
-          ...s,
-          checked,
-          healthRate: checked > 0 ? Math.round((s.valid / checked) * 100) : 0,
-        };
-      })
-      .sort((a, b) => a.healthRate - b.healthRate);
-  });
-
   /**
-   * 检测子集链接（按图床/状态筛选）
+   * 检测一部分链接：还没检查过的（statusFilter: 'unchecked'），或指定几张图的全部链接（historyIds）
    */
   async function checkSubset(filter: {
-    serviceId?: string;
-    statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems';
-    searchQuery?: string;
+    statusFilter?: 'unchecked';
     historyIds?: string[];
-    targets?: Array<{ historyId: string; serviceId: string }>;
   }): Promise<BatchCheckResult | null> {
     if (isChecking.value) {
       toast.warn('检测进行中', '请等待当前检测完成');
       return null;
     }
 
-    const requiresFullLoad = !filter.targets && !filter.historyIds;
+    const requiresFullLoad = !filter.historyIds;
     if (requiresFullLoad) {
       await loadHistoryRows();
       if (isChecking.value) {
@@ -697,32 +624,11 @@ export function useLinkCheckManager() {
       }
     }
 
-    const rows = checkRows.value;
     const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
-    const targetSet = filter.targets ? new Set(filter.targets.map((target) => `${target.historyId}::${target.serviceId}`)) : null;
-    const searchQuery = filter.searchQuery?.trim().toLowerCase() ?? '';
-    const filtered = rows.filter((row) => {
-      if (targetSet) return targetSet.has(linkCheckRowKey(row));
+    const filtered = checkRows.value.filter((row) => {
       if (idSet) return idSet.has(row.historyId);
-      if (filter.serviceId && row.serviceId !== filter.serviceId) return false;
-      if (
-        searchQuery
-        && !row.url.toLowerCase().includes(searchQuery)
-        && !row.fileName.toLowerCase().includes(searchQuery)
-        && !row.serviceId.toLowerCase().includes(searchQuery)
-      ) {
-        return false;
-      }
-      const cr = row.checkResult;
-      switch (filter.statusFilter) {
-        case 'unchecked': return !cr;
-        case 'invalid': return cr != null && !cr.is_valid && cr.error_type !== 'timeout' && cr.error_type !== 'suspicious' && !cr.browser_might_work;
-        case 'timeout': return cr?.error_type === 'timeout';
-        case 'suspicious': return cr?.error_type === 'suspicious' || cr?.browser_might_work === true;
-        case 'valid': return cr?.is_valid === true;
-        case 'problems': return cr != null && !cr.is_valid;
-        default: return true;
-      }
+      if (filter.statusFilter === 'unchecked') return !row.checkResult;
+      return true;
     });
 
     if (filtered.length === 0) {
@@ -791,32 +697,14 @@ export function useLinkCheckManager() {
       // 即使被取消，也要处理已完成的结果并入库
       const allRows = [...checkRows.value];
       applyResultsToRows(allRows, result.results);
-      // 子集复检需清除排序锁定
-      const rowMap = new Map(allRows.map((r) => [linkCheckRowKey(r), r]));
-      for (const itemResult of result.results) {
-        if (!itemResult.history_id || !itemResult.service_id) continue;
-        const row = rowMap.get(`${itemResult.history_id}::${itemResult.service_id}`);
-        if (row) row.pinnedSortWeight = undefined;
-      }
       checkRows.value = allRows;
 
       // 更新 DB
       await persistResultOrRollback(result, rowSnapshot);
       lastLoadTime = 0; // 检测完成后清除缓存
 
-      // session 守卫移到结果入库之后：只控制 toast 显示和返回值
-      if (checkSessionId !== mySession) {
-        if (result.cancelled) {
-          toast.warn('已停止检测', `已完成 ${result.results.length} 条，结果已保存。可通过「仅未检测」继续剩余部分`);
-        }
-        return null;
-      }
-
-      if (!result.cancelled) {
-        toast.success('已检测', `共 ${result.total} 条：有效 ${result.valid} / 失效 ${result.invalid}`);
-      }
-
-      return result;
+      // 不弹「已检测」：结论卡已经换成新结论，再弹一次是重复反馈
+      return checkSessionId === mySession ? result : null;
     } catch (err) {
       log.error('子集检测失败', err);
       toast.error(
@@ -842,83 +730,9 @@ export function useLinkCheckManager() {
     checkRows.value = checkRows.value.slice();
   }
 
-  // ============================================
-  // 检测完成过渡态：行在原 tab 停留 HOLD_MS 后淡出
-  // ============================================
-  // 设计意图：批量检测时新结果到达不立刻把行从「未检测」tab 抽走（突兀），而是
-  // 在原位停留约 2s 让用户看清新状态（dot 变色 + 徽章），再进入「未检测」离场动画。
-  // 对应 tab（如「正常」）那边没有 hold 概念，新结果立即出现。
-
-  /** 完成态停留时长（ms）：用户能看清结果的最小阅读时长 */
-  const HOLD_MS = 2000;
-  /** 「未检测」tab 离场动画窗口，需与 CheckLinkList.vue 的 leaving-unchecked 过渡保持一致 */
-  const UNCHECKED_LEAVE_MS = 520;
-  /** 扫描 hold/leave 过期的轮询间隔；250ms 既不过密也不过疏，高速场景自然分批 */
-  const HOLD_SWEEP_MS = 250;
-  /** 当前处于 hold 态的行集合——避免每次扫全量 checkRows */
-  const rowsInHold = new Set<LinkCheckRow>();
-  let holdSweepInterval: ReturnType<typeof setInterval> | null = null;
-
-  function ensureHoldSweep(): void {
-    if (holdSweepInterval !== null) return;
-    holdSweepInterval = setInterval(() => {
-      const now = Date.now();
-      let mutated = false;
-      for (const row of rowsInHold) {
-        if (row.recentlyCompletedAt === undefined) {
-          row.uncheckedLeavingAt = undefined;
-          rowsInHold.delete(row);
-          mutated = true;
-          continue;
-        }
-
-        if (row.uncheckedLeavingAt !== undefined) {
-          if (now - row.uncheckedLeavingAt >= UNCHECKED_LEAVE_MS) {
-            row.recentlyCompletedAt = undefined;
-            row.uncheckedLeavingAt = undefined;
-            rowsInHold.delete(row);
-            mutated = true;
-          }
-          continue;
-        }
-
-        if (now - row.recentlyCompletedAt >= HOLD_MS) {
-          row.uncheckedLeavingAt = now;
-          mutated = true;
-        }
-      }
-      if (mutated) checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
-      if (rowsInHold.size === 0) stopHoldSweep();
-    }, HOLD_SWEEP_MS);
-  }
-
-  function stopHoldSweep(): void {
-    if (holdSweepInterval !== null) {
-      clearInterval(holdSweepInterval);
-      holdSweepInterval = null;
-    }
-  }
-
-  /** 检测取消/重置/视图切换时清空 hold——防止下次进入看到残影 */
-  function clearAllHolds(): void {
-    for (const row of rowsInHold) {
-      row.recentlyCompletedAt = undefined;
-      row.uncheckedLeavingAt = undefined;
-    }
-    rowsInHold.clear();
-    stopHoldSweep();
-  }
-
-  // composable scope 释放（视图卸载/热更新/路由切换）时必须停掉 sweep interval；
-  // 否则 timer 会继续按 HOLD_SWEEP_MS 调用 schedule(refreshCheckRowsRef)，对已无消费者的 checkRows 做无用更新，
-  // 直到最后一行 hold 过期才自然熄火，期间形成短时间的内存与计算泄漏。
-  if (getCurrentScope()) {
-    onScopeDispose(() => { clearAllHolds(); });
-  }
-
   /**
-   * 把进度事件里的逐条结果实时 patch 到对应行——同时打 recentlyCompletedAt 时间戳
-   * 让 useCheckFilter 在 hold 窗口内继续把它们留在原 tab；窗口到期由 sweep 清零。
+   * 把进度事件里的逐条结果实时 patch 到对应行
+   *
    * 行对象 mutate-in-place + rAF 节流换数组引用：跨越 prop 边界唤醒子组件、
    * 同帧多条结果合并为一次重渲染，避免轰炸 UI。
    */
@@ -937,15 +751,9 @@ export function useLinkCheckManager() {
       const { history_id: _hid, service_id: _sid, ...result } = itemResult;
       target.checkResult = result;
       target.checkedAt = now;
-      target.recentlyCompletedAt = now;
-      target.uncheckedLeavingAt = undefined;
-      rowsInHold.add(target);
       mutated = true;
     }
-    if (mutated) {
-      ensureHoldSweep();
-      checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
-    }
+    if (mutated) checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
   }
 
   /** 复制 checkRows、通过 Map O(1) 找到目标行、执行变更、触发响应式更新 */
@@ -957,21 +765,6 @@ export function useLinkCheckManager() {
     updater(rows[idx]);
     checkRows.value = rows;
     return true;
-  }
-
-  /** 判断检测结果是否会导致行离开当前筛选（Case B） */
-  function wouldLeaveFilter(result: CheckLinkResult, filter: StatusFilter | undefined): boolean {
-    if (filter === 'all') return false;
-    if (filter == null) return false;
-    switch (filter) {
-      case 'problems': return result.is_valid;
-      case 'unchecked': return true;
-      case 'valid': return !result.is_valid;
-      case 'invalid': return result.is_valid || result.error_type === 'timeout' || result.error_type === 'suspicious' || result.browser_might_work;
-      case 'timeout': return result.error_type !== 'timeout';
-      case 'suspicious': return result.error_type !== 'suspicious' && !result.browser_might_work;
-      default: return false;
-    }
   }
 
   /** 执行单条检测请求（含最短转圈等待，避免按钮过快闪烁） */
@@ -987,28 +780,15 @@ export function useLinkCheckManager() {
     return result;
   }
 
-  /** 复检结果动画：展示徽章 → Case A/B 淡出 */
-  async function animateRecheckResult(row: LinkCheckRow, result: CheckLinkResult, currentFilter: StatusFilter | undefined): Promise<void> {
+  /** 复检结果先在原位停留，让用户看清它变成了什么，再落定（落定后列表才按新结果归类） */
+  async function showRecheckResult(row: LinkCheckRow, result: CheckLinkResult): Promise<void> {
     if (!updateRow(row, (t) => { t.recheckLoading = false; t.recheckResult = result; })) return;
     await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.RESULT_SHOW));
-
-    if (wouldLeaveFilter(result, currentFilter)) {
-      // Case B：整行淡出 → 提交最终状态 → filteredRows 重算，行消失
-      if (!updateRow(row, (t) => { t.fadingOut = true; })) return;
-      await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.ROW_FADE));
-      updateRow(row, (t) => { t.checkResult = result; t.checkedAt = Date.now(); t.recheckResult = undefined; t.fadingOut = false; });
-    } else {
-      // Case A：徽章淡出 → 左侧状态更新，行留在列表
-      if (!updateRow(row, (t) => { t.recheckBadgeFading = true; })) return;
-      await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.BADGE_FADE));
-      updateRow(row, (t) => {
-        t.pinnedSortWeight = SEVERITY[t.checkResult?.error_type ?? 'success'] ?? 5; // 锁定排序位置
-        t.checkResult = result;
-        t.checkedAt = Date.now();
-        t.recheckResult = undefined;
-        t.recheckBadgeFading = false;
-      });
-    }
+    updateRow(row, (t) => {
+      t.checkResult = result;
+      t.checkedAt = Date.now();
+      t.recheckResult = undefined;
+    });
   }
 
   /** 将复检结果持久化到数据库 */
@@ -1029,7 +809,7 @@ export function useLinkCheckManager() {
     });
   }
 
-  async function recheckSingle(row: LinkCheckRow, currentFilter?: StatusFilter): Promise<void> {
+  async function recheckSingle(row: LinkCheckRow): Promise<void> {
     const key = linkCheckRowKey(row);
     const existingIdx = rowIndexMap.get(key);
     const existing = existingIdx !== undefined ? checkRows.value[existingIdx] : undefined;
@@ -1040,11 +820,11 @@ export function useLinkCheckManager() {
       if (!updateRow(row, (t) => { t.recheckLoading = true; })) return;
       const result = await performRecheckRequest(row);
       await persistRecheckResult(row, result);
-      await animateRecheckResult(row, result, currentFilter);
+      await showRecheckResult(row, result);
     } catch (err) {
       updateRow(row, (t) => {
-        t.recheckLoading = false; t.recheckResult = undefined; t.recheckBadgeFading = false;
-        t.fadingOut = false; t.pinnedSortWeight = undefined;
+        t.recheckLoading = false;
+        t.recheckResult = undefined;
       });
       log.error('单条检测失败', err);
       toast.error('检测失败', errorMessage(err));
@@ -1120,7 +900,6 @@ export function useLinkCheckManager() {
     idleTimer = setTimeout(() => {
       if (!isChecking.value) {
         checkRows.value = [];
-        lastBatchResult.value = null;
         lastLoadTime = 0; // 清除缓存，下次进入重新加载
         log.info('空闲超时，已释放检测数据');
       }
@@ -1137,9 +916,7 @@ export function useLinkCheckManager() {
     phase2Duration,
     progress,
     progressSource,
-    lastBatchResult,
     checkRows,
-    serviceStats,
     // 方法
     loadHistoryRows,
     loadError,
