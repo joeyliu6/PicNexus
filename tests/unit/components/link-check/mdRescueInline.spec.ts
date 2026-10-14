@@ -203,7 +203,7 @@ describe('MdRescueInline state rendering', () => {
 
     expect(wrapper.find('.broken-groups-stub').exists()).toBe(true);
     expect(wrapper.get('.summary-title').text()).toBe('正在检查图片 · 1 / 2');
-    expect(wrapper.get('.summary-progress').exists()).toBe(true);
+    expect(wrapper.find('.summary-progress').exists()).toBe(true);
     await wrapper.get('.summary-btn--ghost').trigger('click');
 
     expect(manager.cancelScan).toHaveBeenCalled();

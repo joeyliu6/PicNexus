@@ -9,7 +9,7 @@ import MigrateItemRow from '@/components/views/link-check/migrate/components/Mig
 import MigrateSelectPhase from '@/components/views/link-check/migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from '@/components/views/link-check/migrate/MigrateProgressPhase.vue';
 import { MIGRATE_KEY, type MigrateContext } from '@/components/views/link-check/migrate/keys';
-import type { MigrateItemStatus, MigrateResult, MigrateTargetService } from '@/types/batchMigrate';
+import type { MigrateItemStatus, MigrateResult, MigrateScope, MigrateTargetService } from '@/types/batchMigrate';
 import { flushPromisesAndTicks } from '../../../helpers/wait';
 
 vi.mock('@/composables/useToast', () => ({
