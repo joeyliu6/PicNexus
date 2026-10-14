@@ -32,8 +32,8 @@ flowchart TD
     K -- 是 --> L["scanStage = backups<br/>Phase 2: 统一验证备用链接"]
     L --> M["scanStage = complete<br/>按首选 / 最快预选每张图的替换来源（见图 6）"]
 
-    M --> N["用户确认 → fixing 阶段<br/>备份 + 替换（见图 5）"]
-    N --> O["done 阶段<br/>显示结果 / 支持撤销"]
+    M --> N["点结论卡上的「修复 N 张」→ fixing 阶段<br/>备份 + 替换（见图 5）"]
+    N --> O["done 阶段<br/>结论卡：已修复 N 张 · 撤销 / 完成"]
     O --> P["reset() → 回到 idle"]
 
     %% 取消分支
@@ -61,6 +61,10 @@ flowchart TD
 | 已取消 | `scanning` | `cancelled` | 保留已检测结果 | — |
 | 修复中 | `fixing` | — | `fixingProgress`, `healedFiles` | 是（`cancelFix`） |
 | 完成 | `done` | — | `repairReceipt` | — |
+
+### 结论卡
+
+选完文档后，页面顶部是三个维护页共用的结论卡（`common/SummaryCard.vue`），每个阶段说什么、给哪个按钮由纯函数 `rescueVerdict.ts` 的 `buildRescueVerdict` 决定：找文件 →「正在找 Markdown 文件… / 取消」；检查 →「正在检查图片 · 12 / 24 · 目前有 N 张打不开 / 取消」；结果 →「5 张图片打不开 · 在 3 个文档里 · 4 张可以换成备份 / 修复 4 张」，或「24 张图片都能打开 / 换一批文档」；修复 →「正在修复 · 1 / 2 个文档 / 取消」；完成 →「已修复 N 张图片 · 原文件已备份，可以撤销 / 撤销 · 完成」。写入失败说人话（没有写入权限 / 文件被其他程序占用），原始错误在悬停提示里。数量都按出现次数算（`useBottomStats`），与列表行数一致。
 
 ---
 
@@ -341,12 +345,12 @@ setup 期间取好、当参数传进来**，由 `useMdRescueManager()` 里的四
 ## 图 6：替换来源的选择
 
 每张可修复图片要换成哪条备份，**在扫描结束时就定好并显示在列表上**，用户可逐行改；
-点「修复 N 处」直接按列表所示替换，不再弹策略确认框。所见即所改，加上修改前自动备份、
+点「修复 N 张」直接按列表所示替换，不弹策略确认框。所见即所改，加上修改前自动备份、
 完成后可一键撤销，确认框只会是多余的一步。
 
 > **关键源文件**：`src/composables/md-rescue/useRepairStrategy.ts`（`pickBackupForLink`、
 > `applyDefaultBackups`、`preferServiceForAll`）、`src/components/views/link-check/MdRescueInline.vue`
-> （扫描结束 watcher、`handleRepair`、`handlePreferService`）、
+> （扫描结束 watcher、`runAction`、`handlePreferService`）、
 > `src/components/views/link-check/rescue/RescueBackupChooser.vue`（逐行换来源的弹层）
 
 ```mermaid
@@ -367,7 +371,7 @@ flowchart TD
     G --> G1["选一个 → 只改这一行的 selectedBackup"]
     G --> G2["「以后优先用 X，应用到全部」<br/>preferServiceForAll + saveHostPreference"]
 
-    F --> H["点「修复 N 处」→ executeReplace()（见图 5）"]
+    F --> H["点「修复 N 张」→ executeReplace()（见图 5）"]
 
     style F fill:#e3f2fd,stroke:#1976d2
     style G2 fill:#fff3e0,stroke:#e65100
@@ -400,7 +404,7 @@ flowchart TD
 | 撤销后两个同名文件内容互串 | 不应再出现。历史成因是 verbatim 前缀让相对路径退化为裸 basename，同名备份互相顶掉 | 图 5 [备份路径不变量](#备份路径不变量) |
 | 修复过的文件夹再扫一次，失效数虚高 | 检查 `.picnexus-backup` 是否被扫进来（Rust 递归按 `BACKUP_DIR_NAME` 跳过）；目录名两侧漂移会被 `npm run lint` 拦下 | 图 2 Rust 扫描、[备份目录排除](#备份目录排除) |
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
-| 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复 N 处」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
+| 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复 N 张」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
 | 拖放文件报 `forbidden path ... allow-stat` | 路径没进 fs 运行时白名单，见 [文件访问白名单](#文件访问白名单)。按钮选文件能用而拖放不能，就是这条 | 图 2 加载入口 |
 | 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
 | 每行预选的不是想要的图床 | 没设过首选时按「最快」选；在某行弹层里点「以后优先用 X，应用到全部」会存成首选 | 图 6 选择规则 |
