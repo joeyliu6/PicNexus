@@ -91,6 +91,7 @@ export const VISUAL_STATES = {
     'empty',
     'scanning',
     'bad-link-groups',
+    'all-fine',
     'fixing',
     'complete',
     'partial-failed',

@@ -61,6 +61,7 @@ type MarkdownRepairVisualState =
   | 'empty'
   | 'scanning'
   | 'bad-link-groups'
+  | 'all-fine'
   | 'fixing'
   | 'complete'
   | 'partial-failed';
@@ -333,7 +334,10 @@ function mdLink(index: number, fileName: string, kind: 'valid' | 'invalid' | 'ti
 }
 
 function markdownLinks(state: MarkdownRepairVisualState): MdImageLinkWithFile[] {
-  if (state === 'empty' || state === 'scanning') return [];
+  if (state === 'empty') return [];
+  if (state === 'all-fine') {
+    return [1, 2, 3, 4, 5, 6].map((i) => mdLink(i, ['launch-notes.md', 'api-reference.md', 'weekly-report.md'][i % 3], 'valid', true));
+  }
 
   const links = [
     mdLink(1, 'launch-notes.md', 'invalid', true),
@@ -343,6 +347,11 @@ function markdownLinks(state: MarkdownRepairVisualState): MdImageLinkWithFile[] 
     mdLink(5, 'weekly-report.md', 'valid', true),
     mdLink(6, 'weekly-report.md', 'invalid', state !== 'partial-failed'),
   ];
+
+  // 检查进行中：图都收集好了，结果陆续进来（后三张还没查）
+  if (state === 'scanning') {
+    return links.map((link, i) => (i < 3 ? link : { ...link, checkResult: undefined }));
+  }
 
   if (state === 'complete') {
     return links.map((link) => ({
@@ -411,7 +420,7 @@ export function applyMarkdownRepairFixture(rawState: string): void {
   rescueHostPreference.value = ['r2', 'github'];
   rescueScanStage.value = state === 'scanning' ? 'checking' : 'complete';
   rescueReadyFiles.value = ready;
-  rescueScanProgress.value = state === 'scanning' ? { checked: 11, total: 24 } : links.length > 0 ? { checked: links.length, total: links.length } : null;
+  rescueScanProgress.value = state === 'scanning' ? { checked: 3, total: links.length } : links.length > 0 ? { checked: links.length, total: links.length } : null;
   rescueIsCancelled.value = false;
   rescueSkippedDirs.value = state === 'partial-failed' ? ['C:/visual/docs/private'] : [];
   setCheckStartTime(Date.now() - 8000);
