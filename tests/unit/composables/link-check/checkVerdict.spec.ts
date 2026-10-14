@@ -45,7 +45,7 @@ describe('buildCheckVerdict', () => {
     expect(v.hero).toBe(false);
     expect(v.title).toBe('3 张图片打不开');
     // 副标题只说和决定有关的：几张能修、几张没救、什么时候查的；受限 / 没查完由列表分段和按钮交代
-    expect(v.subtitle).toBe('2 张可以改用备份 · 1 张没有能用的备份 · 3天前检查');
+    expect(v.subtitle).toBe('2 张可以改用备份 · 1 张没有能用的备份 · 3 天前检查');
     expect(v.primary).toEqual({ action: 'promote-all', label: '把 2 张改用备份' });
     expect(v.secondary).toEqual({ action: 'check-all', label: '重新检查' });
   });
@@ -61,7 +61,7 @@ describe('buildCheckVerdict', () => {
     });
 
     const partial = idle(summary({ links: 9, uncheckedLinks: 4, kinds: { broken: 2, ok: 3, unchecked: 2 } }));
-    expect(partial.subtitle).toBe('2 张没有能用的备份 · 3天前检查');
+    expect(partial.subtitle).toBe('2 张没有能用的备份 · 3 天前检查');
     expect(partial.primary).toEqual({ action: 'check-unchecked', label: '检查剩下的 4 个' });
     expect(partial.secondary).toEqual({ action: 'check-all', label: '全部重新检查' });
   });
@@ -71,7 +71,7 @@ describe('buildCheckVerdict', () => {
     expect(v).toMatchObject({
       tone: 'ok',
       title: '全部正常',
-      subtitle: '12 张图片都能打开 · 3天前检查',
+      subtitle: '12 张图片都能打开 · 3 天前检查',
       primary: null,
       secondary: { action: 'check-all', label: '重新检查' },
     });
@@ -80,7 +80,7 @@ describe('buildCheckVerdict', () => {
   it('没有打不开的，但有受限或备份失效：标题不说「全部正常」，副标题点出来', () => {
     const v = idle(summary({ kinds: { ok: 10, limited: 1, 'backup-broken': 2 } }));
     expect(v.title).toBe('没有打不开的图片');
-    expect(v.subtitle).toBe('1 张可能受限 · 2 张的备份失效了 · 3天前检查');
+    expect(v.subtitle).toBe('1 张可能受限 · 2 张的备份失效了 · 3 天前检查');
   });
 
   it('已检查的都正常、但有新图没查：主按钮查剩下的', () => {

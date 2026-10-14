@@ -82,28 +82,28 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(NOW - 59_000)).toBe('刚刚');
   });
 
-  it('5 分钟前 → 5分钟前', () => {
-    expect(formatRelativeTime(NOW - 5 * 60_000)).toBe('5分钟前');
+  it('5 分钟前：数字和汉字之间留空格，和应用里其他「N 分钟前」一致', () => {
+    expect(formatRelativeTime(NOW - 5 * 60_000)).toBe('5 分钟前');
   });
 
-  it('59 分钟前 → 59分钟前', () => {
-    expect(formatRelativeTime(NOW - 59 * 60_000)).toBe('59分钟前');
+  it('59 分钟前', () => {
+    expect(formatRelativeTime(NOW - 59 * 60_000)).toBe('59 分钟前');
   });
 
-  it('2 小时前 → 2小时前', () => {
-    expect(formatRelativeTime(NOW - 2 * 3_600_000)).toBe('2小时前');
+  it('2 小时前', () => {
+    expect(formatRelativeTime(NOW - 2 * 3_600_000)).toBe('2 小时前');
   });
 
-  it('23 小时前 → 23小时前', () => {
-    expect(formatRelativeTime(NOW - 23 * 3_600_000)).toBe('23小时前');
+  it('23 小时前', () => {
+    expect(formatRelativeTime(NOW - 23 * 3_600_000)).toBe('23 小时前');
   });
 
-  it('3 天前 → 3天前', () => {
-    expect(formatRelativeTime(NOW - 3 * 86_400_000)).toBe('3天前');
+  it('3 天前', () => {
+    expect(formatRelativeTime(NOW - 3 * 86_400_000)).toBe('3 天前');
   });
 
-  it('6 天前 → 6天前', () => {
-    expect(formatRelativeTime(NOW - 6 * 86_400_000)).toBe('6天前');
+  it('6 天前', () => {
+    expect(formatRelativeTime(NOW - 6 * 86_400_000)).toBe('6 天前');
   });
 
   it('超过 7 天 → 返回日期字符串', () => {
