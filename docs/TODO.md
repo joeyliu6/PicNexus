@@ -85,6 +85,28 @@
 要收编得先把整套色值对到令牌上，**那是一次独立的视觉改动，必须真机看过标题栏与下方 WebView
 的接缝再定**——单看代码判断不了对不对。
 
+### [ ] 文档路由和关键词路由还只认「批量迁移」
+
+- **来源**：2026-10-14 维护页改版，第三个标签改名「补充备份」（[maintenance-redesign-2026-10-14.md](./audits/maintenance-redesign-2026-10-14.md)）
+- **现状**：`AGENTS.md` 文档路由表写的是「批量迁移」，`scripts/claude-hooks/flows-router.mjs` 的关键词只有「批量迁移 / 迁移」。
+  用户说「补充备份」时，流程图不会自动推给 AI
+- **要做的**：两处都加上「补充备份」；文件名 `batch-migrate-*` 不动
+- **为什么没直接改**：`AGENTS.md` 是规则文件，改之前要用户点头；关键词表跟它一起改
+
+**当前处置**：待用户拍板
+
+### [ ] 验收种子脚本写的上传结果形状和应用不一致
+
+- **来源**：2026-10-14 维护页真机走查
+- **症状**：`scripts/seed-tauri-e2e-portable.mjs` 的 6 条 `e2e-*` 记录把 `results` 写成 `{ serviceId, success: true, url }`；
+  应用认的是 `{ serviceId, status: 'success', result: { url } }`（`isUsableMirror`）。脚本注释说派生列「按 isUsableMirror 的口径」，
+  实际口径不同：应用里这些记录没有可用链接，链接检测、补充备份都看不到它们
+- **要做的**：改成应用的形状，再跑一遍 `PICNEXUS_ACCEPTANCE=1 npm run test:tauri:e2e` 确认依赖它的验收用例仍过
+- **为什么没顺手改**：这次跑不了那套验收（要 tauri-driver + msedgedriver），改了没法验证
+- **优先级**：低
+
+**当前处置**：待处理
+
 ---
 
 ## 已知取舍
