@@ -111,11 +111,13 @@ export async function migrateOneItem(
 
   if (needUploadTargets.length === 0) {
     status.status = 'skipped';
+    status.skipReason = 'already-there';
     return;
   }
 
   if (isCancelled.value) {
     status.status = 'skipped';
+    status.skipReason = 'not-attempted';
     return;
   }
 
@@ -133,6 +135,7 @@ export async function migrateOneItem(
   if (sourceCandidates.length === 0) {
     if (status.problemServiceIds && status.problemServiceIds.length > 0) {
       status.status = 'skipped';
+      status.skipReason = 'not-needed';
       status.error = '检测结果已更新，这张图已不需要抢救';
       status.errorType = undefined;
       status.failureDetails = undefined;
@@ -184,6 +187,7 @@ export async function migrateOneItem(
   if (isCancelled.value) {
     cleanupMigrateTempFile(downloadedFilePath);
     status.status = 'skipped';
+    status.skipReason = 'not-attempted';
     return;
   }
 
@@ -305,6 +309,7 @@ export async function processBatch(
     return semaphore.withPermit(async () => {
       if (isCancelled.value) {
         status.status = 'skipped';
+        status.skipReason = 'not-attempted';
         onItemDone(status);
         return;
       }

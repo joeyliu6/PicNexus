@@ -425,6 +425,7 @@ export function useBatchMigrateManager() {
           if (!item) {
             // 预加载到处理间隙被删除 → 视为 skipped，不再走 processBatch
             p.status.status = 'skipped';
+            p.status.skipReason = 'deleted';
             skippedCount++;
             processed++;
             continue;
@@ -541,10 +542,11 @@ export function useBatchMigrateManager() {
     // 收尾归一：取消 / 连续失败自动终止 / 中途异常时，队列里从未被主循环取出的条目
     // （cursor 之后）以及暂停回退后未恢复的条目仍保持 pending——统一归为「跳过（未尝试）」，
     // 避免 done 态结果里悬挂一堆无法操作的"处理中"条目、统计与列表条数对不上
-    const pendingNotice = pauseReason === 'user-cancelled' ? '迁移已取消，未尝试' : '迁移未完成，未尝试';
+    const pendingNotice = pauseReason === 'user-cancelled' ? '备份已停止，没来得及处理' : '备份没做完，没来得及处理';
     for (const status of allItemStatuses.value) {
       if (status.status !== 'pending') continue;
       status.status = 'skipped';
+      status.skipReason = 'not-attempted';
       status.error = pendingNotice;
       skippedCount++;
     }

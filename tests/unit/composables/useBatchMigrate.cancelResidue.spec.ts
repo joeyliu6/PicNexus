@@ -164,6 +164,10 @@ describe('cancel 后队列未处理条目', () => {
     expect(manager.migrateResult.value?.skippedCount).toBe(snapshot.length);
     expect(manager.migrateResult.value?.successCount! + manager.migrateResult.value?.failedCount! + manager.migrateResult.value?.skippedCount!)
       .toBe(snapshot.length);
+    // 收尾归入 skipped 的是「没来得及处理」，完成页不能把它们说成「本来就有」
+    const leftovers = snapshot.filter((s) => s.error === '备份已停止，没来得及处理');
+    expect(leftovers.length).toBeGreaterThan(0);
+    expect(leftovers.every((s) => s.skipReason === 'not-attempted')).toBe(true);
   });
 });
 

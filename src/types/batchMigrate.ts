@@ -2,6 +2,11 @@
  * 批量迁移相关类型定义
  */
 
+/**
+ * 跳过的原因：目标上本来就有 / 停止或中止时还没轮到 / 抢救模式下已不需要 / 处理前记录被删了
+ */
+export type MigrateSkipReason = 'already-there' | 'not-attempted' | 'not-needed' | 'deleted';
+
 /** 迁移流程阶段：配置 → 执行 → 完成 */
 export type MigratePhase = 'configuring' | 'migrating' | 'done';
 
@@ -44,6 +49,13 @@ export interface MigrateItemStatus {
   /** 实际被下载的源 URL（知乎 webp→jpg 优化后的终值），供 UI 列表展示 */
   sourceUrl?: string;
   status: 'pending' | 'downloading' | 'converting' | 'uploading' | 'success' | 'failed' | 'skipped';
+  /**
+   * 为什么跳过（只在 status === 'skipped' 时有值）
+   *
+   * 完成页据此分开说「N 张本来就有」和「N 张没处理」——取消 / 中止后剩下的条目也归入 skipped，
+   * 混在一起就会把「没来得及做」说成「本来就有」。
+   */
+  skipReason?: MigrateSkipReason;
   /**
    * 易读错误摘要（UI 直接展示用）。
    * 由 failureDetails 拼成 `displayName · message；displayName · message` 格式，不再含重复前缀

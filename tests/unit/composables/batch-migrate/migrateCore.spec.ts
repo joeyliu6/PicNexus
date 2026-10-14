@@ -103,6 +103,8 @@ describe('migrateOneItem', () => {
     );
 
     expect(status.status).toBe('skipped');
+    // 完成页据此说「本来就有」，不能和「没来得及处理」混在一起
+    expect(status.skipReason).toBe('already-there');
     expect(getInvokeMock()).not.toHaveBeenCalled();
     expect(historyDB.update).not.toHaveBeenCalled();
   });
@@ -232,6 +234,7 @@ describe('migrateOneItem', () => {
     );
 
     expect(status.status).toBe('skipped');
+    expect(status.skipReason).toBe('not-attempted');
     expect(getInvokeMock()).toHaveBeenCalledWith('cleanup_owned_temp_file', { path: '/tmp/a.png' });
   });
 
@@ -420,6 +423,7 @@ describe('migrateOneItem', () => {
 
     expect(status.status).toBe('skipped');
     expect(status.error).toBe('检测结果已更新，这张图已不需要抢救');
+    expect(status.skipReason).toBe('not-needed');
     expect(status.errorType).toBeUndefined();
     expect(getInvokeMock()).not.toHaveBeenCalled();
     expect(historyDB.update).not.toHaveBeenCalled();
@@ -597,7 +601,7 @@ describe('processBatch cancellation', () => {
     );
 
     expect(done).toHaveLength(2);
-    expect(done.every(status => status.status === 'skipped')).toBe(true);
+    expect(done.every(status => status.status === 'skipped' && status.skipReason === 'not-attempted')).toBe(true);
   });
 
   it('leaves paused items pending and does not count them as done', async () => {
