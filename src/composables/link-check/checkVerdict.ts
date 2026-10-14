@@ -3,6 +3,7 @@
 // 纯函数：输入汇总数字与运行状态，输出卡片上的全部文字与按钮。用户一打开页面看到的就是它，
 // 文案、按钮选哪个都在这里定，组件只负责摆出来。
 
+import { remainingText } from '@/utils/durationText';
 import { formatRelativeTime } from '@/utils/formatters';
 import type { ImageSummary } from './imageHealth';
 
@@ -54,15 +55,6 @@ export interface VerdictInput {
   loadingRest: boolean;
 }
 
-function etaText(seconds: number): string {
-  if (seconds < 60) return '预计不到 1 分钟';
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `预计还要 ${minutes} 分钟`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `预计还要 ${hours} 小时 ${rest} 分钟` : `预计还要 ${hours} 小时`;
-}
-
 function checkedAgo(timestamp: number): string {
   const relative = formatRelativeTime(timestamp);
   return /\d$/.test(relative) ? `${relative} 检查` : `${relative}检查`;
@@ -84,7 +76,7 @@ export function buildCheckVerdict({ summary, running, loadingRest }: VerdictInpu
     if (!running.paused) {
       // 卡住时不报时间：那个数是按之前的速度算的，此刻并不可信
       if (running.stalled) parts.push('有些图床响应慢，正在等它们');
-      else if (running.etaSeconds != null) parts.push(etaText(running.etaSeconds));
+      else if (running.etaSeconds != null) parts.push(remainingText(running.etaSeconds));
     }
     return {
       tone: running.paused ? 'paused' : 'running',

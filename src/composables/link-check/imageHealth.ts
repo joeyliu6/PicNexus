@@ -5,6 +5,7 @@
 // 纯函数，无 Vue 依赖。
 
 import type { CheckLinkResult, LinkCheckRow } from '@/types/linkCheck';
+import { joinCjk as cat, listServiceNames } from '@/utils/cjkSpacing';
 import { statusWord } from './useLinkStatusDisplay';
 
 /** 单条链接的判定：只分用户能据此行动的几类 */
@@ -102,25 +103,6 @@ export function isLostForGood(entry: ImageEntry, resultOf: ResultOf = committedR
   return entry.rows.length > 0 && entry.rows.every((r) => linkVerdict(resultOf(r)) === 'gone');
 }
 
-const CJK = /[一-鿿]/;
-const LATIN = /[A-Za-z0-9]/;
-
-/**
- * 拼句子：交界处一边是中文、一边是英文或数字，就补一个空格（「Cloudflare R2 连接超时」）
- *
- * 只看片段交界，不碰片段内部：图床名可能是用户自己起的（「家里NAS盘」），不能被改写。
- */
-function cat(...parts: string[]): string {
-  let out = '';
-  for (const part of parts) {
-    if (!part) continue;
-    const prev = out[out.length - 1] ?? '';
-    if ((CJK.test(prev) && LATIN.test(part[0])) || (LATIN.test(prev) && CJK.test(part[0]))) out += ' ';
-    out += part;
-  }
-  return out;
-}
-
 /** 「微博上的图已不存在」「Cloudflare R2 连接超时」：只说这一份出了什么事 */
 function problemPhrase(host: string, result: CheckLinkResult | undefined): string {
   if (!result) return cat(host, '上打不开');
@@ -138,11 +120,6 @@ function problemPhrase(host: string, result: CheckLinkResult | undefined): strin
   if (result.status_code === 401) return cat(host, '要登录才能看');
   if (result.status_code === 403) return cat(host, '拒绝访问');
   return cat(host, '上打不开');
-}
-
-function hostList(names: string[]): string {
-  if (names.length <= 3) return names.join('、');
-  return cat(names[0], `等 ${names.length} 个图床`);
 }
 
 export interface ImageDescription {
@@ -169,7 +146,7 @@ export function describeImage(entry: ImageEntry, nameOf: (serviceId: string) => 
     case 'ok':
       text = backups.length === 0
         ? cat('能正常打开 · 只在', nameOf(primary.serviceId), '上有一份')
-        : `能正常打开 · ${hostList(entry.rows.map((r) => nameOf(r.serviceId)))}`;
+        : `能正常打开 · ${listServiceNames(entry.rows.map((r) => nameOf(r.serviceId)))}`;
       break;
     case 'backup-broken': {
       const failed = backups.filter((b) => isFailed(verdictOf(b)));
