@@ -77,19 +77,25 @@ function resolveProfileConfig(config?: UserConfig): UserConfig | null | undefine
  * 获取服务显示名称
  * 支持内置服务和 custom_s3:profileId / webdav:profileId 复合 ID
  *
- * 注：profile 确实不存在时（如已删除，但历史记录仍引用）仍带上 profileId，
- * 这是"查不到"与"没去查"的区别——前者带 ID 反而有助于排查。
+ * 查不到 profile 分两种，必须说成两样：
+ * - **没去查**（没传 config、也没注册来源）→ `WebDAV (原始ID)`。这是接线漏了，
+ *   带 ID 才能一眼看出问题（useConfig 的接线护栏测试靠的就是这个区别）
+ * - **查了但确实不存在**（profile 已删，历史记录仍引用）→ `WebDAV（已删除）`。
+ *   界面的读者是用户，一串随机 ID 既认不出是哪个配置，也说明不了链接为什么坏；
+ *   「已删除」直接回答了后者。需要 ID 排查时看日志或导出的 CSV（存的是原始 serviceId）
  */
 export function getServiceDisplayName(serviceId: string, config?: UserConfig): string {
   if (isCustomS3Id(serviceId)) {
     const profileId = getCustomS3ProfileId(serviceId);
-    const profile = resolveProfileConfig(config)?.custom_s3_profiles?.find(p => p.id === profileId);
-    return profile?.name || `自定义 S3 (${profileId})`;
+    const source = resolveProfileConfig(config);
+    if (!source) return `自定义 S3 (${profileId})`;
+    return source.custom_s3_profiles?.find(p => p.id === profileId)?.name || '自定义 S3（已删除）';
   }
   if (isWebDAVId(serviceId)) {
     const profileId = getWebDAVProfileId(serviceId);
-    const profile = resolveProfileConfig(config)?.webdav_profiles?.find(p => p.id === profileId);
-    return profile?.name || `WebDAV (${profileId})`;
+    const source = resolveProfileConfig(config);
+    if (!source) return `WebDAV (${profileId})`;
+    return source.webdav_profiles?.find(p => p.id === profileId)?.name || 'WebDAV（已删除）';
   }
   return SERVICE_DISPLAY_NAMES[serviceId as ServiceType] || serviceId;
 }

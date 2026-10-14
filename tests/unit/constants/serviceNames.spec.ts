@@ -40,13 +40,13 @@ describe('getServiceDisplayName', () => {
     expect(getServiceDisplayName('custom_s3:s3a')).toBe('自定义 S3 (s3a)');
   });
 
-  it('keeps the id in the label when the profile is genuinely gone', () => {
-    // 「没去查」要修，「查了但确实不存在」（profile 已删、历史记录仍引用）
-    // 保留 ID 反而有助于排查，不能一并抹掉
+  it('says "deleted" instead of a random id when the profile is genuinely gone', () => {
+    // 「没去查」（上一条）保留 ID 好排查接线；「查了但确实不存在」（profile 已删、
+    // 历史记录仍引用）是给用户看的，随机 ID 认不出来，「已删除」才回答了链接为什么坏
     registerProfileNameSource(() => makeConfig());
 
-    expect(getServiceDisplayName('webdav:deleted')).toBe('WebDAV (deleted)');
-    expect(getServiceDisplayName('custom_s3:deleted')).toBe('自定义 S3 (deleted)');
+    expect(getServiceDisplayName('webdav:deleted')).toBe('WebDAV（已删除）');
+    expect(getServiceDisplayName('custom_s3:deleted')).toBe('自定义 S3（已删除）');
   });
 
   it('prefers an explicitly passed config over the registered source', () => {
