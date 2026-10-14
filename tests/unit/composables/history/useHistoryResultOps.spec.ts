@@ -500,6 +500,22 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(getByIdMock).not.toHaveBeenCalled();
   });
 
+  it('调用方可以换成按图片说话的确认文案（链接检测按图片列，「N 条链接」对用户没有意义）', async () => {
+    confirmMock.mockResolvedValue(false);
+    const { ctx } = makeCtx();
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
+
+    await bulkDeleteHistoryResults(
+      [{ historyId: 'hist-multi', serviceId: 'jd' }, { historyId: 'hist-multi', serviceId: 'qiyu' }],
+      { header: '从记录中移除这张图？', message: '自定义说明', acceptLabel: '移除' },
+    );
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      '自定义说明',
+      expect.objectContaining({ header: '从记录中移除这张图？', acceptLabel: '移除', acceptClass: 'p-button-danger' }),
+    );
+  });
+
   // 同一张图的多个图床合并成一次 update，避免 N 次写库
   it('merges multiple services of the same record into a single update', async () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem());

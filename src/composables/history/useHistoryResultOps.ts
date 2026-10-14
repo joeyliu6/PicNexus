@@ -35,6 +35,18 @@ export interface ResultDeleteTarget {
 
 export type ResultDeleteOutcome = 'deleted' | 'updated' | false;
 
+/**
+ * 批量移除确认框的文案，调用方可整套换掉
+ *
+ * 默认按「N 条链接」说；链接检测按图片列表，它会换成「移除这张图」「移除 N 张找不回的图片」。
+ * 换文案时 message 里同样要讲清「图床上的文件不受影响」与「无法撤销」。
+ */
+export interface BulkDeleteConfirmCopy {
+  header: string;
+  message: string;
+  acceptLabel: string;
+}
+
 /** 批量删除的执行报告：只有走到执行阶段才会返回（未确认/空选/全非法时返回 false） */
 export interface BulkResultDeleteReport {
   /** 实际从记录中抹除的选中链接条数（含随整条记录一起消失的）；已不存在的目标不计入 */
@@ -197,6 +209,7 @@ export function createResultOps(ctx: ResultOpsContext) {
    */
   async function bulkDeleteHistoryResults(
     targets: ResultDeleteTarget[],
+    copy?: BulkDeleteConfirmCopy,
   ): Promise<BulkResultDeleteReport | false> {
     try {
       if (targets.length === 0) {
@@ -214,10 +227,11 @@ export function createResultOps(ctx: ResultOpsContext) {
       if (grouped.size === 0) return false;
 
       const confirmed = await confirm(
-        `将从 PicNexus 的记录里移除 ${targets.length} 条图床链接，图床上的文件不会被删除；只剩这些链接的图片会从历史记录里消失。移除后无法撤销。`,
+        copy?.message
+          ?? `将从 PicNexus 的记录里移除 ${targets.length} 条图床链接，图床上的文件不会被删除；只剩这些链接的图片会从历史记录里消失。移除后无法撤销。`,
         {
-          header: `移除 ${targets.length} 条链接？`,
-          acceptLabel: `移除 ${targets.length} 条`,
+          header: copy?.header ?? `移除 ${targets.length} 条链接？`,
+          acceptLabel: copy?.acceptLabel ?? `移除 ${targets.length} 条`,
           acceptClass: 'p-button-danger',
         },
       );
