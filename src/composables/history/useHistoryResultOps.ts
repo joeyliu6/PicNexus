@@ -143,7 +143,7 @@ export function createResultOps(ctx: ResultOpsContext) {
    * 所以这里不追求原子性，而是把"部分失败"做成明确契约：
    * - 每条记录独立 try/catch，一条抛错不拖累其余记录；
    * - applyChanges 只对真落库的部分生效，内存计数/事件与 DB 实际状态一致；
-   * - toast 报实际抹除条数，部分失败时另给可重试提示；
+   * - toast 报实际移除了什么（整张图说张数，只剥链接说条数），部分失败时另给可重试提示；
    * - 返回报告标明哪些记录动了、哪些失败，调用方据此只移除对应的行。
    */
   async function bulkDeleteHistoryResults(
@@ -181,7 +181,6 @@ export function createResultOps(ctx: ResultOpsContext) {
       const staleHistoryIds: string[] = [];
       const failedHistoryIds: string[] = [];
       let removedCount = 0;
-      let failedLinkCount = 0;
       let firstErrorMsg = '';
 
       for (const [historyId, serviceSet] of grouped) {
@@ -227,7 +226,6 @@ export function createResultOps(ctx: ResultOpsContext) {
           const msg = error instanceof Error ? error.message : String(error);
           if (!firstErrorMsg) firstErrorMsg = msg;
           failedHistoryIds.push(historyId);
-          failedLinkCount += serviceSet.size;
           log.error('[历史记录] 批量删除中单条记录处理失败:', { historyId, error });
         }
       }
@@ -241,12 +239,14 @@ export function createResultOps(ctx: ResultOpsContext) {
       if (failedHistoryIds.length === 0) {
         // 全是陈旧目标时静默：没有真删任何东西，行消失本身就是反馈
         if (removedCount > 0) {
-          toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(removedCount));
+          toast.showConfig('success', updatedItemIds.length === 0
+            ? TOAST_MESSAGES.history.imagesRemoved(deletedItemIds.length)
+            : TOAST_MESSAGES.history.linksRemoved(removedCount));
         }
       } else if (removedCount > 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.common.deletePartial(removedCount, failedLinkCount));
+        toast.showConfig('warn', TOAST_MESSAGES.history.removePartial(failedHistoryIds.length));
       } else {
-        toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(firstErrorMsg));
+        toast.showConfig('error', TOAST_MESSAGES.history.removeFailed(firstErrorMsg));
       }
 
       return {
@@ -257,7 +257,7 @@ export function createResultOps(ctx: ResultOpsContext) {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       log.error('[历史记录] 批量删除图床结果失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(msg));
+      toast.showConfig('error', TOAST_MESSAGES.history.removeFailed(msg));
       return false;
     }
   }

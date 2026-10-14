@@ -30,10 +30,6 @@ export const TOAST_MESSAGES = {
       summary: '删除失败',
       detail: error
     }),
-    deletePartial: (removed: number, failed: number): ToastMessageConfig => ({
-      summary: '部分删除失败',
-      detail: `已删除 ${removed} 条，${failed} 条失败\n失败的行已保留在列表中，可重试`
-    }),
     clearSuccess: (target: string): ToastMessageConfig => ({
       summary: '已清空',
       detail: target
@@ -340,7 +336,22 @@ export const TOAST_MESSAGES = {
     noLoadableData: {
       summary: '无可用数据',
       detail: '选中的项目无法加载'
-    } as StaticMessage
+    } as StaticMessage,
+    // 按图床移除链接（链接检测）：回执和确认框用同一个单位——整张图移除说张数，只剥掉链接说条数
+    imagesRemoved: (count: number): ToastMessageConfig => ({
+      summary: `已从记录中移除 ${count} 张图片`
+    }),
+    linksRemoved: (count: number): ToastMessageConfig => ({
+      summary: `已移除 ${count} 条链接`
+    }),
+    removePartial: (failedImages: number): ToastMessageConfig => ({
+      summary: `${failedImages} 张图片没移除成功`,
+      detail: '其余的已移除；没移除的还留在列表里，可以再试一次'
+    }),
+    removeFailed: (error: string): ToastMessageConfig => ({
+      summary: '没移除成功',
+      detail: error
+    })
   },
 
   // === 剪贴板 ===

@@ -172,10 +172,8 @@ describe('createResultOps - 剥离与降级', () => {
     expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
     expect(deleteMock).toHaveBeenCalledWith('hist-single');
     expect(updateMock).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'success',
-      TOAST_MESSAGES.common.deleteSuccess(1),
-    );
+    // 确认框说的是「移除这张图」，回执也按图片说，不说「删除 N 条记录」
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', { summary: '已从记录中移除 1 张图片' });
   });
 
   it('keeps the primary service untouched when a non-primary mirror is stripped', async () => {
@@ -300,7 +298,7 @@ describe('createResultOps - 剥离与降级', () => {
     expect(result).toEqual({ removedCount: 0, resolvedHistoryIds: [], failedHistoryIds: ['hist-multi'] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
-      TOAST_MESSAGES.common.deleteFailed('db offline'),
+      TOAST_MESSAGES.history.removeFailed('db offline'),
     );
     expect(ctx.totalCount.value).toBe(5);
     expect(ctx.dataVersion.value).toBe(1);
@@ -317,7 +315,7 @@ describe('createResultOps - 剥离与降级', () => {
     expect(result).toEqual({ removedCount: 0, resolvedHistoryIds: [], failedHistoryIds: ['hist-multi'] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
-      TOAST_MESSAGES.common.deleteFailed('db locked'),
+      TOAST_MESSAGES.history.removeFailed('db locked'),
     );
     expect(refreshServiceCounts).not.toHaveBeenCalled();
     expect(ctx.dataVersion.value).toBe(1);
@@ -335,7 +333,7 @@ describe('createResultOps - 剥离与降级', () => {
     expect(result).toEqual({ removedCount: 0, resolvedHistoryIds: [], failedHistoryIds: ['hist-single'] });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
-      TOAST_MESSAGES.common.deleteFailed('disk full'),
+      TOAST_MESSAGES.history.removeFailed('disk full'),
     );
     expect(ctx.totalCount.value).toBe(5);
     expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
@@ -582,10 +580,21 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'missing-b', serviceId: 'jd' },
     ]);
 
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'success',
-      TOAST_MESSAGES.common.deleteSuccess(1),
-    );
+    // 记录还在、只剥掉了链接：按链接说
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', { summary: '已移除 1 条链接' });
+  });
+
+  it('清理几张整图时回执报张数，和「清理 N 张找不回的图片」同一个单位', async () => {
+    getByIdMock.mockImplementation(async (id: string) => makeSingleServiceItem({ id }));
+    const { ctx } = makeCtx();
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
+
+    await bulkDeleteHistoryResults([
+      { historyId: 'lost-a', serviceId: 'jd' },
+      { historyId: 'lost-b', serviceId: 'jd' },
+    ]);
+
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', { summary: '已从记录中移除 2 张图片' });
   });
 
   // 部分失败契约（2026-08-22 修复，取代旧的「中途抛错→内存态全不跟进」现状）：
@@ -618,10 +627,10 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['hist-single']);
     expect(emitHistoryUpdatedMock).not.toHaveBeenCalled();
     // 部分失败用 warn 报实际战果 + 可重试指引，而不是整体报错
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'warn',
-      TOAST_MESSAGES.common.deletePartial(1, 1),
-    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', {
+      summary: '1 张图片没移除成功',
+      detail: '其余的已移除；没移除的还留在列表里，可以再试一次',
+    });
   });
 
   // 全部记录都失败时没有任何落库，不动内存态，整体报错（口径与单条版一致）；
@@ -647,10 +656,7 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(ctx.totalCount.value).toBe(5);
     expect(ctx.dataVersion.value).toBe(1);
     expect(refreshServiceCounts).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'error',
-      TOAST_MESSAGES.common.deleteFailed('db locked'),
-    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', { summary: '没移除成功', detail: 'db locked' });
   });
 
   // 与单条版对称：Tauri invoke 抛出的常是字符串而非 Error，detail 不能变成 "[object Object]"
@@ -669,7 +675,7 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
-      TOAST_MESSAGES.common.deleteFailed('plain string failure'),
+      TOAST_MESSAGES.history.removeFailed('plain string failure'),
     );
   });
 });
@@ -730,10 +736,7 @@ describe('createResultOps - applyChanges 副作用', () => {
     const result = await bulkDeleteHistoryResults([{ historyId: 'hist-single', serviceId: 'jd' }]);
 
     expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'success',
-      TOAST_MESSAGES.common.deleteSuccess(1),
-    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', TOAST_MESSAGES.history.imagesRemoved(1));
   });
 
   it('still reports success when the updated broadcast rejects', async () => {
@@ -745,10 +748,7 @@ describe('createResultOps - applyChanges 副作用', () => {
     const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'qiyu' }]);
 
     expect(result).toMatchObject({ removedCount: 1, failedHistoryIds: [] });
-    expect(toastShowConfigMock).toHaveBeenCalledWith(
-      'success',
-      TOAST_MESSAGES.common.deleteSuccess(1),
-    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', TOAST_MESSAGES.history.linksRemoved(1));
   });
 });
 
