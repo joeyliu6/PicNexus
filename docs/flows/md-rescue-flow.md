@@ -30,7 +30,7 @@ flowchart TD
     J --> K{所有文件完成?}
     K -- 否 --> I
     K -- 是 --> L["scanStage = backups<br/>Phase 2: 统一验证备用链接"]
-    L --> M["scanStage = complete<br/>用户选择修复策略（见图 6）"]
+    L --> M["scanStage = complete<br/>按首选 / 最快预选每张图的替换来源（见图 6）"]
 
     M --> N["用户确认 → fixing 阶段<br/>备份 + 替换（见图 5）"]
     N --> O["done 阶段<br/>显示结果 / 支持撤销"]
@@ -244,7 +244,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["用户确认修复<br/>handleRepairConfirm(strategy)"] --> B["applyRepairStrategy(strategy)<br/>按策略为每张图写 link.selectedBackup（见图 6）"]
+    A["用户点「修复 N 处」<br/>handleRepair（不弹确认框）"] --> B["link.selectedBackup 已在扫描结束时定好<br/>（见图 6，用户可逐行改）"]
     B --> C["构建 fileReplacements Map<br/>file → Map&lt;oldUrl, newUrl&gt;（读 link.selectedBackup）"]
     C --> D{有替换可做?}
     D -- 否 --> D1["直接进入 done<br/>repairReceipt 为空"]
@@ -338,50 +338,49 @@ setup 期间取好、当参数传进来**，由 `useMdRescueManager()` 里的四
 
 ---
 
-## 图 6：修复策略决策
+## 图 6：替换来源的选择
 
-展示三种修复策略如何为每张失效图片选择备用链接，以及确认对话框里的替换摘要预览如何跟点
-「开始修复」后实际发生的替换保持一致——两边共用同一份挑选逻辑（`pickBackupForLink`），
-不是各算一份。
+每张可修复图片要换成哪条备份，**在扫描结束时就定好并显示在列表上**，用户可逐行改；
+点「修复 N 处」直接按列表所示替换，不再弹策略确认框。所见即所改，加上修改前自动备份、
+完成后可一键撤销，确认框只会是多余的一步。
 
 > **关键源文件**：`src/composables/md-rescue/useRepairStrategy.ts`（`pickBackupForLink`、
-> `applyRepairStrategy`、`summarizeRepairStrategy`、`applyHostPreference`）、
-> `src/components/views/link-check/MdRepairDialog.vue`（`currentStrategy` 计算属性、摘要面板）
+> `applyDefaultBackups`、`preferServiceForAll`）、`src/components/views/link-check/MdRescueInline.vue`
+> （扫描结束 watcher、`handleRepair`、`handlePreferService`）、
+> `src/components/views/link-check/rescue/RescueBackupChooser.vue`（逐行换来源的弹层）
 
 ```mermaid
 flowchart TD
-    A["用户打开修复确认对话框"] --> B["currentStrategy 计算属性<br/>随策略单选 / 优先级顺序 / 手动选择实时更新"]
-    B --> S["summarizeRepairStrategy(rescuableLinks, currentStrategy)<br/>纯函数，不写 imageLinks，仅供预览"]
-    S --> S1["替换摘要面板：N 个文件 · M 处替换<br/>展开可看每个文件改几处"]
+    A["scanStage → complete / cancelled"] --> B["loadHostPreference()<br/>读已保存的首选顺序"]
+    B --> C["applyDefaultBackups(hostPreference)"]
+    C --> D{"该图已有仍可用的<br/>selectedBackup?"}
+    D -- 是 --> D1["保留（用户手动选过的不覆盖）"]
+    D -- 否 --> E{"有首选顺序?"}
+    E -- 有 --> E1["pickBackupForLink priority<br/>按顺序取首个可用备份"]
+    E -- 无 --> E2["pickBackupForLink fastest<br/>取响应最快的可用备份"]
 
-    B --> C["遍历失效链接<br/>筛选有效备用链接"]
-    C --> D{"pickBackupForLink<br/>策略类型"}
+    E1 --> F["列表每行显示「→ 图床名」"]
+    E2 --> F
+    D1 --> F
 
-    D -- "priority<br/>图床偏好优先级" --> E["按 order 排序<br/>选第一个有效的"]
-    D -- "fastest<br/>最快响应" --> F["按 response_time 升序<br/>选最快的"]
-    D -- "manual<br/>手动选择" --> G["从 selections Map<br/>获取用户指定的 URL"]
+    F --> G["用户点某行的来源<br/>RescueBackupChooser 列出可用备份"]
+    G --> G1["选一个 → 只改这一行的 selectedBackup"]
+    G --> G2["「以后优先用 X，应用到全部」<br/>preferServiceForAll + saveHostPreference"]
 
-    E --> J["用户点「开始修复」<br/>emit('confirm', currentStrategy)"]
-    F --> J
-    G --> J
+    F --> H["点「修复 N 处」→ executeReplace()（见图 5）"]
 
-    J --> K["applyRepairStrategy(strategy)<br/>用同一份 pickBackupForLink 写 link.selectedBackup"]
-    K --> L["executeReplace()（见图 5）"]
-
-    style E fill:#e3f2fd,stroke:#1976d2
     style F fill:#e3f2fd,stroke:#1976d2
-    style G fill:#e3f2fd,stroke:#1976d2
-    style S1 fill:#fff3e0,stroke:#e65100
-    style L fill:#e8f5e9,stroke:#2e7d32
+    style G2 fill:#fff3e0,stroke:#e65100
+    style H fill:#e8f5e9,stroke:#2e7d32
 ```
 
-### 策略类型说明
+### 选择规则
 
-| 策略 | 适用场景 | 参数 | 选择逻辑 |
-|------|---------|------|---------|
-| `priority` | 偏好某些图床（如优先用自建 OSS） | `order: string[]`（图床 ID 优先级列表） | 按 order 排序有效备用链接，取第一个 |
-| `fastest` | 追求最快加载速度 | 无 | 按 `response_time` 升序，取最快 |
-| `manual` | 逐条手动选择（少量修复时） | `selections: Map<url, backupUrl>` | 直接使用用户指定的 URL |
+| 规则 | 何时用 | 选择逻辑 |
+|------|-------|---------|
+| `priority` | 用户设过首选（`mdRescueHostPreference` 非空） | 按顺序排可用备份，取第一个；未列入的图床排最后 |
+| `fastest` | 没设过首选 | 按 `response_time` 升序，取最快 |
+| 逐行手动 | 用户在某行弹层里点了别的图床 | 直接写这一行的 `selectedBackup`，之后的默认预选不会覆盖它 |
 
 ---
 
@@ -401,10 +400,10 @@ flowchart TD
 | 撤销后两个同名文件内容互串 | 不应再出现。历史成因是 verbatim 前缀让相对路径退化为裸 basename，同名备份互相顶掉 | 图 5 [备份路径不变量](#备份路径不变量) |
 | 修复过的文件夹再扫一次，失效数虚高 | 检查 `.picnexus-backup` 是否被扫进来（Rust 递归按 `BACKUP_DIR_NAME` 跳过）；目录名两侧漂移会被 `npm run lint` 拦下 | 图 2 Rust 扫描、[备份目录排除](#备份目录排除) |
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
-| 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复链接」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
+| 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复 N 处」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
 | 拖放文件报 `forbidden path ... allow-stat` | 路径没进 fs 运行时白名单，见 [文件访问白名单](#文件访问白名单)。按钮选文件能用而拖放不能，就是这条 | 图 2 加载入口 |
 | 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
-| 图床偏好设置不生效 | `hostPreference` 为空数组（未设置偏好则不排序） | 图 6 `priority` 策略 |
+| 每行预选的不是想要的图床 | 没设过首选时按「最快」选；在某行弹层里点「以后优先用 X，应用到全部」会存成首选 | 图 6 选择规则 |
 | 徽章/代理服务 URL 里的 `.js`/`.css` 被当图片扫 | `isValidImageUrl` / `is_valid_image_url` 按 URL path 末尾扩展名做黑名单过滤（`js/css/html/pdf/zip/mp4/...`），query/fragment 不参与 | `src/utils/mdParser.ts` `NON_IMAGE_EXTENSIONS`、`src-tauri/src/commands/md_scanner.rs` 同名常量（两侧必须保持一致） |
 
 ---
