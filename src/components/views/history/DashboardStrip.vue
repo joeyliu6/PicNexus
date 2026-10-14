@@ -262,7 +262,7 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 图床筛选（参照 link-check CheckFilterBar 的 chip + 下拉） */
+/* 图床筛选（chip + 下拉） */
 .service-filter {
   position: relative;
   flex-shrink: 0;

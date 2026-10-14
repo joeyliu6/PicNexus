@@ -13,7 +13,7 @@ import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 
 /**
  * 会变的字段（检测结果、选中的备份）单独传：imageLinks 里的对象会被原地改写，
- * 只传 link 引用时子组件感知不到（同链接检测的 CheckLinkRow）。
+ * 只传 link 引用时子组件感知不到（链接检测的 CheckImageList 也是先算好再逐项传给行）。
  */
 const props = defineProps<{
   link: MdImageLinkWithFile;

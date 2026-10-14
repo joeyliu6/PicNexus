@@ -58,7 +58,7 @@ const {
   onCancelCollect: cancelCollect, onCancelScan: cancelScan,
 });
 
-// 底部进度条：显示条件 / 百分比 / 不定态（参照 CheckBottomBar 的位置与样式）
+// 底部进度条：显示条件 / 百分比 / 不定态
 // 只在"真正进行中"的阶段显示；complete / cancelled 立即隐藏，避免扫完后进度条残留
 const showBottomProgress = computed(() => {
   if (phase.value === 'fixing') return true;
@@ -237,7 +237,7 @@ const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修�
     <!-- 底栏 -->
     <Transition name="slide-up">
     <div v-if="phase !== 'idle' || isCollecting" class="rescue-bottom">
-      <!-- 极简进度条（与链接检测 CheckBottomBar 一致），scanning / collecting / fixing 共用 -->
+      <!-- 极简进度条，scanning / collecting / fixing 共用 -->
       <Transition name="fade">
         <div v-if="showBottomProgress" class="progress-bar" role="progressbar" :aria-valuenow="bottomProgressPercent" aria-valuemin="0" aria-valuemax="100">
           <div class="progress-bar-inner">
@@ -364,7 +364,7 @@ const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修�
 /* 底栏 */
 .rescue-bottom { display: flex; flex-direction: column; gap: var(--space-sm); flex-shrink: 0; padding-right: var(--space-xl); }
 
-/* 极简进度条（样式与 CheckBottomBar 一致，确保视觉节奏对齐链接检测） */
+/* 极简进度条 */
 .progress-bar {
   width: 100%; flex-shrink: 0; cursor: default;
   padding: var(--space-xs) 0; position: relative;

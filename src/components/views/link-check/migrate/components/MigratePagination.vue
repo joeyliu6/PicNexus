@@ -2,7 +2,7 @@
 /**
  * 批量迁移 · 分页条
  *
- * 视觉对齐 CheckBottomBar 的分页块（26×26 chevron + 32×22 页码输入 + "/ totalPages"）。
+ * 分页块：26×26 chevron + 32×22 页码输入 + "/ totalPages"。
  * 父组件在 effectiveTotalCount > 0 时挂载（MigrateProgressPhase.showPagination），
  * 不足一页时也会渲染一个无翻页可用的「第 1 / 1 页」分页条。
  */
