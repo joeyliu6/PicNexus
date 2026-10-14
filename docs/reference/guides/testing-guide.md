@@ -133,6 +133,22 @@ portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥�
 ⚠️ 不 `--clean` 的话，以后 `tauri dev` 会静默进入 portable 模式读错数据。
 建表语句由脚本从 `SchemaManager.ts` 运行时抽取，不存在第二份会漂移的 DDL 副本。
 
+### 真机走查（AI 自己看界面）
+
+视觉测试用的是夹具数据；改完维护页这类「数据 → 判断 → 界面」整条链路，还要在真应用里走一遍。做法：
+
+1. `node scripts/seed-tauri-e2e-portable.mjs` 建好隔离库，再用 Python 把 `history_items` 换成自己造的记录。`results` 每项写成 `{ serviceId, status: 'success', result: { serviceId, fileKey, url } }`（应用认这个形状，种子脚本里的 6 条 `e2e-*` 不是）。
+2. 本机起一个假图床（Python `ThreadingHTTPServer`），按路径回 200 真图片（大于 1 KB、`image/png`）/ 404 / 502 / 403 / 超过 10 秒 / 302，链接写 `http://127.0.0.1:端口/...`：探测放行回环地址。
+3. `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222 npm run tauri dev`，用 Playwright `chromium.connectOverCDP('http://127.0.0.1:9222')` 连上主窗口点按钮、截图。
+4. 收尾：关掉 `target\debug\picnexus.exe` 和 Vite 进程，`--clean` 删隔离库。
+
+坑：
+
+- 微博链接检测走百度中转，中转连不到本机，假图床模拟不了微博，造数据换别的图床。
+- 隔离的只有数据库和配置；WebView 的 localStorage 和正式版共用。文档修复要打开测试文件夹，就往 `mru.md-rescue` 插一条再点「最近打开」，走查前先存原值，结束后原样写回（`lastRepair.md-rescue` 同理）；`picnexus-theme` 会被开发版写成它自己的主题，正式版下次启动时自己改回。
+- 补充备份取原图会拦本机地址，假图床跑不出成功的备份流程。
+- 改代码后热更新会把标签页切回链接检测，模块级的状态却还在：点之前先截图确认在哪一页；`text=` 选择器也可能点到同名的分组标题。
+
 ## 跨引擎（WebKit）层
 
 ### 它解决什么
