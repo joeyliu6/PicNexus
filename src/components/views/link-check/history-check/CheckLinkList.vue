@@ -58,12 +58,15 @@ const emit = defineEmits<{
       class="empty-state-wrapper"
     >
       <EmptyState
-        icon="pi pi-verified"
         title="没有发现问题"
         :description="stats.unchecked > 0
           ? `已检测的 ${stats.checked.toLocaleString()} 条链接都能正常访问，还有 ${stats.unchecked.toLocaleString()} 条未检测`
           : `全部 ${stats.checked.toLocaleString()} 条链接都能正常访问`"
-      />
+      >
+        <template #icon>
+          <i class="pi pi-check-circle empty-ok-icon" aria-hidden="true" />
+        </template>
+      </EmptyState>
     </div>
 
     <div
@@ -145,6 +148,12 @@ const emit = defineEmits<{
     calc(var(--link-check-empty-center-shift-x, 40px) * -1),
     calc(var(--link-check-empty-center-shift-y, 40px) * -1)
   );
+}
+
+/* 「没有发现问题」用成功色，和文档修复的同名空态一致 */
+.empty-ok-icon {
+  font-size: var(--text-4xl);
+  color: var(--success);
 }
 
 /* TransitionGroup 行进出动画

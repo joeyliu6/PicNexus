@@ -298,14 +298,14 @@ const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修�
           </template>
           <template v-else-if="phase === 'scanning' && scanStage === 'cancelled'">
             <span v-if="scanProgress" class="mr-cancelled-hint">已检测 {{ scanProgress.checked }} / {{ scanProgress.total }}</span>
-            <button class="btn-ghost btn-sm" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
-            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '基于已检测的部分结果修复 · 修改前自动备份' : '已检测部分无可修复链接'" @click="handleRepair">
+            <button class="btn-ghost btn-sm" v-tooltip.top="'回到首页，重新选择文件或文件夹'" @click="resetRescue"><i class="pi pi-arrow-left" /> 重新选择</button>
+            <button v-if="bottomStats.problemCount > 0" :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '基于已检测的部分结果修复 · 修改前自动备份' : '已检测部分无可修复链接'" @click="handleRepair">
               <i class="pi pi-wrench" /> {{ hasRescuable ? repairButtonLabel : '修复链接' }}
             </button>
           </template>
           <template v-else-if="phase === 'scanning' && scanStage === 'complete'">
-            <button :class="['btn-sm', hasRescuable ? 'btn-ghost' : 'btn-primary']" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
-            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? repairButtonTooltip : '这些失效图片在 PicNexus 里都没有可用备份'" @click="handleRepair">
+            <button :class="['btn-sm', hasRescuable ? 'btn-ghost' : 'btn-primary']" v-tooltip.top="'回到首页，重新选择文件或文件夹'" @click="resetRescue"><i class="pi pi-arrow-left" /> 重新选择</button>
+            <button v-if="bottomStats.problemCount > 0" :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? repairButtonTooltip : '这些失效图片在 PicNexus 里都没有可用备份'" @click="handleRepair">
               <i class="pi pi-wrench" /> {{ hasRescuable ? repairButtonLabel : '修复链接' }}
             </button>
           </template>
@@ -313,7 +313,7 @@ const repairButtonTooltip = '用备份图床的链接替换失效链接 · 修�
             <button class="btn-danger btn-sm" @click="cancelFix"><i class="pi pi-stop" /> 取消修复</button>
           </template>
           <template v-else-if="phase === 'done'">
-            <button class="btn-ghost btn-sm" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
+            <button class="btn-primary btn-sm" v-tooltip.top="'回到首页；要反悔可以点上方的「撤销」，或之后在首页的「上次修复」里撤销'" @click="resetRescue"><i class="pi pi-check" /> 完成</button>
           </template>
         </div>
       </div>

@@ -9,7 +9,7 @@ function makeHarness(args: {
   isCollecting?: boolean;
   collectProgress?: { scannedFiles: number; processedFiles: number; foundLinks: number; currentFile?: string } | null;
   scanProgress?: { checked: number; total: number } | null;
-  bottomStats?: { totalImages: number; normalFileCount: number; checkedCount: number };
+  bottomStats?: { totalFiles: number; totalImages: number; normalFileCount: number; checkedCount: number };
   onCancelCollect?: () => void;
   onCancelScan?: () => void;
 }) {
@@ -18,7 +18,7 @@ function makeHarness(args: {
   const isCollecting = ref(args.isCollecting ?? false);
   const collectProgress = ref(args.collectProgress ?? null);
   const scanProgress = ref(args.scanProgress ?? null);
-  const bottomStats = computed(() => args.bottomStats ?? { totalImages: 0, normalFileCount: 0, checkedCount: 0 });
+  const bottomStats = computed(() => args.bottomStats ?? { totalFiles: 0, totalImages: 0, normalFileCount: 0, checkedCount: 0 });
   const onCancelCollect = args.onCancelCollect ?? vi.fn();
   const onCancelScan = args.onCancelScan ?? vi.fn();
 
@@ -81,8 +81,14 @@ describe('useRescueScanHeader', () => {
   it('emptyIcon/Title/Desc - complete', () => {
     const h = makeHarness({ scanStage: 'complete' });
     expect(h.api().emptyIcon.value).toBe('pi pi-check-circle');
-    expect(h.api().emptyTitle.value).toBe('没有问题链接');
-    expect(h.api().emptyDesc.value).toBe('所有图片链接正常');
+    expect(h.api().emptyTitle.value).toBe('没有发现问题');
+    expect(h.api().emptyDesc.value).toBe('这些文件里没有图片链接');
+
+    const counted = makeHarness({
+      scanStage: 'complete',
+      bottomStats: { totalFiles: 3, totalImages: 7, normalFileCount: 3, checkedCount: 7 },
+    });
+    expect(counted.api().emptyDesc.value).toBe('检查了 3 个文件里的 7 张图片，都能正常打开');
   });
 
   it('emptyIcon/Title/Desc - cancelled', () => {
@@ -104,7 +110,7 @@ describe('useRescueScanHeader', () => {
 
   it('emptyDesc - 有 normalFileCount', () => {
     const h = makeHarness({
-      bottomStats: { normalFileCount: 5, checkedCount: 20, totalImages: 50 },
+      bottomStats: { totalFiles: 5, normalFileCount: 5, checkedCount: 20, totalImages: 50 },
     });
     expect(h.api().emptyDesc.value).toBe('已扫 5 个文件 · 检测 20 / 50 图片');
   });

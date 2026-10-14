@@ -7,7 +7,7 @@ import type { RescuePhase } from './shared';
 type ScanStage = 'checking' | 'backups' | 'complete' | 'cancelling' | 'cancelled';
 type CollectProgress = { scannedFiles: number; processedFiles: number; foundLinks: number; currentFile?: string } | null;
 type ScanProgress = { checked: number; total: number } | null;
-type BottomStats = { totalImages: number; normalFileCount: number; checkedCount: number };
+type BottomStats = { totalFiles: number; totalImages: number; normalFileCount: number; checkedCount: number };
 
 interface UseRescueScanHeaderArgs {
   phase: Ref<RescuePhase>;
@@ -49,14 +49,17 @@ export function useRescueScanHeader(args: UseRescueScanHeaderArgs) {
     return '';
   });
   const emptyTitle = computed(() => {
-    if (args.scanStage.value === 'complete') return '没有问题链接';
+    if (args.scanStage.value === 'complete') return '没有发现问题';
     if (args.scanStage.value === 'cancelled') return '已取消扫描';
     return '正在检测';
   });
   const emptyDesc = computed(() => {
     const s = args.bottomStats.value;
     const cp = args.collectProgress.value;
-    if (args.scanStage.value === 'complete') return '所有图片链接正常';
+    if (args.scanStage.value === 'complete') {
+      if (s.totalImages === 0) return '这些文件里没有图片链接';
+      return `检查了 ${s.totalFiles} 个文件里的 ${s.totalImages} 张图片，都能正常打开`;
+    }
     if (args.scanStage.value === 'cancelled') return '当前未发现问题';
     if (args.isCollecting.value && cp && cp.scannedFiles > 0) return `正在扫描文件列表 · 已找到 ${cp.scannedFiles} 个`;
     if (s.normalFileCount > 0) return `已扫 ${s.normalFileCount} 个文件 · 检测 ${s.checkedCount} / ${s.totalImages} 图片`;

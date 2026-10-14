@@ -229,7 +229,7 @@ describe('MdRescueInline state rendering', () => {
     expect(manager.cancelFix).toHaveBeenCalled();
   });
 
-  it('done 状态显示修复完成、备份位置，并允许撤销和重新扫描', async () => {
+  it('done 状态显示修复完成、备份位置，并允许撤销和点「完成」回到首页', async () => {
     const manager = makeManager({
       phase: ref('done'),
       repairReceipt: ref({
@@ -250,7 +250,9 @@ describe('MdRescueInline state rendering', () => {
     expect(wrapper.text()).toContain('共修复 2 处');
     expect(wrapper.text()).toContain('原文件已备份至 .../.picnexus-backup/20260428_120000');
     await wrapper.get('.wk-actions .button-stub').trigger('click');
-    await wrapper.get('.bottom-actions .btn-ghost').trigger('click');
+    const finish = wrapper.get('.bottom-actions .btn-primary');
+    expect(finish.text()).toContain('完成');
+    await finish.trigger('click');
 
     expect(manager.undoReplace).toHaveBeenCalled();
     expect(manager.reset).toHaveBeenCalled();
@@ -318,6 +320,15 @@ describe('MdRescueInline state rendering', () => {
     expect(repair.text()).toContain('修复 1 处');
     await repair.trigger('click');
     expect(manager.executeReplace).toHaveBeenCalledTimes(1);
+  });
+
+  it('扫完没有问题时不摆「修复」按钮，只留「重新选择」', () => {
+    const manager = makeManager({ phase: ref('scanning'), scanStage: ref('complete') });
+    rescueMocks.manager = manager;
+    const wrapper = mountInline();
+    const buttons = wrapper.findAll('.bottom-actions button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].text()).toContain('重新选择');
   });
 });
 

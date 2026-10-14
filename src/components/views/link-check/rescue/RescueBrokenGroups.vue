@@ -155,7 +155,8 @@ defineExpose({
 
 <template>
   <!-- 顶部筛选芯片（占位显示，扫描一开始就稳定在顶部） -->
-  <div class="mr-action-bar">
+  <!-- 扫完且没有问题时整条隐藏：三个计数全是「—」，留着只是噪音 -->
+  <div v-if="flatBrokenLinks.length > 0 || scanInProgress" class="mr-action-bar">
     <div class="mr-chips">
       <button class="mr-chip" :class="{ active: activeFilter === 'all' }" @click="selectFilter('all')">
         <span>全部</span>
@@ -205,6 +206,9 @@ defineExpose({
         <div class="scan-dots" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
+      </template>
+      <template v-else-if="scanStage === 'complete'" #icon>
+        <i class="pi pi-check-circle mr-empty-ok" aria-hidden="true" />
       </template>
     </EmptyState>
     <div v-else-if="groupedRows.length > 0" key="groups" class="mr-groups">
@@ -306,6 +310,11 @@ defineExpose({
 .mr-scan-spinner { font-size: var(--text-lg); color: var(--primary); flex-shrink: 0; }
 
 /* 扫描进行中的三点波浪动画：替代空态大图标的位置 */
+.mr-empty-ok {
+  font-size: var(--text-4xl);
+  color: var(--success);
+}
+
 .scan-dots {
   display: inline-flex; align-items: center; gap: var(--space-xs);
   margin-bottom: var(--space-xs);

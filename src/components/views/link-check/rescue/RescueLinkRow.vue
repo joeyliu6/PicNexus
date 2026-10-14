@@ -74,7 +74,7 @@ const backupName = computed(() => (props.selectedBackup ? getServiceDisplayName(
       <span
         v-if="repairFailed"
         class="mr-fix-failed"
-        v-tooltip.top="'这个文件没能写入，内容保持原样；重新扫描后可以再试'"
+        v-tooltip.top="'这个文件没能写入，内容保持原样；回到首页重新选择这个文件夹即可再试'"
       >
         <i class="pi pi-times-circle" aria-hidden="true"></i>
         没改成
