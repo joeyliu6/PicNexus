@@ -17,6 +17,8 @@ defineProps<{
   promoteName: string | null;
   canRetry: boolean;
   rechecking: boolean;
+  /** 刚重查完，主链接还是打不开 */
+  stillFailing: boolean;
   copied: boolean;
   disabled: boolean;
   confirmedHttpHosts?: ReadonlySet<string>;
@@ -57,6 +59,7 @@ const emit = defineEmits<{
         <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
         检查中
       </span>
+      <span v-else-if="stillFailing" class="row-note">还是打不开</span>
       <span v-else-if="copied" class="row-note row-note--ok">
         <i class="pi pi-check" aria-hidden="true"></i>
         已复制链接

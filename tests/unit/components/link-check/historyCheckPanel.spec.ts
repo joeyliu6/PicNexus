@@ -169,6 +169,19 @@ describe('HistoryCheckPanel', () => {
     expect(scope).toEqual({ kind: 'lost', images: 1 });
   });
 
+  it('重试后还是打不开：在按钮的位置说一句「还是打不开」，不让人以为没点上；好了的就不说', () => {
+    const timeout = () => createCheckLinkResult({ is_valid: false, error_type: 'timeout' });
+    const wrapper = mountPanel({
+      checkRows: [
+        { ...copy('slow', 'jd', timeout(), true), recheckResult: timeout() },
+        { ...copy('back', 'r2', timeout(), true), recheckResult: ok() },
+      ],
+    });
+
+    expect(wrapper.findAll('.row-note').map((n) => n.text())).toEqual(['还是打不开']);
+    expect(wrapper.findAll('button').filter((b) => b.text() === '重试')).toHaveLength(0);
+  });
+
   it('检查中：卡片报进度并给暂停 / 停止；文档修复借用检测引擎时不算', async () => {
     const running = mountPanel({
       checkRows: mixedRows(), isChecking: true, progressSource: 'monitor', progress: { checked: 2, total: 5, current_url: '' },

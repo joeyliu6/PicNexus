@@ -68,6 +68,7 @@ interface ListItem {
   promoteName: string | null;
   canRetry: boolean;
   rechecking: boolean;
+  stillFailing: boolean;
 }
 
 function failedRows(entry: ImageEntry): LinkCheckRow[] {
@@ -79,6 +80,14 @@ function failedRows(entry: ImageEntry): LinkCheckRow[] {
 
 function isRechecking(entry: ImageEntry): boolean {
   return entry.rows.some((r) => r.recheckLoading);
+}
+
+/** 刚重查完、结果还停在原位的那一秒：主链接还是打不开就明说，免得用户以为没点上又连点 */
+function isStillFailing(entry: ImageEntry): boolean {
+  const primary = entry.rows[0];
+  if (!primary || !entry.rows.some((r) => r.recheckResult)) return false;
+  const verdict = linkVerdict(effectiveResult(primary));
+  return verdict === 'gone' || verdict === 'failing';
 }
 
 /** 只有「可能是暂时的」打不开才值得重试；404 重试多少次也一样 */
@@ -105,6 +114,7 @@ const items = computed<ListItem[]>(() => {
       promoteName: target ? props.nameOf(target.serviceId) : null,
       canRetry: canRetry(entry, description),
       rechecking: isRechecking(entry),
+      stillFailing: isStillFailing(entry),
     };
   });
 });
@@ -171,6 +181,7 @@ function openMenu(entry: ImageEntry, event: MouseEvent): void {
           :promote-name="item.promoteName"
           :can-retry="item.canRetry"
           :rechecking="item.rechecking"
+          :still-failing="item.stillFailing"
           :copied="copiedId === item.entry.historyId"
           :disabled="isChecking || actionLocked"
           :confirmed-http-hosts="confirmedHttpHosts"
