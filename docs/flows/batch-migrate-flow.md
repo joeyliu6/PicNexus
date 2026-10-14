@@ -1,6 +1,6 @@
-# 批量迁移流程
+# 补充备份流程（批量迁移）
 
-> 将图片从一个图床批量迁移到另一个图床。选择目标 → 筛选范围 → 下载 + 上传 → 更新历史记录 → 广播刷新。
+> 把图片复制到另一个图床多存一份，原来的不动（界面叫「补充备份」，代码沿用 migrate 词源）。选择目标 → 筛选范围 → 下载 + 上传 → 更新历史记录 → 广播刷新。
 > 排查「迁移速度慢」「格式转换失败」「重复迁移」「迁移完其它视图不刷新」「被删的镜像又出现」时查看此文档。
 
 ---
@@ -11,37 +11,32 @@
 
 > **关键源文件**：`src/types/batchMigrate.ts`（`MigratePhase`）、`src/composables/batch-migrate/useBatchMigrate.ts`（`useBatchMigrateManager`）
 >
-> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「状态 chip 过滤条（`MigrateStatusFilterChips`）+ 可滚动列表 + 底栏」。两态列表都用统一的 `MigrateItemRow`：
-> - **首行**：文件名（mono）+ 状态 chip（失败 chip 的 `v-tooltip` 悬停显示 `errorTooltipText`）
-> - **次行**：`存在于 [existing chips] → [target chips]` + 右侧上下文操作按钮；其中：
->   - `existing` chips 读 `MigrateItemStatus.existingServiceIds`（迁移前已成功的图床快照）
->   - `target` chips **按 `targetServiceIds` 中「不在 `existingServiceIds` 的目标」渲染**：迁移前已存在于该图床的目标会被过滤出 target 组（不重复显示），并在对应 `existing` chip 上以角标标注「你选了它但已在」（`also-target`）。`serviceResults[sid]` 只决定 target chip 着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ 未写入或 `pending → 'pending'`（蓝环）；未写入代表"取消前没轮到尝试"
->   - 右侧按钮随状态切换：成功态显示「复制新 URL」（调 `historyDB` 查新增 target 的 URL）；done + failed 态显示「重试」
->
-> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，`effectiveTotalCount > 0` 时挂载——不足一页时也会渲染一个「第 1 / 1 页」分页条，挂载条件详见下文「分页切片」）+ **运行状态 pill**（运行中/正在暂停/已暂停）；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项或部分失败项才挂】| 重新发起迁移）。进入 done 态时若有完全失败或部分失败自动选中「失败」chip 并重置滚动。
->
-> **统计信息位置**：各状态数量由 `MigrateStatusFilterChips` 展示；已完成数、速率、剩余时间和并发数收进运行状态 pill 的 tooltip。
+> **UI 组装**：三个阶段顶部都是同一张结论卡（`common/SummaryCard.vue`），文案与按钮由 `composables/batch-migrate/migrateVerdict.ts` 的纯函数决定：
+> - **configuring**（`MigrateSelectPhase.vue`）：卡片说要做什么（「把 286 张图复制到 Cloudflare R2 · 原来的图片不动 · 大约 10 分钟」）+「开始备份」；没选目标 / 来源全取消 / 数字重算中时按钮灰着并在悬停提示里说原因。下面是「备份到哪里」的目标卡片（`TargetCard`）和默认收起的「更多选项」（`MigrateOptions`）。
+> - **migrating / done**（同一个 `MigrateProgressPhase.vue`）：卡片报进度、成败与剩余时间（暂停 / 停止），完成后一句结论 + 这一刻该点的按钮（有失败先「重试失败的 N 张」，否则「完成」）；导出报告在卡片的「⋯」。下面「全部 / 失败」二选一 + 搜索，一张图一行（`MigrateItemRow`），进入完成态时有失败自动停在「失败」。
+> - **行**：缩略图 + 文件名 + 一句白话状态（等待中 / 上传中… / 已复制到 X / 没成功 · 原因 / 目标图床上本来就有 / 没来得及处理），右侧 `existing` 徽章（迁移前已在的图床）→ `target` 徽章（本次目标，按 `serviceResults` 着色：success 绿 / failed 红 / 未写入或 pending 蓝；迁移前已在的目标不重复显示，在对应 existing 徽章上加「你选了它但已在」角标）。完成态失败行带「重试」。
 
 ```mermaid
 flowchart TD
-    A["进入批量迁移面板"] --> B["initConfiguring()"]
+    A["进入补充备份面板"] --> B["initConfiguring()"]
     B --> C["读取配置<br/>filterConfiguredServices"]
     C --> D["构建 targetServices 列表<br/>保留上次勾选状态"]
     D --> E["applyFilter()<br/>查询各图床 pendingCount"]
     E --> F["configuring 阶段<br/>用户勾选目标图床"]
 
-    F --> G{allBackedUp?<br/>所有图床 pending=0}
-    G -- 是 --> G1["提示：已全部备份"]
-    G -- 否 --> H["用户点击「开始补传备份 / 开始恢复备份」"]
+    F --> G{勾选目标的 pending=0?}
+    G -- 是 --> G1["结论卡：这些图片都已经存到 X 了<br/>不给开始按钮"]
+    G -- 否 --> H["用户点结论卡上的「开始备份」"]
 
     H --> I["migrating 阶段<br/>startMigrate()"]
     I --> J["预加载流水线 + chunk 处理<br/>（见图 4）"]
-    J --> K["done 阶段<br/>显示结果统计"]
+    J --> K["done 阶段<br/>结论卡一句结论（图 6）"]
 
     K --> L{用户操作}
-    L -- "完成 / 重新发起迁移" --> N["resetToConfiguring()"]
+    L -- "完成" --> N["resetToConfiguring()"]
     N --> B
-    L -- "导出报告" --> EX["CSV / TXT 双格式导出<br/>从 migrateResult.itemsSnapshot 输出全量"]
+    L -- "重试失败的 N 张" --> RT["retryFailed(failures)"]
+    L -- "⋯ 导出报告" --> EX["CSV / TXT 双格式导出<br/>跳过的按原因分组"]
 
     %% 暂停 / 恢复（保守策略：在途条目落定后主循环阻塞）
     I -.-> P["pauseMigrate()<br/>isPaused = true"]
@@ -106,16 +101,18 @@ flowchart TD
 | 带来源筛选 | `maxSuccessCount` + `hasServiceId` + `timestampAfter` | 计算满足筛选条件的图片中，各目标图床的已有数量（total - existing = pending） |
 | 不带来源筛选 | `maxSuccessCount` + `timestampAfter` | 列出所有有记录的来源图床及其数量（构建筛选下拉列表） |
 
-### UI 筛选维度（MigrateFilterPopover）
+### 更多选项（MigrateOptions）
 
-配置阶段的「来源图床」栏目标签右侧有一个 `pi-sliders-h` 图标，点击打开 Popover 面板，聚合以下精细化筛选：
+目标是用户唯一必须做的决定；其余细分默认收起在「更多选项」里。设过任何一项时标题写出「已设：……」（`migrateFilterNote`），结论卡副标题也会写「只备份……」，并给「恢复默认」。
 
-| 维度 | Composable 状态 | 作用面 | 默认值 |
+| 维度 | Composable 状态 | 作用面 | 选项 / 默认 |
 |------|----------------|--------|--------|
-| 备份数阈值 | `maxSuccessCount` | 数据库 `success_count <= X` | 999（全部） |
-| 上传时间范围 | `timestampAfterMs` | 数据库 `timestamp >= X`（经 `timestampRangePresets` 转绝对时间戳） | null（全部时间） |
+| 来源图床 | `sourceServiceFilter` | 只备份这些图床上有的图（全部勾选 = 不限） | 默认全选 |
+| 上传时间 | `timestampAfterMs` | 数据库 `timestamp >= X` | 不限 / 最近 7 天 / 30 天 / 3 个月 / 1 年 |
+| 备份情况 | `maxSuccessCount` | 数据库 `success_count <= X`（图片目前存在的图床数） | 不限（999）/ 只有 1 份的 / 不超过 2 份的 / 不超过 3 份的 |
+| 补哪些 | `migrateScope` | `broken-with-valid-source` 只处理链接检测发现坏了一份、别处还有好的 | 所有还没存过去的 |
 
-任一维度非默认时，触发按钮会挂徽章显示简短描述（如 `<2 · 最近 30 天`）。`resetToConfiguring()` 会把两者一并复位。
+`resetToConfiguring()` 会把这几项一并复位。
 
 ---
 
@@ -134,7 +131,7 @@ flowchart TD
 >
 > **并行上传关键点**：
 > - 所有目标通过 `Promise.all` 同时发起（内部 try/catch，Promise.all 不会因单目标失败而 reject）
-> - 每个目标完成后**立即写 `status.serviceResults[targetId]`**，然后调用 `onTargetSettled` 回调——外层用它触发 RAF 节流的 `scheduleStatusUpdate`，让 UI chip 一个个变色（不是等整条落定一起跳）
+> - 每个目标完成后**立即写 `status.serviceResults[targetId]`**，然后调用 `onTargetSettled` 回调——外层用它触发 RAF 节流的 `scheduleStatusUpdate`，让目标徽章一个个变色（不是等整条落定一起跳）
 > - 若至少一个目标成功、另有目标失败，条目保持 `success`，同时写入 `partialFailures` 和一条 `isPartial` 的 `failures` 记录；结果页「失败」筛选和重试按钮会只针对失败目标重试，不会重复上传已成功目标
 > - 取消（`isCancelled=true`）不会打断已发起的并行上传；只影响主循环下一张图不被取出
 > - 信号量 `MAX_CONCURRENT=3` 控制图片级并发。由于每张图只向每个图床发 1 次上传，**每图床的峰值并发数 = MAX_CONCURRENT（= 3），与目标数无关**
@@ -200,17 +197,17 @@ flowchart TD
 
 ### 格式兼容性表
 
-| 场景 | 检测方法 | 处理 | 状态 chip 文案（终态） |
+| 场景 | 检测方法 | 处理 | 行上的终态 |
 |------|---------|------|--------------|
 | 知乎 webp → 不支持 webp 的目标 | `needsFormatConversion(targetId, 'webp')` | URL 改后缀 `.webp` → `.jpg`（知乎原生支持），下载后 ext='jpg' | **已完成**（URL 优化已生效，未调 `compress_image`，`convertedFormat` 未写入） |
 | 下载文件格式不被目标支持 | `needsFormatConversion(targetId, ext)` 在循环内按 target 探测 | `status='converting'` → `compress_image` 转 jpeg（quality=92）→ `convertedFormat='jpeg'` → `status='uploading'` | **已转 JPEG**（由 `convertedFormat` 字段驱动） |
 | 目标图床无格式白名单（对象存储类） | `needsFormatConversion` 返回 false | 直接上传原文件 | **已完成** |
 
-> 行状态由 `MigrateItemRow.vue` 直接渲染，没有独立的状态映射函数：左侧圆点表状态（pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄），右侧按图床显示服务徽章（已存在的 / 本次目标的 pending·new·failed），错误信息挂在红点的 tooltip 上（`useErrorPresentation`）。过程态 `downloading/converting/uploading` 统一显示为 active 蓝点，不逐段切文字。「已转 JPEG」这类终态信息由 `convertedFormat` 字段驱动。
+> 行状态由 `MigrateItemRow.vue` 直接渲染：文件名下一句白话（`statusLine`）+ 圆点（pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄），完整错误在悬停提示（`useErrorPresentation`）。过程态分别说「下载中… / 转换格式… / 上传中…」。「已转 JPEG」这类终态信息由 `convertedFormat` 字段驱动。
 
 > 公共图床（有白名单）：京东、牛客、B 站、知乎、超星、SM.MS、Imgur、奇遇；对象存储（无限制）：R2、腾讯云、阿里云、七牛、又拍、GitHub、微博、纳米。详见 `src/constants/serviceFormats.ts`。
 
-> 转换失败统一归 `errorType='upload'`——不引入独立 `convert` errorType 是为了避免 `getErrorInfo` / `MigrateStatusBanner` / CSV 导出多处映射联动。
+> 转换失败统一归 `errorType='upload'`——不引入独立 `convert` errorType 是为了避免 `getErrorInfo` / CSV 导出多处映射联动。
 
 ---
 
@@ -320,7 +317,7 @@ flowchart TD
 | 下载中 | 下载本身无法中断（Tauri `download_url_image` 无 abort），下载完成后检查 `isPaused`——清理临时文件 + 状态回退为 `'pending'` | `migrateCore.ts` 下载成功分支 |
 | 上传中 | 不中断——所有目标已通过 `Promise.all` 并行发起，等每个目标自然完成或 HTTP 超时；暂停/取消都只影响下一张图不被主循环取出 | `migrateCore.ts` Promise.all 并行块 |
 
-**UI 反馈**：`isPausing = isPaused && concurrentCount > 0` —— 只要有条目还在途就显示"正在暂停..."；所有在途条目落定后 `isPausing` 自然 flip 到 false，底栏切换为"已暂停 + 继续"按钮。
+**UI 反馈**：`isPausing = isPaused && concurrentCount > 0` —— 只要有条目还在途，结论卡就显示「正在暂停… / 手上这几张传完就停」且不给按钮；所有在途条目落定后 `isPausing` 自然 flip 到 false，卡片切换为「已暂停 · 3 / 18」+「继续 / 停止」。
 
 ---
 
@@ -368,46 +365,37 @@ flowchart TD
 
 ---
 
-## 图 6：统一列表视图（chip 过滤驱动）
+## 图 6：结论卡与列表
 
-2026-04-22 精简：砍掉固定槽位 + 最近完成快照的双重机制。`migrating` 和 `done` 两态都走同一条数据路径：数据源 → chip 过滤 → `MigrateItemRow` 单行渲染。
+`migrating` 和 `done` 共用一条数据路径：数据源 → 搜索 →「全部 / 失败」→ 分页 → `MigrateItemRow`。结论卡的文字全部来自 `migrateVerdict.ts`。
 
-> **为什么砍**：`MAX_CONCURRENT` 从 2 升到 3 后，固定槽位视觉密度不再匹配实际并发；用户也想直接按 chip 切换去看「处理中 / 已完成 / 失败 / 已跳过」分桶，而不是被"活跃槽 + 快照"的分区结构束缚。
+> **关键源文件**：`src/components/views/link-check/migrate/MigrateProgressPhase.vue`（`rawList` / `listed` / `verdict`）、`src/composables/batch-migrate/migrateVerdict.ts`、`src/components/views/link-check/migrate/components/MigrateItemRow.vue`
 
-> **关键源文件**：`src/components/views/link-check/migrate/MigrateProgressPhase.vue`（`rawList` / `displayList` / `filterCounts` 三个 computed）、`src/components/views/link-check/migrate/components/MigrateItemRow.vue`
+| 态 | 数据源 |
+|----|--------|
+| `migrating` | `allItemStatuses`（批次开始时 prepend，新批在前） |
+| `done` | `migrateResult.itemsSnapshot`（失败行合并 `failures[].details`） |
 
-| 态 | 数据源 | 排序 |
-|----|--------|------|
-| `migrating` | `allItemStatuses`（批次开始时 prepend，新批在前） | `filter='all'` 时：活跃项（pending/downloading/converting/uploading）前置，终态后置；其它 filter 直接按数据源顺序 |
-| `done` | `migrateResult.itemsSnapshot`（失败行合并 `failures[].details`） | 不额外排序 |
+「失败」收 `status === 'failed'` 与「部分目标失败」（`serviceResults` 里有 failed）。每页 100 条，只有一页时不出现翻页；切视图、改搜索回到第一页。
 
-### 分页切片
+### 完成态的数字口径
 
-`displayList` 过滤 + 排序后由 `PAGE_SIZE=100` 切出 `visibleList`，仅当前页条目渲染为 DOM。`pageByFilter: Map<MigrateStatusFilter, number>` 保留每个 filter 的独立页码，切 chip 不丢上下文；`totalPages` 变小时自动 clamp。进入 done 态 / 切换 phase 时分页记忆清空。分页条挂在 `MigrateBottomBar` 的 `#pagination` slot，挂载条件为 `effectiveTotalCount > 0`（migrating 且无搜索/图床筛选时取 `migrateStats.totalCount`——预加载前为上界估计；其余取 `displayList.length`），`totalPages = max(1, ceil(effectiveTotal / 100))`——不足一页时仍会渲染一个「第 1 / 1 页」的 1 页分页条，属轻微视觉噪音（无翻页可用）。
+| 数字 | 算法 | 为什么 |
+|------|------|-------|
+| 已备份 | `successCount − 部分失败数` | 部分目标没传上的图没按要求备份齐，不算「已备份」 |
+| 没成功 | `failures.length`（完全失败 + 部分失败） | 与「失败」列表、「重试失败的 N 张」三处一致 |
+| 本来就有 | `skipReason` 为 already-there / not-needed（旧数据无原因按本来就有） | 目标上本来就有，不用补 |
+| 没处理 | `skipReason` 为 not-attempted / deleted | 停止或中止时还没轮到；收尾归一时写入，说成「本来就有」就是撒谎 |
 
-chip 分桶映射（`displayList` 内部）：
+| 结束方式 | 卡片 |
+|---------|------|
+| 全部成功 | 「已备份 N 张到 X」· 本来就有 · 用时；按钮「完成」 |
+| 有失败 | 「N 张已备份，M 张没成功」；主按钮「重试失败的 M 张」，次按钮「完成」 |
+| 用户停止 | 「已停止」· 已备份 · 本来就有 ·「N 张没处理，下次开始会接着补」 |
+| 连续失败自动停 | 「连续失败，已自动停下」·「可能是 X 出了问题，先去设置里测一下连接」；主按钮「完成」，重试放次要 |
+| 出错中断 | 「出错中断」 |
 
-| chip | 命中条件 |
-|------|---------|
-| `all` | 全量 |
-| `processing` | `status ∈ {pending, downloading, converting, uploading}` |
-| `success` | `status === 'success'` |
-| `failed` | `status === 'failed'` |
-| `skipped` | `status === 'skipped'` |
-
-### 运行态 pill（底栏）
-
-顶部不再有"正在处理 / 已暂停"指示——运行态收进 `MigrateBottomBar.bm-state-pill`：
-
-| 条件 | pill |
-|------|------|
-| `mode='migrating'` + 未暂停/取消 | `● 迁移中 3 / 18`（呼吸绿点；数字 = 成功 + 失败 + 跳过 / 总数，`progressLabel`） |
-| `mode='migrating'` + `isCancelling` | `⏳ 正在取消…`（红色 tone，优先级最高：用户点取消时同步禁用暂停/继续按钮并把取消按钮替成 disabled 占位） |
-| `mode='migrating'` + `isPausing` | `⏳ 正在暂停…` |
-| `mode='migrating'` + `isPaused` | `⏸ 已暂停 3 / 18` |
-| `mode='done'` | 无 pill；左侧改为一句结论 `migrateResultSummary`（「全部完成 · 3 张已备份」/「完成 · 3 张已备份 · 2 张失败」/「已取消 · …」/「连续失败，已自动停下 · …」） |
-
-> `isCancelling = isCancelled && isMigrating`——用户点"取消迁移"后 `isCancelled` 立即置 true，但在途的 `processBatch` Promise.all 需要等所有目标自然落定（或 HTTP 超时），这段"等落定"窗口由此 pill + disabled 占位反馈给用户。`finalizeResult` 里 `isMigrating=false` 后 pill 自动消失。
+> `isCancelling = isCancelled && isMigrating`——用户点「停止」后 `isCancelled` 立即置 true，但在途的 `processBatch` Promise.all 要等所有目标自然落定（或 HTTP 超时），这段窗口卡片显示「正在停止… / 已成功的会保留」且不给按钮。`finalizeResult` 里 `isMigrating=false` 后进入完成态。
 
 ---
 
@@ -420,24 +408,24 @@ chip 分桶映射（`displayList` 内部）：
 | webp 图片上传失败 | 目标图床不支持 webp 且格式转换失败 | 图 3 `convertIfNeeded` |
 | 同一图片被重复迁移 | `cursor` 未推进（chunk 里有 pending 残留会重试本段）；或预加载 `makePreloaded` 的"全目标已备份"剔除失效 | 图 4 cursor 推进与去重策略 |
 | 进度条到 100% 但 phase 未变 done | 最后一批的 `flushStatusUpdate` 延迟 | 图 5 `flushStatusUpdate` |
-| 统计卡一直显示「计算中」 | `processedCount` 始终为 0（可能全部 skipped 也算 processed） | 图 5 统计卡计算 |
+| 卡片一直不报剩余时间 | `estimatedTimeRemaining` 依赖 `processedCount > 0`；一张都还没落定时不估算 | 图 5 统计卡计算 |
 | 知乎图片迁移后变模糊 | webp→jpg URL 优化生效但原图质量已低 | 图 3 知乎 URL 优化 |
 | 迁移完成后历史记录未更新 | `historyDB.update` 失败 → `errorType='upload'` | 图 3 DB 更新失败分支 |
 | 重试按钮点击后 pending=0 | `retryFailed` 先 `applyFilter` 重算，失败项可能已被其他操作处理 | 图 1 `retryFailed` |
-| 高级筛选不生效 | `sourceServiceFilter` 为空数组表示「全部」，非「无」 | 图 2 `applyFilter` 参数 |
+| 「更多选项」设了没效果 | 来源图床全取消时卡片会说「没选来源图床」并锁住开始；其余几项变化后 `applyFilter` 防抖 150ms 重算 | 图 2 `applyFilter` 参数 |
 | 列表空窗期没有任何条目显示 | 批次初始化时会对 `allItemStatuses` prepend，如果列表一直空——检查 `useBatchMigrate.startMigrate` 的 prepend 是否被跳过；或 `rawList` 的过滤条件把全部项都踢掉了 | 图 6 数据源表 |
-| 底栏状态 pill 一直是"正在暂停…" | `isPausing = isPaused && concurrentCount > 0`；concurrentCount 归零不及 → 检查下载是否卡在 HTTP 层（`download_url_image` 无 abort） | 图 1 暂停分支 |
 | 终态显示「已完成」但期望「已转 JPEG」 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序；渲染见 `MigrateItemRow.vue` | 图 3 converting 分支 |
-| 暂停后按钮一直卡在"正在暂停..." | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading 下载本身无法中断必须等 HTTP 超时或完成 | 图 1 暂停分支 |
+| 暂停后卡片一直是「正在暂停…」 | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading，下载本身无法中断（`download_url_image` 无 abort），必须等 HTTP 超时或完成 | 图 1 暂停分支 |
 | 恢复后已暂停的条目没重新迁移 | 暂停回退的条目靠 `status==='pending'` 被下一轮 `pendingChunk` 重新捡起——检查 `cursor` 是否被误推进（`allSettled` 判定） | 图 4 cursor 推进与去重策略 |
 | 迁移完成后历史表格「备份数」不变、灯箱看不到新链接 | 落库后没广播 `history-updated`——检查 `onItemDone` 里 `historyRefresh.add` 与 chunk 末尾的 `historyRefresh.flush()` | 图 4 落库后的视图刷新 |
 | 迁移完成后被删的镜像又出现 | 落库前没重读最新记录，用了 chunk 开头的陈旧快照当合并 base | 图 3 落库不变量 |
 | 迁移中时间轴/历史表格频繁重刷、界面卡顿 | 广播粒度退化成按条——`useTimelineDayPagination` 收到 `history-updated` 无防抖直接 `reloadAll()` | 图 4 落库后的视图刷新（广播粒度行） |
 | 单条重试成功但其它视图不刷新 | `runRetry` 的返回值被吞掉，或 `retrySingleFailed` 没调 `notifyMigrationPersisted` | `batchMigrate/retryFailed.ts` |
 | 失败项显示的错误信息是英文 | 原始错误未命中 `categorizeMigrateError` 的映射规则，fallback 到"未知错误"，悬停 ⓘ 看 tooltip 原文 | `src/utils/uploadFailureMessage.ts` 的 `MIGRATE_ERROR_PATTERNS` |
-| 取消迁移后底栏仍显示「全部重试」| `canRetryAll = phase==='done' && failures.length>0`；取消只把在途条目转 skipped，取消前已落定的失败条目保留，按钮就挂出来——语义正确 | `MigrateProgressPhase.vue` `canRetryAll` / `MigrateBottomBar.vue` done 态按钮组 |
-| 目标 chip 只显示尝试过的那几个 | 目标 chip 按 `targetServiceIds` 中「非 `existingServiceIds`」的目标渲染；已在图床的目标过滤出 target 组、在 existing chip 上加「你选了但已在」角标 | `MigrateItemRow.vue` `targetChips` / `alsoTargetSet` computed |
-| 目标 chip 没有一个一个变色，全部一起跳 | `onTargetSettled` 回调未触发或 `scheduleStatusUpdate` 没挂到批次状态 → 检查 `useBatchMigrate.startMigrate` 里 `processBatch` 的第 10 个参数 | 图 3 并行上传关键点 |
+| 停止后卡片仍给「重试失败的 N 张」| 停止只把在途 / 没轮到的条目转 skipped（没处理），停止前已落定的失败条目保留——语义正确 | `migrateVerdict.ts` `buildDoneVerdict` |
+| 停止后卡片说「N 张本来就有」，但其实是没轮到 | 收尾归一时没写 `skipReason: 'not-attempted'`，或新加的跳过分支漏写原因 | `useBatchMigrate.ts` `finalizeResult` / `migrateCore.ts` 各 skipped 分支 |
+| 目标徽章只显示尝试过的那几个 | 目标徽章按 `targetServiceIds` 中「非 `existingServiceIds`」的目标渲染；已在图床的目标过滤出 target 组、在 existing chip 上加「你选了但已在」角标 | `MigrateItemRow.vue` `targetChips` / `alsoTargetSet` computed |
+| 目标徽章没有一个一个变色，全部一起跳 | `onTargetSettled` 回调未触发或 `scheduleStatusUpdate` 没挂到批次状态 → 检查 `useBatchMigrate.startMigrate` 里 `processBatch` 的第 10 个参数 | 图 3 并行上传关键点 |
 
 ---
 
