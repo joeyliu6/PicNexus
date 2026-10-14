@@ -41,9 +41,9 @@ function handleToggleAll() {
 
 <template>
   <div class="split-left">
-    <!-- 栏目标签 + 来源列表（与右栏「到这里」呼应，暗示从左到右迁移方向） -->
+    <!-- 栏目标签 + 来源列表（与右栏「备份到」呼应，暗示从左到右的方向） -->
     <div class="column-label">
-      <span class="column-label-text">从这里</span>
+      <span class="column-label-text">来源图床</span>
       <span class="column-label-actions">
         <button
           v-if="sources.length > 0"

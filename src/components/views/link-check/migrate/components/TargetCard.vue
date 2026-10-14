@@ -41,7 +41,7 @@ const cardTooltip = computed(() => {
 const cardAriaLabel = computed(() => {
   const parts = [
     props.displayName,
-    props.noSourceSelected ? '请先选择来源' : `${formatNumber(props.pendingCount)} 张待迁移`,
+    props.noSourceSelected ? '请先选择来源' : `${formatNumber(props.pendingCount)} 张待备份`,
     backedUpLine.value,
   ].filter((part): part is string => Boolean(part));
   if (errorTooltip.value) parts.splice(1, 0, errorTooltip.value);
@@ -51,6 +51,7 @@ const countClass = computed((): string | undefined => {
   if (props.noSourceSelected) return 'target-count-stack--no-source';
   if (props.isRefiltering) return 'target-count-stack--stale';
   if (props.checked) return 'target-count-stack--active';
+  if (props.pendingCount === 0) return 'target-count-stack--done';
   return undefined;
 });
 
@@ -85,6 +86,7 @@ function handleClick() {
         :class="`dot--${healthStatus}`"
         v-tooltip.top="healthTooltip ?? badgeText"
       />
+      <span class="target-check" aria-hidden="true"><i class="pi pi-check" /></span>
     </div>
     <div class="target-count-stack" :class="countClass">
       <template v-if="noSourceSelected">
@@ -93,10 +95,19 @@ function handleClick() {
           <span class="target-count-unit">请先选择来源</span>
         </span>
       </template>
+      <template v-else-if="isDisabled">
+        <span class="target-count target-count--error">连接异常，先去设置里检查</span>
+      </template>
+      <template v-else-if="pendingCount === 0 && !isRefiltering">
+        <span class="target-count target-count--summary">
+          <i class="pi pi-check-circle target-done-icon" aria-hidden="true" />
+          <span class="target-count-unit">已全部有备份</span>
+        </span>
+      </template>
       <template v-else>
         <span class="target-count target-count--summary">
           <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
-          <span class="target-count-unit">张待迁移</span>
+          <span class="target-count-unit">张待备份</span>
         </span>
       </template>
     </div>
@@ -155,6 +166,7 @@ function handleClick() {
 .target-card--checked .target-icon { color: var(--primary); }
 
 .target-name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -170,7 +182,6 @@ function handleClick() {
   width: 8px; height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-left: auto;
   background: var(--text-muted);
   box-shadow: 0 0 0 1px var(--border-subtle);
   cursor: default;
@@ -178,6 +189,24 @@ function handleClick() {
 .dot--verified { background: var(--success); }
 .dot--pending  { background: var(--warning); }
 .dot--error    { background: var(--error);   }
+
+/* 勾选标记：未选是空心圆，选中填满——一眼看出这是可选的卡片 */
+.target-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: auto; flex-shrink: 0;
+  border-radius: 50%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 与拖放区虚线同一折中值，token 仅有 1/2/3px */
+  border: 1.5px solid var(--border-subtle);
+  color: transparent;
+  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
+}
+.target-check .pi { font-size: var(--text-2xs); font-weight: var(--weight-bold); }
+.target-card:not(.target-card--disabled):hover .target-check { border-color: var(--primary-alpha-50); }
+.target-card--checked .target-check { background: var(--primary); border-color: var(--primary); color: var(--text-on-primary); }
+
+.target-count--error { font-size: var(--text-xs); color: var(--error); }
+.target-done-icon { font-size: var(--text-xs); color: var(--success); }
+.target-count-stack--done .target-count-unit { color: var(--success); }
 
 .target-count-stack { display: flex; align-items: baseline; min-width: 0; max-width: 100%; }
 

@@ -195,7 +195,7 @@ function handleTargetToggle(serviceId: string) {
 
       <!-- 右栏：迁移目标 -->
       <div class="split-right">
-        <div v-if="configuredServices.length > 0" class="column-label">到这里</div>
+        <div v-if="configuredServices.length > 0" class="column-label">备份到</div>
         <div v-if="isAllBackedUp" class="backed-up-banner">
           <i class="pi pi-check-circle" />
           <span v-if="availableSourceServices.length === 0">当前无需备份的图片</span>
@@ -250,10 +250,10 @@ function handleTargetToggle(serviceId: string) {
     <div class="bottom-main">
       <span class="bottom-stat" :title="bottomFullText">
         <template v-if="noSourceSelected">
-          {{ checkedTargets.length === 0 ? '请先在左侧选择来源图床' : '请先选择来源图床，再开始迁移' }}
+          {{ checkedTargets.length === 0 ? '先在左边勾选来源图床' : '先在左边勾选来源图床，再开始' }}
         </template>
         <template v-else-if="checkedTargets.length === 0">
-          选择迁移目标，开始备份
+          在右边选好要备份到哪里 · 原图床上的图片不会被删除
         </template>
         <template v-else>
           <span class="bottom-dim">从</span>
@@ -271,9 +271,14 @@ function handleTargetToggle(serviceId: string) {
           v-tooltip.top="'公共图床随时可能失效，且单日上传数量有限，大量迁移可能中途失败'"
           aria-label="公共图床风险提示"
         />
-        <button class="btn-primary" :disabled="!canStart()" @click="emit('start')">
+        <button
+          class="btn-primary"
+          :disabled="!canStart()"
+          v-tooltip.top="canStart() ? '只复制，不删除：原图床上的图片保持不动' : null"
+          @click="emit('start')"
+        >
           <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11" style="flex-shrink:0;display:block"><path d="M3 2l10 6-10 6V2z"/></svg>
-          开始迁移
+          开始{{ migrateActionText }}
         </button>
       </div>
     </div>
