@@ -188,7 +188,7 @@
 
 只读探测（`check_image_link` / `batch_check_links`）只做同步判据：scheme、字面量 IP、URL 内嵌凭证。
 下载重传（`validate_fetch_url`）**仍然**做 DNS 裁决，两条路径的分工见
-[link-check-flow.md 出站策略校验小节](./flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)。
+[link-check-outbound-policy.md](./flows/link-check-outbound-policy.md)。
 
 > 📌 **2026-08-21 更新**：探测的字面量判据已委托 `url_policy` 的 `AllowPrivate` 策略并接收
 > 前端传入的已确认明文 HTTP 主机名名单（对齐 2026-08 上传/渲染/CSP 三处放开局域网图床的

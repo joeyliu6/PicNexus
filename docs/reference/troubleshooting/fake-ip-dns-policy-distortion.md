@@ -98,6 +98,6 @@ IP 字面量始终不受影响，而群晖等 NAS 引导用户填的默认就是
 
 ## 相关文档
 
-- 链接检测侧的对应处理：[link-check-flow.md 出站策略校验小节](../../flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)
+- 链接检测侧的对应处理：[link-check-outbound-policy.md](../../flows/link-check-outbound-policy.md)
 - WebDAV 图床排查：[webdav-image-host-issues.md](./webdav-image-host-issues.md)
 - 真机验收记录：[webdav-digest-and-lan-http-escape-hatch-acceptance.md](../../audits/webdav-digest-and-lan-http-escape-hatch-acceptance.md)

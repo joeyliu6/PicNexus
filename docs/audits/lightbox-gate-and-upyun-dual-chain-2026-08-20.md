@@ -262,7 +262,7 @@ source 链里。于是所有 `contains("ErrInvalidAccessKeyID")` 这类分类**�
 > `validate_probe_url` 改为委托 `url_policy::validate_url_with_policy(AllowPrivate)` +
 > 前端传入的已确认明文 HTTP 主机名名单；`validate_fetch_url` 改走 `Deny` 策略保持
 > 下载重传不放宽。探测仍是同步函数、不查 DNS。详见
-> [link-check-flow.md 出站策略校验小节](../flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)。
+> [link-check-outbound-policy.md](../flows/link-check-outbound-policy.md)。
 
 它还顺手坑了验收本身：2.2 的第一版场景「传 15 张到 dufs 再停掉 dufs」完全失效——
 那些链接在发请求之前就被判「拦截」了，停不停服务一个样。

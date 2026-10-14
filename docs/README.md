@@ -19,6 +19,7 @@ docs/
 │   ├── data-persistence.md       # 配置/缩略图持久化
 │   ├── auxiliary-flows.md        # 链接检测/压缩
 │   ├── link-check-flow.md        # 链接检测（深度）
+│   ├── link-check-outbound-policy.md # 链接检测出站策略校验（探测 vs 下载）
 │   ├── md-rescue-flow.md         # 文档修复
 │   ├── batch-migrate-flow.md     # 批量迁移
 │   ├── ipc-command-flow.md       # Tauri 命令/事件
