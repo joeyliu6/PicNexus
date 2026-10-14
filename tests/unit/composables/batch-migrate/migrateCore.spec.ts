@@ -419,7 +419,7 @@ describe('migrateOneItem', () => {
     );
 
     expect(status.status).toBe('skipped');
-    expect(status.error).toBe('检测结果已更新，不再满足可恢复图片条件');
+    expect(status.error).toBe('检测结果已更新，这张图已不需要抢救');
     expect(status.errorType).toBeUndefined();
     expect(getInvokeMock()).not.toHaveBeenCalled();
     expect(historyDB.update).not.toHaveBeenCalled();

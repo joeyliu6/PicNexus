@@ -331,8 +331,8 @@ describe('batch migrate P1 components', () => {
       },
     });
 
-    const allScopeButton = wrapper.findAll('button').find(button => button.text() === '所有缺失备份');
-    const recoveryButton = wrapper.findAll('button').find(button => button.text() === '可恢复图片');
+    const allScopeButton = wrapper.findAll('button').find(button => button.text() === '补全备份');
+    const recoveryButton = wrapper.findAll('button').find(button => button.text() === '抢救失效图片');
     expect(wrapper.text()).toContain('处理范围');
     expect(allScopeButton?.attributes('data-tooltip')).toBe('为符合条件、但目标图床还没有备份的图片补传一份。');
     expect(recoveryButton).toBeTruthy();
@@ -341,8 +341,8 @@ describe('batch migrate P1 components', () => {
 
     expect(wrapper.emitted('update:migrateScope')?.[0]).toEqual(['broken-with-valid-source']);
     await wrapper.setProps({ migrateScope: 'broken-with-valid-source' });
-    expect(wrapper.find('.filter-trigger-badge').text()).toContain('可恢复图片');
-    expect(wrapper.get('.filter-trigger').attributes('data-tooltip')).toContain('当前筛选：可恢复图片');
+    expect(wrapper.find('.filter-trigger-badge').text()).toContain('抢救失效图片');
+    expect(wrapper.get('.filter-trigger').attributes('data-tooltip')).toContain('当前筛选：抢救失效图片');
   });
 
   it('MigrateFilterBar updates status, source service, and search models', async () => {

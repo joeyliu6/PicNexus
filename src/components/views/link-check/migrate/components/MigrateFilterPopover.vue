@@ -17,10 +17,10 @@ import type { MigrateScope } from '@/types/batchMigrate';
 const DAY_MS = 86400_000;
 const CUSTOM_COUNT_MAX = 20;
 const CUSTOM_DAYS_MAX = 1095; // 3 年
-const ALL_SCOPE_LABEL = '所有缺失备份';
-const RECOVERY_SCOPE_LABEL = '可恢复图片';
+const ALL_SCOPE_LABEL = '补全备份';
+const RECOVERY_SCOPE_LABEL = '抢救失效图片';
 const ALL_SCOPE_TOOLTIP = '为符合条件、但目标图床还没有备份的图片补传一份。';
-const RECOVERY_SCOPE_TOOLTIP = '只处理检测到失效链接、且仍有其他可用链接的图片。迁移时会优先使用可用链接。依据最近一次已保存的链接检测结果。';
+const RECOVERY_SCOPE_TOOLTIP = '只处理链接检测发现已失效、但在别的图床还有可用备份的图片：从能用的那份重新传一份。依据最近一次已保存的链接检测结果。';
 
 // 弹层内只显示 4 个预设，为内嵌输入框腾空间。
 // 被砍的项（备份数 2、时间 90 天）仍保留在 filterThresholds/timestampRangePresets 里，

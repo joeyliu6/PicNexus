@@ -133,7 +133,7 @@ export async function migrateOneItem(
   if (sourceCandidates.length === 0) {
     if (status.problemServiceIds && status.problemServiceIds.length > 0) {
       status.status = 'skipped';
-      status.error = '检测结果已更新，不再满足可恢复图片条件';
+      status.error = '检测结果已更新，这张图已不需要抢救';
       status.errorType = undefined;
       status.failureDetails = undefined;
       return;
