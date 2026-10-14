@@ -6,6 +6,7 @@
 import { ref } from 'vue';
 import Menu from 'primevue/menu';
 import StatePill, { type StatePill as StatePillType } from '@/components/views/link-check/common/StatePill.vue';
+import type { MigrateResultSummary } from '@/components/views/link-check/migrate/utils';
 
 interface Props {
   mode: 'migrating' | 'done';
@@ -20,6 +21,8 @@ interface Props {
   canRetryAll?: boolean;
   /** done 态：正在重试的条目数（>0 时禁用按钮 + 显 spinner） */
   retryingCount?: number;
+  /** done 态：一句话结论（见 migrateResultSummary） */
+  resultSummary?: MigrateResultSummary | null;
 }
 
 withDefaults(defineProps<Props>(), {
@@ -29,6 +32,7 @@ withDefaults(defineProps<Props>(), {
   statePill: null,
   canRetryAll: false,
   retryingCount: 0,
+  resultSummary: null,
 });
 
 const emit = defineEmits<{
@@ -58,6 +62,19 @@ function toggleExportMenu(ev: MouseEvent) {
     <div class="bm-left">
       <slot name="pagination" />
       <StatePill :pill="statePill" />
+      <span
+        v-if="mode === 'done' && resultSummary"
+        class="bm-result"
+        :class="`bm-result--${resultSummary.tone}`"
+        role="status"
+      >
+        <i
+          class="pi"
+          :class="resultSummary.tone === 'success' ? 'pi-check-circle' : 'pi-exclamation-triangle'"
+          aria-hidden="true"
+        />
+        {{ resultSummary.text }}
+      </span>
     </div>
     <div class="bottom-actions">
       <template v-if="mode === 'migrating'">
@@ -161,4 +178,18 @@ function toggleExportMenu(ev: MouseEvent) {
   cursor: progress;
 }
 
+.bm-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bm-result .pi { font-size: var(--text-xs); }
+.bm-result--success { color: var(--success); }
+.bm-result--warning { color: var(--warning); }
+.bm-result--error { color: var(--error); }
 </style>

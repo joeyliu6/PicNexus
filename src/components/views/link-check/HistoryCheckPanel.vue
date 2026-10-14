@@ -8,6 +8,7 @@ import CheckFilterBar from './history-check/CheckFilterBar.vue';
 import CheckLinkList from './history-check/CheckLinkList.vue';
 import LinkCheckSkeleton from './history-check/LinkCheckSkeleton.vue';
 import type { StatePill } from './common/StatePill.vue';
+import { progressLabel } from './common/progressLabel';
 import { rowKey, useCheckFilter } from '@/composables/link-check/useCheckFilter';
 import { useCheckStats, type CheckStatsResult } from '@/composables/link-check/useCheckStats';
 import { useCheckStrategy } from '@/composables/link-check/useCheckStrategy';
@@ -177,8 +178,10 @@ const statePill = computed<StatePill | null>(() => {
     progressLabel: progressTooltip.value,
     tooltip: progressTooltipDetails.value,
   };
-  if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停', ...progressMeta };
-  return { tone: 'running', label: '检测中', ...progressMeta };
+  const done = progress.value?.checked ?? 0;
+  const total = progress.value?.total ?? 0;
+  if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: progressLabel('已暂停', done, total), ...progressMeta };
+  return { tone: 'running', label: progressLabel('检测中', done, total), ...progressMeta };
 });
 
 const moreMenuItems = computed(() => {

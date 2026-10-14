@@ -15,17 +15,20 @@ import { createLogger } from '@/utils/logger';
 import { historyDB } from '@/services/database';
 import { MIGRATE_KEY } from './keys';
 import { buildCsvReport, buildTxtReport } from './reportExport';
-import { buildMigrateProgressTooltip } from './utils';
+import { buildMigrateProgressTooltip, migrateResultSummary } from './utils';
 import { useFilterBar } from './composables/useFilterBar';
 import type { MigrateItemStatus } from '@/types/batchMigrate';
 import MigrateItemRow from './components/MigrateItemRow.vue';
 import type { MigrateRowItem } from './components/migrateRowTypes';
 import MigrateBottomBar from './components/MigrateBottomBar.vue';
 import type { StatePill } from '@/components/views/link-check/common/StatePill.vue';
+import { progressLabel } from '@/components/views/link-check/common/progressLabel';
 import MigratePagination from './components/MigratePagination.vue';
 import MigrateFilterBar from './components/MigrateFilterBar.vue';
 import { type MigrateStatusFilter } from './components/MigrateStatusFilterChips.vue';
 import { exportTextFile } from '@/utils/userFiles';
+import { getCopiesThumbnailCandidates } from '@/composables/image/useThumbCache';
+import { getConfirmedHttpHosts } from '@/security/networkPolicy';
 
 const PAGE_SIZE = 100;
 
@@ -232,6 +235,10 @@ const emptyHint = computed(() => {
   }
 });
 
+const resultSummary = computed(() =>
+  phase.value === 'done' && migrateResult.value ? migrateResultSummary(migrateResult.value) : null,
+);
+
 const canRetryAll = computed(() =>
   phase.value === 'done'
     && !!migrateResult.value
@@ -241,11 +248,14 @@ const canRetryAll = computed(() =>
 const statePill = computed<StatePill | null>(() => {
   if (phase.value !== 'migrating') return null;
   const tooltip = migrateProgressTooltip.value;
+  const counts = cumulativeCounts.value;
+  const done = counts.success + counts.failed + counts.skipped;
+  const total = globalProgress.value.total || migrateStats.value.totalCount;
   // 取消状态优先——用户点取消同时若在途条目未落定，pausing 会被短暂命中，以取消语义为准
   if (isCancelling.value) return { tone: 'cancelling', icon: 'pi pi-spin pi-spinner', label: '正在取消…', tooltip };
   if (isPausing.value) return { tone: 'pausing', icon: 'pi pi-spin pi-spinner', label: '正在暂停…', tooltip };
-  if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停', tooltip };
-  return { tone: 'running', label: '运行中', tooltip };
+  if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: progressLabel('已暂停', done, total), tooltip };
+  return { tone: 'running', label: progressLabel('迁移中', done, total), tooltip };
 });
 
 const migrateProgressTooltip = computed(() => {
@@ -262,6 +272,16 @@ const migrateProgressTooltip = computed(() => {
     state: isCancelling.value ? 'cancelling' : isPausing.value ? 'pausing' : isPaused.value ? 'paused' : 'running',
   });
 });
+
+const confirmedHttpHosts = computed(() => getConfirmedHttpHosts(configManager.config.value));
+
+function rowThumbSrcs(item: MigrateRowItem): string[] {
+  if (!item.sourceUrl) return [];
+  return getCopiesThumbnailCandidates(
+    [{ serviceId: item.sourceServiceId ?? '', url: item.sourceUrl }],
+    configManager.config.value,
+  );
+}
 
 const currentTargetServiceIds = computed(() => {
   if (phase.value === 'done') return migrateResult.value?.targetServiceIds ?? [];
@@ -338,6 +358,8 @@ function handleResume() { resumeMigrate(); }
           :show-retry="needsRetry(item)"
           :retrying="!!(item.historyId && retryingIds.has(item.historyId))"
           :copied-key="copiedMigrateKey"
+          :thumb-srcs="rowThumbSrcs(item)"
+          :confirmed-http-hosts="confirmedHttpHosts"
           @retry="handleRetryOne"
           @copy-url="handleCopyUrl"
         />
@@ -357,6 +379,7 @@ function handleResume() { resumeMigrate(); }
     :state-pill="statePill"
     :can-retry-all="canRetryAll"
     :retrying-count="retryingIds.size"
+    :result-summary="resultSummary"
     @pause="handlePause"
     @resume="handleResume"
     @cancel="cancelMigrate"

@@ -2,7 +2,7 @@
 /**
  * 批量迁移 · 统一条目行（单行链接检测风格）
  *
- * 布局：[6px 圆点] [filename 省略号] [spacer] [existing chips » target chips] [重试按钮 · 仅失败+done]
+ * 布局：[6px 圆点] [缩略图] [filename 省略号] [spacer] [existing chips » target chips] [重试按钮 · 仅失败+done]
  * - 圆点颜色：pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄
  * - 错误信息改为悬停红点的 tooltip（useErrorPresentation 已提供）
  * - 复制 URL 入口下沉到可点击的服务徽章，单条重试用缩小版 24px 图标按钮
@@ -12,6 +12,7 @@ import { makeCopyBadgeKey } from '@/composables/useCopyBadgeFeedback';
 import { errorTooltipText } from '@/components/views/link-check/migrate/composables/useErrorPresentation';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import MigrateServiceChip from './MigrateServiceChip.vue';
+import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import type { MigrateRowItem } from './migrateRowTypes';
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'skipped']);
@@ -24,6 +25,9 @@ interface Props {
   showRetry?: boolean;
   retrying?: boolean;
   copiedKey?: string | null;
+  /** 缩略图候选（父组件按来源链接生成）；文件名大多是 clipboard_xxx，认图全靠它 */
+  thumbSrcs?: string[];
+  confirmedHttpHosts?: ReadonlySet<string>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -31,6 +35,8 @@ const props = withDefaults(defineProps<Props>(), {
   showRetry: false,
   retrying: false,
   copiedKey: null,
+  thumbSrcs: () => [],
+  confirmedHttpHosts: undefined,
 });
 
 const emit = defineEmits<{
@@ -169,6 +175,19 @@ function chipCopyKey(serviceId: string): string {
       v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : skippedTooltip"
     />
 
+    <div class="mi-thumb">
+      <ThumbnailImage
+        :srcs="thumbSrcs"
+        :alt="item.fileName"
+        image-class="mi-thumb-img"
+        :confirmed-http-hosts="confirmedHttpHosts"
+      >
+        <template #placeholder>
+          <i class="pi pi-image mi-thumb-placeholder" aria-hidden="true"></i>
+        </template>
+      </ThumbnailImage>
+    </div>
+
     <!-- 文件名 -->
     <span class="mi-row__name">{{ item.fileName }}</span>
 
@@ -234,19 +253,41 @@ function chipCopyKey(serviceId: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-sm-md);
-  padding: 0 0 0 var(--space-md);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 40px 对齐链接检测 .link-row 行高 */
-  height: 40px;
+  padding: 0 var(--space-sm) 0 var(--space-md);
+  height: 52px;
 
   /* 父容器 .focus-list 是 flex column，子项默认 flex-shrink:1 会被压缩，固定高度失效 */
   flex-shrink: 0;
-  border-bottom: 1px solid var(--primary-alpha-5);
+  border-radius: var(--radius-md);
   transition:
     background var(--duration-micro),
     opacity var(--duration-fast);
 }
 
-.mi-row:last-child { border-bottom: none; }
+/* ── 缩略图（与链接检测 / 文档修复同尺寸） ── */
+.mi-thumb {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm-md);
+  overflow: hidden;
+  background: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mi-thumb :deep(.mi-thumb-img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mi-thumb-placeholder {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
 .mi-row:hover { background: var(--hover-overlay-subtle); }
 .mi-row--retrying { opacity: 0.55; }
 

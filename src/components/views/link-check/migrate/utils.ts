@@ -3,6 +3,7 @@
  */
 import { PUBLIC_SERVICES } from '@/config/types';
 import type { ServiceType } from '@/config/types';
+import type { MigrateResult } from '@/types/batchMigrate';
 
 export function formatTime(ms: number | null): string {
   if (!ms || ms <= 0) return '--';
@@ -139,3 +140,33 @@ export const timestampRangePresets: Array<{ value: number | null; label: string 
 export const MAX_VISIBLE_FILES = 50;
 
 export const healthLabels: Record<string, string> = { verified: '可用', error: '异常', pending: '待验证' };
+
+export interface MigrateResultSummary {
+  text: string;
+  tone: 'success' | 'warning' | 'error';
+}
+
+/**
+ * 迁移结束后的一句话结论：底栏左侧常驻，回答「到底成了没有」
+ *
+ * 只说用户能据此决定下一步的数：成了几张、失败几张（可重试）、几张本来就有。
+ */
+export function migrateResultSummary(result: Pick<MigrateResult, 'successCount' | 'failedCount' | 'skippedCount' | 'pauseReason'>): MigrateResultSummary {
+  const parts: string[] = [];
+  if (result.successCount > 0) parts.push(`${formatNumber(result.successCount)} 张已备份`);
+  if (result.failedCount > 0) parts.push(`${formatNumber(result.failedCount)} 张失败`);
+  if (result.skippedCount > 0) parts.push(`${formatNumber(result.skippedCount)} 张本来就有`);
+  const detail = parts.join(' · ');
+
+  if (result.pauseReason === 'user-cancelled') {
+    return { text: detail ? `已取消 · ${detail}` : '已取消，没有图片被处理', tone: 'warning' };
+  }
+  if (result.pauseReason === 'consecutive-failures') {
+    return { text: `连续失败，已自动停下${detail ? ` · ${detail}` : ''}`, tone: 'error' };
+  }
+  if (result.pauseReason === 'preload-error' || result.pauseReason === 'runtime-error') {
+    return { text: `出错中断${detail ? ` · ${detail}` : ''}`, tone: 'error' };
+  }
+  if (result.failedCount > 0) return { text: `完成 · ${detail}`, tone: 'warning' };
+  return { text: detail ? `全部完成 · ${detail}` : '全部完成', tone: 'success' };
+}
