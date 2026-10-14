@@ -81,7 +81,7 @@ async function handleUndo() {
         上次修复 · {{ formatRelativeTime(record.date) }}
       </span>
       <span class="last-repair__detail">
-        成功 {{ record.linksFixed }} 张，覆盖 {{ record.filesFixed }} 个文件
+        修复了 {{ record.filesFixed }} 个文件里的 {{ record.linksFixed }} 处图片
       </span>
     </div>
 

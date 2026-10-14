@@ -78,37 +78,36 @@ onDeactivated(() => { isViewActive.value = false; });
   <div class="rescue-idle" :class="{ dragging: isDragging }">
     <div class="idle-zone-wrapper">
       <div class="idle-zone" :class="{ dragging: isDragging }" @click="handleZoneClick">
-        <div class="idle-zone__main">
-          <div class="idle-zone__headline">
-            <i class="idle-zone__icon pi pi-file-import" />
-            <span class="idle-zone__text">
-              <template v-if="isDragging">松开以载入</template>
-              <template v-else>拖入文件夹或 Markdown 文件</template>
-            </span>
-          </div>
-          <div class="idle-zone__actions" @click.stop>
-            <button
-              type="button"
-              class="idle-secondary-link"
-              :disabled="isAnalyzing || isChecking"
-              @click="emit('selectFile')"
-            >
-              选择单个文件
-            </button>
-            <Button
-              label="选择文件夹"
-              :loading="isAnalyzing || isChecking"
-              class="idle-btn-primary"
-              @click="emit('selectFolder')"
-            />
-          </div>
+        <div class="idle-zone__icon-wrap">
+          <i class="idle-zone__icon pi pi-file-import" />
+        </div>
+        <span class="idle-zone__text">
+          <template v-if="isDragging">松开就开始检查</template>
+          <template v-else>把 Markdown 文件或文件夹拖到这里</template>
+        </span>
+        <span class="idle-zone__desc">
+          找出文档里打不开的图片，换成你在其他图床上的备份
+        </span>
+        <div class="idle-zone__actions" @click.stop>
+          <Button
+            label="选择文件夹"
+            icon="pi pi-folder-open"
+            :loading="isAnalyzing || isChecking"
+            class="idle-btn-primary"
+            @click="emit('selectFolder')"
+          />
+          <button
+            type="button"
+            class="idle-secondary-link"
+            :disabled="isAnalyzing || isChecking"
+            @click="emit('selectFile')"
+          >
+            选择单个文件
+          </button>
         </div>
       </div>
       <div class="option-row-group">
-        <label
-          class="subfolder-option-row"
-          @click.stop
-        >
+        <label class="subfolder-option-row" @click.stop>
           <Checkbox
             :model-value="includeSubfolders"
             :binary="true"
@@ -116,32 +115,28 @@ onDeactivated(() => { isViewActive.value = false; });
           />
           <span>包含子文件夹</span>
         </label>
-        <label class="subfolder-option-row" @click.stop>
+        <label
+          class="subfolder-option-row"
+          v-tooltip.top="'代码块里的图片链接通常是示例代码，默认不检查'"
+          @click.stop
+        >
           <Checkbox
             :model-value="includeCodeBlocks"
             :binary="true"
             @update:model-value="emit('update:includeCodeBlocks', $event as boolean)"
           />
-          <span>包含代码块内的图片链接</span>
+          <span>包含代码块里的图片</span>
         </label>
+        <span class="scope-hint">只修复用 PicNexus 上传过的图片 · 修改前自动备份，可撤销</span>
       </div>
     </div>
+
+    <RescueLastRepairCard v-if="lastRepairRecord" />
 
     <RescueRecentList
       :disabled="isAnalyzing || isChecking"
       @pick="emit('pickRecent', $event)"
     />
-
-    <RescueLastRepairCard v-if="lastRepairRecord" />
-    <div v-else class="last-repair-empty">
-      <i class="pi pi-history" />
-      <span>还没有修复记录 · 从上方拖入文件即可开始</span>
-    </div>
-
-    <div class="scope-hint">
-      <i class="pi pi-info-circle scope-hint__icon" />
-      <span>仅修复 PicNexus 上传过的图片，修复前自动备份、随时可撤销</span>
-    </div>
   </div>
 </template>
 
@@ -150,7 +145,7 @@ onDeactivated(() => { isViewActive.value = false; });
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: var(--space-lg-xl);
+  gap: var(--space-xl);
   width: 100%;
   max-width: 850px;
   height: 100%;
@@ -159,38 +154,31 @@ onDeactivated(() => { isViewActive.value = false; });
   overflow-y: auto;
 }
 
+.idle-zone-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  flex-shrink: 0;
+}
+
 .idle-zone {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-sm);
   width: 100%;
-  padding: var(--space-3xl) var(--space-xl);
+  padding: var(--space-2xl) var(--space-xl);
   background: var(--bg-card);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 在"虚线细"和"可见度"之间取折中，token 仅有 1/2/3px */
   border: 1.5px dashed var(--border-subtle);
   border-radius: var(--radius-lg);
+  text-align: center;
   cursor: pointer;
   flex-shrink: 0;
   transition:
     border-color var(--duration-medium),
     background var(--duration-medium);
-}
-
-.idle-zone__main {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  gap: var(--space-md);
-  width: 100%;
-  min-height: 36px;
-}
-
-.idle-zone__headline {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: var(--space-sm-md);
-  min-width: 0;
 }
 
 .idle-zone:hover {
@@ -205,89 +193,64 @@ onDeactivated(() => { isViewActive.value = false; });
   border-style: solid;
 }
 
-.idle-zone__icon {
-  font-size: var(--text-xl);
-  color: var(--primary);
-  flex-shrink: 0;
-  transition: transform var(--duration-medium) ease;
-}
-
-.idle-zone.dragging .idle-zone__icon,
-.rescue-idle.dragging .idle-zone__icon { transform: translateY(-2px) scale(1.1); }
-
-.option-row-group {
+.idle-zone__icon-wrap {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.idle-zone-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.subfolder-option-row {
-  display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  gap: var(--space-sm);
-  padding: var(--space-xs-sm) var(--space-sm-md);
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm-md);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: var(--space-xs);
+  border-radius: 50%;
+  background: var(--primary-alpha-10);
+  transition: transform var(--duration-medium) var(--ease-standard);
 }
 
-.subfolder-option-row:hover {
-  color: var(--text-main);
-  border-color: var(--primary);
+.idle-zone__icon {
+  font-size: var(--text-2xl);
+  color: var(--primary);
 }
+
+.idle-zone.dragging .idle-zone__icon-wrap,
+.rescue-idle.dragging .idle-zone__icon-wrap { transform: translateY(-2px) scale(1.08); }
 
 .idle-zone__text {
-  min-width: 0;
   font-size: var(--text-lg);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   line-height: var(--leading-tight);
-  letter-spacing: 0.01em;
   color: var(--text-main);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.idle-zone__desc {
+  max-width: 460px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
 }
 
 .idle-zone__actions {
   display: flex;
   align-items: center;
-  justify-self: end;
-  gap: var(--space-sm);
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
 }
 
 .idle-btn-primary.p-button {
-  height: 32px; padding: 0 var(--space-md); font-size: var(--text-sm); font-weight: var(--weight-semibold);
-  border-radius: var(--radius-sm-md);
-  background: var(--primary-alpha-15); border-color: transparent; color: var(--primary);
-  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+  height: 34px;
+  padding: 0 var(--space-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-md);
 }
 
-.idle-btn-primary.p-button:hover { background: var(--primary-alpha-15); filter: brightness(0.94); }
-.idle-btn-primary.p-button:active { background: var(--primary-alpha-15); filter: brightness(0.88); }
 .idle-btn-primary.p-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
 .idle-secondary-link {
-  padding: var(--space-2xs) var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
   background: transparent;
   border: 0;
+  font-family: inherit;
   font-size: var(--text-sm);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: color var(--duration-fast) var(--ease-standard);
@@ -297,43 +260,32 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-secondary-link:disabled { opacity: 0.5; cursor: not-allowed; }
 .idle-secondary-link:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
-.last-repair-empty {
+.option-row-group {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: 0 var(--space-xs);
+}
+
+.subfolder-option-row {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-md);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  background: var(--primary-alpha-8);
-  border: 1px dashed var(--primary-alpha-30);
-  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--duration-fast) var(--ease-standard);
 }
 
-.last-repair-empty i {
-  font-size: var(--text-base);
-  color: var(--primary);
-  flex-shrink: 0;
+.subfolder-option-row:hover {
+  color: var(--text-main);
 }
 
-/* 底部一行功能提示：合并原两行 + 去除关闭按钮 */
 .scope-hint {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm-md) var(--space-md);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  color: var(--success);
-  background: var(--success-alpha-8);
-  border: 1px solid var(--success-border);
-  border-radius: var(--radius-md);
-  width: 100%;
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
-
-.scope-hint__icon {
-  font-size: var(--text-base);
-  color: var(--success);
-  flex-shrink: 0;
-}
-
 </style>
