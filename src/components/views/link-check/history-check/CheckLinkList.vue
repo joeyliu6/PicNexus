@@ -22,6 +22,7 @@ defineProps<{
   copiedKey?: string | null;
   rowThumbSrcs: (row: LinkCheckRow) => string[];
   rowHint: (row: LinkCheckRow) => CopyHint | null;
+  rowPromoteTo: (row: LinkCheckRow) => string | null;
   confirmedHttpHosts?: ReadonlySet<string>;
 }>();
 
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   (e: 'copy-url', row: LinkCheckRow): void;
   (e: 'recheck-single', row: LinkCheckRow): void;
   (e: 'delete-row', row: LinkCheckRow): void;
+  (e: 'promote-backup', row: LinkCheckRow): void;
 }>();
 </script>
 
@@ -97,6 +99,8 @@ const emit = defineEmits<{
         :recheck-result="row.recheckResult"
         :recheck-loading="!!row.recheckLoading"
         :recheck-fading="!!row.recheckBadgeFading"
+        :is-primary="!!row.isPrimary"
+        :promote-to="rowPromoteTo(row)"
         :selected="selectedIds.has(rowKey(row))"
         :selection-active="selectedIds.size > 0"
         :disabled="isChecking || isActionLocked"
@@ -110,6 +114,7 @@ const emit = defineEmits<{
         @copy-url="emit('copy-url', row)"
         @recheck="emit('recheck-single', row)"
         @delete="emit('delete-row', row)"
+        @promote="emit('promote-backup', row)"
       />
     </TransitionGroup>
   </div>

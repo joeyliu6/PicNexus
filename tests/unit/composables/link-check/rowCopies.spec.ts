@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyHint, indexRowsByHistory, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
+import { copyHint, indexRowsByHistory, promotableBackup, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
 import { createCheckLinkResult, createLinkCheckRow } from '../../factories/linkCheckFactory';
 
 const ok = () => createCheckLinkResult({ is_valid: true });
@@ -77,4 +77,24 @@ describe('rowCopies', () => {
     const order = thumbnailCopyOrder(self, [deadSibling, unchecked, alive]);
     expect(order.map((r) => r.serviceId)).toEqual(['jd', 'webdav:a', 'zhihu', 'webdav:b']);
   });
+
+  it('只有坏掉的主链接才建议改用备份，且取第一个可用的', () => {
+    const primary = createLinkCheckRow({ historyId: 'h', serviceId: 'webdav:a', isPrimary: true, checkResult: dead() });
+    const deadSibling = createLinkCheckRow({ historyId: 'h', serviceId: 'webdav:b', checkResult: dead() });
+    const jd = createLinkCheckRow({ historyId: 'h', serviceId: 'jd', checkResult: ok() });
+    const qiyu = createLinkCheckRow({ historyId: 'h', serviceId: 'qiyu', checkResult: ok() });
+    expect(promotableBackup(primary, [deadSibling, jd, qiyu])?.serviceId).toBe('jd');
+
+    const nonPrimary = { ...primary, isPrimary: false };
+    expect(promotableBackup(nonPrimary, [jd])).toBeUndefined();
+
+    const healthy = { ...primary, checkResult: ok() };
+    expect(promotableBackup(healthy, [jd])).toBeUndefined();
+
+    const hotlink = { ...primary, checkResult: createCheckLinkResult({ is_valid: false, status_code: 403, browser_might_work: true }) };
+    expect(promotableBackup(hotlink, [jd])).toBeUndefined();
+
+    expect(promotableBackup(primary, [deadSibling])).toBeUndefined();
+  });
 });
+

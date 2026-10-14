@@ -1080,6 +1080,21 @@ export function useLinkCheckManager() {
     checkRows.value = rows;
   }
 
+  /**
+   * 主图床已在库里切换后，同步行上的「主链接」标记（不重新加载整表）
+   */
+  function setPrimaryService(historyId: string, serviceId: string): void {
+    let changed = false;
+    const rows = checkRows.value.map((row) => {
+      if (row.historyId !== historyId) return row;
+      const isPrimary = row.serviceId === serviceId;
+      if (row.isPrimary === isPrimary) return row;
+      changed = true;
+      return { ...row, isPrimary };
+    });
+    if (changed) checkRows.value = rows;
+  }
+
   /** 页面激活时：取消空闲计时，利用 TTL 缓存判断是否需要重新加载 */
   function onViewActivated(): void {
     if (idleTimer) {
@@ -1133,6 +1148,7 @@ export function useLinkCheckManager() {
     removeRowsByHistoryIds,
     removeRowsByKeys,
     setFadingOutRows,
+    setPrimaryService,
     onViewActivated,
     onViewDeactivated,
   };

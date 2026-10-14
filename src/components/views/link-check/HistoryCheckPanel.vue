@@ -15,7 +15,8 @@ import { useCheckStrategy } from '@/composables/link-check/useCheckStrategy';
 import type { MoreMenuKind } from '@/composables/link-check/useCheckStrategy';
 import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
 import { applyZhihuSourceFromConfig } from '@/utils/zhihuSource';
-import { copyHint, indexRowsByHistory, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
+import { copyHint, indexRowsByHistory, promotableBackup, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
+import { getServiceDisplayName } from '@/constants/serviceNames';
 import { getCopiesThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { getConfirmedHttpHosts } from '@/security/networkPolicy';
 
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   (e: 'bulk-recheck', rows: LinkCheckRow[]): void;
   (e: 'bulk-copy', rows: LinkCheckRow[]): void;
   (e: 'bulk-delete', rows: LinkCheckRow[]): void;
+  (e: 'promote-backup', row: LinkCheckRow, serviceId: string): void;
 }>();
 
 const checkRows = computed(() => props.checkRows);
@@ -168,6 +170,20 @@ function rowThumbSrcs(row: LinkCheckRow): string[] {
 
 function rowHint(row: LinkCheckRow) {
   return copyHint(row, siblingRows(row, rowsByHistory.value));
+}
+
+function backupToPromote(row: LinkCheckRow): LinkCheckRow | undefined {
+  return promotableBackup(row, siblingRows(row, rowsByHistory.value));
+}
+
+function rowPromoteTo(row: LinkCheckRow): string | null {
+  const backup = backupToPromote(row);
+  return backup ? getServiceDisplayName(backup.serviceId) : null;
+}
+
+function handlePromote(row: LinkCheckRow): void {
+  const backup = backupToPromote(row);
+  if (backup) emit('promote-backup', row, backup.serviceId);
 }
 
 /** 底栏运行状态 pill —— 仅在链接检测自己检测时显示，rescue/迁移不借此渲染 */
@@ -361,12 +377,14 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :selected-ids="selectedIds"
       :row-thumb-srcs="rowThumbSrcs"
       :row-hint="rowHint"
+      :row-promote-to="rowPromoteTo"
       :confirmed-http-hosts="confirmedHttpHosts"
       :copied-key="copiedLinkKey"
       @toggle-select="handleToggleSelect"
       @copy-url="handleCopyUrl"
       @recheck-single="handleRecheck"
       @delete-row="(row: LinkCheckRow) => emit('delete-row', row)"
+      @promote-backup="handlePromote"
     />
 
     <CheckBottomBar

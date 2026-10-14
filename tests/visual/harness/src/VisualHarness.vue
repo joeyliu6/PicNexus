@@ -32,7 +32,8 @@ import WechatQrDialog from '@/components/settings/about-update/WechatQrDialog.vu
 import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
-import { copyHint, indexRowsByHistory, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { copyHint, indexRowsByHistory, promotableBackup, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter, BatchCheckProgress } from '@/types/linkCheck';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
@@ -197,7 +198,10 @@ const linkRows = computed<LinkCheckRow[]>(() => {
     row(6, 'zhihu', 'valid'),
     row(7, 'nami', 'invalid'),
     row(8, 'qiyu'),
+    // 第 2 张图的第二份副本：主链接（微博）坏了，京东这份还能用 → 「改用京东」
+    row(2, 'jd', 'valid'),
   ];
+  rows.forEach((r, i) => { r.isPrimary = i < 8; });
   if (state === 'running' || state === 'paused') {
     rows[4].recheckLoading = true;
     rows[5].recentlyCompletedAt = Date.now() - 500;
@@ -252,6 +256,10 @@ const moreItems: MoreMenuItem[] = [
 const linkRowsByHistory = computed(() => indexRowsByHistory(linkRows.value));
 const rowThumbSrcs = (row: LinkCheckRow) => thumbnailCopyOrder(row, siblingRows(row, linkRowsByHistory.value)).map((r) => r.rawUrl);
 const rowHint = (row: LinkCheckRow) => copyHint(row, siblingRows(row, linkRowsByHistory.value));
+const rowPromoteTo = (row: LinkCheckRow) => {
+  const backup = promotableBackup(row, siblingRows(row, linkRowsByHistory.value));
+  return backup ? getServiceDisplayName(backup.serviceId) : null;
+};
 
 const historyMode = ref<'table' | 'timeline' | 'favorites'>(
   page === 'timeline' ? 'timeline' : page === 'favorites' ? 'favorites' : 'table'
@@ -859,6 +867,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
             :selected-ids="selectedIds"
             :row-thumb-srcs="rowThumbSrcs"
             :row-hint="rowHint"
+            :row-promote-to="rowPromoteTo"
           />
           <CheckBottomBar
             v-model:current-page="currentPage"

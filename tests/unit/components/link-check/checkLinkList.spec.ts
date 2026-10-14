@@ -29,6 +29,7 @@ function mountList(options: {
   statusFilter?: StatusFilter;
   rowThumbSrcs?: (row: LinkCheckRow) => string[];
   rowHint?: (row: LinkCheckRow) => CopyHint | null;
+  rowPromoteTo?: (row: LinkCheckRow) => string | null;
 } = {}) {
   const rows = options.rows ?? [];
 
@@ -51,6 +52,7 @@ function mountList(options: {
       copiedKey: options.copiedKey ?? null,
       rowThumbSrcs: options.rowThumbSrcs ?? vi.fn(() => []),
       rowHint: options.rowHint ?? vi.fn(() => null),
+      rowPromoteTo: options.rowPromoteTo ?? vi.fn(() => null),
     },
     global: {
       stubs: {
@@ -265,6 +267,22 @@ describe('CheckLinkList', () => {
     const locked = mountList({ rows: [row], isChecking: true });
     await locked.get('.link-row').trigger('keydown', { key: ' ' });
     expect(locked.emitted('toggle-select')).toBeUndefined();
+  });
+
+  it('坏掉的主链接给出「改用 X」按钮，点击上报，不触发选中', async () => {
+    const row = createLinkCheckRow({ historyId: 'hist-1', serviceId: 'webdav:a', isPrimary: true });
+    const other = createLinkCheckRow({ historyId: 'hist-2', serviceId: 'jd' });
+    const wrapper = mountList({
+      rows: [row, other],
+      rowPromoteTo: (r) => (r.historyId === 'hist-1' ? '京东' : null),
+    });
+    const buttons = wrapper.findAll('.promote-btn');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].text()).toBe('改用京东');
+
+    await buttons[0].trigger('click');
+    expect(wrapper.emitted('promote-backup')).toHaveLength(1);
+    expect(wrapper.emitted('toggle-select')).toBeUndefined();
   });
 });
 

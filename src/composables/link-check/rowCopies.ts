@@ -80,3 +80,16 @@ export function thumbnailCopyOrder(row: LinkCheckRow, siblings: readonly LinkChe
     .sort((a, b) => a.k - b.k || a.i - b.i)
     .map(({ r }) => r);
 }
+
+/**
+ * 主链接坏了、但别的图床还有能用的 → 返回可以顶上来的那一份（按记录里的顺序取第一个可用的）
+ *
+ * 只对主链接给出：非主链接坏了不影响用户已经复制出去的链接，没什么可「改用」的。
+ * 防盗链 / 跳转这类「浏览器多半能看」的不算坏，不建议换。
+ */
+export function promotableBackup(row: LinkCheckRow, siblings: readonly LinkCheckRow[]): LinkCheckRow | undefined {
+  if (!row.isPrimary) return undefined;
+  const result = effectiveResult(row);
+  if (!result || result.is_valid || result.browser_might_work || result.error_type === 'redirect') return undefined;
+  return siblings.find((s) => effectiveResult(s)?.is_valid);
+}

@@ -10,6 +10,13 @@ import BatchMigratePanel from './link-check/BatchMigratePanel.vue';
 import HistoryCheckPanel from './link-check/HistoryCheckPanel.vue';
 import MdRescueInline from './link-check/MdRescueInline.vue';
 import { exportTextFile } from '@/utils/userFiles';
+import { historyDB } from '@/services/database';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { createLogger } from '@/utils/logger';
+import { getErrorMessage } from '@/types/errors';
+
+const log = createLogger('LinkCheckView');
 
 const toast = useToast();
 
@@ -58,6 +65,7 @@ const {
   exportCsv,
   removeRowsByKeys,
   setFadingOutRows,
+  setPrimaryService,
   onViewActivated,
   onViewDeactivated,
 } = useLinkCheckManager();
@@ -112,6 +120,24 @@ async function handleDeleteRow(row: LinkCheckRow): Promise<void> {
   setFadingOutRows([row], true);
   await new Promise((resolve) => setTimeout(resolve, 380));
   removeRowsByKeys([row]);
+}
+
+/**
+ * 主链接坏了 → 改用能访问的备份当主链接
+ *
+ * 不弹确认：随时能在浏览页 / 这里再改回来，而且什么都不删。
+ * 提示要发：那一行往往不在当前「有问题」筛选里，「主链接」标签挪过去用户看不见。
+ */
+async function handlePromoteBackup(row: LinkCheckRow, serviceId: string): Promise<void> {
+  try {
+    await historyDB.switchPrimaryService(row.historyId, serviceId);
+    setPrimaryService(row.historyId, serviceId);
+    await emitHistoryUpdated([row.historyId]).catch((e) => log.warn('history-updated 事件发送失败', e));
+    toast.success('已改用备份', `主链接换成了 ${getServiceDisplayName(serviceId)}，以后复制的就是这条`);
+  } catch (error) {
+    log.error('切换主链接失败', error);
+    toast.error('没改成', getErrorMessage(error));
+  }
 }
 
 async function recheckRows(rows: LinkCheckRow[]): Promise<void> {
@@ -188,6 +214,7 @@ onDeactivated(onViewDeactivated);
         @bulk-recheck="bulkRecheck"
         @bulk-copy="bulkCopyUrls"
         @bulk-delete="bulkDelete"
+        @promote-backup="handlePromoteBackup"
       />
 
       <MdRescueInline v-else-if="activeTab === 'rescue'" key="rescue" />

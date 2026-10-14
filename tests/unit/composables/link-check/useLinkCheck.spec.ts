@@ -281,6 +281,22 @@ describe('useLinkCheckManager.removeRowsByKeys', () => {
   });
 });
 
+describe('useLinkCheckManager.setPrimaryService', () => {
+  it('只挪同一条记录的「主链接」标记，换新对象以便单行组件刷新', async () => {
+    const m = await freshManager();
+    m.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'webdav:a', isPrimary: true }),
+      makeRow({ historyId: 'h1', serviceId: 'jd', isPrimary: false }),
+      makeRow({ historyId: 'h2', serviceId: 'jd', isPrimary: true }),
+    ];
+    const before = m.checkRows.value;
+    m.setPrimaryService('h1', 'jd');
+    expect(m.checkRows.value.map((r) => r.isPrimary)).toEqual([false, true, true]);
+    expect(m.checkRows.value[0]).not.toBe(before[0]);
+    expect(m.checkRows.value[2]).toBe(before[2]);
+  });
+});
+
 describe('useLinkCheckManager.setFadingOutRows', () => {
   it('对匹配的 (historyId, serviceId) 设置 fadingOut=true', async () => {
     const m = await freshManager();

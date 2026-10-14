@@ -19,6 +19,9 @@ const props = defineProps<{
   recheckResult: CheckLinkResult | undefined;
   recheckLoading: boolean;
   recheckFading: boolean;
+  isPrimary: boolean;
+  /** 主链接坏了、可以改用的备份图床名（没有就是 null） */
+  promoteTo: string | null;
   selected: boolean;
   /** 列表里已有选中项：此时每行都露出勾选圈，提示「点行即可加选」 */
   selectionActive: boolean;
@@ -36,6 +39,7 @@ const emit = defineEmits<{
   (e: 'copy-url'): void;
   (e: 'recheck'): void;
   (e: 'delete'): void;
+  (e: 'promote'): void;
 }>();
 
 const tone = computed(() => statusTone(props.result));
@@ -91,7 +95,7 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
           <span class="badge-label">{{ serviceName }}</span>
         </span>
         <span
-          v-if="row.isPrimary"
+          v-if="isPrimary"
           v-tooltip.top="'复制出去、写进文档的就是这条链接'"
           class="primary-tag"
         >主链接</span>
@@ -107,6 +111,17 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
       <i :class="hint.tone === 'ok' ? 'pi pi-shield' : 'pi pi-exclamation-circle'" aria-hidden="true"></i>
       {{ hint.text }}
     </span>
+
+    <button
+      v-if="promoteTo"
+      type="button"
+      class="promote-btn"
+      :disabled="disabled"
+      v-tooltip.top="`以后复制、插入的都改用 ${promoteTo} 上的这份；可随时改回`"
+      @click.stop="emit('promote')"
+    >
+      改用{{ promoteTo }}
+    </button>
 
     <span v-tooltip.top="tooltip" class="status-pill" :class="`status-pill--${tone}`">
       <span class="status-dot" aria-hidden="true"></span>{{ word }}
@@ -354,6 +369,35 @@ const recheckTone = computed(() => (props.recheckResult ? statusTone(props.reche
 
 .copy-hint--error {
   color: var(--error);
+}
+
+.promote-btn {
+  flex-shrink: 0;
+  max-width: 140px;
+  height: 24px;
+  padding: 0 var(--space-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--primary-alpha-30);
+  border-radius: var(--radius-full);
+  background: var(--primary-alpha-8);
+  color: var(--primary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.promote-btn:hover:not(:disabled) {
+  background: var(--primary-alpha-15);
+  border-color: var(--primary-alpha-50);
+}
+
+.promote-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* 状态药丸：正常的安静，出问题的才着色——让眼睛先落在问题上 */
