@@ -153,9 +153,11 @@ function removeCopy(rows: LinkCheckRow[], scope: RemoveScope): BulkDeleteConfirm
       acceptLabel: '移除',
     };
   }
+  // 这张图还有能打开的一份：文档里写的多半是这条旧链接，「文档修复」靠它在记录里找到备份，所以要提醒
+  const these = rows.length === 1 ? '这条' : '这些';
   return {
     header: `移除 ${rows.length} 个失效的链接？`,
-    message: `「${entry.fileName}」在 ${rows.map((r) => nameOf(r.serviceId)).join('、')} 上的链接已经打不开。只移除打不开的，能打开的链接都保留；图床上的文件不受影响，移除后无法撤销。`,
+    message: `「${entry.fileName}」在 ${rows.map((r) => nameOf(r.serviceId)).join('、')} 上的链接已经打不开，能打开的会保留。文档里如果还用着${these}旧链接，移除后「文档修复」就换不了它了，建议先修文档。图床上的文件不受影响，移除后无法撤销。`,
     acceptLabel: '移除',
   };
 }

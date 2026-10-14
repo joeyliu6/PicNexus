@@ -225,15 +225,17 @@ describe('LinkCheckView page interactions', () => {
     timers.restore();
   });
 
-  it('只移除一张图上打不开的那一份：量词和列表一样用「个」，一份时不说「这几条」', async () => {
+  it('只移除一张图上打不开的那一份：量词和列表一样用「个」，并提醒文档修复要靠这条旧链接找备份', async () => {
     const wrapper = await mountLinkCheckView();
     await wrapper.get('.remove-dead-copy').trigger('click');
     await flushPromisesAndTicks();
 
     const copy = mockState.bulkDeleteHistoryResults.mock.calls[0][1];
     expect(copy.header).toBe('移除 1 个失效的链接？');
-    expect(copy.message).toContain('能打开的链接都保留');
+    expect(copy.message).toContain('能打开的会保留');
     expect(copy.message).not.toContain('这几条');
+    // 文档里写的多半就是这条旧链接，「文档修复」靠它在记录里找到备份；删了就对不上了
+    expect(copy.message).toContain('「文档修复」就换不了它了');
   });
 
   it('清理找不回的图片用专门的确认文案', async () => {

@@ -396,6 +396,7 @@ flowchart TD
 | 删主力 → 补选 | 从剩余可用镜像（`isUsableMirror`：success 且有 url）里挑第一个，更新 `generatedLink`；Timeline/收藏的缩略图会自动跟上 |
 | 结果归零 → 整条删 | `results[]` 空壳记录没有展示价值，直接 `historyDB.delete` 降级；删主力后无可用接班镜像时同样整条删（避免 `generatedLink=''` 孤儿） |
 | 批量合并 | 同一 `historyId` 下多个 serviceId 合并为一次 `update`，不会 N 次写库 |
+| 移除前提醒文档修复 | 这张图还有能打开的一份时，文档里写的多半就是这条打不开的旧链接；文档修复的 `findBackupLinksRaw` 拿旧链接在记录里找备份，删了就对不上。所以确认框写明「文档里如果还用着这条旧链接，移除后『文档修复』就换不了它了，建议先修文档」。整张图都打不开时本来就没有备份可换，不提醒 |
 | 批量部分失败 → 按记录隔离 | 底层逐条写库无法回滚，一条记录抛错不拖累其余；`applyChanges` 只对真落库的部分生效；回执和确认框同一个单位：整张图移除报「已从记录中移除 N 张图片」，只剥掉链接报「已移除 N 个链接」，部分失败报「N 张图片没移除成功」（warn）；返回 `BulkResultDeleteReport`，视图只移除 `resolvedHistoryIds` 对应的行（含"目标本就不存在"的陈旧行），失败的行保留供重试 |
 | 事件分流 | 整条删走 `emitHistoryDeleted`，仅改走 `emitHistoryUpdated`；其他视图依赖这两类事件刷新缓存 |
 

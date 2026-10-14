@@ -406,7 +406,7 @@ flowchart TD
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
 | 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复 N 张」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
 | 拖放文件报 `forbidden path ... allow-stat` | 路径没进 fs 运行时白名单，见 [文件访问白名单](#文件访问白名单)。按钮选文件能用而拖放不能，就是这条 | 图 2 加载入口 |
-| 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
+| 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录）；或文档里这条旧链接在链接检测里被「移除失效的链接」删了——`findBackupLinksRaw` 拿旧链接在记录里找备份，记录里没有它就认不出来（链接检测的确认框会提醒先修文档） | 图 4 `findBackupLinksRaw` |
 | 每行预选的不是想要的图床 | 没设过首选时按「最快」选；在某行弹层里点「以后优先用 X，应用到全部」会存成首选 | 图 6 选择规则 |
 | 徽章/代理服务 URL 里的 `.js`/`.css` 被当图片扫 | `isValidImageUrl` / `is_valid_image_url` 按 URL path 末尾扩展名做黑名单过滤（`js/css/html/pdf/zip/mp4/...`），query/fragment 不参与 | `src/utils/mdParser.ts` `NON_IMAGE_EXTENSIONS`、`src-tauri/src/commands/md_scanner.rs` 同名常量（两侧必须保持一致） |
 
