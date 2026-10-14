@@ -30,22 +30,6 @@ export const EXEMPTIONS: Exemption[] = [
     reason: 'CollapsibleSettingsCard 折叠态：max-height 收到 0 再用 overflow 裁掉正文，'
       + '「把内容裁没」就是折叠这个交互本身。展开态（webdav-expanded）不在此列，仍然受检。',
   },
-  {
-    page: 'link-check',
-    state: 'empty',
-    pathIncludes: 'link-list-wrap',
-    axis: 'x',
-    reason: '.empty-state-wrapper 有 translate(-40px, -40px) 的视觉居中补偿'
-      + '（CheckLinkList.vue 的 --link-check-empty-center-shift-x/y）。'
-      + '它是撑满容器的 flex 居中盒，被裁掉的是左上角的空白区，不是内容。',
-  },
-  {
-    page: 'link-check',
-    state: 'empty',
-    pathIncludes: 'link-list-wrap',
-    axis: 'y',
-    reason: '同上，纵向那一半的视觉居中补偿。',
-  },
 ];
 
 /**

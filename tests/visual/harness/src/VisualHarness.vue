@@ -18,9 +18,7 @@ import MdRescueInline from '@/components/views/link-check/MdRescueInline.vue';
 import MigrateSelectPhase from '@/components/views/link-check/migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from '@/components/views/link-check/migrate/MigrateProgressPhase.vue';
 import { MIGRATE_KEY } from '@/components/views/link-check/migrate/keys';
-import CheckFilterBar from '@/components/views/link-check/history-check/CheckFilterBar.vue';
-import CheckLinkList from '@/components/views/link-check/history-check/CheckLinkList.vue';
-import CheckBottomBar from '@/components/views/link-check/history-check/CheckBottomBar.vue';
+import HistoryCheckPanel from '@/components/views/link-check/HistoryCheckPanel.vue';
 import LinkCheckSkeleton from '@/components/views/link-check/history-check/LinkCheckSkeleton.vue';
 import GeneralSettingsPanel from '@/components/settings/GeneralSettingsPanel.vue';
 import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSection.vue';
@@ -32,12 +30,8 @@ import WechatQrDialog from '@/components/settings/about-update/WechatQrDialog.vu
 import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
-import { getServiceDisplayName } from '@/constants/serviceNames';
-import { copyHint, indexRowsByHistory, promotableBackup, siblingRows, thumbnailCopyOrder } from '@/composables/link-check/rowCopies';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
-import type { CheckLinkResult, LinkCheckRow, StatusFilter, BatchCheckProgress } from '@/types/linkCheck';
-import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
-import type { MoreMenuItem } from '@/composables/link-check/useCheckStrategy';
+import type { CheckLinkResult, LinkCheckRow, BatchCheckProgress } from '@/types/linkCheck';
 import type { CompressionPreset, HistoryItem, ProfileSyncRecord, ServiceType, ThemeMode, WebDAVConfig } from '@/config/types';
 import { DEFAULT_CONFIG } from '@/config/types';
 import type { ServiceHealthStatus } from '@/types/serviceHealth';
@@ -169,97 +163,68 @@ const uploadItems = computed(() => {
   return [];
 });
 
-function result(kind: 'valid' | 'invalid' | 'timeout' | 'suspicious'): CheckLinkResult {
+function result(kind: 'valid' | 'invalid' | 'timeout' | 'hotlink'): CheckLinkResult {
   if (kind === 'valid') return { link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false, response_time: 108 };
   if (kind === 'timeout') return { link: '', is_valid: false, error_type: 'timeout', error: 'Timeout', browser_might_work: false, response_time: 10000 };
-  if (kind === 'suspicious') return { link: '', is_valid: false, status_code: 403, error_type: 'suspicious', error: 'Browser may work', browser_might_work: true, response_time: 840 };
+  if (kind === 'hotlink') return { link: '', is_valid: false, status_code: 403, error_type: 'http_4xx', error: 'Forbidden', browser_might_work: true, response_time: 840 };
   return { link: '', is_valid: false, status_code: 404, error_type: 'http_4xx', error: 'Not found', browser_might_work: false, response_time: 280 };
 }
 
-function row(idx: number, serviceId: string, kind?: 'valid' | 'invalid' | 'timeout' | 'suspicious'): LinkCheckRow {
+/** 三天前检查过：结论卡写「3天前检查」 */
+const CHECKED_AT = Date.now() - 3 * 86_400_000;
+
+function row(idx: number, serviceId: string, kind?: 'valid' | 'invalid' | 'timeout' | 'hotlink', primary = false): LinkCheckRow {
   return {
     historyId: `history-${idx}`,
     serviceId,
     url: `https://img.example/${idx}/${serviceId}.jpg`,
     rawUrl: `https://img.example/${idx}/${serviceId}.jpg`,
     fileName: `gallery-shot-${idx.toString().padStart(2, '0')}.jpg`,
+    isPrimary: primary,
     checkResult: kind ? result(kind) : undefined,
+    checkedAt: kind ? CHECKED_AT : undefined,
   };
+}
+
+/**
+ * 八张图覆盖每一类：能改用备份 / 打不开（超时）/ 找不回（404）/ 受限（防盗链）/ 备份失效 / 正常 / 没检查
+ */
+function mixedLinkRows(): LinkCheckRow[] {
+  return [
+    row(1, 'jd', 'valid', true),
+    row(2, 'weibo', 'invalid', true),
+    row(2, 'jd', 'valid'),
+    row(3, 'r2', 'timeout', true),
+    row(4, 'github', 'hotlink', true),
+    row(5, 'smms', undefined, true),
+    row(6, 'zhihu', 'valid', true),
+    row(6, 'weibo', 'invalid'),
+    row(7, 'nami', 'invalid', true),
+    row(8, 'qiyu', undefined, true),
+  ];
 }
 
 const linkRows = computed<LinkCheckRow[]>(() => {
   if (state === 'empty' || state === 'skeleton') return [];
-  const rows = [
-    row(1, 'jd', 'valid'),
-    row(2, 'weibo', 'invalid'),
-    row(3, 'r2', 'timeout'),
-    row(4, 'github', 'suspicious'),
-    row(5, 'smms'),
-    row(6, 'zhihu', 'valid'),
-    row(7, 'nami', 'invalid'),
-    row(8, 'qiyu'),
-    // 第 2 张图的第二份副本：主链接（微博）坏了，京东这份还能用 → 「改用京东」
-    row(2, 'jd', 'valid'),
-  ];
-  rows.forEach((r, i) => { r.isPrimary = i < 8; });
-  if (state === 'running' || state === 'paused') {
-    rows[4].recheckLoading = true;
-    rows[5].recentlyCompletedAt = Date.now() - 500;
+  if (state === 'never-checked') return mixedLinkRows().map((r) => ({ ...r, checkResult: undefined, checkedAt: undefined }));
+  if (state === 'all-clear') {
+    return [
+      row(1, 'jd', 'valid', true),
+      row(1, 'weibo', 'valid'),
+      row(2, 'r2', 'valid', true),
+      row(2, 'jd', 'valid'),
+      row(3, 'github', 'valid', true),
+    ];
   }
-  if (state === 'phase2-loading') {
-    rows[4].recentlyCompletedAt = Date.now() - 250;
-  }
+  const rows = mixedLinkRows();
   if (state === 'recheck-result') {
+    rows[3].recheckLoading = true;
     rows[1].recheckResult = result('valid');
-    rows[2].recheckResult = result('timeout');
   }
   return rows;
 });
 
-function statsFor(rows: LinkCheckRow[]): CheckStatsResult {
-  let valid = 0;
-  let invalid = 0;
-  let timeout = 0;
-  let suspicious = 0;
-  let unchecked = 0;
-  for (const item of rows) {
-    const check = item.checkResult;
-    if (!check) unchecked += 1;
-    else if (check.is_valid) valid += 1;
-    else if (check.error_type === 'timeout') timeout += 1;
-    else if (check.error_type === 'suspicious' || check.browser_might_work) suspicious += 1;
-    else invalid += 1;
-  }
-  return { total: rows.length, valid, invalid, timeout, suspicious, unchecked, checked: rows.length - unchecked, problems: invalid + timeout + suspicious };
-}
-
-const linkStats = computed(() => statsFor(linkRows.value));
-const serviceList = computed(() => Array.from(new Set(linkRows.value.map((item) => item.serviceId))).map((id) => ({ id, count: linkRows.value.filter((item) => item.serviceId === id).length })));
-const selectedIds = computed(() => state === 'bulk-select' ? new Set(['history-2|weibo', 'history-3|r2', 'history-4|github']) : new Set<string>());
-const statusFilter = ref<StatusFilter>(state === 'empty' ? null : 'all');
-const selectedServiceId = ref<string | null>(null);
-const showServiceMenu = ref(state === 'service-menu');
-const searchInput = ref(state === 'mixed-results' ? 'gallery' : '');
-const searchQuery = ref('');
-const searchFocused = ref(false);
-const currentPage = ref(1);
-const pageInput = ref('1');
-const showOverflowMenu = ref(state === 'overflow-menu');
-const progressValue = computed<BatchCheckProgress | null>(() => (state === 'running' || state === 'paused') ? { checked: 5, total: 8, current_url: 'https://img.example/5/jd.jpg' } : null);
-const moreItems: MoreMenuItem[] = [
-  { kind: 'export', label: 'Export', icon: 'pi-download', count: 8 },
-  { kind: 'recheck', label: 'Recheck', icon: 'pi-refresh', count: 8 },
-  { kind: 'copy', label: 'Copy links', icon: 'pi-copy', count: 8 },
-  { kind: 'delete', label: 'Delete', icon: 'pi-trash', count: 8, danger: true },
-];
-
-const linkRowsByHistory = computed(() => indexRowsByHistory(linkRows.value));
-const rowThumbSrcs = (row: LinkCheckRow) => thumbnailCopyOrder(row, siblingRows(row, linkRowsByHistory.value)).map((r) => r.rawUrl);
-const rowHint = (row: LinkCheckRow) => copyHint(row, siblingRows(row, linkRowsByHistory.value));
-const rowPromoteTo = (row: LinkCheckRow) => {
-  const backup = promotableBackup(row, siblingRows(row, linkRowsByHistory.value));
-  return backup ? getServiceDisplayName(backup.serviceId) : null;
-};
+const progressValue = computed<BatchCheckProgress | null>(() => (state === 'running' || state === 'paused') ? { checked: 5, total: 10, current_url: 'https://img.example/5/smms.jpg' } : null);
 
 const historyMode = ref<'table' | 'timeline' | 'favorites'>(
   page === 'timeline' ? 'timeline' : page === 'favorites' ? 'favorites' : 'table'
@@ -822,12 +787,12 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
       <section
         v-else-if="isLinkFeaturePage"
         class="visual-page visual-linkcheck"
-        :class="{ 'visual-linkcheck--native': page !== 'link-check' }"
+        :class="{ 'visual-linkcheck--native': true }"
       >
         <div class="visual-tabs">
-          <span :class="{ active: page === 'link-check' }">Link check</span>
-          <span :class="{ active: page === 'markdown-repair' }">Markdown repair</span>
-          <span :class="{ active: page === 'batch-migrate' }">Batch migrate</span>
+          <span :class="{ active: page === 'link-check' }">链接检测</span>
+          <span :class="{ active: page === 'markdown-repair' }">文档修复</span>
+          <span :class="{ active: page === 'batch-migrate' }">批量迁移</span>
         </div>
         <div v-if="page === 'markdown-repair'" class="visual-native-body">
           <MdRescueInline />
@@ -839,58 +804,21 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
           />
           <MigrateProgressPhase v-else />
         </div>
-        <LinkCheckSkeleton v-else-if="state === 'skeleton'" embedded />
-        <template v-else>
-          <CheckFilterBar
-            v-model:status-filter="statusFilter"
-            v-model:selected-service-id="selectedServiceId"
-            v-model:show-service-menu="showServiceMenu"
-            v-model:search-input="searchInput"
-            v-model:search-query="searchQuery"
-            v-model:search-focused="searchFocused"
-            :stats="linkStats"
-            :service-list="serviceList"
-            :is-loading="false"
-            :is-checking="state === 'running' || state === 'paused'"
-            :is-phase2-loading="state === 'phase2-loading'"
-            :phase2-duration="500"
-          />
-          <CheckLinkList
-            :visible-rows="linkRows"
-            :filtered-rows="linkRows"
-            :stats="linkStats"
-            :status-filter="statusFilter"
-            :is-loading="false"
-            :is-checking="state === 'running' || state === 'paused'"
-            :is-action-locked="false"
-            :suppress-list-motion="true"
-            :selected-ids="selectedIds"
-            :row-thumb-srcs="rowThumbSrcs"
-            :row-hint="rowHint"
-            :row-promote-to="rowPromoteTo"
-          />
-          <CheckBottomBar
-            v-model:current-page="currentPage"
-            v-model:page-input="pageInput"
-            v-model:show-overflow-menu="showOverflowMenu"
+        <div v-else class="visual-native-body">
+          <LinkCheckSkeleton v-if="state === 'skeleton'" />
+          <HistoryCheckPanel
+            v-else
+            :check-rows="linkRows"
             :is-checking="state === 'running' || state === 'paused'"
             :is-paused="state === 'paused'"
-            :state-pill="state === 'paused' ? { tone: 'paused', icon: 'pi pi-pause', label: 'Paused', progressPercent: 63, progressLabel: '5 / 8' } : state === 'running' ? { tone: 'running', label: 'Checking', progressPercent: 63, progressLabel: '5 / 8' } : null"
-            :is-action-locked="false"
-            progress-source="monitor"
-            :has-selection="state === 'bulk-select'"
-            :selected-count="selectedIds.size"
-            :is-all-selected="false"
-            :total-pages="2"
-            :bottom-summary="`${linkRows.length} links`"
             :is-loading="false"
-            :stats="linkStats"
-            smart-check-label="Recheck problems"
-            smart-check-tooltip="Recheck the current visual fixture"
-            :more-menu-items="moreItems"
-            more-menu-scope-label="Current filter"
+            :load-error="null"
+            :is-phase2-loading="state === 'phase2-loading'"
+            :progress="progressValue"
+            progress-source="monitor"
+            :is-action-locked="false"
           />
-        </template>
+        </div>
       </section>
 
       <section v-else-if="page === 'backup-sync'" class="visual-page visual-settings visual-backup-sync">

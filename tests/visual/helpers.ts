@@ -55,6 +55,20 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
   if (visualPage === 'history' && state === 'service-menu') {
     await page.locator('.visual-history .service-filter .filter-chip').click();
   }
+  if (visualPage === 'link-check' && state === 'service-menu') {
+    await page.locator('.check-toolbar .filter-trigger').click();
+  }
+  if (visualPage === 'link-check' && state === 'all-view') {
+    await page.locator('.check-toolbar .view-option').nth(1).click();
+  }
+  if (visualPage === 'link-check' && state === 'overflow-menu') {
+    await page.locator('.summary-card .summary-btn--icon').click();
+    await expect(page.locator('.p-menu')).toBeVisible();
+  }
+  if (visualPage === 'link-check' && state === 'row-menu') {
+    await page.locator('.image-row .row-more').first().click();
+    await expect(page.locator('.p-menu')).toBeVisible();
+  }
   if (visualPage === 'favorites' && state === 'scroll-middle') {
     await page.locator('.visual-favorites-scroll').evaluate((element) => {
       element.scrollTop = 520;
@@ -109,9 +123,10 @@ export async function gotoVisualState(page: Page, visualPage: string, state: str
   await waitForVisualAssets(page);
 }
 
-/** 弹窗被 Teleport 到 body，不在 [data-visual-root] 内，这些状态必须整页处理 */
+/** 弹窗 / 弹出菜单被 Teleport 到 body，不在 [data-visual-root] 内，这些状态必须整页处理 */
 export function isTeleportedDialogState(visualPage: string, state: string): boolean {
   return visualPage === 'dialogs'
+    || (visualPage === 'link-check' && ['overflow-menu', 'row-menu'].includes(state))
     || (visualPage === 'backup-sync' && [
       'password-dialog',
       'password-set-dialog',
