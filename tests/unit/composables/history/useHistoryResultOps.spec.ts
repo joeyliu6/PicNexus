@@ -380,12 +380,12 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(result).toBe(false);
     expect(confirmMock).toHaveBeenCalledWith(
       expect.stringContaining('图床上的文件不会被删除'),
-      expect.objectContaining({ header: '移除 1 条链接？', acceptLabel: '移除 1 条' }),
+      expect.objectContaining({ header: '移除 1 个链接？', acceptLabel: '移除 1 个' }),
     );
     expect(getByIdMock).not.toHaveBeenCalled();
   });
 
-  it('调用方可以换成按图片说话的确认文案（链接检测按图片列，「N 条链接」对用户没有意义）', async () => {
+  it('调用方可以换成按图片说话的确认文案（链接检测按图片列，「N 个链接」对用户没有意义）', async () => {
     confirmMock.mockResolvedValue(false);
     const { ctx } = makeCtx();
     const { bulkDeleteHistoryResults } = createResultOps(ctx);
@@ -581,7 +581,7 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     ]);
 
     // 记录还在、只剥掉了链接：按链接说
-    expect(toastShowConfigMock).toHaveBeenCalledWith('success', { summary: '已移除 1 条链接' });
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', { summary: '已移除 1 个链接' });
   });
 
   it('清理几张整图时回执报张数，和「清理 N 张找不回的图片」同一个单位', async () => {

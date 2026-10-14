@@ -155,7 +155,7 @@ function removeCopy(rows: LinkCheckRow[], scope: RemoveScope): BulkDeleteConfirm
   }
   return {
     header: `移除 ${rows.length} 个失效的链接？`,
-    message: `「${entry.fileName}」在 ${rows.map((r) => nameOf(r.serviceId)).join('、')} 上的链接已经打不开。只移除这几条记录，能打开的链接都保留；图床上的文件不受影响，移除后无法撤销。`,
+    message: `「${entry.fileName}」在 ${rows.map((r) => nameOf(r.serviceId)).join('、')} 上的链接已经打不开。只移除打不开的，能打开的链接都保留；图床上的文件不受影响，移除后无法撤销。`,
     acceptLabel: '移除',
   };
 }

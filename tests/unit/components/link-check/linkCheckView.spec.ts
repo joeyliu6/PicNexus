@@ -75,13 +75,14 @@ vi.mock('@/composables/history/useHistory', () => ({
 }));
 
 const imageEntry = { historyId: 'hist-broken-weibo', fileName: 'broken-weibo.jpg', rows: [linkCheckRows[1]] };
+const twoCopyEntry = { historyId: 'hist-two', fileName: 'two-copies.jpg', rows: [linkCheckRows[0], linkCheckRows[1]] };
 
 const HistoryCheckPanelStub = defineComponent({
   name: 'HistoryCheckPanel',
   props: ['checkRows', 'isChecking', 'isPaused', 'isLoading', 'loadError', 'isPhase2Loading', 'progress', 'progressSource', 'isActionLocked'],
   emits: ['check-all', 'check-subset', 'cancel-check', 'pause-check', 'resume-check', 'recheck-image', 'promote', 'remove-links', 'export-csv', 'navigate', 'retry'],
   setup() {
-    return { imageEntry };
+    return { imageEntry, twoCopyEntry };
   },
   template: `
     <section data-testid="history-check-panel" :data-row-count="checkRows.length" :data-locked="String(isActionLocked)">
@@ -94,6 +95,7 @@ const HistoryCheckPanelStub = defineComponent({
       <button class="promote-two" @click="$emit('promote', [{ historyId: 'h1', serviceId: 'jd' }, { historyId: 'h2', serviceId: 'r2' }])" />
       <button class="promote-one" @click="$emit('promote', [{ historyId: 'h1', serviceId: 'jd' }])" />
       <button class="remove-image" @click="$emit('remove-links', [checkRows[1]], { kind: 'image', entry: imageEntry })" />
+      <button class="remove-dead-copy" @click="$emit('remove-links', [checkRows[1]], { kind: 'image', entry: twoCopyEntry })" />
       <button class="remove-lost" @click="$emit('remove-links', checkRows.slice(0, 2), { kind: 'lost', images: 2 })" />
       <button class="export" @click="$emit('export-csv', checkRows.slice(0, 2))" />
       <button class="go-rescue" @click="$emit('navigate', 'rescue')" />
@@ -221,6 +223,17 @@ describe('LinkCheckView page interactions', () => {
     await timers.advanceBy(380);
     expect(mockState.removeRowsByKeys).toHaveBeenCalledWith([linkCheckRows[1]]);
     timers.restore();
+  });
+
+  it('只移除一张图上打不开的那一份：量词和列表一样用「个」，一份时不说「这几条」', async () => {
+    const wrapper = await mountLinkCheckView();
+    await wrapper.get('.remove-dead-copy').trigger('click');
+    await flushPromisesAndTicks();
+
+    const copy = mockState.bulkDeleteHistoryResults.mock.calls[0][1];
+    expect(copy.header).toBe('移除 1 个失效的链接？');
+    expect(copy.message).toContain('能打开的链接都保留');
+    expect(copy.message).not.toContain('这几条');
   });
 
   it('清理找不回的图片用专门的确认文案', async () => {

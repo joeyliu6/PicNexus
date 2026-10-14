@@ -337,12 +337,12 @@ export const TOAST_MESSAGES = {
       summary: '无可用数据',
       detail: '选中的项目无法加载'
     } as StaticMessage,
-    // 按图床移除链接（链接检测）：回执和确认框用同一个单位——整张图移除说张数，只剥掉链接说条数
+    // 按图床移除链接（链接检测）：回执和确认框用同一个单位——整张图移除说张数，只剥掉链接说个数
     imagesRemoved: (count: number): ToastMessageConfig => ({
       summary: `已从记录中移除 ${count} 张图片`
     }),
     linksRemoved: (count: number): ToastMessageConfig => ({
-      summary: `已移除 ${count} 条链接`
+      summary: `已移除 ${count} 个链接`
     }),
     removePartial: (failedImages: number): ToastMessageConfig => ({
       summary: `${failedImages} 张图片没移除成功`,
