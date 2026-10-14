@@ -5,12 +5,15 @@
  * 只留两个视图：用户要么想看出了问题的图，要么想翻全部；「失效 / 超时 / 可疑」这类细分
  * 由每行那句白话交代，不再做成筛选按钮让用户自己拼。
  */
+import { computed } from 'vue';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { serviceNameTooltip } from '@/utils/serviceNameFit';
 import ServiceLogo from '@/components/common/ServiceLogo.vue';
+import SearchField from '@/components/views/link-check/common/SearchField.vue';
+import ViewSwitch from '@/components/views/link-check/common/ViewSwitch.vue';
 import type { ImageListView } from '@/composables/link-check/useImageList';
 
-defineProps<{
+const props = defineProps<{
   problemCount: number;
   allCount: number;
   serviceList: { id: string; count: number }[];
@@ -21,6 +24,11 @@ const serviceId = defineModel<string | null>('serviceId', { required: true });
 const searchInput = defineModel<string>('searchInput', { required: true });
 const showServiceMenu = defineModel<boolean>('showServiceMenu', { required: true });
 
+const viewOptions = computed(() => [
+  { value: 'problems' as const, label: '有问题', count: props.problemCount },
+  { value: 'all' as const, label: '全部', count: props.allCount },
+]);
+
 function pickService(id: string | null): void {
   serviceId.value = id;
   showServiceMenu.value = false;
@@ -29,30 +37,7 @@ function pickService(id: string | null): void {
 
 <template>
   <div class="check-toolbar">
-    <div class="view-switch" role="tablist" aria-label="列表范围">
-      <button
-        type="button"
-        role="tab"
-        class="view-option"
-        :class="{ active: view === 'problems' }"
-        :aria-selected="view === 'problems'"
-        @click="view = 'problems'"
-      >
-        有问题
-        <span class="view-count">{{ problemCount.toLocaleString() }}</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="view-option"
-        :class="{ active: view === 'all' }"
-        :aria-selected="view === 'all'"
-        @click="view = 'all'"
-      >
-        全部
-        <span class="view-count">{{ allCount.toLocaleString() }}</span>
-      </button>
-    </div>
+    <ViewSwitch v-model="view" :options="viewOptions" group-label="列表范围" />
 
     <div class="toolbar-spacer"></div>
 
@@ -98,25 +83,7 @@ function pickService(id: string | null): void {
       </Transition>
     </div>
 
-    <div class="search-field">
-      <i class="pi pi-search search-field-icon" aria-hidden="true"></i>
-      <input
-        v-model="searchInput"
-        type="text"
-        class="search-field-input"
-        placeholder="搜索文件名或链接"
-        aria-label="搜索文件名或链接"
-      />
-      <button
-        v-show="searchInput"
-        type="button"
-        class="search-field-clear"
-        aria-label="清除搜索"
-        @click="searchInput = ''"
-      >
-        <i class="pi pi-times" aria-hidden="true"></i>
-      </button>
-    </div>
+    <SearchField v-model="searchInput" placeholder="搜索文件名或链接" />
   </div>
 </template>
 
@@ -130,50 +97,6 @@ function pickService(id: string | null): void {
 
 .toolbar-spacer {
   flex: 1;
-}
-
-/* ---- 二选一 ---- */
-.view-switch {
-  display: inline-flex;
-  padding: var(--space-2xs);
-  border-radius: var(--radius-md);
-  background: var(--bg-input);
-}
-
-.view-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-  height: 26px;
-  padding: 0 var(--space-md);
-  border: none;
-  border-radius: var(--radius-sm-md);
-  background: transparent;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-
-.view-option:hover {
-  color: var(--text-main);
-}
-
-.view-option.active {
-  background: var(--bg-card);
-  color: var(--text-main);
-  box-shadow: var(--shadow-sm);
-}
-
-.view-count {
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.view-option.active .view-count {
-  color: var(--text-muted);
 }
 
 /* ---- 图床筛选 ---- */
@@ -293,69 +216,5 @@ function pickService(id: string | null): void {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
-}
-
-/* ---- 搜索 ---- */
-.search-field {
-  display: flex;
-  align-items: center;
-  flex: 0 1 240px;
-  min-width: 140px;
-  height: 30px;
-  padding: 0 var(--space-xs) 0 var(--space-sm-md);
-  border: 1px solid transparent;
-  border-radius: var(--radius-full);
-  background: var(--bg-input);
-  transition: border-color var(--duration-fast);
-}
-
-.search-field:focus-within {
-  border-color: var(--primary);
-}
-
-.search-field-icon {
-  margin-right: var(--space-xs-sm);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.search-field:focus-within .search-field-icon {
-  color: var(--primary);
-}
-
-.search-field-input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--text-sm);
-}
-
-.search-field-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.search-field-clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--text-2xs);
-  cursor: pointer;
-}
-
-.search-field-clear:hover {
-  background: var(--hover-overlay);
-  color: var(--text-main);
 }
 </style>
