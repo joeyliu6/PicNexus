@@ -792,7 +792,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
         <div class="visual-tabs">
           <span :class="{ active: page === 'link-check' }">链接检测</span>
           <span :class="{ active: page === 'markdown-repair' }">文档修复</span>
-          <span :class="{ active: page === 'batch-migrate' }">批量迁移</span>
+          <span :class="{ active: page === 'batch-migrate' }">补充备份</span>
         </div>
         <div v-if="page === 'markdown-repair'" class="visual-native-body">
           <MdRescueInline />

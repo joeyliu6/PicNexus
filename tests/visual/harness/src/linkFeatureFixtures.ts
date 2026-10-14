@@ -43,13 +43,19 @@ import {
 
 type BatchMigrateVisualState =
   | 'skeleton'
-  | 'source-selection'
+  | 'no-target'
   | 'target-selection'
+  | 'options-open'
+  | 'all-backed-up'
   | 'migrating'
   | 'paused'
   | 'partial-failed'
+  | 'stopped'
   | 'skipped-success-mixed'
   | 'complete';
+
+const CONFIGURING_STATES = new Set(['skeleton', 'no-target', 'target-selection', 'options-open', 'all-backed-up']);
+const RUNNING_STATES = new Set(['migrating', 'paused']);
 
 type MarkdownRepairVisualState =
   | 'empty'
@@ -60,13 +66,17 @@ type MarkdownRepairVisualState =
   | 'partial-failed';
 
 function migrateTargets(state: string): MigrateTargetService[] {
-  const targetSelected = state !== 'source-selection' && state !== 'skeleton';
+  const r2Checked = state !== 'no-target' && state !== 'skeleton';
   return [
-    { serviceId: 'r2', displayName: 'Cloudflare R2', isConfigured: true, pendingCount: 286, backedUpCount: 42, checked: targetSelected },
-    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 184, backedUpCount: 144, checked: state === 'target-selection' || state === 'migrating' || state === 'paused' },
+    {
+      serviceId: 'r2', displayName: 'Cloudflare R2', isConfigured: true,
+      pendingCount: state === 'all-backed-up' ? 0 : state === 'options-open' ? 37 : 286,
+      backedUpCount: 42, checked: r2Checked,
+    },
+    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 184, backedUpCount: 144, checked: RUNNING_STATES.has(state) },
     { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 91, backedUpCount: 237, checked: false },
-    { serviceId: 'qiniu', displayName: 'Qiniu', isConfigured: true, pendingCount: 58, backedUpCount: 270, checked: false },
-    { serviceId: 'upyun', displayName: 'Upyun', isConfigured: false, pendingCount: 0, backedUpCount: 0, checked: false },
+    { serviceId: 'qiniu', displayName: '七牛云', isConfigured: true, pendingCount: 58, backedUpCount: 270, checked: false },
+    { serviceId: 'upyun', displayName: '又拍云', isConfigured: false, pendingCount: 0, backedUpCount: 0, checked: false },
   ];
 }
 
@@ -91,6 +101,7 @@ function migrateStatus(
     fileName: `migration-fixture-${String(index).padStart(2, '0')}.jpg`,
     sourceUrl: `https://img.example/migrate/${id}.jpg`,
     status,
+    skipReason: status === 'skipped' ? 'already-there' : undefined,
     serviceResults,
     existingServiceIds: status === 'skipped' ? ['jd', 'r2'] : [source],
     ...overrides,
@@ -115,6 +126,19 @@ function runningMigrateItems(paused: boolean): MigrateItemStatus[] {
 }
 
 function doneMigrateItems(state: string): MigrateItemStatus[] {
+  if (state === 'stopped') {
+    return [
+      migrateStatus(1, 'success', { serviceResults: { r2: 'success' } }),
+      migrateStatus(2, 'success', { serviceResults: { r2: 'success' } }),
+      migrateStatus(3, 'skipped', { existingServiceIds: ['jd', 'r2'] }),
+      ...[4, 5, 6, 7].map((i) => migrateStatus(i, 'skipped', {
+        skipReason: 'not-attempted',
+        error: '备份已停止，没来得及处理',
+        existingServiceIds: [i % 2 === 0 ? 'weibo' : 'jd'],
+      })),
+    ];
+  }
+
   if (state === 'complete') {
     return Array.from({ length: 7 }, (_, i) => migrateStatus(i + 1, 'success', {
       serviceResults: { r2: 'success' },
@@ -167,7 +191,7 @@ function failureRecord(item: MigrateItemStatus): MigrateFailureRecord {
 }
 
 function makeMigrateResult(state: string, items: MigrateItemStatus[]): MigrateResult | null {
-  if (state === 'migrating' || state === 'paused') return null;
+  if (RUNNING_STATES.has(state) || CONFIGURING_STATES.has(state)) return null;
   const fullFailureCount = items.filter((item) => item.status === 'failed').length;
   const failures = items.filter((item) => item.status === 'failed').map(failureRecord);
   if (state === 'partial-failed') {
@@ -195,29 +219,37 @@ function makeMigrateResult(state: string, items: MigrateItemStatus[]): MigrateRe
     partialFailures: state === 'partial-failed'
       ? [{ historyId: 'migrate-2', fileName: 'migration-fixture-02.jpg', failedTargets: ['github'] }]
       : [],
+    pauseReason: state === 'stopped' ? 'user-cancelled' : undefined,
     durationMs: state === 'complete' ? 42_000 : 68_000,
     avgBytesPerSec: state === 'complete' ? 7_800_000 : 4_200_000,
-    targetServiceIds: state === 'complete' || state === 'skipped-success-mixed' ? ['r2'] : ['r2', 'github'],
+    targetServiceIds: ['complete', 'skipped-success-mixed', 'stopped'].includes(state) ? ['r2'] : ['r2', 'github'],
     itemsSnapshot: items,
   };
 }
 
 export function createMigrateContext(rawState: string): MigrateContext {
   const state = rawState as BatchMigrateVisualState;
-  const phase = ref<MigratePhase>(state === 'skeleton' || state === 'source-selection' || state === 'target-selection' ? 'configuring' : state === 'migrating' || state === 'paused' ? 'migrating' : 'done');
+  const phase = ref<MigratePhase>(CONFIGURING_STATES.has(state) ? 'configuring' : RUNNING_STATES.has(state) ? 'migrating' : 'done');
   const targetServices = ref(migrateTargets(state));
-  const sourceServiceFilter = ref<string[]>(state === 'skeleton' || state === 'source-selection' ? [] : ['jd', 'weibo']);
-  const allItemStatuses = ref<MigrateItemStatus[]>(state === 'migrating' || state === 'paused' ? runningMigrateItems(state === 'paused') : doneMigrateItems(state));
+  const sources = [
+    { id: 'jd', displayName: '京东', count: 286 },
+    { id: 'weibo', displayName: '微博', count: 184 },
+    { id: 'zhihu', displayName: '知乎', count: 97 },
+    { id: 'github', displayName: 'GitHub', count: 43 },
+  ];
+  // 默认全部来源；「更多选项」状态演示只备份京东、最近 30 天上传的
+  const sourceServiceFilter = ref<string[]>(state === 'options-open' ? ['jd'] : sources.map((s) => s.id));
+  const allItemStatuses = ref<MigrateItemStatus[]>(RUNNING_STATES.has(state) ? runningMigrateItems(state === 'paused') : CONFIGURING_STATES.has(state) ? [] : doneMigrateItems(state));
   const migrateResult = ref<MigrateResult | null>(makeMigrateResult(state, allItemStatuses.value));
   const processed = allItemStatuses.value.filter((item) => ['success', 'failed', 'skipped'].includes(item.status)).length;
   const failed = allItemStatuses.value.filter((item) => item.status === 'failed').length;
   const skipped = allItemStatuses.value.filter((item) => item.status === 'skipped').length;
   const success = allItemStatuses.value.filter((item) => item.status === 'success').length;
-  const total = state === 'migrating' || state === 'paused' ? 18 : allItemStatuses.value.length;
+  const total = RUNNING_STATES.has(state) ? 18 : Math.max(1, allItemStatuses.value.length);
   const configuredServices = computed(() => targetServices.value.filter((item) => item.isConfigured));
   const unconfiguredServices = computed(() => targetServices.value.filter((item) => !item.isConfigured));
   const checkedTargets = computed(() => configuredServices.value.filter((item) => item.checked));
-  const totalPending = computed(() => checkedTargets.value.reduce((sum, item) => sum + item.pendingCount, 0));
+  const totalPending = computed(() => Math.max(0, ...checkedTargets.value.map((item) => item.pendingCount)));
   const migrateStats = ref<MigrateStats>({
     startTime: Date.now() - 28_000,
     elapsedMs: state === 'paused' ? 28_000 : 34_000,
@@ -231,16 +263,11 @@ export function createMigrateContext(rawState: string): MigrateContext {
     isInitialized: ref(state !== 'skeleton'),
     isFilterApplied: ref(state !== 'skeleton'),
     isRefiltering: ref(false),
-    maxSuccessCount: ref(1),
+    maxSuccessCount: ref(999),
     sourceServiceFilter,
     migrateScope: ref<MigrateScope>('all-backups'),
-    availableSourceServices: ref([
-      { id: 'jd', displayName: 'JD', count: 286 },
-      { id: 'weibo', displayName: 'Weibo', count: 184 },
-      { id: 'zhihu', displayName: 'Zhihu', count: 97 },
-      { id: 'github', displayName: 'GitHub', count: 43 },
-    ]),
-    timestampAfterMs: ref(Date.now() - 1000 * 60 * 60 * 24 * 30),
+    availableSourceServices: ref(sources),
+    timestampAfterMs: ref(state === 'options-open' ? Date.now() - 1000 * 60 * 60 * 24 * 30 : null),
     configuredServices,
     unconfiguredServices,
     checkedTargets,

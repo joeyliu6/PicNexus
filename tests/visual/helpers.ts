@@ -65,6 +65,10 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
     await page.locator('.summary-card .summary-btn--icon').click();
     await expect(page.locator('.p-menu')).toBeVisible();
   }
+  if (visualPage === 'batch-migrate' && state === 'options-open') {
+    await page.locator('.migrate-options .options-toggle').click();
+    await expect(page.locator('.migrate-options .options-body')).toBeVisible();
+  }
   if (visualPage === 'link-check' && state === 'row-menu') {
     await page.locator('.image-row .row-more').first().click();
     await expect(page.locator('.p-menu')).toBeVisible();
