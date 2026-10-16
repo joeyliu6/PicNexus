@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 首页·快传（HomeScreen.dc.html，交接说明 8.1）：拖入 / 粘贴 / 选择文件 / 从 URL 下载 → 上传到勾选的图床 → 自动复制链接。
 // 上传本身由应用级的 useUploadController 负责（在任何页面拖入都能传），这里只负责展示与把操作交给它。
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
 import BgDecor from '@/components/biz/BgDecor.vue';
 import type { HistoryItem } from '@/config/types';
@@ -24,7 +24,8 @@ import RecentList from './RecentList.vue';
 import UrlDownloadDialog from './UrlDownloadDialog.vue';
 
 const upload = useUploadController();
-const { recent, total } = useRecentUploads();
+const recentUploads = useRecentUploads();
+const { recent, total } = recentUploads;
 const { copyLinks } = useCopyLink();
 
 const hosts = computed(() => upload.hosts.value);
@@ -39,10 +40,10 @@ const focusItems = computed(() => (focus.value ? upload.itemsOf(focus.value) : [
 const restSessions = computed(() => shown.value.slice(1));
 
 /** 这次打开应用后传的那些已经在列表上面了，「更早」里去掉它们；「清空」之前的也不再列出 */
-const older = computed(() => {
-  const inSession = new Set(upload.sessions.flatMap((s) => upload.itemsOf(s)).map((item) => item.historyId).filter(Boolean));
-  return recent.value.filter((item) => !inSession.has(item.id) && item.timestamp > upload.recentClearedAt.value).slice(0, 6);
-});
+const inSession = computed(() => new Set(upload.sessions.flatMap((s) => upload.itemsOf(s)).map((item) => item.historyId).filter(Boolean)));
+// 一批传了 10 张：最新的几条全是它们，往前多读这么多，「更早」才不会被挤空
+watch(() => inSession.value.size, (count) => { void recentUploads.reserve(count); });
+const older = computed(() => recent.value.filter((item) => !inSession.value.has(item.id) && item.timestamp > upload.recentClearedAt.value).slice(0, 6));
 
 // 图床状态、配置与图库总数读到之前不判断该用哪种布局（启动时不闪「没有图床」）
 const ready = computed(() => upload.ready.value && total.value !== null);
