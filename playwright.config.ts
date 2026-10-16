@@ -1,6 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
 const visualBaseUrl = 'http://127.0.0.1:1421';
+// 新界面：跑真应用 + e2e 的原生接口模拟（tests/e2e/mocks），端口与冒烟测试的 1422 分开
+const redesignBaseUrl = 'http://127.0.0.1:1423';
 const desktopViewport = { width: 1280, height: 800 };
 
 // 跨引擎哨兵用 .probe.spec.ts 后缀与像素快照的 .visual.spec.ts 分开。
@@ -49,12 +51,32 @@ export default defineConfig({
       testMatch: layoutProbeMatch,
       use: { browserName: 'webkit', viewport: desktopViewport, colorScheme: 'light' },
     },
+    // 新界面的像素基准（tests/redesign，继承顶层 testMatch）：每张图自己定窗口尺寸
+    {
+      name: 'redesign-light',
+      testDir: './tests/redesign',
+      use: { browserName: 'chromium', baseURL: redesignBaseUrl, colorScheme: 'light', locale: 'zh-CN', timezoneId: 'Asia/Shanghai' },
+    },
+    {
+      name: 'redesign-dark',
+      testDir: './tests/redesign',
+      use: { browserName: 'chromium', baseURL: redesignBaseUrl, colorScheme: 'dark', locale: 'zh-CN', timezoneId: 'Asia/Shanghai' },
+    },
   ],
-  webServer: {
-    command: 'npx vite --config tests/visual/vite.config.ts --host 127.0.0.1 --port 1421',
-    url: visualBaseUrl,
-    reuseExistingServer: !process.env.CI,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: 'npx vite --config tests/visual/vite.config.ts --host 127.0.0.1 --port 1421',
+      url: visualBaseUrl,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      command: 'npx vite --config tests/e2e/vite.config.ts --host 127.0.0.1 --port 1423',
+      url: redesignBaseUrl,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 });

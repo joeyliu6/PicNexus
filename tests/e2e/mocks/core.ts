@@ -1,9 +1,33 @@
-import { record } from './state';
+import { getState, record, type InvokeOverride } from './state';
 
 const SECURE_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
+/** 图床回的对象名像真的一样是短 ASCII（同一个文件名永远得到同一个） */
+export function mockObjectName(fileName: string): string {
+  let hash = 5381;
+  for (const ch of fileName) hash = ((hash * 33) ^ ch.charCodeAt(0)) >>> 0;
+  const ext = /\.[a-z0-9]+$/i.exec(fileName)?.[0].toLowerCase() ?? '.png';
+  return `${hash.toString(36)}${ext}`;
+}
+
+function applyOverride<T>(override: InvokeOverride, args: unknown): Promise<T> {
+  if (override.hang) return new Promise<T>(() => undefined);
+  const filePath = String((args as { filePath?: unknown } | undefined)?.filePath ?? '');
+  const name = filePath.split(/[\\/]/).pop() || 'image.png';
+  const fails = override.failFor ? override.failFor.includes(name) : Boolean(override.error);
+  // Tauri 的 invoke 失败时给的是命令返回的错误值本身（多为字符串），不是 Error
+  if (fails) return Promise.reject(override.error ?? 'mock failure');
+  if (override.urlPrefix) {
+    return Promise.resolve({ url: `${override.urlPrefix}${mockObjectName(name)}`, size: 24_576 } as T);
+  }
+  return Promise.resolve(override.result as T);
+}
+
 export async function invoke<T = unknown>(command: string, args?: unknown): Promise<T> {
   record({ type: 'invoke', command, args });
+
+  const override = getState().invokeOverrides[command];
+  if (override) return applyOverride<T>(override, args);
 
   switch (command) {
     case 'get_or_create_secure_key':

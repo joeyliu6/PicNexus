@@ -1,9 +1,10 @@
-import { makeUnlisten } from './state';
+import { getState, makeUnlisten } from './state';
 
 const currentWebview = {
   label: 'main',
   async clearAllBrowsingData() {},
-  async onDragDropEvent() {
+  async onDragDropEvent(handler: (event: { payload: unknown }) => void) {
+    getState().dragDropHandler = handler;
     return makeUnlisten();
   },
 };
