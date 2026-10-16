@@ -115,7 +115,7 @@ test.describe('PicNexus Tauri smoke', () => {
     await expect(page.locator('.app-sidebar .app-sidebar__item')).toHaveCount(6);
 
     await navItem(page, '图库').click();
-    await expect(page.locator('.history-view')).toBeVisible();
+    await expect(page.locator('.gallery')).toBeVisible();
 
     await navItem(page, '链接健康').click();
     await expect(page.locator('.link-check-view')).toBeVisible();
@@ -179,24 +179,24 @@ test.describe('PicNexus Tauri smoke', () => {
     expect(state.calls.some((call) => call.type === 'clipboard.writeText' && !!call.text)).toBe(true);
   });
 
-  test('history entry keeps empty-state navigation stable on mocked SQLite', async ({ page }) => {
+  // GalleryScreen.dc.html G09 / G11：一张图都没有、收藏为空，切到列表视图也一样
+  test('gallery keeps its empty states stable on mocked SQLite', async ({ page }) => {
     await openApp(page);
     await navItem(page, '图库').click();
 
-    await expect(page.locator('.history-view .dashboard-strip')).toBeVisible();
-    await expect(page.locator('.history-view').getByText('暂无上传记录')).toBeVisible();
+    const gallery = page.locator('.gallery');
+    await expect(gallery.getByText('暂无图片')).toBeVisible();
+    await expect(gallery.getByText('共 0 张')).toBeVisible();
 
-    await page.locator('.history-view .tab-btn').filter({ hasText: '时间轴' }).click();
-    await expect(page.locator('.history-view .tab-btn.active')).toContainText('时间轴');
-    await expect(page.locator('.history-view').getByText('暂无上传记录')).toBeVisible();
+    await gallery.getByLabel('列表', { exact: true }).click();
+    await expect(gallery.getByText('暂无图片')).toBeVisible();
 
-    await page.locator('.history-view .tab-btn').filter({ hasText: '收藏' }).click();
-    await expect(page.locator('.history-view .tab-btn.active')).toContainText('收藏');
-    await expect(page.locator('.history-view').getByText('暂无收藏')).toBeVisible();
+    await gallery.getByRole('button', { name: '★ 收藏' }).click();
+    await expect(gallery.getByText('还没有收藏')).toBeVisible();
+    await expect(gallery.getByText('找到 0 张')).toBeVisible();
 
-    await page.locator('.history-view .tab-btn').filter({ hasText: '表格' }).click();
-    await expect(page.locator('.history-view .tab-btn.active')).toContainText('表格');
-    await expect(page.locator('.history-view').getByText('暂无上传记录')).toBeVisible();
+    await gallery.getByRole('button', { name: '清除全部' }).click();
+    await expect(gallery.getByText('暂无图片')).toBeVisible();
   });
 
   test('settings save failure rolls back autostart through mocked native calls', async ({ page }) => {

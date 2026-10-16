@@ -1,0 +1,106 @@
+/* 图库灯箱的 PhotoSwipe 主题（GalleryScreen.dc.html G08）。
+ * 选择器要打到 PhotoSwipe 自建的 DOM（不带 data-v 属性），所以由 GalleryLightbox.vue 不加 scoped 引入。
+ * 灯箱不随主题：始终是一块不透明的深色底，自绘的顶栏 / 底栏用 data-theme="dark" 取深色令牌。 */
+
+.pswp--picnexus {
+  --pswp-bg: var(--pn-lightbox-bg);
+
+  z-index: var(--pn-z-lightbox);
+}
+
+/* PhotoSwipe 自带的顶栏不用：顶栏、底栏、翻页按钮都由 GalleryLightbox 自己画 */
+.pswp--picnexus .pswp__top-bar { display: none; }
+
+.pswp--picnexus .pswp__img {
+  border-radius: var(--pn-radius-sm);
+  backface-visibility: hidden;
+}
+
+/* 大图到位之前先藏着，到位后淡入（占位图由 msrc 中图顶着） */
+.pswp--picnexus .pswp__img.is-waiting-full-image { opacity: 0; }
+
+.pswp--picnexus .pswp__img.is-full-image-ready {
+  transition: opacity var(--pn-dur-standard) var(--pn-ease-in);
+}
+
+/* 没有中图时 PhotoSwipe 的占位块默认灰底：透明掉，露出深色底 */
+.pswp--picnexus .pswp__img--placeholder { background: transparent; }
+
+/* 切图入场：下一张从右、上一张从左轻轻滑入（PhotoSwipe 的缩放矩阵在 zoom-wrap 上，不碰 img 自己的 transform） */
+@keyframes pn-lightbox-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pn-lightbox-in-next {
+  from { opacity: 0; transform: translateX(var(--pn-lightbox-switch)); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pn-lightbox-in-prev {
+  from { opacity: 0; transform: translateX(calc(-1 * var(--pn-lightbox-switch))); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.pswp--picnexus .pswp__img.is-switching-in,
+.pswp--picnexus .pswp__img--placeholder.is-switching-in {
+  animation: pn-lightbox-in var(--pn-dur-standard) var(--pn-ease-in);
+}
+
+.pswp--picnexus .pswp__img.is-switching-in[data-switch-dir='next'] {
+  animation: pn-lightbox-in-next var(--pn-dur-standard) var(--pn-ease-in);
+}
+
+.pswp--picnexus .pswp__img.is-switching-in[data-switch-dir='prev'] {
+  animation: pn-lightbox-in-prev var(--pn-dur-standard) var(--pn-ease-in);
+}
+
+/* 关场时自绘的顶栏、底栏、翻页按钮先让开，把收回的动作留给图片 */
+.pswp--picnexus.is-pswp-closing .lightbox-chrome {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--pn-dur-fast) var(--pn-ease-out);
+}
+
+/* 「换个图床」菜单：Reka 的菜单内容由它自己渲染，组件的 scoped 样式够不着，放在这里（GalleryScreen.dc.html G08） */
+.lightbox__menu {
+  z-index: var(--pn-z-popover);
+  width: var(--pn-size-lightbox-menu);
+  box-sizing: border-box;
+  padding: var(--pn-space-4);
+  border-radius: var(--pn-radius-lg);
+  background: var(--pn-elevated);
+  box-shadow: var(--pn-lightbox-menu-shadow);
+  color: var(--pn-text1);
+}
+
+.lightbox__menu-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pn-space-button-sm-x);
+  height: var(--pn-size-lightbox-menu-row);
+  padding: 0 var(--pn-space-button-sm-x);
+  border-radius: var(--pn-radius-sm);
+  outline: none;
+}
+
+.lightbox__menu-row[data-highlighted] { background: var(--pn-lightbox-menu-active); }
+.lightbox__menu-row[data-disabled] { opacity: 0.6; }
+
+.lightbox__plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--pn-size-lightbox-plate);
+  height: var(--pn-size-lightbox-plate);
+  border-radius: var(--pn-radius-tile-select);
+  background: var(--pn-lightbox-menu-active);
+  color: var(--pn-text2);
+}
+
+.lightbox__menu-row[data-highlighted] .lightbox__plate { background: var(--pn-lightbox-plate-active); color: var(--pn-text1); }
+
+.lightbox__menu-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.lightbox__menu-status { color: var(--pn-text3); font-size: var(--pn-text-footnote); }
+.lightbox__menu-hint { display: none; color: var(--pn-text3); font-size: var(--pn-text-caption); }
+.lightbox__menu-row[data-highlighted] .lightbox__menu-hint { display: inline; }

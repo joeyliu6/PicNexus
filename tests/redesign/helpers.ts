@@ -36,6 +36,11 @@ function imageFor(url: string): string {
 
 async function fulfillExternal(route: Route): Promise<void> {
   const request = route.request();
+  // 路径里带 /gone/ 的链接当作图床上已经没了（失效的「复制时使用」那份）
+  if (decodeURIComponent(request.url()).includes('/gone/')) {
+    await route.fulfill({ status: 404, body: '' });
+    return;
+  }
   if (request.resourceType() === 'image' || (request.headers().accept ?? '').includes('image/')) {
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageFor(request.url()) });
     return;
