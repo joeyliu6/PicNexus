@@ -1059,8 +1059,37 @@ describe('RetryService', () => {
     expect(toast.success).toHaveBeenCalledTimes(1);
   });
 
+  // 首页在屏时不弹通知：没网时的重试也要在图上标出原因，不能点了什么都没发生
+  it('fails a single-host retry with the network reason when the network is down', async () => {
+    checkNetworkConnectivityMock.mockResolvedValue(false);
+    const toast = makeToast();
+    const queueManager = createQueueManager([createItem()]);
+    const service = new RetryService(makeOptions({ toast, queueManager }));
+
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(retryUploadMock).not.toHaveBeenCalled();
+    expect(queueManager.items.get('item-1')?.serviceProgress.weibo).toMatchObject({ status: '✗ 失败', error: '网络连接中断' });
+    expect(toast.error).toHaveBeenCalledWith('name:weibo上传失败', '网络连接中断，请检查网络后重试');
+  });
+
+  it('fails a full retry with the network reason when the network is down', async () => {
+    checkNetworkConnectivityMock.mockResolvedValue(false);
+    const toast = makeToast();
+    const queueManager = createQueueManager([createItem()]);
+    const service = new RetryService(makeOptions({ toast, queueManager }));
+
+    await service.retryAll('item-1', DEFAULT_CONFIG);
+
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+    const item = queueManager.items.get('item-1')!;
+    expect(item.status).toBe('error');
+    expect(item.serviceProgress.weibo?.error).toBe('网络连接中断');
+    expect(toast.error).toHaveBeenCalledWith('demo.png 上传失败', '网络连接中断，请检查网络后重试', 5000);
+  });
+
   it('counts every pending failed service as failed when retryAllFailed cannot start because the network is down', async () => {
-    checkNetworkConnectivityMock.mockResolvedValueOnce(false);
+    checkNetworkConnectivityMock.mockResolvedValue(false);
     const toast = makeToast();
     const queueManager = createQueueManager([
       createItem({
@@ -1087,5 +1116,8 @@ describe('RetryService', () => {
     expect(result).toEqual({ success: 0, failed: 2 });
     expect(retryUploadMock).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledTimes(1);
+    const item = queueManager.items.get('item-a')!;
+    expect(item.serviceProgress.weibo?.error).toBe('网络连接中断');
+    expect(item.serviceProgress.r2?.error).toBe('网络连接中断');
   });
 });

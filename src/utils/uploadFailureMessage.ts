@@ -115,6 +115,9 @@ export function reasonsByService(errorMsg: string): Map<string, string> {
   return reasons;
 }
 
+/** 网络不通、还没开始传时记在每个图床上的原因（说法归到「网络连接中断，请检查网络后重试」） */
+export const NETWORK_DOWN_ERROR = '网络连接中断';
+
 export interface UploadFailureText {
   /** 短原因：失败图床那一行、批量卡片、最近上传都用它 */
   reason: string;

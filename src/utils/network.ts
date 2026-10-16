@@ -9,12 +9,22 @@ const log = createLogger('Network');
 /** 端点检测超时（ms）。短超时 + race 语义，避免单端点慢拖累整体响应 */
 const ENDPOINT_TIMEOUT_MS = 1500;
 
+/** 正在进行的那次探测：同时来问的共用它（批量补传时每一项都会问一遍） */
+let inFlight: Promise<boolean> | null = null;
+
 /**
  * 检测网络是否联通
- * 使用多端点 race 检测：任一端点先返回成功就立即放行，避免 allSettled 等到最慢
  * @returns Promise<boolean> - true 表示网络联通，false 表示网络断开
  */
-export async function checkNetworkConnectivity(): Promise<boolean> {
+export function checkNetworkConnectivity(): Promise<boolean> {
+  if (!inFlight) {
+    inFlight = probeEndpoints().finally(() => { inFlight = null; });
+  }
+  return inFlight;
+}
+
+/** 多端点 race 检测：任一端点先返回成功就立即放行，避免 allSettled 等到最慢 */
+async function probeEndpoints(): Promise<boolean> {
   // navigator.onLine 在 Tauri WebView2 下几乎总是 true，不可靠
   // 仅用 navigator.onLine === false 作为日志参考，始终执行端点检测
   log.debug(`navigator.onLine=${navigator.onLine}，执行端点检测...`);

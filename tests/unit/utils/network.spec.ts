@@ -32,6 +32,25 @@ describe('checkNetworkConnectivity', () => {
     expect(result).toBe(true);
   });
 
+  // 批量补传时每一项各自查网络：同时问的共用一次探测，不往外发几十组请求
+  it('shares one probe between callers that ask at the same time', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response());
+
+    const results = await Promise.all([checkNetworkConnectivity(), checkNetworkConnectivity(), checkNetworkConnectivity()]);
+
+    expect(results).toEqual([true, true, true]);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('probes again once the previous probe has settled', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response());
+
+    await checkNetworkConnectivity();
+    await checkNetworkConnectivity();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(6);
+  });
+
   it('使用 HEAD 方法和 no-cors 模式', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response());
 

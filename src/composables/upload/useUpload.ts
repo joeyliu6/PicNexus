@@ -24,6 +24,7 @@ import { fetchMetadataBatch, getImageMetadata } from '@/composables/image/useIma
 import { resolveActivePreset, useImageCompress } from '@/composables/image/useImageCompress';
 import { createLogger } from '@/utils/logger';
 import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '@/utils/uploadSummary';
+import { describeUploadFailure, NETWORK_DOWN_ERROR } from '@/utils/uploadFailureMessage';
 
 const log = createLogger('useUpload');
 
@@ -86,6 +87,31 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
     } else {
       toast.warn(payload.summary, payload.detail);
     }
+  }
+
+  /**
+   * 网络不通：不去白等每个图床超时，但这几张照样进队列、标成失败并写清原因，
+   * 首页卡片上就有「重试」（HomeScreen H06）；首页不在屏时再弹通知
+   */
+  function reportNetworkDown(queue: UploadQueueManager, filePaths: string[], services: string[]): void {
+    const nameOf = (filePath: string) => filePath.split(/[/\\]/).pop() || filePath;
+    for (const filePath of filePaths) {
+      const itemId = queue.addFile(filePath, nameOf(filePath), [...services]);
+      if (!itemId) continue;
+      queue.updateItem(itemId, {
+        // 和正常上传一样先分好历史记录 id，重试传上了就记在这条下面
+        historyId: crypto.randomUUID(),
+        serviceProgress: Object.fromEntries(services.map((serviceId) => [
+          serviceId,
+          { serviceId, progress: 0, status: '✗ 失败', error: NETWORK_DOWN_ERROR },
+        ])),
+      });
+      queue.markItemFailed(itemId, NETWORK_DOWN_ERROR);
+    }
+    if (options.resultsOnScreen?.()) return;
+    const { reason, advice } = describeUploadFailure(undefined, NETWORK_DOWN_ERROR);
+    const title = filePaths.length === 1 ? `${nameOf(filePaths[0])} 上传失败` : `${filePaths.length} 张上传失败`;
+    toast.error(title, `${reason}，${advice}`, 5000);
   }
 
   /**
@@ -225,11 +251,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       // ⭐ 异步检测网络（在处理之前）
       const isNetworkAvailable = await checkNetworkConnectivity();
       if (!isNetworkAvailable) {
-        toast.error(
-          '网络请求失败',
-          `${valid.length} 个文件请求超时或中断，请检查网络\n建议：检查图床配置 / 切换图床`,
-          6000
-        );
+        reportNetworkDown(queueManager, valid, enabledServices);
         return;
       }
 

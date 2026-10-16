@@ -622,6 +622,28 @@ describe('useUploadManager', () => {
     expect(toastWarnMock).not.toHaveBeenCalled();
   });
 
+  // HomeScreen H06：没网时这几张照样出现在首页、标成失败并写清原因，卡片上能点「重试」；首页不在屏时才弹通知
+  it('lists the images as failed with the network reason when the network is down', async () => {
+    checkNetworkConnectivityMock.mockResolvedValue(false);
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    let shown = true;
+    const { handleFilesUpload } = useUploadManager(queueManager as never, { resultsOnScreen: () => shown });
+
+    await handleFilesUpload(['C:/tmp/a.jpg']);
+    const item = queueManager.getItem('queue-0');
+    expect(item.serviceProgress.jd).toMatchObject({ status: '✗ 失败', error: '网络连接中断' });
+    expect(item.serviceProgress.upyun).toMatchObject({ status: '✗ 失败', error: '网络连接中断' });
+    expect(queueManager.markItemFailed).toHaveBeenCalledWith('queue-0', '网络连接中断');
+    expect(item.historyId).toEqual(expect.any(String));
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+
+    shown = false;
+    await handleFilesUpload(['C:/tmp/b.jpg', 'C:/tmp/c.jpg']);
+    expect(toastErrorMock).toHaveBeenCalledWith('2 张上传失败', '网络连接中断，请检查网络后重试', 5000);
+  });
+
   it('does not toast a failed image while the caller shows it, and does otherwise', async () => {
     const allFailed = new Error('所有图床上传均失败：\n  - jd: 京东上传失败: 请求超时\n\n请检查网络连接和服务配置');
     const { useUploadManager } = await import('@/composables/upload/useUpload');

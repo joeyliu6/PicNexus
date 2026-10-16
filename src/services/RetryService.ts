@@ -22,7 +22,7 @@ import {
   resolveQueueStatus,
 } from './retryStatus';
 import { COOKIE_BASED_SERVICES } from '@/constants/serviceRequiredFields';
-import { describeUploadFailure, reasonsByService } from '@/utils/uploadFailureMessage';
+import { describeUploadFailure, NETWORK_DOWN_ERROR, reasonsByService } from '@/utils/uploadFailureMessage';
 
 const log = createLogger('RetryService');
 
@@ -54,6 +54,19 @@ interface RetrySingleServiceOptions {
   silentToast?: boolean;
 }
 
+interface PreparedRetryFile {
+  uploadPath: string;
+  cleanup: () => Promise<void>;
+}
+
+/**
+ * 网络不通就不去白等图床超时，但照一次失败收口：图上写「网络连接中断」。
+ * 首页在屏时不弹通知，什么都不标的话用户点了「重试」会以为没反应。
+ */
+async function ensureNetwork(): Promise<void> {
+  if (!(await checkNetworkConnectivity())) throw new Error(NETWORK_DOWN_ERROR);
+}
+
 /**
  * 重试服务类
  */
@@ -74,7 +87,7 @@ export class RetryService {
     filePath: string,
     serviceIds: string[],
     config: UserConfig
-  ): Promise<{ uploadPath: string; cleanup: () => Promise<void> }> {
+  ): Promise<PreparedRetryFile> {
     const prepared = await this.imageCompress.prepareSingleUpload(filePath, config.imageCompression);
     const unsupported = (path: string) => getUnsupportedServicesForFormat(serviceIds, getFileExtension(path)).length > 0;
     if (prepared.uploadPath !== filePath && unsupported(prepared.uploadPath) && !unsupported(filePath)) {
@@ -112,19 +125,6 @@ export class RetryService {
 
     log.info(`单独重试 ${item.fileName} -> ${serviceId}`);
 
-    // 检测网络连通性
-    const isNetworkAvailable = await checkNetworkConnectivity();
-    if (!isNetworkAvailable) {
-      if (!silentToast) {
-        this.options.toast.error(
-          '网络请求失败',
-          '请检查网络后重试',
-          3000
-        );
-      }
-      return;
-    }
-
     // 并发控制
     const retryKey = `${itemId}-${serviceId}`;
     if (this.retryingItems.has(retryKey)) {
@@ -136,10 +136,11 @@ export class RetryService {
     this.options.queueManager.resetServiceForRetry(itemId, serviceId);
     this.retryingItems.add(retryKey);
 
-    // 与首次上传一样按当前设置压缩；队列与历史仍记原图路径，临时文件传完即删
-    const prepared = await this.prepareRetryFile(item.filePath, [serviceId], config);
-
+    let prepared: PreparedRetryFile | undefined;
     try {
+      await ensureNetwork();
+      // 与首次上传一样按当前设置压缩；队列与历史仍记原图路径，临时文件传完即删
+      prepared = await this.prepareRetryFile(item.filePath, [serviceId], config);
       const result = await this.uploader.retryUpload(
         prepared.uploadPath,
         serviceId,
@@ -168,7 +169,7 @@ export class RetryService {
       await this.handleSingleServiceFailure(itemId, serviceId, item, error, silentToast, config);
     } finally {
       this.retryingItems.delete(retryKey);
-      await prepared.cleanup();
+      await prepared?.cleanup();
     }
   }
 
@@ -191,17 +192,6 @@ export class RetryService {
     // 「重试」是用户点的：立刻重传，不等退避、不设次数上限
     log.info(`全量重试: ${item.fileName}`);
 
-    // 检测网络连通性
-    const isNetworkAvailable = await checkNetworkConnectivity();
-    if (!isNetworkAvailable) {
-      this.options.toast.error(
-        '网络请求失败',
-        '请检查网络后重试',
-        3000
-      );
-      return;
-    }
-
     // 标记为重试中（界面上的花瓣与进度就是反馈，不另弹「正在重试」）
     this.retryingItems.add(itemId);
     this.options.queueManager.updateItem(itemId, { isRetrying: true });
@@ -210,9 +200,11 @@ export class RetryService {
     this.options.queueManager.resetItemForRetry(itemId);
 
     const enabledServices = item.enabledServices || [];
-    const prepared = await this.prepareRetryFile(item.filePath, enabledServices, config);
+    let prepared: PreparedRetryFile | undefined;
 
     try {
+      await ensureNetwork();
+      prepared = await this.prepareRetryFile(item.filePath, enabledServices, config);
       const result = await this.uploader.uploadToMultipleServices(
         prepared.uploadPath,
         enabledServices,
@@ -232,7 +224,7 @@ export class RetryService {
       // 处理成功
       await this.handleFullRetrySuccess(itemId, item, result);
 
-      // 清理重试���态
+      // 清理重试状态
       this.retryingItems.delete(itemId);
       this.options.queueManager.updateItem(itemId, { isRetrying: false });
 
@@ -256,7 +248,7 @@ export class RetryService {
       this.retryingItems.delete(itemId);
       this.options.queueManager.updateItem(itemId, { isRetrying: false });
     } finally {
-      await prepared.cleanup();
+      await prepared?.cleanup();
     }
   }
 
@@ -493,18 +485,7 @@ export class RetryService {
 
     log.info(`开始重传 ${retryTasks.length} 个失败的图床`);
 
-    // 检测网络连通性
-    const isNetworkAvailable = await checkNetworkConnectivity();
-    if (!isNetworkAvailable) {
-      this.options.toast.error(
-        '网络请求失败',
-        '请检查网络后重试',
-        3000
-      );
-      return { success: 0, failed: retryTasks.length };
-    }
-
-    // 并发执行所有重试（只重试失败的服务）
+    // 并发执行所有重试（只重试失败的服务）；网络不通时每一项各自按失败收口，写清原因
     const results = await Promise.allSettled(
       retryTasks.map(({ itemId, serviceId }) =>
         this.retrySingleService(itemId, serviceId, config, { silentToast: true })
