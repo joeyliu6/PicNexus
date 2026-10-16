@@ -4,6 +4,7 @@ import {
   formatDateCompact,
   formatFileSize,
   formatRelativeTime,
+  formatSizeChange,
   formatTimestampCompact,
 } from '@/utils/formatters';
 
@@ -20,12 +21,16 @@ describe('formatFileSize', () => {
     expect(formatFileSize(1023)).toBe('1023 B');
   });
 
-  it('1024 字节返回 1.0 KB', () => {
-    expect(formatFileSize(1024)).toBe('1.0 KB');
+  // 设计稿的写法：KB 取整（「386 KB」），MB 不到 10 留一位小数（「1.2 MB」），10 以上取整（「18 MB」）
+  it('writes KB as whole numbers', () => {
+    expect(formatFileSize(1024)).toBe('1 KB');
+    expect(formatFileSize(1536)).toBe('2 KB');
+    expect(formatFileSize(386 * 1024)).toBe('386 KB');
   });
 
-  it('1536 字节返回 1.5 KB', () => {
-    expect(formatFileSize(1536)).toBe('1.5 KB');
+  it('keeps one decimal below 10 MB and drops it above', () => {
+    expect(formatFileSize(1.2 * 1024 * 1024)).toBe('1.2 MB');
+    expect(formatFileSize(18 * 1024 * 1024)).toBe('18 MB');
   });
 
   it('1MB 返回 1.0 MB', () => {
@@ -38,6 +43,18 @@ describe('formatFileSize', () => {
 
   it('1GB 返回 1.0 GB', () => {
     expect(formatFileSize(1024 * 1024 * 1024)).toBe('1.0 GB');
+  });
+});
+
+// HomeScreen H03 / H05：压缩过的图写「1.2 MB → 410 KB」；没压小就只写原大小
+describe('formatSizeChange', () => {
+  it('shows the original and the compressed size', () => {
+    expect(formatSizeChange(1.2 * 1024 * 1024, 410 * 1024)).toBe('1.2 MB → 410 KB');
+  });
+
+  it('shows only the original size when nothing got smaller', () => {
+    expect(formatSizeChange(386 * 1024)).toBe('386 KB');
+    expect(formatSizeChange(386 * 1024, 400 * 1024)).toBe('386 KB');
   });
 });
 

@@ -21,7 +21,7 @@ import { chunkArray } from '@/utils/semaphore';
 import { useServiceSelector } from '@/composables/service/useServiceSelector';
 import { useHistorySaver } from '@/composables/history/useHistorySaver';
 import { fetchMetadataBatch, getImageMetadata } from '@/composables/image/useImageMetadata';
-import { resolveActivePreset, useImageCompress } from '@/composables/image/useImageCompress';
+import { resolveActivePreset, useImageCompress, type CompressedFile } from '@/composables/image/useImageCompress';
 import { createLogger } from '@/utils/logger';
 import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '@/utils/uploadSummary';
 import { describeUploadFailure, NETWORK_DOWN_ERROR } from '@/utils/uploadFailureMessage';
@@ -300,7 +300,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
         }
 
         // 1.5 图片压缩预处理
-        let actualFiles = batchFiles;
+        let compressedFiles = new Map<string, CompressedFile>();
         if (compressionConfig.enabled) {
           try {
             const fileSizes = new Map<string, number>();
@@ -311,10 +311,9 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
               if (meta?.file_size) fileSizes.set(batchFiles[i], meta.file_size);
             });
 
-            const pathMap = await compressImageBatch(batchFiles, activePreset, fileSizes);
-            if (pathMap.size > 0) {
-              actualFiles = batchFiles.map(fp => pathMap.get(fp) ?? fp);
-              log.info(`批次 ${batchIndex + 1}: ${pathMap.size} 张图片已压缩`);
+            compressedFiles = await compressImageBatch(batchFiles, activePreset, fileSizes);
+            if (compressedFiles.size > 0) {
+              log.info(`批次 ${batchIndex + 1}: ${compressedFiles.size} 张图片已压缩`);
             }
           } catch (compressError) {
             log.warn(`批次 ${batchIndex + 1} 压缩失败，使用原图:`, compressError);
@@ -325,15 +324,16 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
         // 关键：filePath 写入队列与历史的应该是用户原图路径，
         // uploadFilePath（可能是压缩后的临时文件）只用于喂给 uploader，
         // 否则上传后 cleanupTempFiles 把临时文件删掉，重试/元数据修复就找不到原图了
-        const queueItems = actualFiles.map((uploadFilePath, index) => {
-          const originalPath = batchFiles[index];
+        const queueItems = batchFiles.map((originalPath) => {
+          const compressed = compressedFiles.get(originalPath);
           const fileName = originalPath.split(/[/\\]/).pop() || originalPath;
           const itemId = queueManager!.addFile(originalPath, fileName, [...enabledServices]);
-          return { itemId, filePath: originalPath, uploadFilePath, fileName };
+          if (itemId && compressed?.size) queueManager!.updateItem(itemId, { compressedSize: compressed.size });
+          return { itemId, filePath: originalPath, uploadFilePath: compressed?.path ?? originalPath, fileName };
         }).filter(item => item.itemId);
 
         // 同批次内被 isFileInQueue 拦截的重复路径计数（addFile 返回 null 时被 filter 过滤）
-        const droppedAsDuplicate = actualFiles.length - queueItems.length;
+        const droppedAsDuplicate = batchFiles.length - queueItems.length;
         if (droppedAsDuplicate > 0) {
           uploadSummary.duplicatesSkipped = (uploadSummary.duplicatesSkipped ?? 0) + droppedAsDuplicate;
           log.info(`批次 ${batchIndex + 1}: ${droppedAsDuplicate} 张重复路径被忽略`);

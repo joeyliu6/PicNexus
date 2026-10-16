@@ -16,6 +16,13 @@ interface CompressResult {
   format: string;
 }
 
+/** 压缩后实际要传的文件（原图路径 → 它） */
+export interface CompressedFile {
+  path: string;
+  /** 压缩后的字节数：首页写「1.2 MB → 410 KB」用 */
+  size?: number;
+}
+
 /** 累计节省的字节数（本次会话） */
 const totalBytesSaved = ref(0);
 
@@ -135,41 +142,32 @@ export function useImageCompress() {
     filePaths: string[],
     preset: CompressionPreset,
     fileSizes?: Map<string, number>,
-  ): Promise<Map<string, string>> {
-    const pathMap = new Map<string, string>();
+  ): Promise<Map<string, CompressedFile>> {
+    const compressedFiles = new Map<string, CompressedFile>();
 
     if (filePaths.length === 0) {
-      return pathMap;
+      return compressedFiles;
     }
 
     log.info(`开始批量压缩 ${filePaths.length} 张图片（预设: ${preset.name}, 质量: ${preset.quality}）`);
 
     const MAX_CONCURRENT = 3;
-    const results: Array<{ original: string; compressed: string }> = [];
 
     for (let i = 0; i < filePaths.length; i += MAX_CONCURRENT) {
       const batch = filePaths.slice(i, i + MAX_CONCURRENT);
-      const batchResults = await Promise.all(
+      await Promise.all(
         batch.map(async (fp) => {
-          const size = fileSizes?.get(fp);
-          const { filePath: outPath, compressed } = await compressImage(fp, preset, size);
-          return { original: fp, compressed: compressed ? outPath : fp };
+          const { filePath: outPath, compressed, result } = await compressImage(fp, preset, fileSizes?.get(fp));
+          if (compressed && outPath !== fp) compressedFiles.set(fp, { path: outPath, size: result?.compressedSize });
         }),
       );
-      results.push(...batchResults);
     }
 
-    for (const { original, compressed } of results) {
-      if (original !== compressed) {
-        pathMap.set(original, compressed);
-      }
+    if (compressedFiles.size > 0) {
+      log.info(`批量压缩完成：${compressedFiles.size}/${filePaths.length} 张图片已压缩`);
     }
 
-    if (pathMap.size > 0) {
-      log.info(`批量压缩完成：${pathMap.size}/${filePaths.length} 张图片已压缩`);
-    }
-
-    return pathMap;
+    return compressedFiles;
   }
 
   /**

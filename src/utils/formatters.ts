@@ -73,9 +73,17 @@ export function formatShortDateTime(timestamp: number, now: number = Date.now())
 export function formatFileSize(bytes: number, options?: { emptyText?: string }): string {
   if (bytes === 0) return options?.emptyText ?? '0 B';
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  // 设计稿的写法：KB 取整（「386 KB」），MB / GB 不到 10 留一位小数（「1.2 MB」），10 以上取整（「18 MB」）
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  const large = (value: number, unit: string) => `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit}`;
+  if (bytes < 1024 * 1024 * 1024) return large(bytes / (1024 * 1024), 'MB');
+  return large(bytes / (1024 * 1024 * 1024), 'GB');
+}
+
+/** 上传前压缩过：「1.2 MB → 410 KB」；没压小（或没压）只写原大小 */
+export function formatSizeChange(originalBytes: number, compressedBytes?: number): string {
+  const original = formatFileSize(originalBytes);
+  return compressedBytes && compressedBytes < originalBytes ? `${original} → ${formatFileSize(compressedBytes)}` : original;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');

@@ -66,6 +66,7 @@ export interface QueueItem {
   errorMessage?: string;
   primaryUrl?: string;  // 主力图床的URL
   thumbUrl?: string;
+  compressedSize?: number;  // 上传前压缩过：压缩后的字节数（首页写「原大小 → 压缩后」）
 
   isRetrying?: boolean;       // 是否正在重试中
 

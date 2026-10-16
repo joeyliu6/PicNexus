@@ -22,7 +22,7 @@ import { formatLinkWithConfig } from '@/composables/useCopyLink';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import type { UploadHost } from '@/composables/upload/useUploadController';
 import { hasLink, hostFailureText, hostViews, itemPhase, petalStates, type UploadSession } from '@/composables/upload/uploadSessions';
-import { formatFileSize, formatRelativeTime } from '@/utils/formatters';
+import { formatRelativeTime, formatSizeChange } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 import UploadToPanel from './UploadToPanel.vue';
 
@@ -93,7 +93,8 @@ watch(() => props.item.filePath, async (filePath) => {
 const metaLine = computed(() => {
   const parts = [formatRelativeTime(props.session.startedAt)];
   if (meta.value?.width && meta.value.height) parts.push(`${meta.value.width} × ${meta.value.height}`);
-  if (meta.value?.size) parts.push(formatFileSize(meta.value.size));
+  // 压缩过的写「1.2 MB → 410 KB」（H03 / H05）
+  if (meta.value?.size) parts.push(formatSizeChange(meta.value.size, props.item.compressedSize));
   return parts.join(' · ');
 });
 

@@ -19,6 +19,8 @@ const {
   toastErrorMock,
   toastInfoMock,
   toastShowConfigMock,
+  compressImageBatchMock,
+  getImageMetadataMock,
 } = vi.hoisted(() => ({
   configStoreGetMock: vi.fn(),
   fetchMetadataBatchMock: vi.fn(),
@@ -34,6 +36,8 @@ const {
   toastErrorMock: vi.fn(),
   toastInfoMock: vi.fn(),
   toastShowConfigMock: vi.fn(),
+  compressImageBatchMock: vi.fn(),
+  getImageMetadataMock: vi.fn(),
 }));
 
 const selectedServicesRef = ref(['jd', 'upyun']);
@@ -95,6 +99,12 @@ vi.mock('@/composables/history/useHistorySaver', () => ({
 
 vi.mock('@/composables/image/useImageMetadata', () => ({
   fetchMetadataBatch: fetchMetadataBatchMock,
+  getImageMetadata: getImageMetadataMock,
+}));
+
+vi.mock('@/composables/image/useImageCompress', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/composables/image/useImageCompress')>()),
+  useImageCompress: () => ({ compressImageBatch: compressImageBatchMock, cleanupTempFiles: vi.fn().mockResolvedValue(undefined) }),
 }));
 
 vi.mock('@/utils/network', () => ({
@@ -193,6 +203,8 @@ describe('useUploadManager', () => {
       },
     });
     fetchMetadataBatchMock.mockReset().mockResolvedValue(undefined);
+    compressImageBatchMock.mockReset().mockResolvedValue(new Map());
+    getImageMetadataMock.mockReset().mockResolvedValue({ file_size: 1_200_000 });
     saveHistoryItemMock.mockReset().mockResolvedValue(undefined);
     saveHistoryItemImmediateMock.mockReset().mockResolvedValue(undefined);
     addResultToHistoryItemMock.mockReset().mockResolvedValue(true);
@@ -620,6 +632,26 @@ describe('useUploadManager', () => {
     expect(onCopied).toHaveBeenCalledWith({ ok: true, copiedCount: 1, format: 'markdown' });
     expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(toastWarnMock).not.toHaveBeenCalled();
+  });
+
+  // HomeScreen H03 / H05：压缩过的图写「1.2 MB → 410 KB」，所以队列项要记下压缩后的大小
+  it('records the compressed size on the queue item and uploads the compressed file', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
+      linkOutput: { ...DEFAULT_CONFIG.linkOutput!, autoCopy: false },
+      imageCompression: { ...DEFAULT_CONFIG.imageCompression!, enabled: true },
+    });
+    compressImageBatchMock.mockResolvedValue(new Map([['C:/tmp/big.png', { path: 'C:/tmp/big.compressed.webp', size: 410_000 }]]));
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/big.png']);
+
+    expect(uploadToMultipleServicesMock.mock.calls[0][0]).toBe('C:/tmp/big.compressed.webp');
+    expect(queueManager.getItem('queue-0')).toMatchObject({ filePath: 'C:/tmp/big.png', compressedSize: 410_000 });
   });
 
   // HomeScreen H06：没网时这几张照样出现在首页、标成失败并写清原因，卡片上能点「重试」；首页不在屏时才弹通知
