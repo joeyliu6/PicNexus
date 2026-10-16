@@ -122,12 +122,8 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
       id: slide.id,
     }],
     index: 0,
-    /*
-     * 0.55 而非更高：背景一共叠了三层（本遮罩 + 模糊图 brightness + 影院暗角），
-     * 三层相乘后中心亮度只剩原图的个位数百分比，模糊背景那点颜色氛围会被压没。
-     * 调低这一层是把颜色救回来最有效的一处，聚焦感由暗角继续负责。
-     */
-    bgOpacity: 0.55,
+    // 图库灯箱是一块不透明的深色底（GalleryScreen.dc.html G08），颜色在 galleryLightbox.css 的 --pswp-bg
+    bgOpacity: 1,
     // 自定义 spinner 由 Vue 层 Teleport 渲染；清空默认错误文案（避免 slide 内显示英文错误）
     errorMsg: '',
     showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
@@ -147,9 +143,9 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
     arrowKeys: false,
     // 单图模式禁用循环和滑动
     loop: false,
-    // 底部留空给 LightboxBottomBar
-    paddingFn: () => ({ top: 0, bottom: 72, left: 80, right: 80 }),
-    // 滚轮缩放（Ctrl+wheel）
+    // 上下留出灯箱的顶栏 52 / 底栏 64（+8 间隙），左右留给翻页按钮（G08）
+    paddingFn: () => ({ top: 52, bottom: 72, left: 80, right: 80 }),
+    // 滚轮缩放（交接说明 8.2：← → 切换、滚轮缩放、拖动平移）
     wheelToZoom: true,
     // 点击行为
     bgClickAction: 'close',
@@ -427,23 +423,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     }
   }
 
-  // ── 滚轮导航（非 Ctrl 时前后翻页，Ctrl 交给 PhotoSwipe 缩放） ──
-
-  let wheelTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function handleWheel(e: WheelEvent) {
-    if (!pswp || e.ctrlKey) return; // Ctrl+wheel 交给 PhotoSwipe 缩放
-    if (wheelTimer) return;
-    wheelTimer = setTimeout(() => { wheelTimer = null; }, 200);
-    if (e.deltaY > 0 && options.hasNext.value) {
-      setSwitchDirection('next');
-      options.onNavigate('next');
-    } else if (e.deltaY < 0 && options.hasPrev.value) {
-      setSwitchDirection('prev');
-      options.onNavigate('prev');
-    }
-  }
-
   // ── 打开 PhotoSwipe ─────────────────────────
 
   function openPswp() {
@@ -544,15 +523,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       currentLoadingSrc = undefined;
       pswp = null;
       options.onClose();
-    });
-
-    // 滚轮事件拦截（非 Ctrl 时用于翻页）
-    pswp.on('wheel', (e) => {
-      const we = e.originalEvent as WheelEvent;
-      if (!we.ctrlKey) {
-        e.preventDefault();
-        handleWheel(we);
-      }
     });
 
     // 加载状态：仅响应「当前 active content」的事件，过滤掉孤儿 content 的串扰
@@ -743,7 +713,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
 
   onUnmounted(() => {
     window.removeEventListener('keydown', handleKeydown);
-    if (wheelTimer) { clearTimeout(wheelTimer); wheelTimer = null; }
     clearLoadingIndicator();
     clearLoadRetryTimer();
     loadRetryCounts.clear();

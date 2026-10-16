@@ -357,11 +357,12 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     document.body.innerHTML = '';
   });
 
-  it('routes keyboard and wheel navigation only when the direction is available', async () => {
+  // 交接说明 8.2：← → 切换，滚轮缩放——滚轮整个交给 PhotoSwipe，不拿来翻页
+  it('switches with the arrow keys only where there is a neighbour, and leaves the wheel to zoom', async () => {
     const onNavigate = vi.fn();
     const harness = mountHarness({
       hasPrev: true,
-      hasNext: true,
+      hasNext: false,
       onNavigate,
     });
     harness.visible.value = true;
@@ -370,8 +371,8 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
-    expect(onNavigate).toHaveBeenNthCalledWith(1, 'prev');
-    expect(onNavigate).toHaveBeenNthCalledWith(2, 'next');
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith('prev');
 
     const pswp = pswpInstances[0];
     const preventDefault = vi.fn();
@@ -379,28 +380,8 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
       originalEvent: new WheelEvent('wheel', { deltaY: 120 }),
       preventDefault,
     });
-    expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(onNavigate).toHaveBeenLastCalledWith('next');
-
-    pswp.emit('wheel', {
-      originalEvent: new WheelEvent('wheel', { deltaY: 120 }),
-      preventDefault: vi.fn(),
-    });
-    expect(onNavigate).toHaveBeenCalledTimes(3);
-
-    await vi.advanceTimersByTimeAsync(200);
-    pswp.emit('wheel', {
-      originalEvent: new WheelEvent('wheel', { deltaY: -120 }),
-      preventDefault: vi.fn(),
-    });
-    expect(onNavigate).toHaveBeenLastCalledWith('prev');
-
-    const ctrlPreventDefault = vi.fn();
-    pswp.emit('wheel', {
-      originalEvent: { ctrlKey: true, deltaY: 120 } as unknown as Event,
-      preventDefault: ctrlPreventDefault,
-    });
-    expect(ctrlPreventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledTimes(1);
     harness.wrapper.unmount();
   });
 
