@@ -21,8 +21,12 @@ import {
   mergeSuccessMetadata,
   resolveQueueStatus,
 } from './retryStatus';
+import { COOKIE_BASED_SERVICES } from '@/constants/serviceRequiredFields';
+import { describeUploadFailure, reasonsByService } from '@/utils/uploadFailureMessage';
 
 const log = createLogger('RetryService');
+
+const isCookieHost = (serviceId: string) => (COOKIE_BASED_SERVICES as readonly string[]).includes(serviceId);
 
 export interface RetryOptions {
   /** 配置存储 */
@@ -156,7 +160,8 @@ export class RetryService {
       await this.handleSingleServiceSuccess(itemId, serviceId, item, result, config.linkOutput?.copyFromService);
 
       if (!silentToast) {
-        this.options.toast.success('修复成功', `${getServiceDisplayName(serviceId, config)} 已补充上传成功`);
+        // 「修复」在新界面专指链接健康里的修复，这里是补传
+        this.options.toast.success(`已补传到${getServiceDisplayName(serviceId, config)}`, item.fileName);
       }
 
     } catch (error) {
@@ -183,20 +188,8 @@ export class RetryService {
       return;
     }
 
-    // 检查重试次数限制
-    const currentRetryCount = item.retryCount || 0;
-    const maxRetries = item.maxRetries || 3;
-
-    if (currentRetryCount >= maxRetries) {
-      this.options.toast.error(
-        '重试次数已用尽',
-        `${item.fileName} 已尝试 ${maxRetries} 次，请检查配置后手动重试`,
-        5000
-      );
-      return;
-    }
-
-    log.info(`全量重试 (${currentRetryCount + 1}/${maxRetries}): ${item.fileName}`);
+    // 「重试」是用户点的：立刻重传，不等退避、不设次数上限
+    log.info(`全量重试: ${item.fileName}`);
 
     // 检测网络连通性
     const isNetworkAvailable = await checkNetworkConnectivity();
@@ -209,33 +202,9 @@ export class RetryService {
       return;
     }
 
-    // 真正的指数退避延迟
-    // 公式：baseDelay * 2^retryCount，带随机抖动防止惊群效应
-    // 第 1 次：1-2 秒，第 2 次：2-4 秒，第 3 次：4-8 秒...
-    const BASE_DELAY = 1000;
-    const MAX_DELAY = 30000; // 最大延迟 30 秒
-    const exponentialDelay = Math.min(BASE_DELAY * Math.pow(2, currentRetryCount), MAX_DELAY);
-    // 添加 0-50% 的随机抖动
-    const jitter = exponentialDelay * Math.random() * 0.5;
-    const delay = Math.round(exponentialDelay + jitter);
-
-    if (delay > 0) {
-      log.info(`等待 ${delay}ms 后重试（指数退避 + 抖动）...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    // 标记为重试中
+    // 标记为重试中（界面上的花瓣与进度就是反馈，不另弹「正在重试」）
     this.retryingItems.add(itemId);
-    this.options.queueManager.updateItem(itemId, {
-      isRetrying: true,
-      retryCount: currentRetryCount + 1,
-      lastRetryTime: Date.now()
-    });
-
-    this.options.toast.info(
-      '正在重试',
-      `${item.fileName} 正在重新上传 (${currentRetryCount + 1}/${maxRetries})`
-    );
+    this.options.queueManager.updateItem(itemId, { isRetrying: true });
 
     // 重置状态
     this.options.queueManager.resetItemForRetry(itemId);
@@ -429,7 +398,8 @@ export class RetryService {
     }
 
     if (!silentToast) {
-      this.options.toast.error('重试依然失败', `${getServiceDisplayName(serviceId, config)}: ${errorMsg}`);
+      const failure = describeUploadFailure(serviceId, errorMsg, { cookieLogin: isCookieHost(serviceId) });
+      this.options.toast.error(`${getServiceDisplayName(serviceId, config)}上传失败`, `${failure.reason}，${failure.advice}`);
     }
   }
 
@@ -596,36 +566,11 @@ export class RetryService {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(`${item.fileName} 上传失败:`, errorMsg);
 
-    // 解析失败的图床
-    const failedServices: string[] = [];
-    const servicePattern = /- (\w+):/g;
-    let match;
-    while ((match = servicePattern.exec(errorMsg)) !== null) {
-      failedServices.push(match[1]);
-    }
-
-    // 智能错误提示
-    if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
-      const serviceName = failedServices.length > 0 ? failedServices.join('、') : '微博';
-      this.options.toast.error(
-        `${serviceName} 授权失效`,
-        '登录凭证/Cookie 已过期，请前往更新',
-        6000
-      );
-    } else if (errorMsg.includes('认证失败') || errorMsg.includes('authentication')) {
-      const serviceName = failedServices.length > 0 ? failedServices.join('、') : '图床';
-      this.options.toast.error(
-        `${serviceName} 鉴权失败`,
-        '请检查 AK/SK 或 Token 配置是否正确',
-        5000
-      );
-    } else {
-      this.options.toast.error(
-        '重试依然失败',
-        `${item.fileName}: ${errorMsg}`,
-        5000
-      );
-    }
+    // 每个图床记它自己的原因；通知按第一个失败的图床写「原因 + 处理办法」（交接说明第 9 节）
+    const ownReasons = reasonsByService(errorMsg);
+    const [firstHost, firstReason] = ownReasons.entries().next().value ?? [enabledServices[0], errorMsg];
+    const failure = describeUploadFailure(firstHost, firstReason, { cookieLogin: isCookieHost(firstHost) });
+    this.options.toast.error(`${item.fileName} 上传失败`, `${failure.reason}，${failure.advice}`, 5000);
 
     // 更新所有服务的失败状态
     const currentItem = this.options.queueManager.getItem(itemId);
@@ -637,7 +582,7 @@ export class RetryService {
             ...updatedServiceProgress[serviceId],
             status: '✗ 失败',
             progress: 0,
-            error: errorMsg
+            error: ownReasons.get(serviceId) ?? errorMsg
           };
         }
       });

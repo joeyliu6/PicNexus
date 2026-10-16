@@ -68,6 +68,7 @@ vi.mock('@/events/cacheEvents', () => ({
 
 vi.mock('@/constants/serviceNames', () => ({
   getServiceDisplayName: getServiceDisplayNameMock,
+  getServiceAliases: () => [],
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -126,8 +127,6 @@ function createItem(overrides: Partial<QueueItem> = {}): QueueItem {
         error: 'old error',
       },
     },
-    retryCount: 0,
-    maxRetries: 3,
     ...overrides,
   };
 }
@@ -807,32 +806,57 @@ describe('RetryService', () => {
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
 
-  it('stops retryAll when the max retry count has already been reached', async () => {
-    const toast = makeToast();
+  // 「重试」是用户点的：立刻重传，不等退避、不设次数上限（交接说明 8.1「「重试」原样再传」）
+  it('retries right away however many times it was retried before', async () => {
+    vi.useFakeTimers();
+    const queueManager = createQueueManager([createItem()]);
+    uploadToMultipleServicesMock.mockResolvedValue({
+      primaryService: 'weibo',
+      primaryUrl: 'https://img.example.com/demo.png',
+      results: [{ serviceId: 'weibo', status: 'success', result: makeUploadResult() }],
+    });
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await service.retryAll('item-1', DEFAULT_CONFIG);
+    }
+
+    expect(uploadToMultipleServicesMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps each host's own reason when a full retry fails again", async () => {
     const queueManager = createQueueManager([
       createItem({
-        retryCount: 3,
-        maxRetries: 3,
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: { serviceId: 'weibo', progress: 0, status: '失败' },
+          r2: { serviceId: 'r2', progress: 0, status: '失败' },
+        },
       }),
     ]);
+    uploadToMultipleServicesMock.mockRejectedValueOnce(new Error([
+      '所有图床上传均失败：',
+      '  - weibo: 微博上传失败: 认证失败: 401',
+      '  - r2: R2 上传失败: 请求超时',
+      '',
+      '请检查网络连接和服务配置',
+    ].join('\n')));
+    const toast = makeToast();
     const service = new RetryService(makeOptions({ toast, queueManager }));
 
     await service.retryAll('item-1', DEFAULT_CONFIG);
 
-    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledTimes(1);
+    const item = queueManager.items.get('item-1')!;
+    expect(item.serviceProgress.weibo?.error).toBe('微博上传失败: 认证失败: 401');
+    expect(item.serviceProgress.r2?.error).toBe('R2 上传失败: 请求超时');
+    // 通知同样写「原因 + 处理办法」（交接说明第 9 节）
+    expect(toast.error).toHaveBeenCalledWith('demo.png 上传失败', '登录已过期，请重新登录后重试', 5000);
   });
 
-  it('uses exponential backoff, then saves the full retry result and warns on partial failures', async () => {
-    vi.useFakeTimers();
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
-
+  it('saves the full retry result and warns on partial failures', async () => {
     const toast = makeToast();
     const queueManager = createQueueManager([
       createItem({
-        retryCount: 1,
-        maxRetries: 3,
         enabledServices: ['weibo', 'r2'],
         serviceProgress: {
           weibo: {
@@ -879,14 +903,9 @@ describe('RetryService', () => {
       saveHistoryItem,
     }));
 
-    const promise = service.retryAll('item-1', DEFAULT_CONFIG);
-    await Promise.resolve();
-    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 2500);
-    await vi.advanceTimersByTimeAsync(2500);
-    await promise;
+    await service.retryAll('item-1', DEFAULT_CONFIG);
 
     const item = queueManager.items.get('item-1')!;
-    expect(item.retryCount).toBe(2);
     expect(item.isRetrying).toBe(false);
     expect(queueManager.markItemComplete).toHaveBeenCalledWith('item-1', 'https://img.example.com/demo.png');
     expect(saveHistoryItem).toHaveBeenCalledWith(
@@ -904,8 +923,6 @@ describe('RetryService', () => {
     const queueManager = createQueueManager([
       createItem({
         historyId: 'existing-history-uuid',
-        retryCount: 0,
-        maxRetries: 3,
         enabledServices: ['weibo'],
       }),
     ]);
@@ -940,8 +957,6 @@ describe('RetryService', () => {
     const queueManager = createQueueManager([
       createItem({
         filePath,
-        retryCount: 0,
-        maxRetries: 3,
         enabledServices: ['weibo'],
       }),
     ]);

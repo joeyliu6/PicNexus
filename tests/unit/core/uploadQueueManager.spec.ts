@@ -71,10 +71,7 @@ describe('UploadQueueManager', () => {
         progress: 0,
         status: QUEUE_SERVICE_STATUS.waiting,
       });
-      expect(item.retryCount).toBe(0);
-      expect(item.maxRetries).toBe(3);
       expect(item.isRetrying).toBe(false);
-      expect(item.lastRetryTime).toBeUndefined();
     });
 
     it('reports each added item so the home page can group one upload together', () => {

@@ -67,10 +67,6 @@ export interface QueueItem {
   primaryUrl?: string;  // 主力图床的URL
   thumbUrl?: string;
 
-  // 新增：重试相关字段
-  retryCount?: number;        // 当前重试次数（默认 0）
-  maxRetries?: number;        // 最大重试次数（默认 3）
-  lastRetryTime?: number;     // 上次重试时间戳
   isRetrying?: boolean;       // 是否正在重试中
 
   // 向后兼容字段（可选，供旧UI使用）
@@ -204,10 +200,6 @@ export class UploadQueueManager {
       enabledServices: [...enabledServices],  // 创建数组副本,避免引用共享
       serviceProgress: serviceProgress as Record<string, ServiceProgress>,
       status: 'pending',
-      // 新增：初始化重试相关字段
-      retryCount: 0,
-      maxRetries: 3,
-      lastRetryTime: undefined,
       isRetrying: false,
       // 向后兼容
       uploadToR2: enabledServices.includes('r2'),
