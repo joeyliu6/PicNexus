@@ -155,10 +155,11 @@ function checkDuplicates(file) {
   const scope = file.endsWith('.vue') ? path.relative(root, file) : 'global';
   for (const { text, startLine } of blocks) {
     postcss.parse(text).walkDecls(/^--/, (decl) => {
-      if (decl.parent.type !== 'rule') return;
-      const selector = decl.parent.selector.replace(/\s+/g, ' ').trim();
-      const key = `${scope}|${contextOf(decl.parent)}|${selector}|${decl.prop}`;
-      const where = { file: path.relative(root, file), line: startLine + decl.source.start.line, value: decl.value.trim() };
+      const rule = decl.parent;
+      if (!rule || rule.type !== 'rule') return;
+      const selector = /** @type {import('postcss').Rule} */ (rule).selector.replace(/\s+/g, ' ').trim();
+      const key = `${scope}|${contextOf(rule)}|${selector}|${decl.prop}`;
+      const where = { file: path.relative(root, file), line: startLine + (decl.source?.start?.line ?? 0), value: decl.value.trim() };
       const first = seen.get(key);
       if (!first) seen.set(key, where);
       else if (first.value !== where.value) duplicates.push({ name: decl.prop, selector, first, again: where });
