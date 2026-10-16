@@ -43,32 +43,9 @@
 - **来源**：2026-10-15 维护者决定整体重做界面与操作逻辑；2026-10-16 Claude Design 交付并验收
 - **现状**：设计包与实施阶段清单在 [docs/design/redesign/README.md](./design/redesign/README.md)；分支 `feat/redesign`，每阶段提交、不 push
 - **要做的**：按 README 的 0–11 阶段逐页替换，最后卸载 PrimeVue 并跑交接说明第 14 节验收清单
+- **待拍板**：README 里标「待拍板」的条目（图库按「失效」筛选时的分组、Markdown 的 alt 要不要扩展名）
 
 **当前处置**：实施中
-
-### [ ] 灯箱 `pendingClose` 路径下收回计时器与真实 close 事件脱钩
-
-- **来源**：2026-09-11 发版前扫描（[scan-prerelease-1.1.2-2026-09-11.md](./audits/scan-prerelease-1.1.2-2026-09-11.md)）
-- **症状**：`src/composables/history/useTableInteractions.ts` 的 `closingTimer` 以 `lightboxVisible=false` 起算，
-  但 `usePhotoSwipeBridge.ts` 在开场闸门关着时只记 `pendingClose`，真实 `close()` 推迟到 `openingAnimationEnd`（≈380ms 后）。
-  timer 会在大图仍在缩小时把 phase 置 `idle`，卡片提前显形；随后 resolve 再写 `landing`/`dismissing`，此时已无 timer，
-  phase 停在非 idle 直到下一次 mouseenter/leave
-- **定性**：疑似缺陷（静态追踪，未真机复现），置信度 🟡
-- **优先级**：低——触发要在开灯箱后 ~160-380ms 内完成"点删除 + 确认框"，人手基本做不到，且自愈；修法是让 timer
-  起点跟随 `resolveLightboxCloseTargetMode()`（真实 close 事件）或让 bridge 回传"已延迟"
-
-**当前处置**：待验证
-
-### [ ] 灯箱 keep 分支下 handoff 监听器晚拆
-
-- **来源**：同上
-- **症状**：`useTableInteractions.ts` 的 `closingTimer` 回调在 `keepHoverPreviewAfterClose` 为真时只写 `idle`，
-  不调 `stopHoverHandoffTracking()`；document 上 5 个 capture 监听 + window 2 个要等鼠标离开源缩略图才拆。
-  灯箱动画重做之前（`f3e3af79`）结构相同，非本次回归
-- **定性**：确认与文档"用完即拆"描述不符，置信度 🔴；影响面小（监听器最终会拆，只是晚）
-- **优先级**：低
-
-**当前处置**：待修复
 
 ### [ ] 给"try 里 await invoke、catch 里 `String(err)`"加静态护栏
 
@@ -133,17 +110,17 @@
 
 - **状态**：故意如此，短期不改——影响面很小，根治代价明显大于收益
 - **位置**：`src/composables/history/usePhotoSwipeBridge.ts` 的 `pswpEl`（供
-  `HistoryLightbox.vue` 的 `<Teleport :to="pswpEl">` 挂载模糊背景/底栏/导航箭头）；
+  `src/views/gallery/GalleryLightbox.vue` 的 `<Teleport :to="pswpEl">` 挂载顶栏/底栏/翻页按钮）；
   `openPswp()` 里 `pswp.on('destroy', ...)` 的守卫注释指到这里
 
 **为什么看着像缺陷**：关闭一张图后、约 200ms 收回动画播完之前，若用户又打开另一张图，
-`pswpEl` 会从正在淡出的旧实例改指向新实例，Vue 把自绘的模糊背景/底栏/导航箭头整体
-搬到新实例身上，旧实例剩下的淡出帧会瞬间丢掉这层背景装饰。
+`pswpEl` 会从正在淡出的旧实例改指向新实例，Vue 把自绘的顶栏/底栏/翻页按钮整体
+搬到新实例身上，旧实例剩下的淡出帧会瞬间丢掉这层自绘 UI（关场时它们本就先淡出，肉眼更难察觉）。
 
 **为什么不做**：这些自绘 UI 只共用一个 `pswpEl` ref、对应一个 Teleport 目标，同一时刻
 只能属于一个实例，这是设计如此。真要让新旧实例互不干扰，得给每个 PhotoSwipe 实例发一份
 独立的 Teleport 目标（例如按实例 id 建一个 Map），而不是一个共享 ref——这会改变
-`HistoryLightbox.vue` 的挂载结构，还要重新审计 `usePhotoSwipeBridge.ts` 里另外 8 处
+`GalleryLightbox.vue` 的挂载结构，还要重新审计 `usePhotoSwipeBridge.ts` 里另外 8 处
 只判断"`pswp` 是否非空"的调用点（它们现在默认"非空 = 当前唯一活跃实例"，一旦允许
 新旧并存这个假设就不成立）。而触发场景本身要求用户在 200ms 内连续触发两次开关，且
 新实例大概率会整体盖住旧实例——肉眼基本看不出来，也不会崩溃或泄漏（PhotoSwipe 自己的
@@ -254,6 +231,10 @@
 
 ## 已完成
 
+### [x] 历史表格悬停预览的两处计时器问题不再适用
+
+`useTableInteractions.ts`（`closingTimer` 起算点、handoff 监听晚拆）随旧历史页删除，图库不做悬停预览。来源见 [scan-prerelease-1.1.2-2026-09-11.md](./audits/scan-prerelease-1.1.2-2026-09-11.md)。
+
 ### [x] Tauri E2E 在 CI 跑手上建会话失败（降权 workaround 已复验转绿）
 
 根因是微软 by-design 的安全硬化（WebView2 150+ 在提权宿主下丢弃调试参数），不是跑手镜像问题，等不到上游修复。已用 `gsudo --integrity Medium` 把整条测试链降权，2026-09-10 复验 4 passing 并转为阻断门禁（push + dispatch，不含 PR）。详见 [tauri-e2e-runner-webview2-2026-08-21.md](audits/tauri-e2e-runner-webview2-2026-08-21.md)。
@@ -352,7 +333,7 @@ history-flow.md 图 3 对齐实现；两条判据 2026-08-22 经 Tauri E2E（por
 
 ### [x] 灯箱 / 悬停预览 / ±1 预热接入 URL 安全闸
 
-CSP 撤网后仅剩的三条无闸取图路径已统一收进 `useGatedImageUrls`，判据与缩略图同源；被拦下时给可执行的提示。
+图库的灯箱大图、当前图与 ±1 预热、滚动预热都过 `safeImageUrl`，判据与缩略图同源（调用方清单见 `networkPolicy.ts` 的 `getConfirmedHttpHosts`）。
 详见 [lightbox-gate-and-upyun-dual-chain-2026-08-20.md](./audits/lightbox-gate-and-upyun-dual-chain-2026-08-20.md)。
 
 ### [x] `emitConfigUpdated()` 死代码已删
