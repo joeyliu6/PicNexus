@@ -38,3 +38,16 @@ test('locating clears gallery filters that would hide the image', async ({ page 
   await expect(page.locator('.detail')).toContainText('远处的目标.png');
   await expect(gallery.locator('.tile[aria-label="远处的目标.png"]')).toBeInViewport();
 });
+
+// 设计稿的详情面板没有关闭按钮：除了 Esc，再点一次同一张也能收起（鼠标也关得掉）
+test('clicking the open image again closes its details', async ({ page }) => {
+  const rows = Array.from({ length: 6 }, (_, i) => historyRow(i + 1, `第${i + 1}张.png`, i * 30));
+  await openApp(page, { historyRows: rows });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const tile = page.locator('.gallery .tile[aria-label="第2张.png"]');
+
+  await tile.click();
+  await expect(page.locator('.detail')).toContainText('第2张.png');
+  await tile.click();
+  await expect(page.locator('.detail')).toBeHidden();
+});

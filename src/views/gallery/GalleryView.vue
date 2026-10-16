@@ -88,9 +88,10 @@ const detailId = ref<string | null>(null);
 const focusedId = ref<string | null>(null);
 const { copiedKey, markCopied } = useCopyBadgeFeedback(1500);
 
+/** 单击 / Enter 打开详情；再点正开着的那张就收起（设计稿的详情没有关闭按钮，鼠标也要关得掉） */
 function openDetail(meta: ImageMeta): void {
-  detailId.value = meta.id;
   focusedId.value = meta.id;
+  detailId.value = detailId.value === meta.id ? null : meta.id;
 }
 
 function openLightbox(meta: ImageMeta): void {
