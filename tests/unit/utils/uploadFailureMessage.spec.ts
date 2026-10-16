@@ -263,7 +263,8 @@ describe('describeUploadFailure', () => {
   });
 
   it('says the login expired for cookie hosts and the keys are wrong for the others', () => {
-    expect(describeUploadFailure('weibo', '微博上传失败: 认证失败: 401', { cookieLogin: true }).reason).toBe('登录已过期');
+    // HomeScreen.dc.html：「微博：登录已过期，请重新登录」（登录后会自动补传）
+    expect(describeUploadFailure('weibo', '微博上传失败: 认证失败: 401', { cookieLogin: true })).toEqual({ reason: '登录已过期', advice: '请重新登录' });
     expect(describeUploadFailure('r2', 'R2 上传失败: 403 forbidden').reason).toBe('凭证无效');
   });
 

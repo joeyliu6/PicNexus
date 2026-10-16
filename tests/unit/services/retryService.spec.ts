@@ -850,7 +850,7 @@ describe('RetryService', () => {
     expect(item.serviceProgress.weibo?.error).toBe('微博上传失败: 认证失败: 401');
     expect(item.serviceProgress.r2?.error).toBe('R2 上传失败: 请求超时');
     // 通知同样写「原因 + 处理办法」（交接说明第 9 节）
-    expect(toast.error).toHaveBeenCalledWith('demo.png 上传失败', '登录已过期，请重新登录后重试', 5000);
+    expect(toast.error).toHaveBeenCalledWith('demo.png 上传失败', '登录已过期，请重新登录', 5000);
   });
 
   it('saves the full retry result and warns on partial failures', async () => {

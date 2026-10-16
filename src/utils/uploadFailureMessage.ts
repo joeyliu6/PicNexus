@@ -148,7 +148,7 @@ export function describeUploadFailure(
   const { category } = categorizeMigrateError('upload', cleaned);
   if (category === '权限不足') {
     return options.cookieLogin
-      ? { reason: '登录已过期', advice: '请重新登录后重试' }
+      ? { reason: '登录已过期', advice: '请重新登录' }
       : { reason: '凭证无效', advice: '请检查图床配置后重试' };
   }
   const known = UPLOAD_FAILURE_TEXT[category];
