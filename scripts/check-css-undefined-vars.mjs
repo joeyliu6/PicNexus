@@ -28,11 +28,14 @@
  *   - `--p-*`（PrimeVue）与 `--reka-*`（Reka UI 写在浮层上的触发器尺寸等）由库在运行时定义，跳过。
  *   - 注释里的内容先剥掉（CSS 块注释、HTML 注释），避免示例代码误报。
  *
+ * 另查一类同样静默的错：同一选择器下把同名变量定义两次且取值不同（见第 3 节）。
+ *
  * 用法：npm run lint 自动执行；单独跑 `node scripts/check-css-undefined-vars.mjs`
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import postcss from 'postcss';
 
 const root = process.cwd();
 
@@ -127,7 +130,58 @@ for (const dir of REFERENCE_SCAN.dirs) {
   });
 }
 
-// ---- 3. 报告 ----
+// ---- 3. 同一选择器下取值冲突的重复定义 ----
+// 同一个选择器（同一层 @media）下把同名变量定义两次、取值还不一样，后一条静默盖掉前一条
+// （例：新加的 --pn-size-chip: 24px 把首页用的 28px 改小了），任何门禁都看不见。
+// 全局 .css 跨文件比（都在同一个 :root 上）；.vue 的 <style> 只在本文件内比。取值相同的重复无害，不报。
+
+const DUPLICATE_SCAN = { dirs: ['src'], extensions: /\.(css|vue)$/ };
+const seen = new Map();
+const duplicates = [];
+
+function contextOf(node) {
+  const chain = [];
+  for (let parent = node.parent; parent && parent.type !== 'root'; parent = parent.parent) {
+    if (parent.type === 'atrule') chain.unshift(`@${parent.name} ${parent.params}`);
+  }
+  return chain.join(' ');
+}
+
+function checkDuplicates(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const blocks = file.endsWith('.vue')
+    ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => ({ text: m[1], startLine: lineOf(source, m.index + m[0].indexOf(m[1])) - 1 }))
+    : [{ text: source, startLine: 0 }];
+  const scope = file.endsWith('.vue') ? path.relative(root, file) : 'global';
+  for (const { text, startLine } of blocks) {
+    postcss.parse(text).walkDecls(/^--/, (decl) => {
+      if (decl.parent.type !== 'rule') return;
+      const selector = decl.parent.selector.replace(/\s+/g, ' ').trim();
+      const key = `${scope}|${contextOf(decl.parent)}|${selector}|${decl.prop}`;
+      const where = { file: path.relative(root, file), line: startLine + decl.source.start.line, value: decl.value.trim() };
+      const first = seen.get(key);
+      if (!first) seen.set(key, where);
+      else if (first.value !== where.value) duplicates.push({ name: decl.prop, selector, first, again: where });
+    });
+  }
+}
+
+for (const dir of DUPLICATE_SCAN.dirs) {
+  walk(path.join(root, dir), (file) => {
+    if (DUPLICATE_SCAN.extensions.test(file)) checkDuplicates(file);
+  });
+}
+
+if (duplicates.length > 0) {
+  console.error('\n❌ 同一选择器下重复定义了 CSS 变量且取值不同 —— 后一条静默盖掉前一条：\n');
+  for (const d of duplicates) {
+    console.error(`  ${d.name}（${d.selector}）：${d.first.file}:${d.first.line} 是 ${d.first.value}，${d.again.file}:${d.again.line} 又写成 ${d.again.value}`);
+  }
+  console.error('\n多半是新加令牌时撞了已有的名字：换个更具体的名字，别改已有的值。\n');
+  process.exit(1);
+}
+
+// ---- 4. 报告 ----
 
 if (failures.length > 0) {
   console.error('\n❌ 以下 CSS 变量被 var() 引用，但项目里没有任何定义 —— 这条声明在浏览器里静默作废：\n');
