@@ -2,6 +2,7 @@
 // 第一次使用（HomeScreen.dc.html H01 / H19）：没有任何记录时投放区放大居中，下面三条说明还能怎么传。
 // 「再加一个备份」打开同一个「上传到」面板，只列京东和七鱼两个免配置图床，点一下就能加上做备份。
 import { computed } from 'vue';
+import BrandMark from '@/components/biz/BrandMark.vue';
 import HostIcon from '@/components/biz/HostIcon.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
@@ -59,14 +60,7 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
 <template>
   <div class="first-use">
     <section class="first-use__drop" aria-label="投放区">
-      <svg width="56" height="56" viewBox="-4 -4 136 136" aria-hidden="true" class="first-use__petals">
-        <g fill="none" stroke="currentColor" stroke-width="5" stroke-dasharray="10 9">
-          <path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" />
-          <path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" />
-          <path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" />
-          <path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" />
-        </g>
-      </svg>
+      <BrandMark :size="56" />
       <div class="first-use__title">拖入图片，或按 {{ pasteKeys }} 粘贴</div>
       <div class="first-use__buttons">
         <PnButton variant="primary" @click="emit('pick')">选择文件</PnButton>
@@ -83,7 +77,8 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
         <span class="first-use__tip-title">截图后按 {{ pasteKeys }}</span>
         <span class="first-use__tip-desc">上传剪贴板图片</span>
       </div>
-      <div class="first-use__tip">
+      <!-- 关掉了全局快捷键就不提它 -->
+      <div v-if="hotkey" class="first-use__tip">
         <span class="first-use__tip-title">在任意程序中按 {{ hotkey }}</span>
         <span class="first-use__tip-desc">无需打开窗口，完成后自动复制链接</span>
       </div>
@@ -144,8 +139,6 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
   border-radius: var(--pn-radius-panel);
 }
 
-.first-use__petals { color: var(--pn-text3); }
-
 .first-use__title {
   margin-top: var(--pn-space-6);
   font-size: var(--pn-text-title);
@@ -157,7 +150,7 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
 .first-use__buttons { display: flex; align-items: center; gap: var(--pn-space-6); }
 .first-use__url { color: var(--pn-text2); font-weight: var(--pn-weight-regular); }
 
-.first-use__tips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--pn-space-12); }
+.first-use__tips { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: var(--pn-space-12); }
 
 .first-use__tip {
   display: flex;

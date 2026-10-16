@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // 没有可用的图床（HomeScreen.dc.html H02）：点「启用京东图床」→ 公共图床风险确认 → 加入上传组合；
 // 「连接其他图床」去图床页。这时拖入图片，遮罩写「先启用一个图床」，不上传。
-import PetalGlyph from '@/components/biz/PetalGlyph.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 
 defineEmits<{ enableJd: []; connect: [] }>();
@@ -9,7 +8,14 @@ defineEmits<{ enableJd: []; connect: [] }>();
 
 <template>
   <section class="no-host" aria-label="尚未启用图床">
-    <PetalGlyph :states="['empty', 'empty', 'empty', 'empty']" :size="56" />
+    <svg width="56" height="56" viewBox="-4 -4 136 136" aria-hidden="true" class="no-host__petals">
+      <g fill="none" stroke="currentColor" stroke-width="5" stroke-dasharray="10 9">
+        <path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" />
+        <path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" />
+        <path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" />
+        <path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" />
+      </g>
+    </svg>
     <div class="no-host__title">尚未启用图床</div>
     <div class="no-host__desc">上传需要至少一个图床。京东免配置，可直接启用；建议另接一个自有存储作为备份。</div>
     <div class="no-host__buttons">
@@ -21,6 +27,8 @@ defineEmits<{ enableJd: []; connect: [] }>();
 </template>
 
 <style scoped>
+.no-host__petals { color: var(--pn-text3); }
+
 .no-host {
   display: flex;
   flex-direction: column;

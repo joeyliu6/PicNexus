@@ -20,7 +20,7 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); });
   <div role="status" class="fast-hint">
     <span class="fast-hint__arrow" aria-hidden="true" />
     <span class="fast-hint__title">截图后按 {{ pasteKeys }} 即可上传</span>
-    <span class="fast-hint__desc">窗口在后台时，可使用 {{ hotkey }}。</span>
+    <span v-if="hotkey" class="fast-hint__desc">窗口在后台时，可使用 {{ hotkey }}。</span>
     <div class="fast-hint__foot">
       <button type="button" class="fast-hint__button" @click="emit('dismiss')">知道了</button>
     </div>
