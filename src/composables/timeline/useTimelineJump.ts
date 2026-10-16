@@ -1,5 +1,8 @@
 /**
  * 时间轴跳转：图库刻度条点击或拖动，跳到某年某月（交接说明 8.2）
+ *
+ * 跳转中再来的请求只记最后一个，这次落地后接着跳过去：拖动刻度条时一路经过的每个月都会请求，
+ * 要去的只是松手时停的那个月；中途经过的直接作废，不排队。
  */
 import { ref, watch, nextTick, type Ref, type ComputedRef } from 'vue';
 import { createLogger } from '@/utils/logger';
@@ -57,6 +60,13 @@ interface UseTimelineJumpOptions {
   resumeScrollAnchor?: () => void;
 }
 
+/** 一次跳转请求：month 缺省 = 跳整年；day 缺省 = 该月最新一天 */
+interface JumpTarget {
+  year: number;
+  month?: number;
+  day?: number;
+}
+
 export function useTimelineJump(options: UseTimelineJumpOptions) {
   const {
     scrollContainer, groups, isCalculating,
@@ -68,8 +78,9 @@ export function useTimelineJump(options: UseTimelineJumpOptions) {
     suspendScrollAnchor, resumeScrollAnchor,
   } = options;
 
-  /** 正在跳转：重入守卫，跳转中再来的请求直接忽略 */
+  /** 正在跳转（落地前不接新的跳转，新请求记进 pending） */
   const isJumping = ref(false);
+  let pending: JumpTarget | null = null;
 
   /** 等待 isCalculating 降为 false（layout 异步重算完成），最多等 timeoutMs */
   function waitLayoutSettled(timeoutMs = 500): Promise<void> {
@@ -90,6 +101,21 @@ export function useTimelineJump(options: UseTimelineJumpOptions) {
     ]);
   }
 
+  /** 跳转中来的请求只留最后一个；返回 true 表示已记下、这次不跳 */
+  function deferIfJumping(target: JumpTarget): boolean {
+    if (!isJumping.value) return false;
+    pending = target;
+    return true;
+  }
+
+  /** 这次落地后接着跳到最后请求的那个位置（与刚落地的相同就不再跳） */
+  async function runPending(landed: JumpTarget): Promise<void> {
+    const next = pending;
+    pending = null;
+    if (!next || (next.year === landed.year && next.month === landed.month && next.day === landed.day)) return;
+    await (next.month === undefined ? handleJumpToYear(next.year) : handleJumpToPeriod(next.year, next.month, next.day));
+  }
+
   /**
    * 跳转到指定年月日（day 为月内进度估算，精度"那附近"；未传则回退为月最新一天）
    * - isFullyPreloaded=true：layout 已是精准骨架，单次 scrollTop 直接落点，真图后台加载
@@ -97,7 +123,7 @@ export function useTimelineJump(options: UseTimelineJumpOptions) {
    */
   async function handleJumpToPeriod(year: number, month: number, day?: number): Promise<void> {
     if (!hasLoadedStats.value) return;
-    if (isJumping.value) return;
+    if (deferIfJumping({ year, month, day })) return;
 
     log.debug(`[jump] ${year}-${month}-${day ?? 'latest'} path=${isFullyPreloaded.value ? 'normal' : 'downgrade'}`);
 
@@ -165,12 +191,14 @@ export function useTimelineJump(options: UseTimelineJumpOptions) {
       forceNormalMode(scrollContainer.value?.scrollTop);
       resumeScrollAnchor?.();
       isJumping.value = false;
+      // 放在 finally 里：目标月不存在、被筛选掉这些提前 return 的路径也要接着跳
+      await runPending({ year, month, day });
     }
   }
 
   /** 跳转到指定年份：已加载的直接滚到该年最早一天，没加载的转给 handleJumpToPeriod */
   async function handleJumpToYear(year: number): Promise<void> {
-    if (isJumping.value) return;
+    if (deferIfJumping({ year })) return;
 
     const yearGroups = groups.value.filter(g => g.year === year);
 

@@ -190,17 +190,44 @@ describe('useTimelineJump - handleJumpToPeriod', () => {
     expect(h.api().isJumping.value).toBe(false);
   });
 
-  // 重入守卫：连点两次月份不能让两段跳转互相踩 isJumping
-  it('ignores a second jump while one is still in flight', async () => {
-    const h = jumpHarness();
+  // 回归：图库刻度条拖动时一路经过的每个月都会请求跳转，跳转中来的请求曾被直接丢掉——
+  // 松手停在的那个月若恰好赶上上一次还没落地，画面就停在半路的月份
+  it('lands on the last month requested while a jump was running', async () => {
+    const h = jumpHarness({ isFullyPreloaded: true });
 
     const first = h.api().handleJumpToPeriod(2024, 2);
-    const second = h.api().handleJumpToPeriod(2024, 1);
+    const passed = h.api().handleJumpToPeriod(2024, 2, 10);
+    const last = h.api().handleJumpToPeriod(2024, 1);
+    await settle(Promise.all([first, passed, last]).then(() => undefined));
 
-    await settle(Promise.all([first, second]).then(() => undefined));
+    expect(h.fns.jumpToMonth.mock.calls).toEqual([[2024, 2], [2024, 1]]);
+    expect(h.scrollContainer.value!.scrollTop).toBe(1000);
+  });
+
+  // 拖出去又拖回起点：最后要去的就是刚落地的位置，不再跳第二次
+  it('does not jump again when the last request is where it just landed', async () => {
+    const h = jumpHarness({ isFullyPreloaded: true });
+
+    const first = h.api().handleJumpToPeriod(2024, 2);
+    const away = h.api().handleJumpToPeriod(2024, 1);
+    const back = h.api().handleJumpToPeriod(2024, 2);
+    await settle(Promise.all([first, away, back]).then(() => undefined));
 
     expect(h.fns.jumpToMonth).toHaveBeenCalledTimes(1);
-    expect(h.fns.jumpToMonth).toHaveBeenCalledWith(2024, 2);
+    expect(h.api().isJumping.value).toBe(false);
+  });
+
+  // 目标月不存在时 try 里提前 return，接着跳的那一步也不能被跳过
+  it('still follows up with the last request when the running jump finds no month', async () => {
+    const h = jumpHarness({ isFullyPreloaded: true });
+    h.fns.jumpToMonth.mockResolvedValueOnce(false);
+
+    const missing = h.api().handleJumpToPeriod(2025, 0);
+    const last = h.api().handleJumpToPeriod(2024, 1);
+    await settle(Promise.all([missing, last]).then(() => undefined));
+
+    expect(h.fns.jumpToMonth.mock.calls).toEqual([[2025, 0], [2024, 1]]);
+    expect(h.scrollContainer.value!.scrollTop).toBe(1000);
   });
 
   it('suspends the scroll anchor and forces normal mode before touching scrollTop', async () => {
@@ -469,19 +496,22 @@ describe('useTimelineJump - handleJumpToYear', () => {
     expect(h.fns.scrollToItem).not.toHaveBeenCalled();
   });
 
-  it('ignores a year jump while a month jump is in flight', async () => {
+  // 月份跳转还没落地时拖到了年份刻度：等它落地再跳那一年
+  it('runs a year request made during a month jump after it lands', async () => {
+    const meta = createImageMeta({ id: 'img-2023' });
     const h = mountHarness({
       groups: [
         createPhotoGroup({ year: 2024, month: 0, day: 1, items: [createImageMeta()] }),
-        createPhotoGroup({ year: 2023, month: 5, day: 1, items: [createImageMeta({ id: 'img-2023' })] }),
+        createPhotoGroup({ year: 2023, month: 5, day: 1, items: [meta] }),
       ],
       layoutResult: { groupLayouts: [makeLayout('2024-0-1', 0), makeLayout('2023-5-1', 600)] },
     });
 
     const month = h.api().handleJumpToPeriod(2024, 0);
     const yearJump = h.api().handleJumpToYear(2023);
-    await settle(Promise.all([month, yearJump]).then(() => undefined));
-
     expect(h.fns.scrollToItem).not.toHaveBeenCalled();
+
+    await settle(Promise.all([month, yearJump]).then(() => undefined));
+    expect(h.fns.scrollToItem).toHaveBeenCalledWith('img-2023');
   });
 });
