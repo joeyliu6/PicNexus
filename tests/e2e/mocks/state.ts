@@ -34,6 +34,8 @@ export interface E2ESeed {
   historyRows?: Array<Record<string, unknown>>;
   invokeOverrides?: Record<string, InvokeOverride>;
   dialogOpenResult?: string[] | string | null;
+  /** 图库按天统计的查询一直不返回（冷启动骨架 G12） */
+  sqlHangDayStats?: boolean;
 }
 
 interface E2EState {

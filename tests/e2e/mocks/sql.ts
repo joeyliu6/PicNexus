@@ -1,74 +1,66 @@
+// @tauri-apps/plugin-sql 的替身：浏览器里跑一份真的 SQLite（sql.js，WebAssembly），
+// 表结构用应用自己的 SchemaManager 建，再放进 seed 的 historyRows。
+// 图库按天分组、筛选、列表排序都靠真 SQL（json_extract / json_each / strftime localtime），
+// 用正则模拟只会越补越偏；sql.js 在浏览器里跑，不依赖 Node 版本（CI 是 Node 20）。
+import initSqlJs, { type Database as SqlJsDatabase, type SqlValue } from 'sql.js';
+import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import { createTablesAndIndexes, runMigrations } from '@/services/database/SchemaManager';
 import { getState } from './state';
 
-const HISTORY_COLUMNS = [
-  'id',
-  'timestamp',
-  'local_file_name',
-  'local_file_name_lower',
-  'file_path',
-  'primary_service',
-  'results',
-  'generated_link',
-  'link_check_status',
-  'link_check_summary',
-  'width',
-  'height',
-  'aspect_ratio',
-  'file_size',
-  'format',
-  'color_type',
-  'has_alpha',
-  'is_favorited',
-  'favorite_updated_at',
-  'favorite_updated_by',
-  'success_count',
-  'successful_service_ids',
-  'migration_skip',
-  'link_check_skip',
-];
+type Bind = unknown[];
+
+/** 应用里的占位写作 $1 $2；SQLite 的编号占位是 ?1 ?2，按位置绑定数组 */
+const toSqlite = (sql: string) => sql.replace(/\$(\d+)/g, '?$1');
+
+const bindable = (values: Bind): SqlValue[] => values.map((value) => {
+  if (value === undefined) return null;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  return value as SqlValue;
+});
+
+let shared: Promise<SqlJsDatabase> | null = null;
+
+async function open(): Promise<SqlJsDatabase> {
+  const SQL = await initSqlJs({ locateFile: () => wasmUrl });
+  const raw = new SQL.Database();
+  const adapter = new Database(raw);
+  await createTablesAndIndexes(adapter as never);
+  await runMigrations(adapter as never);
+  for (const row of getState().historyRows) {
+    const columns = Object.keys(row);
+    raw.run(
+      `INSERT INTO history_items (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      bindable(columns.map((column) => row[column])),
+    );
+  }
+  return raw;
+}
 
 export default class Database {
+  constructor(private readonly raw: SqlJsDatabase) {}
+
   static async load(_path: string): Promise<Database> {
-    return new Database();
+    shared ??= open();
+    return new Database(await shared);
   }
 
   async close(): Promise<void> {}
 
-  async execute(): Promise<{ rowsAffected: number; lastInsertId?: number }> {
-    return { rowsAffected: 1 };
+  async execute(query: string, bindValues: Bind = []): Promise<{ rowsAffected: number; lastInsertId?: number }> {
+    this.raw.run(toSqlite(query), bindable(bindValues));
+    return { rowsAffected: this.raw.getRowsModified() };
   }
 
-  async select<T = unknown[]>(query: string, bindValues: unknown[] = []): Promise<T> {
-    const rows = getState().historyRows;
-    if (/SELECT 1 as v/i.test(query)) {
-      return [{ v: 1 }] as T;
+  async select<T = unknown[]>(query: string, bindValues: Bind = []): Promise<T> {
+    if (globalThis.__PICNEXUS_E2E_SEED__?.sqlHangDayStats && /GROUP BY year/.test(query)) return new Promise<T>(() => {});
+    const statement = this.raw.prepare(toSqlite(query));
+    try {
+      statement.bind(bindable(bindValues));
+      const rows: Record<string, SqlValue>[] = [];
+      while (statement.step()) rows.push(statement.getAsObject());
+      return rows as T;
+    } finally {
+      statement.free();
     }
-    if (/PRAGMA table_info\(history_items\)/i.test(query)) {
-      return HISTORY_COLUMNS.map((name) => ({ name })) as T;
-    }
-    // 分页 / 文件名搜索（HistoryDatabase.queryWithTotal）：末尾两个参数是 LIMIT、OFFSET
-    if (/COUNT\(\*\) OVER\(\) as _total FROM history_items/i.test(query)) {
-      let matched = [...rows].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-      if (/local_file_name_lower LIKE \$1/i.test(query)) {
-        const keyword = String(bindValues[0] ?? '').replace(/^%|%$/g, '');
-        matched = matched.filter((row) => String(row.local_file_name_lower).includes(keyword));
-      }
-      const limit = Number(bindValues[bindValues.length - 2] ?? matched.length);
-      const offset = Number(bindValues[bindValues.length - 1] ?? 0);
-      return matched.slice(offset, offset + limit).map((row) => ({ ...row, _total: matched.length })) as T;
-    }
-    if (/COUNT\(DISTINCT primary_service\)/i.test(query)) {
-      return [{ total: rows.length, services: new Set(rows.map((row) => row.primary_service)).size, lastAt: null }] as T;
-    }
-    if (/strftime\('%Y'|GROUP BY year|SUM\(COALESCE\(aspect_ratio/i.test(query)) {
-      return [] as T;
-    }
-    if (/COUNT\(\*\) as count/i.test(query) || /COUNT\(\*\) AS count/i.test(query)) {
-      return [{ count: rows.length }] as T;
-    }
-    if (/getFavoriteCount/i.test(query)) {
-      return [{ count: 0 }] as T;
-    }
-    return [] as T;
   }
 }
