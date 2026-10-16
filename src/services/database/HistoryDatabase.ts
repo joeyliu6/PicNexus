@@ -45,7 +45,10 @@ import {
   getItemsByDayRangeQuery,
   getDayAspectRatiosByRangeQuery,
   getAllAspectRatiosQuery,
+  getListPageQuery,
   type AspectRatioRow,
+  type GalleryListRow,
+  type GalleryListSort,
 } from './TimelineQueryService';
 import { createTablesAndIndexes, runMigrations } from './SchemaManager';
 import { ConnectionManager } from './ConnectionManager';
@@ -715,6 +718,12 @@ class HistoryDatabase {
   async getItemsByDayRange(startTs: number, endTs: number, filter?: DayStatsFilter): Promise<ImageMeta[]> {
     const db = await this.connection.getDb();
     return getItemsByDayRangeQuery(db, startTs, endTs, filter);
+  }
+
+  /** 图库列表视图的一页：与网格同一套筛选，可按上传时间 / 文件名 / 大小排序（委托 TimelineQueryService） */
+  async getListPage(filter: DayStatsFilter | undefined, sort: GalleryListSort, offset: number, limit: number): Promise<GalleryListRow[]> {
+    const db = await this.connection.getDb();
+    return getListPageQuery(db, filter, sort, offset, limit);
   }
 
   /** 按时间戳闭区间只拉 aspect_ratio 列（跳转前懒加载预取降级路径） */

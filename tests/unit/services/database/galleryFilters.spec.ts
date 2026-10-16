@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
-import { getDayStatsQuery, getItemsByDayRangeQuery } from '@/services/database/TimelineQueryService';
+import { getDayStatsQuery, getItemsByDayRangeQuery, getListPageQuery } from '@/services/database/TimelineQueryService';
 import type { DayStatsFilter } from '@/services/database/types';
 
 // 图库的筛选（交接说明 8.2：图床 / 收藏 / 状态 / 时间）直接跑在真的 SQLite 上：
@@ -44,14 +44,16 @@ beforeEach(() => {
   raw.exec(`CREATE TABLE history_items (
     id TEXT PRIMARY KEY, timestamp INTEGER, local_file_name TEXT, local_file_name_lower TEXT,
     aspect_ratio REAL, primary_service TEXT, generated_link TEXT, results TEXT, is_favorited INTEGER,
-    link_check_status TEXT, success_count INTEGER, successful_service_ids TEXT
+    link_check_status TEXT, success_count INTEGER, successful_service_ids TEXT,
+    width INTEGER, height INTEGER, file_size INTEGER
   )`);
-  const insert = raw.prepare('INSERT INTO history_items VALUES (?, ?, ?, ?, 1.5, ?, ?, ?, 0, ?, ?, ?)');
-  for (const row of ROWS) {
+  const insert = raw.prepare('INSERT INTO history_items VALUES (?, ?, ?, ?, 1.5, ?, ?, ?, 0, ?, ?, ?, 1200, 800, ?)');
+  for (const [index, row] of ROWS.entries()) {
     const results = row.hosts.map((serviceId) => ({ serviceId, status: 'success', result: { serviceId, fileKey: row.id, url: `https://${serviceId}.example/${row.id}.png` } }));
     insert.run(
       row.id, NOW - row.daysAgo * DAY, `${row.id}.png`, `${row.id}.png`, row.primary, `https://${row.primary}.example/${row.id}.png`,
       JSON.stringify(results), row.status ? JSON.stringify(row.status) : null, row.hosts.length, JSON.stringify(row.hosts),
+      (index + 1) * 1000,
     );
   }
   db = sqliteAdapter(raw);
@@ -92,5 +94,27 @@ describe.skipIf(!sqlite)('gallery filters on the real SQLite', () => {
   it('applies the same filters to the per-day counts', async () => {
     const days = await getDayStatsQuery(db as never, { statusFilter: ['dead'], since: NOW - 7 * DAY });
     expect(days.reduce((sum, day) => sum + day.count, 0)).toBe(1);
+  });
+});
+
+// 列表视图（交接说明 8.2：点表头排序、行高 54、虚拟滚动）：同一套筛选，一次取一页
+describe.skipIf(!sqlite)('gallery list pages on the real SQLite', () => {
+  const page = async (sort: { key: 'time' | 'name' | 'size'; descending: boolean }, offset = 0, limit = 10, filter: DayStatsFilter = {}) =>
+    (await getListPageQuery(db as never, filter, sort, offset, limit)).map((row) => row.id);
+
+  it('sorts by upload time, file name or size', async () => {
+    expect(await page({ key: 'time', descending: true })).toEqual(['ok', 'dead', 'limited', 'unchecked', 'pending', 'nas-dead']);
+    expect(await page({ key: 'time', descending: false })).toEqual(['nas-dead', 'pending', 'unchecked', 'limited', 'dead', 'ok']);
+    expect(await page({ key: 'name', descending: false })).toEqual(['dead', 'limited', 'nas-dead', 'ok', 'pending', 'unchecked']);
+    expect(await page({ key: 'size', descending: true }, 0, 2)).toEqual(['nas-dead', 'pending']);
+  });
+
+  it('pages through the filtered result', async () => {
+    expect(await page({ key: 'time', descending: true }, 2, 2, { hostFilter: 'jd' })).toEqual(['unchecked', 'pending']);
+  });
+
+  it('carries the size and dimensions the list shows', async () => {
+    const [row] = await getListPageQuery(db as never, {}, { key: 'time', descending: true }, 0, 1);
+    expect(row).toMatchObject({ id: 'ok', width: 1200, height: 800, fileSize: 1000, copyLinkHealth: 'ok' });
   });
 });

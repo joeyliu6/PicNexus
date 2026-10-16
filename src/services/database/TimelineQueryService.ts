@@ -182,6 +182,62 @@ export async function getItemsByDayRangeQuery(
   return rows.map(rowToImageMeta);
 }
 
+/** 图库列表视图（GalleryScreen.dc.html G02）：点表头按这几列排序 */
+export type GalleryListSortKey = 'time' | 'name' | 'size';
+
+export interface GalleryListSort {
+  key: GalleryListSortKey;
+  descending: boolean;
+}
+
+/** 列表一行：网格那套 meta 再加「尺寸 · 大小」 */
+export interface GalleryListRow extends ImageMeta {
+  width?: number;
+  height?: number;
+  fileSize?: number;
+}
+
+const LIST_SORT_SQL: Record<GalleryListSortKey, string> = {
+  time: 'timestamp',
+  name: 'local_file_name_lower',
+  size: 'COALESCE(file_size, 0)',
+};
+
+/** 列表视图的一页：与网格同一套筛选，按 sort 排序（同值时按 id 定序，翻页不重不漏） */
+export async function getListPageQuery(
+  db: Database,
+  filter: DayStatsFilter | undefined,
+  sort: GalleryListSort,
+  offset: number,
+  limit: number,
+): Promise<GalleryListRow[]> {
+  const params: (string | number)[] = [];
+  const conditions: string[] = [];
+  appendFilterClause(filter, conditions, params);
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const direction = sort.descending ? 'DESC' : 'ASC';
+  params.push(limit, offset);
+
+  const rows = await db.select<Array<MetaRow & { width: number | null; height: number | null; file_size: number | null }>>(
+    `SELECT id, timestamp, local_file_name, aspect_ratio,
+            primary_service, generated_link, results, is_favorited,
+            width, height, file_size,
+            ${COPY_LINK_HEALTH_SQL} AS copy_link_health
+     FROM history_items
+     ${where}
+     ORDER BY ${LIST_SORT_SQL[sort.key]} ${direction}, id ${direction}
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+
+  return rows.map((row) => ({
+    ...rowToImageMeta(row),
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    fileSize: row.file_size ?? undefined,
+  }));
+}
+
 /** aspect_ratio 预取记录（骨架 justifiedLayout 的输入 + 增量更新按 id 定位） */
 export interface AspectRatioRow {
   id: string;
