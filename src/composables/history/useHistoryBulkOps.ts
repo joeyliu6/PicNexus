@@ -6,7 +6,7 @@ import { historyDB } from '@/services/database';
 import { useToast } from '@/composables/useToast';
 import { useConfirm } from '@/composables/useConfirm';
 import { TOAST_MESSAGES } from '@/constants';
-import { emitHistoryDeleted } from '@/events/cacheEvents';
+import { emitHistoryDeleted, emitHistoryUpdated } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';
 import { exportTextFile } from '@/utils/userFiles';
 import type { useImageDetailCache } from '@/composables/image/useImageDetailCache';
@@ -101,5 +101,49 @@ export function createBulkOps(ctx: BulkOpsContext) {
     }
   }
 
-  return { bulkExportJSON, bulkDeleteRecords };
+  /**
+   * 移除记录、不再确认（图库「移除记录」靠通知里的「撤销」反悔，交接说明第 4 节）
+   *
+   * 删之前先把完整记录取回来交给调用方：撤销时原样插回（含收藏、检测结果）。
+   * 只删本地记录，图床上的图片不动。
+   * @returns 真正删掉的那些记录；出错时弹通知并返回空数组
+   */
+  async function removeRecords(ids: string[]): Promise<HistoryItem[]> {
+    if (ids.length === 0) return [];
+    try {
+      const snapshot = (await ctx.detailCache.getDetails(ids)).filter((d): d is HistoryItem => d !== null);
+      const deletedIds = await historyDB.deleteMany(ids);
+      ids.forEach(id => ctx.detailCache.removeDetail(id));
+      if (deletedIds.length > 0) {
+        ctx.totalCount.value = Math.max(0, ctx.totalCount.value - deletedIds.length);
+        ctx.removeFavoritesFromIds(deletedIds);
+        await ctx.refreshServiceCounts();
+        void ctx.refreshTimePeriodStats();
+        ctx.dataVersion.value++;
+        emitHistoryDeleted(deletedIds).catch(e => {
+          log.warn('[历史记录] 跨窗口通知失败:', e);
+        });
+      }
+      const deleted = new Set(deletedIds);
+      return snapshot.filter(item => deleted.has(item.id));
+    } catch (error) {
+      log.error('[批量操作] 移除记录失败:', error);
+      toast.error('移除记录失败', `${error instanceof Error ? error.message : String(error)}，请稍后重试`);
+      return [];
+    }
+  }
+
+  /** 撤销「移除记录」：原样插回，再广播 history-updated，计数、收藏与各视图跟着重查 */
+  async function restoreRecords(items: HistoryItem[]): Promise<void> {
+    if (items.length === 0) return;
+    try {
+      for (const item of items) await historyDB.insertOrIgnore(item);
+      await emitHistoryUpdated(items.map(item => item.id));
+    } catch (error) {
+      log.error('[批量操作] 恢复记录失败:', error);
+      toast.error('恢复记录失败', `${error instanceof Error ? error.message : String(error)}，请稍后重试`);
+    }
+  }
+
+  return { bulkExportJSON, bulkDeleteRecords, removeRecords, restoreRecords };
 }

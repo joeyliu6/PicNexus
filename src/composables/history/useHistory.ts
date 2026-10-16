@@ -359,7 +359,7 @@ export function useHistoryManager() {
   }
 
   // 批量操作（导出 JSON / 批量删除）从 useHistoryBulkOps 引入
-  const { bulkExportJSON, bulkDeleteRecords } = createBulkOps({
+  const { bulkExportJSON, bulkDeleteRecords, removeRecords, restoreRecords } = createBulkOps({
     totalCount,
     dataVersion,
     detailCache,
@@ -581,6 +581,8 @@ export function useHistoryManager() {
     clearHistory,
     bulkExportJSON,
     bulkDeleteRecords,
+    removeRecords,
+    restoreRecords,
     bulkDeleteHistoryResults,
 
     // 时间轴相关

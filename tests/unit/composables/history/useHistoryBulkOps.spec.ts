@@ -1,17 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import type { HistoryItem } from '@/config/types';
 import { getInvokeMock } from '../../helpers/tauriMock';
+import { createHistoryItem } from '../../factories/historyFactory';
 
 const {
   historyDeleteManyMock,
+  historyInsertOrIgnoreMock,
   toastShowConfigMock,
+  toastErrorMock,
   confirmMock,
   emitHistoryDeletedMock,
+  emitHistoryUpdatedMock,
 } = vi.hoisted(() => ({
   historyDeleteManyMock: vi.fn(),
+  historyInsertOrIgnoreMock: vi.fn(),
   toastShowConfigMock: vi.fn(),
+  toastErrorMock: vi.fn(),
   confirmMock: vi.fn(),
   emitHistoryDeletedMock: vi.fn(),
+  emitHistoryUpdatedMock: vi.fn(),
 }));
 
 const invokeMock = getInvokeMock();
@@ -19,12 +27,14 @@ const invokeMock = getInvokeMock();
 vi.mock('@/services/database', () => ({
   historyDB: {
     deleteMany: historyDeleteManyMock,
+    insertOrIgnore: historyInsertOrIgnoreMock,
   },
 }));
 
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     showConfig: toastShowConfigMock,
+    error: toastErrorMock,
   }),
 }));
 
@@ -36,6 +46,7 @@ vi.mock('@/composables/useConfirm', () => ({
 
 vi.mock('@/events/cacheEvents', () => ({
   emitHistoryDeleted: emitHistoryDeletedMock,
+  emitHistoryUpdated: emitHistoryUpdatedMock,
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -88,6 +99,8 @@ describe('createBulkOps', () => {
     // deleteMany 返回实际删除的 id 列表（默认回显入参 = 全部存在）
     historyDeleteManyMock.mockImplementation(async (ids: string[]) => ids);
     emitHistoryDeletedMock.mockResolvedValue(undefined);
+    historyInsertOrIgnoreMock.mockResolvedValue(undefined);
+    emitHistoryUpdatedMock.mockResolvedValue(undefined);
   });
 
   it('returns false and warns when bulkDeleteRecords is called with an empty selection', async () => {
@@ -175,6 +188,111 @@ describe('createBulkOps', () => {
     expect(ctx.totalCount.value).toBe(5);
     expect(ctx.dataVersion.value).toBe(1);
     expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+  });
+
+  // 同一个 id 每次拿到同一条（工厂按序号生成时间戳，现造两次会不相等）
+  const records = new Map<string, HistoryItem>();
+  const record = (id: string): HistoryItem => {
+    if (!records.has(id)) records.set(id, createHistoryItem({ id, localFileName: `${id}.png`, isFavorited: true }));
+    return records.get(id)!;
+  };
+
+  it('does nothing when removeRecords is called with an empty selection', async () => {
+    const { ctx, detailCache } = makeCtx();
+    const { removeRecords } = createBulkOps(ctx);
+
+    expect(await removeRecords([])).toEqual([]);
+    expect(detailCache.getDetails).not.toHaveBeenCalled();
+    expect(historyDeleteManyMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  // 「移除记录」不弹确认、不报成功（反馈是图库那条带「撤销」的通知）；删之前留好整条记录给撤销用
+  it('removes records without asking, updates counters and hands back full records for undo', async () => {
+    const { ctx, detailCache, removedFavoriteBatches, refreshServiceCounts, refreshTimePeriodStats } = makeCtx();
+    detailCache.getDetails.mockResolvedValue([record('a'), record('b')]);
+    const { removeRecords } = createBulkOps(ctx);
+
+    const removed = await removeRecords(['a', 'b']);
+
+    expect(removed).toEqual([record('a'), record('b')]);
+    expect(detailCache.getDetails.mock.invocationCallOrder[0]).toBeLessThan(historyDeleteManyMock.mock.invocationCallOrder[0]);
+    expect(historyDeleteManyMock).toHaveBeenCalledWith(['a', 'b']);
+    expect(ctx.totalCount.value).toBe(3);
+    expect(ctx.dataVersion.value).toBe(2);
+    expect(removedFavoriteBatches).toEqual([['a', 'b']]);
+    expect(refreshServiceCounts).toHaveBeenCalledTimes(1);
+    expect(refreshTimePeriodStats).toHaveBeenCalledTimes(1);
+    expect(detailCache.removeDetail).toHaveBeenCalledWith('a');
+    expect(detailCache.removeDetail).toHaveBeenCalledWith('b');
+    expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['a', 'b']);
+    expect(toastShowConfigMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  // 陈旧目标（记录已被别处删掉，详情缓存里还留着旧的一份）：只扣真删掉的、只广播真删掉的 id，
+  // 否则其他窗口会重复扣减；撤销也只插回真删掉的那些
+  it('counts, broadcasts and hands back only the rows that were actually deleted', async () => {
+    historyDeleteManyMock.mockResolvedValueOnce(['a']);
+    const { ctx, detailCache, removedFavoriteBatches } = makeCtx();
+    detailCache.getDetails.mockResolvedValue([record('a'), record('ghost')]);
+    const { removeRecords } = createBulkOps(ctx);
+
+    const removed = await removeRecords(['a', 'ghost']);
+
+    expect(removed).toEqual([record('a')]);
+    expect(ctx.totalCount.value).toBe(4);
+    expect(removedFavoriteBatches).toEqual([['a']]);
+    expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['a']);
+    // 详情缓存对陈旧目标一样要清：那条记录已不在库里
+    expect(detailCache.removeDetail).toHaveBeenCalledWith('ghost');
+  });
+
+  it('stays silent when every target is stale: no broadcast, counters untouched', async () => {
+    historyDeleteManyMock.mockResolvedValueOnce([]);
+    const { ctx, detailCache } = makeCtx();
+    detailCache.getDetails.mockResolvedValue([null, null]);
+    const { removeRecords } = createBulkOps(ctx);
+
+    expect(await removeRecords(['ghost-1', 'ghost-2'])).toEqual([]);
+    expect(ctx.totalCount.value).toBe(5);
+    expect(ctx.dataVersion.value).toBe(1);
+    expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
+  });
+
+  it('says why removing failed and what to do, and keeps state unchanged', async () => {
+    historyDeleteManyMock.mockRejectedValueOnce(new Error('db offline'));
+    const { ctx, detailCache } = makeCtx();
+    detailCache.getDetails.mockResolvedValue([record('a')]);
+    const { removeRecords } = createBulkOps(ctx);
+
+    expect(await removeRecords(['a'])).toEqual([]);
+    expect(ctx.totalCount.value).toBe(5);
+    expect(ctx.dataVersion.value).toBe(1);
+    expect(toastErrorMock).toHaveBeenCalledWith('移除记录失败', 'db offline，请稍后重试');
+  });
+
+  // 撤销：整条原样插回（含收藏），再广播 history-updated，计数和各视图跟着重查
+  it('restores removed records as they were and announces the update', async () => {
+    const { ctx } = makeCtx();
+    const { restoreRecords } = createBulkOps(ctx);
+
+    await restoreRecords([record('a'), record('b')]);
+
+    expect(historyInsertOrIgnoreMock).toHaveBeenNthCalledWith(1, record('a'));
+    expect(historyInsertOrIgnoreMock).toHaveBeenNthCalledWith(2, record('b'));
+    expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['a', 'b']);
+  });
+
+  it('says why restoring failed when the database refuses', async () => {
+    historyInsertOrIgnoreMock.mockRejectedValueOnce(new Error('disk full'));
+    const { ctx } = makeCtx();
+    const { restoreRecords } = createBulkOps(ctx);
+
+    await restoreRecords([record('a')]);
+
+    expect(emitHistoryUpdatedMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith('恢复记录失败', 'disk full，请稍后重试');
   });
 
   it('exports only the loadable selected items to JSON', async () => {
