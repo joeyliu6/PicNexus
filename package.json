@@ -53,7 +53,6 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@lucide/vue": "1.49.0",
     "@primeuix/themes": "2.0.2",
     "@tanstack/vue-virtual": "3.13.39",
     "@tauri-apps/api": "2.10.1",
