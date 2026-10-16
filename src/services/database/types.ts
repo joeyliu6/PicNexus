@@ -64,8 +64,18 @@ export interface DayStats {
   maxTimestamp: number;
 }
 
+/** 图库「状态」筛选的取值：复制链接失效 / 可能受限 / 尚未检测，以及只有 1 份 */
+export type GalleryStatusFilter = 'dead' | 'limited' | 'unchecked' | 'single';
+
 export interface DayStatsFilter {
+  /** 复制时使用的图床（旧视图的筛选） */
   serviceFilter?: ServiceType | 'all';
+  /** 图库「图床」筛选：这个图床上存有一份（不论是不是复制时使用的） */
+  hostFilter?: string;
+  /** 图库「状态」筛选：命中任意一项即可 */
+  statusFilter?: readonly GalleryStatusFilter[];
+  /** 图库「时间」筛选：只看这个时间之后上传的（毫秒） */
+  since?: number;
   searchTerm?: string;
   favoritesOnly?: boolean;
 }

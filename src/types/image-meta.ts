@@ -60,7 +60,13 @@ export interface ImageMeta {
 
   /** 是否已收藏 */
   isFavorited?: boolean;
+
+  /** 复制时使用的那条链接最近一次检测的结果（图库角标与「状态」筛选用） */
+  copyLinkHealth?: CopyLinkHealth;
 }
+
+/** ok = 正常；dead = 失效；limited = 可能受限（浏览器里也许还能打开）；unchecked = 尚未检测 */
+export type CopyLinkHealth = 'ok' | 'dead' | 'limited' | 'unchecked';
 
 /** 单个镜像图床的精简信息（用于列表缩略图的 fallback 链） */
 export interface MirrorService {

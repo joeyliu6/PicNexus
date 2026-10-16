@@ -6,7 +6,7 @@
  */
 
 import type Database from '@tauri-apps/plugin-sql';
-import type { ImageMeta } from '@/types/image-meta';
+import type { CopyLinkHealth, ImageMeta } from '@/types/image-meta';
 import { extractMirrorServices } from '@/types/image-meta';
 import type { DayStats, DayStatsFilter, ServiceType } from './types';
 import type { HistoryItem } from '@/config/types';
@@ -23,14 +23,29 @@ interface MetaRow {
   generated_link: string;
   results: string;
   is_favorited: number;
+  copy_link_health: CopyLinkHealth;
 }
 
 function escapeLikePattern(s: string): string {
   return s.replace(/[%_\\]/g, '\\$&');
 }
 
+/** 复制时使用的那个图床在 link_check_status 里的某个字段（复合 ID 含冒号，路径里要加引号） */
+const copyLinkField = (field: string) => `json_extract(link_check_status, '$."' || primary_service || '".${field}')`;
+
 /**
- * 把 DayStatsFilter 的 serviceFilter/searchTerm/favoritesOnly 追加到 conditions/params。
+ * 复制链接的健康状况，取值见 CopyLinkHealth。
+ * 没检测过、或检测还停在 pending 都算「尚未检测」；判失效但浏览器可能还能打开的算「可能受限」。
+ */
+const COPY_LINK_HEALTH_SQL = `CASE
+  WHEN ${copyLinkField('isValid')} IS NULL OR ${copyLinkField('errorType')} = 'pending' THEN 'unchecked'
+  WHEN ${copyLinkField('isValid')} = 1 THEN 'ok'
+  WHEN ${copyLinkField('browserMightWork')} = 1 THEN 'limited'
+  ELSE 'dead'
+END`;
+
+/**
+ * 把 DayStatsFilter 的各项筛选追加到 conditions/params。
  * 不处理 timestamp 范围（由调用方自行预置）。
  */
 function appendFilterClause(
@@ -38,16 +53,25 @@ function appendFilterClause(
   conditions: string[],
   params: (string | number)[],
 ): void {
-  const { serviceFilter = 'all', searchTerm, favoritesOnly } = filter ?? {};
+  const { serviceFilter = 'all', hostFilter, statusFilter, since, searchTerm, favoritesOnly } = filter ?? {};
+  const next = (value: string | number) => { params.push(value); return `$${params.length}`; };
   if (favoritesOnly) conditions.push('is_favorited = 1');
-  if (serviceFilter !== 'all') {
-    conditions.push(`primary_service = $${params.length + 1}`);
-    params.push(serviceFilter);
+  if (serviceFilter !== 'all') conditions.push(`primary_service = ${next(serviceFilter)}`);
+  if (hostFilter) {
+    conditions.push(`EXISTS (SELECT 1 FROM json_each(successful_service_ids) WHERE value = ${next(hostFilter)})`);
   }
+  if (statusFilter?.length) {
+    const health = statusFilter.filter((s) => s !== 'single');
+    const anyOf = [
+      ...(health.length ? [`(${COPY_LINK_HEALTH_SQL}) IN (${health.map(next).join(', ')})`] : []),
+      ...(statusFilter.includes('single') ? ['success_count = 1'] : []),
+    ];
+    conditions.push(`(${anyOf.join(' OR ')})`);
+  }
+  if (since !== undefined) conditions.push(`timestamp >= ${next(since)}`);
   const trimmed = searchTerm?.trim().toLowerCase();
   if (trimmed) {
-    conditions.push(`local_file_name_lower LIKE $${params.length + 1} ESCAPE '\\'`);
-    params.push(`%${escapeLikePattern(trimmed)}%`);
+    conditions.push(`local_file_name_lower LIKE ${next(`%${escapeLikePattern(trimmed)}%`)} ESCAPE '\\'`);
   }
 }
 
@@ -74,6 +98,7 @@ function rowToImageMeta(row: MetaRow): ImageMeta {
     primaryFileKey,
     mirrorServices,
     isFavorited: row.is_favorited === 1,
+    copyLinkHealth: row.copy_link_health,
   };
 }
 
@@ -142,7 +167,8 @@ export async function getItemsByDayRangeQuery(
   const t0 = performance.now();
   const rows = await db.select<MetaRow[]>(
     `SELECT id, timestamp, local_file_name, aspect_ratio,
-            primary_service, generated_link, results, is_favorited
+            primary_service, generated_link, results, is_favorited,
+            ${COPY_LINK_HEALTH_SQL} AS copy_link_health
      FROM history_items
      WHERE ${conditions.join(' AND ')}
      ORDER BY timestamp DESC, id DESC`,
