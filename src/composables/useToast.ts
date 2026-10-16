@@ -1,6 +1,7 @@
 // Toast 通知 Composable - 增强版
+// 画面与计时在 PnToaster / toastStore（右下角、最多 3 条）；这里保留去重、全局静默与旧的调用方式。
 
-import { useToast as usePrimeToast } from 'primevue/usetoast';
+import { pushToast, clearToasts, type ToastAction, type ToastKind } from '@/components/pn/toastStore';
 import type { ToastMessageConfig } from '@/constants/toastMessages';
 import { createLogger } from '@/utils/logger';
 
@@ -17,8 +18,6 @@ export function suppressToasts(suppress: boolean): void {
 const recentToasts = new Map<string, number>();
 const DUPLICATE_WINDOW = 2000; // 2秒防抖窗口
 
-// 默认显示时长映射
-const DEFAULT_LIFE: Record<string, number> = { error: 5000, warn: 4000 };
 const CACHE_SIZE_LIMIT = 50; // 缓存大小限制
 const CACHE_EXPIRE_TIME = 5000; // 缓存过期时间
 
@@ -58,27 +57,40 @@ function isDuplicate(severity: string, summary: string, detail?: string): boolea
 }
 
 /**
- * `useToast()` 的返回值类型
- *
- * 给那些**不能自己调 `useToast()`** 的模块用：`useToast` 内部走 Vue 的 `inject()`，
- * 只在 setup 栈期间有效。模块级函数（会在 watcher / click 回调里被调到）必须由
- * 调用方在 setup 时取好、当参数传进来。
+ * `useToast()` 的返回值类型：模块级函数以参数形式接收通知能力时使用（便于测试替换）
  */
 export type ToastApi = ReturnType<typeof useToast>;
 
+/** 带一个动作按钮的通知（「撤销」「重试」「去登录」）的额外选项 */
+export interface ToastActionOptions {
+  /** 停留毫秒数 */
+  life?: number;
+  /** 底部倒计时细线（「撤销」类，默认停留 6 秒） */
+  countdown?: boolean;
+  /** 到时间自然消失时调用（没点动作按钮） */
+  onExpire?: () => void;
+}
+
 /**
  * Toast 通知 Composable
- * 封装 PrimeVue Toast 服务，提供简化的 API
+ * 不依赖 inject，任何地方都能调用
  */
 export function useToast() {
-  const toast = usePrimeToast();
-
-  type Severity = 'success' | 'info' | 'warn' | 'error';
+  type Severity = ToastKind;
 
   function addToast(severity: Severity, summary: string, detail?: string, life?: number): void {
     if (globalSuppressed) return;
     if (isDuplicate(severity, summary, detail)) return;
-    toast.add({ severity, summary, detail, life: life || DEFAULT_LIFE[severity] || 3000 });
+    pushToast({ kind: severity, title: summary, desc: detail, life });
+  }
+
+  /**
+   * 带动作按钮的通知；不走去重（每次撤销 / 重试都是新的一次操作）
+   * @returns 通知 id；静默期间返回 null
+   */
+  function withAction(severity: Severity, summary: string, detail: string | undefined, action: ToastAction, options: ToastActionOptions = {}): number | null {
+    if (globalSuppressed) return null;
+    return pushToast({ kind: severity, title: summary, desc: detail, action, ...options });
   }
 
   const success = (summary: string, detail?: string, life?: number) => addToast('success', summary, detail, life);
@@ -86,21 +98,11 @@ export function useToast() {
   const warn = (summary: string, detail?: string, life?: number) => addToast('warn', summary, detail, life);
   const info = (summary: string, detail?: string, life?: number) => addToast('info', summary, detail, life);
   const show = (severity: Severity, summary: string, detail?: string, life?: number) => addToast(severity, summary, detail, life);
-  const clear = () => toast.removeAllGroups();
+  const clear = () => clearToasts();
 
   const showConfig = (severity: Severity, config: ToastMessageConfig) => {
     addToast(severity, config.summary, config.detail, config.life);
   };
-
-  /**
-   * 直接转发底层 PrimeVue Toast.add（不走去重 / suppress 检查）
-   * 仅供需要自定义模板渲染（带 group）的高级场景使用，例如 useUndoToast。
-   */
-  const addRaw = (options: Parameters<typeof toast.add>[0]) => {
-    if (globalSuppressed) return;
-    toast.add(options);
-  };
-  const removeGroup = (group: string) => toast.removeGroup(group);
 
   /**
    * 静默日志（仅记录日志，不显示通知）
@@ -127,7 +129,6 @@ export function useToast() {
     clear,
     showConfig,
     silent,
-    addRaw,
-    removeGroup,
+    withAction,
   };
 }

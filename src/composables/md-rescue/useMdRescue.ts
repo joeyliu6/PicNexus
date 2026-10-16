@@ -68,14 +68,10 @@ const log = createLogger('MdRescue');
 
 export function useMdRescueManager() {
   const toast = useToast();
-  // 整份留着而不是只解构 loadConfig：下面四个模块级函数要靠它读写配置。
-  // 它们**不能**自己调 useConfigManager()/useToast()——那是 inject，
-  // 在 watcher / click 回调里会抛「No PrimeVue Toast provided!」
+  // 整份留着而不是只解构 loadConfig：下面四个模块级函数以参数接收它（便于测试替换）
   const configManager = useConfigManager();
   const { loadConfig } = configManager;
   const { checkUrls, isChecking, progress, progressSource, cancelCheck } = useLinkCheckManager();
-  // 必须在 setup 栈期间调用 useMdFileLoader，内部会 useToast() → inject()，
-  // 返回的 5 个函数通过闭包持有 toast，之后可在 click / 拖放回调里安全调用。
   const { selectMdFile, selectFolder, selectAny, loadFilePath, loadFolderPath } = useMdFileLoader();
 
   // 筛选管道（内含 watch/watchDebounced，必须在 composable 函数内调用）

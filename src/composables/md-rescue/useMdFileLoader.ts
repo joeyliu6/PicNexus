@@ -95,11 +95,7 @@ export async function loadFileImpl(path: string): Promise<void> {
 }
 
 /**
- * Composable 工厂：提供 5 个依赖 toast 的 MD 文件加载函数。
- *
- * 必须在组件 setup() 或其它 composable 顶层同步调用，因为内部 `useToast()`
- * 依赖 Vue 的 `inject()`，只在 setup 栈期间可用。返回的函数通过闭包持有
- * toast 引用，因此可以安全地在 click handler、拖放回调等异步上下文中调用。
+ * Composable 工厂：提供 5 个依赖 toast 的 MD 文件加载函数（返回的函数通过闭包持有 toast）。
  */
 export function useMdFileLoader() {
   const toast = useToast();

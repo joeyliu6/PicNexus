@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import Divider from 'primevue/divider';
-import { useConfirm } from 'primevue/useconfirm';
+import { useConfirm } from '@/composables/useConfirm';
 import { useBackupSync } from '@/composables/backup-sync/useBackupSync';
 import type { WebDAVConfig } from '@/config/types';
 
@@ -198,7 +198,7 @@ async function handleImportHistory() {
 function handleExportWithGuide() {
   const hasPwd = backupPasswordSectionRef.value?.isPasswordMode() ?? false;
   if (!hasPwd) {
-    confirm.require({
+    confirm.showConfirm({
       header: '导出文件未加密',
       message: '导出的文件包含所有图床密钥和 Token。建议先设置备份密码，导出文件会自动加密保护。',
       icon: 'pi pi-shield',

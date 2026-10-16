@@ -1,6 +1,8 @@
 // 确认对话框 Composable
+// 画面在 PnConfirmHost（统一对话框规格）；这里保留旧的调用方式。
+// 能撤销的操作不弹确认框（交接说明第 4 节）——只给真正不可逆的操作用。
 
-import { useConfirm as usePrimeConfirm } from 'primevue/useconfirm';
+import { requestConfirm, dismissCurrentConfirm, type ConfirmTone } from '@/components/pn/confirmStore';
 import { UI_COPY } from '@/constants/uiCopy';
 
 export interface ConfirmOptions {
@@ -22,11 +24,18 @@ export interface ConfirmOptions {
   /** 取消回调 */
   reject?: () => void;
 
-  /** 图标 */
+  /** 图标（旧写法 'pi pi-…'）：含 exclamation 的按「警告」画琥珀图标块 */
   icon?: string;
 
-  /** 确认按钮样式类（如 'p-button-danger'） */
+  /** 确认按钮样式（旧写法 'p-button-danger' / 'p-button-warning'）：danger = 红色危险按钮 */
   acceptClass?: string;
+}
+
+/** 由旧的 icon / acceptClass 写法推出新对话框的图标块色调与确认按钮样式 */
+export function resolveConfirmTone(icon?: string, acceptClass?: string): { tone: ConfirmTone; danger: boolean } {
+  if (acceptClass?.includes('danger')) return { tone: 'danger', danger: true };
+  if (acceptClass?.includes('warning') || icon?.includes('exclamation')) return { tone: 'warning', danger: false };
+  return { tone: 'brand', danger: false };
 }
 
 /** 异步确认选项 */
@@ -56,88 +65,92 @@ export interface ConfirmThreeWayOptions {
    * 「本次运行内不再提示」勾选框的状态容器；不传就不显示这个勾选框
    *
    * 传的是**对象**而不是布尔值：对话框要把用户的选择写回来，
-   * 布尔值按值传过去就断了。渲染在 `App.vue` 的 `#message` slot 里。
+   * 布尔值按值传过去就断了。勾选框画在 `PnConfirmHost.vue` 里。
    *
    * 目前只有清除已保存凭证用它，见 `useSecretClearConfirm`。
    */
   clearOptOut?: { checked: boolean };
 }
 
+interface RequireOptions {
+  header: string;
+  message: string;
+  acceptLabel: string;
+  rejectLabel: string;
+  icon?: string;
+  acceptClass?: string;
+  clearOptOut?: { checked: boolean };
+}
+
+function require(options: RequireOptions) {
+  return requestConfirm({
+    title: options.header,
+    message: options.message,
+    acceptLabel: options.acceptLabel,
+    rejectLabel: options.rejectLabel,
+    clearOptOut: options.clearOptOut,
+    ...resolveConfirmTone(options.icon, options.acceptClass),
+  });
+}
+
 /**
- * 确认对话框 Composable
- * 封装 PrimeVue ConfirmDialog，提供简化的 API
+ * 确认对话框 Composable（不依赖 inject，任何地方都能调用）
  */
 export function useConfirm() {
-  const confirm = usePrimeConfirm();
   const confirmDefaults = UI_COPY.confirm.defaults;
   const deleteDefaults = UI_COPY.confirm.delete;
   const warnDefaults = UI_COPY.confirm.warn;
 
-  /**
-   * 显示确认对话框
-   * @param options 对话框选项
-   */
+  /** 显示确认对话框（回调式） */
   const showConfirm = (options: ConfirmOptions) => {
-    confirm.require({
+    void require({
       header: options.header || confirmDefaults.header,
       message: options.message,
       icon: options.icon || confirmDefaults.icon,
       acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
       rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
       acceptClass: options.acceptClass,
-      accept: options.accept,
-      reject: options.reject
+    }).then((result) => {
+      // Esc / 点遮罩（dismiss）两个回调都不调，与按「取消」区分开
+      if (result === 'accept') options.accept?.();
+      else if (result === 'reject') options.reject?.();
     });
   };
 
-  /**
-   * 显示删除确认对话框
-   * @param message 消息内容
-   * @param onConfirm 确认回调
-   */
+  /** 显示删除确认对话框 */
   const confirmDelete = (message: string, onConfirm: () => void) => {
-    confirm.require({
+    void require({
       header: deleteDefaults.header,
       message,
       icon: deleteDefaults.icon,
       acceptLabel: deleteDefaults.acceptLabel,
       rejectLabel: deleteDefaults.rejectLabel,
       acceptClass: deleteDefaults.acceptClass,
-      accept: onConfirm
-    });
+    }).then((result) => { if (result === 'accept') onConfirm(); });
   };
 
-  /**
-   * 显示警告确认对话框
-   * @param message 消息内容
-   * @param onConfirm 确认回调
-   */
+  /** 显示警告确认对话框 */
   const confirmWarn = (message: string, onConfirm: () => void) => {
-    confirm.require({
+    void require({
       header: warnDefaults.header,
       message,
       icon: warnDefaults.icon,
       acceptLabel: warnDefaults.acceptLabel,
       rejectLabel: warnDefaults.rejectLabel,
       acceptClass: warnDefaults.acceptClass,
-      accept: onConfirm
-    });
+    }).then((result) => { if (result === 'accept') onConfirm(); });
   };
 
-  /**
-   * 关闭确认对话框
-   */
+  /** 关闭当前确认框（等价于按 Esc） */
   const close = () => {
-    confirm.close();
+    dismissCurrentConfirm();
   };
 
   /**
-   * 异步确认对话框（返回 Promise）
-   * @param message 消息内容
-   * @param headerOrOptions 标题字符串，或完整选项对象
+   * 异步确认对话框
    * @returns Promise<boolean> 用户是否确认
    */
-  const confirmAsync = (
+  const confirmAsync = async (
     message: string,
     headerOrOptions?: string | ConfirmAsyncOptions
   ): Promise<boolean> => {
@@ -145,56 +158,28 @@ export function useConfirm() {
       ? { header: headerOrOptions }
       : headerOrOptions || {};
 
-    return new Promise((resolve) => {
-      confirm.require({
-        header: opts.header || confirmDefaults.header,
-        message,
-        icon: confirmDefaults.icon,
-        acceptLabel: opts.acceptLabel || confirmDefaults.acceptLabel,
-        rejectLabel: opts.rejectLabel || confirmDefaults.rejectLabel,
-        acceptClass: opts.acceptClass,
-        accept: () => resolve(true),
-        reject: () => resolve(false)
-      });
+    const result = await require({
+      header: opts.header || confirmDefaults.header,
+      message,
+      icon: confirmDefaults.icon,
+      acceptLabel: opts.acceptLabel || confirmDefaults.acceptLabel,
+      rejectLabel: opts.rejectLabel || confirmDefaults.rejectLabel,
+      acceptClass: opts.acceptClass,
     });
+    return result === 'accept';
   };
 
   /**
-   * 三态确认对话框
-   * 区分三种关闭方式：accept（确认按钮）、reject（取消按钮）、dismiss（叉叉/ESC）
-   * @param options 对话框选项
-   * @returns Promise<ConfirmThreeWayResult>
+   * 三态确认对话框：accept（确认按钮）、reject（取消按钮）、dismiss（Esc / 点遮罩）
    */
-  const confirmThreeWay = (options: ConfirmThreeWayOptions): Promise<ConfirmThreeWayResult> => {
-    return new Promise((resolve) => {
-      let resolved = false;
-
-      confirm.require({
-        header: options.header || confirmDefaults.header,
-        message: options.message,
-        icon: options.icon || confirmDefaults.icon,
-        acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
-        rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
-        // PrimeVue 4 会把整个 options 对象原样交给 #message slot（2026-08-20 实测），
-        // 所以自定义字段就是这么透传过去的
-        clearOptOut: options.clearOptOut,
-        accept: () => {
-          resolved = true;
-          resolve('accept');
-        },
-        reject: () => {
-          resolved = true;
-          resolve('reject');
-        },
-        onHide: () => {
-          // 如果 accept/reject 都没被调用，说明是叉叉/ESC 关闭
-          if (!resolved) {
-            resolve('dismiss');
-          }
-        }
-      });
-    });
-  };
+  const confirmThreeWay = (options: ConfirmThreeWayOptions): Promise<ConfirmThreeWayResult> => require({
+    header: options.header || confirmDefaults.header,
+    message: options.message,
+    icon: options.icon || confirmDefaults.icon,
+    acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
+    rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
+    clearOptOut: options.clearOptOut,
+  });
 
   return {
     showConfirm,

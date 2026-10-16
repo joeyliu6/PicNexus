@@ -28,9 +28,9 @@ const backupRefs = vi.hoisted(() => ({
   needsReload: null as null | { value: boolean },
 }));
 
-vi.mock('primevue/useconfirm', () => ({
+vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({
-    require: confirmRequireMock,
+    showConfirm: confirmRequireMock,
   }),
 }));
 

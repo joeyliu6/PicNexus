@@ -16,10 +16,7 @@ import {
 /**
  * 从配置加载图床偏好
  *
- * ⚠️ `configManager` 必须由调用方在 setup 栈期间取好传进来，**不要在这里
- * 自己调 `useConfigManager()`**：它内部是 `inject()`，而本函数的调用点是
- * 「扫描完成」的 watcher 回调，那时 Vue 已经没有组件上下文，会直接抛
- * 「No PrimeVue Toast provided!」——整个回调中断，偏好静默加载不上。
+ * `configManager` 由调用方传进来（便于测试替换）。
  */
 export async function loadHostPreference(configManager: ConfigManagerApi): Promise<void> {
   const config = await configManager.loadConfig();

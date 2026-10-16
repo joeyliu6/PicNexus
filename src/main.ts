@@ -7,8 +7,6 @@ import { createAppRouter } from './router';
 // PrimeVue 相关导入
 import PrimeVue from 'primevue/config';
 import { PicNexusPreset } from '@/theme/preset';
-import ToastService from 'primevue/toastservice';
-import ConfirmationService from 'primevue/confirmationservice';
 import Tooltip from 'primevue/tooltip';
 import Ripple from 'primevue/ripple';
 
@@ -39,6 +37,7 @@ import './theme/primevue-overrides.css';
 import './styles/motion.css';
 import './styles/tokens.css';
 import './styles/tokens-extra.css';
+import './styles/pn-base.css';
 import './styles/bottom-bar-buttons.css';
 
 const log = createLogger('Init');
@@ -76,8 +75,6 @@ app.use(PrimeVue, {
 });
 
 // 配置 PrimeVue 服务
-app.use(ToastService);
-app.use(ConfirmationService);
 app.directive('tooltip', Tooltip);
 app.directive('ripple', Ripple);
 

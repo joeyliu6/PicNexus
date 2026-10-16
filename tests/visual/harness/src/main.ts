@@ -1,7 +1,5 @@
 import { createApp } from 'vue';
 import PrimeVue from 'primevue/config';
-import ToastService from 'primevue/toastservice';
-import ConfirmationService from 'primevue/confirmationservice';
 import Tooltip from 'primevue/tooltip';
 import Ripple from 'primevue/ripple';
 import { PicNexusPreset } from '@/theme/preset';
@@ -29,8 +27,6 @@ app.use(PrimeVue, {
   ripple: false,
 });
 
-app.use(ToastService);
-app.use(ConfirmationService);
 app.directive('tooltip', Tooltip);
 app.directive('ripple', Ripple);
 app.mount('#app');

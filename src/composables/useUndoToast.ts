@@ -1,87 +1,51 @@
 // 撤销 Toast Composable（模块级单例）
-// 用于高破坏性操作的"倒计时撤销"模式：
-// 确认后在 Toast 里显示 "(Xs)" 倒计时，期间可点撤销中止
-//
-// 实现要点：复用 useToast 暴露的 addRaw / removeGroup 入口，
-// 这样"已撤销"成功提示也能享受统一的去重/抑制机制，
-// 避免之前直接持有 primeToast 单例造成的两套 Toast 体系问题。
+// 用于高破坏性操作的「倒计时后才执行」模式：通知底部一条倒计时细线 +「撤销」按钮，
+// 倒计时走完才真正执行；期间点「撤销」中止。同一时间只保留一轮。
 
-import { reactive } from 'vue';
+import { dismissToast } from '@/components/pn/toastStore';
 import { useToast } from './useToast';
 
-const UNDO_GROUP = 'undo';
+let pending: { id: number | null; resolve: (proceed: boolean) => void } | null = null;
 
-interface UndoToastState {
-  summary: string;
-  remaining: number;
-}
-
-const state = reactive<UndoToastState>({
-  summary: '',
-  remaining: 0,
-});
-
-let resolveRef: ((value: boolean) => void) | null = null;
-let timerId: ReturnType<typeof setInterval> | null = null;
-// useToast 实例缓存：模块级单例，避免在非 setup 上下文重复 inject
-let toastApi: ReturnType<typeof useToast> | null = null;
-
-function clearTimer() {
-  if (timerId !== null) {
-    clearInterval(timerId);
-    timerId = null;
-  }
+function settle(proceed: boolean): void {
+  const current = pending;
+  pending = null;
+  current?.resolve(proceed);
 }
 
 export function useUndoToast() {
-  // 在 setup 阶段捕获 Toast 服务（inject 上下文仅在此时可用）
-  if (!toastApi) {
-    toastApi = useToast();
-  }
+  const toast = useToast();
 
   /**
-   * 显示带撤销按钮的倒计时 Toast
-   * @param summary  Toast 标题文案
+   * 显示带撤销按钮的倒计时通知
+   * @param summary  通知标题
    * @param seconds  倒计时秒数，默认 5
-   * @returns Promise<boolean>：true = 倒计时结束执行操作，false = 用户撤销
+   * @returns Promise<boolean>：true = 倒计时结束、执行操作；false = 用户撤销（或被下一轮顶掉）
    */
   const show = (summary: string, seconds = 5): Promise<boolean> => {
-    resolveRef?.(false);
-    resolveRef = null;
-    clearTimer();
+    if (pending?.id != null) dismissToast(pending.id);
+    settle(false);
+
     return new Promise((resolve) => {
-      resolveRef = resolve;
-      state.summary = summary;
-      state.remaining = seconds;
-
-      toastApi!.addRaw({
-        group: UNDO_GROUP,
-        severity: 'error',
-        closable: false,
+      const round = { id: null as number | null, resolve };
+      pending = round;
+      round.id = toast.withAction('warn', summary, undefined, { label: '撤销', run: cancel }, {
+        life: seconds * 1000,
+        countdown: true,
+        onExpire: () => { if (pending === round) settle(true); },
       });
-
-      timerId = setInterval(() => {
-        state.remaining--;
-        if (state.remaining <= 0) {
-          clearTimer();
-          toastApi!.removeGroup(UNDO_GROUP);
-          resolve(true);
-          resolveRef = null;
-        }
-      }, 1000);
+      // 全局静默期间通知发不出来：没有人能点撤销，按到时间处理
+      if (round.id === null) settle(true);
     });
   };
 
-  /**
-   * 撤销——停止计时并关闭 Toast
-   */
-  const cancel = () => {
-    clearTimer();
-    toastApi?.removeGroup(UNDO_GROUP);
-    toastApi?.success('已撤销', '历史记录保留完好');
-    resolveRef?.(false);
-    resolveRef = null;
-  };
+  /** 撤销——收回通知并 resolve(false) */
+  function cancel(): void {
+    if (!pending) return;
+    if (pending.id != null) dismissToast(pending.id);
+    settle(false);
+    toast.success('已撤销', '历史记录保留完好');
+  }
 
-  return { state, show, cancel };
+  return { show, cancel };
 }

@@ -1,91 +1,72 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { defineComponent, h } from 'vue';
-import { mount } from '@vue/test-utils';
-
-// mock primevue/usetoast
-const primeToastMock = {
-  add: vi.fn(),
-  removeGroup: vi.fn(),
-  remove: vi.fn(),
-};
-
-vi.mock('primevue/usetoast', () => ({
-  useToast: () => primeToastMock,
-}));
-
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUndoToast } from '@/composables/useUndoToast';
+import { suppressToasts } from '@/composables/useToast';
+import { __resetToastsForTests, runToastAction, useToastItems } from '@/components/pn/toastStore';
 
-function harness() {
-  let api: ReturnType<typeof useUndoToast> | null = null;
-  const Harness = defineComponent({
-    setup() {
-      api = useUndoToast();
-      return () => h('div');
-    },
-  });
-  const wrapper = mount(Harness);
-  return { wrapper, api: () => api! };
-}
+const toasts = useToastItems();
 
 describe('useUndoToast', () => {
   beforeEach(() => {
-    primeToastMock.add.mockReset();
-    primeToastMock.removeGroup.mockReset();
+    __resetToastsForTests();
     vi.useFakeTimers();
   });
 
-  it('show 显示带 undo 分组的 toast', () => {
-    const h = harness();
-    h.api().show('确认删除', 3);
-    expect(primeToastMock.add).toHaveBeenCalledWith(expect.objectContaining({
-      group: 'undo',
-      severity: 'error',
-      closable: false,
-    }));
-    expect(h.api().state.summary).toBe('确认删除');
-    expect(h.api().state.remaining).toBe(3);
+  afterEach(() => {
+    suppressToasts(false);
+    vi.useRealTimers();
   });
 
-  it('倒计时结束后 resolve(true)', async () => {
-    const h = harness();
-    const p = h.api().show('delete', 2);
-    // 第一次 tick：remaining=1
-    vi.advanceTimersByTime(1000);
-    expect(h.api().state.remaining).toBe(1);
-    // 第二次 tick：remaining=0 → resolve(true)，removeGroup
-    vi.advanceTimersByTime(1000);
-    await expect(p).resolves.toBe(true);
-    expect(primeToastMock.removeGroup).toHaveBeenCalledWith('undo');
+  it('shows a countdown toast with an undo button', () => {
+    void useUndoToast().show('确认删除', 3);
+
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toMatchObject({ title: '确认删除', countdown: true, life: 3000 });
+    expect(toasts[0].action?.label).toBe('撤销');
   });
 
-  it('cancel 停止计时并 resolve(false) + 显示"已撤销"提示', async () => {
-    const h = harness();
-    const p = h.api().show('delete', 5);
-    h.api().cancel();
-    await expect(p).resolves.toBe(false);
-    // removeGroup + 一条 success toast
-    expect(primeToastMock.removeGroup).toHaveBeenCalledWith('undo');
-    expect(primeToastMock.add).toHaveBeenCalledWith(expect.objectContaining({
-      severity: 'success',
-      summary: '已撤销',
-    }));
+  it('resolves true once the countdown ends', async () => {
+    const result = useUndoToast().show('delete', 2);
+
+    vi.advanceTimersByTime(1999);
+    expect(toasts).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+
+    await expect(result).resolves.toBe(true);
+    expect(toasts).toHaveLength(0);
   });
 
-  it('重复 show 取消前一轮 toast', async () => {
-    const h = harness();
-    const p1 = h.api().show('first', 5);
-    h.api().show('second', 5);
-    await expect(p1).resolves.toBe(false);
+  it('resolves false and confirms the undo when the button is pressed', async () => {
+    const result = useUndoToast().show('delete', 5);
+
+    runToastAction(toasts[0].id);
+
+    await expect(result).resolves.toBe(false);
+    expect(toasts.map((t) => t.title)).toEqual(['已撤销']);
+    vi.advanceTimersByTime(10_000);
   });
 
-  it('show 默认 seconds=5', () => {
-    const h = harness();
-    h.api().show('x');
-    expect(h.api().state.remaining).toBe(5);
+  it('cancels the previous round when shown again', async () => {
+    const undo = useUndoToast();
+    const first = undo.show('first', 5);
+    const second = undo.show('second', 5);
+
+    await expect(first).resolves.toBe(false);
+    expect(toasts.map((t) => t.title)).toEqual(['second']);
+    vi.advanceTimersByTime(5000);
+    await expect(second).resolves.toBe(true);
   });
 
-  it('cancel 在无进行中的 show 时不抛错', () => {
-    const h = harness();
-    expect(() => h.api().cancel()).not.toThrow();
+  it('defaults to 5 seconds', () => {
+    void useUndoToast().show('delete');
+    expect(toasts[0].life).toBe(5000);
+  });
+
+  it('does not throw when cancel is called with nothing pending', () => {
+    expect(() => useUndoToast().cancel()).not.toThrow();
+  });
+
+  it('proceeds right away while toasts are suppressed, since nobody can press undo', async () => {
+    suppressToasts(true);
+    await expect(useUndoToast().show('delete', 5)).resolves.toBe(true);
   });
 });
