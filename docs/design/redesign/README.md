@@ -21,6 +21,7 @@
 - 图床配置沿用两层字段，不迁移：`availableServices` = 已添加，`enabledServices` = 启用 = 首页「上传到」勾选的那些。「已添加」= 在 `availableServices` 里，并且免配置或已填凭证。
 - 「复制」可固定某个图床；固定的图床失败时退回「最先完成」（设计未画，按最接近的规则补）。
 - 新配置字段只加不改、有默认值：复制固定图床、文档文件夹、自动检测（默认每 7 天）、渐进提示已出现。
+- 通知：最多叠 3 条时先挤掉最旧的普通通知，带「撤销」倒计时的尽量留着（免得来不及撤销就生效）；确认框排队，一次只显示一个。
 - 侧栏：窗口窄于 1000px 强制收成图标栏且不给「展开」（展开后内容区只剩 592px，会横向滚动）；宽窗口下 `Ctrl+\` 手动收起，记在本机 localStorage，不进配置、不随云同步。
 - 尚未重写的旧页面挂在新外壳里，由外壳代画顶部标题行与窗口按钮（路由 `meta.legacyTitle`）；`/hosts` 过渡期复用 SettingsView 的图床面板（`fixedTab`）。
 
@@ -37,8 +38,8 @@
 |---|---|---|---|
 | 0 准备 | 设计包入库、令牌、`data-theme` / `data-platform`、依赖 | Foundations | 已完成 |
 | 1 外壳 | 侧栏 / 图标栏、标题栏与窗口按钮、路由 | H17 K01 | 已完成 |
-| 2 基础件 | Pn 控件、PnToast / PnDialog、业务组件、命令面板、传输中心 | Controls Patterns PetalScale HostIcons BgDecor LoadingRules H14–H16 N01 | 未开始 |
-| 3 首页·快传 | 焦点卡、最近上传、批量、三个浮层、URL 下载、渐进提示、第一次使用、全局拖放与粘贴 | H01–H21 HB1–3 | 未开始 |
+| 2 基础件 | Pn 控件、PnToaster / PnConfirmHost（接在 useToast / useUndoToast / useConfirm 下面，调用方式不变）、HostIcon、PetalGlyph、BgDecor、CopyButton、LinkBlock | Controls Patterns PetalScale HostIcons BgDecor N01 | 已完成 |
+| 3 首页·快传 | 焦点卡、最近上传、批量、三个浮层、URL 下载、渐进提示、第一次使用、全局拖放与粘贴、命令面板、传输中心 | H01–H21 HB1–3 | 未开始 |
 | 4 图库 | 网格 / 列表、筛选、多选、详情、灯箱、刻度条、空与加载 | G01–G13 K02 K03 K07 | 未开始 |
 | 5 链接健康 | 状态栏、上传日历、工具卡、失效清单、两个弹窗、自动检测 | L01–L18 K04 K08 | 未开始 |
 | 6 图床 | 双栏、接入表单、目录、测试连接、敏感字段、窄窗口、Cookie 小窗 | P01–P16 K09 | 未开始 |
