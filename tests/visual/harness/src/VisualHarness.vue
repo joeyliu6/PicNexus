@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, provide, ref } from 'vue';
-import ConfirmDialog from 'primevue/confirmdialog';
 import Skeleton from 'primevue/skeleton';
-import { useConfirm as usePrimeConfirm } from 'primevue/useconfirm';
 import UploadDropZone from '@/components/views/upload/UploadDropZone.vue';
 import CompressPopoverMenu from '@/components/views/upload/CompressPopoverMenu.vue';
 import ServiceSelector from '@/components/views/upload/ServiceSelector.vue';
@@ -28,6 +26,8 @@ import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue'
 import UrlDownloadDialog from '@/components/dialogs/UrlDownloadDialog.vue';
 import WechatQrDialog from '@/components/settings/about-update/WechatQrDialog.vue';
 import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
+import PnConfirmHost from '@/components/pn/PnConfirmHost.vue';
+import { useConfirm } from '@/composables/useConfirm';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
@@ -55,10 +55,10 @@ const isSettingsPage = computed(() => page === 'settings' || page === 'backup-sy
 
 document.documentElement.classList.toggle('dark-theme', isDark);
 document.documentElement.classList.toggle('light-theme', !isDark);
+document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
 
 const migrateContext = createMigrateContext(state);
 provide(MIGRATE_KEY, migrateContext);
-const visualConfirm = usePrimeConfirm();
 
 if (page === 'markdown-repair') {
   applyMarkdownRepairFixture(state);
@@ -522,7 +522,7 @@ onMounted(async () => {
 
   if (state === 'overwrite-confirm-dialog') {
     await nextTick();
-    visualConfirm.require({
+    useConfirm().showConfirm({
       header: '覆盖本地数据',
       message: '本地现有的所有记录将被删除，替换为云端数据。此操作不可撤销。',
       icon: 'pi pi-exclamation-triangle',
@@ -1017,6 +1017,6 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
         <OnboardingDialog v-if="isOnboardingState" />
       </section>
     </main>
-    <ConfirmDialog />
+    <PnConfirmHost />
   </div>
 </template>

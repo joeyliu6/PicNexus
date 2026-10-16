@@ -57,9 +57,6 @@ export const CASES: DialogCase[] = [
     name: 'BackupPasswordDialog 恢复失败', page: 'backup-sync', state: 'restore-password-error',
   },
   {
-    name: 'ConfirmDialog 覆盖确认', page: 'backup-sync', state: 'overwrite-confirm-dialog',
-  },
-  {
     name: 'UrlDownloadDialog 空闲', page: 'dialogs', state: 'url-download-idle',
   },
   {

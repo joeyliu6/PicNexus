@@ -68,8 +68,8 @@ test.describe('弹窗规格一致性', () => {
       const metrics = await readDialogMetrics(page);
 
       // ---- 外壳 ----
-      expect(metrics.rootClass, '每个弹窗都必须挂上 app-dialog（ConfirmDialog 用 p-confirmdialog）')
-        .toMatch(/\b(app-dialog|p-confirmdialog)\b/);
+      expect(metrics.rootClass, '每个弹窗都必须挂上 app-dialog')
+        .toMatch(/\bapp-dialog\b/);
       expect(metrics.borderRadius).toBe(SHELL.borderRadius);
       expect(metrics.headerPadding).toBe(SHELL.headerPadding);
       expect(metrics.headerBorderBottom).toBe(SHELL.headerBorderBottom);

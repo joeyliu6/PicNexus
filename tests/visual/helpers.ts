@@ -95,7 +95,7 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
     await expect(page.locator('.visual-backup-sync .dropdown-menu')).toBeVisible();
   }
   if (visualPage === 'backup-sync' && state === 'overwrite-confirm-dialog') {
-    await expect(page.locator('.p-confirmdialog')).toBeVisible();
+    await expect(page.locator('.pn-dialog[data-state="open"]')).toBeVisible();
   }
   if (
     visualPage === 'backup-sync'

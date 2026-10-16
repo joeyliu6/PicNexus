@@ -86,8 +86,8 @@ test.describe('弹窗外壳跨引擎一致性', () => {
       const metrics = await readShellMetrics(page);
 
       // ---- 外壳：全是纯 CSS px，跨引擎必然一致 ----
-      expect.soft(metrics.rootClass, '每个弹窗都必须挂上 app-dialog（ConfirmDialog 用 p-confirmdialog）')
-        .toMatch(/\b(app-dialog|p-confirmdialog)\b/);
+      expect.soft(metrics.rootClass, '每个弹窗都必须挂上 app-dialog')
+        .toMatch(/\bapp-dialog\b/);
       expect.soft(metrics.radius, '弹窗四角圆角')
         .toEqual(Array(4).fill(SHELL.borderRadius));
       expect.soft(metrics.headerPadding, '标题栏内边距')
