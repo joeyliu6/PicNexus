@@ -1,14 +1,15 @@
 <script setup lang="ts">
 // 图库（GalleryScreen.dc.html，交接说明 8.2）：按天分组的等高行网格 / 列表、筛选、多选、详情、灯箱、刻度条。
 // 数据与虚拟滚动在 useGalleryGrid（复用时间轴那组 composables）；这里只做页面编排与键盘。
-import { computed, onActivated, onDeactivated, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { refDebounced, useElementSize, useEventListener } from '@vueuse/core';
+import { refDebounced, until, useElementSize, useEventListener } from '@vueuse/core';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { useCopyLink } from '@/composables/useCopyLink';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import { useDebouncedTrue } from '@/composables/useDebouncedTrue';
 import TitleRow from '@/shell/TitleRow.vue';
+import { locateRequest, type LocateRequest } from '@/shell/galleryLocate';
 import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
 import type { ImageMeta } from '@/types/image-meta';
 import type { LinkFormat } from '@/utils/linkFormatter';
@@ -155,6 +156,33 @@ function reveal(id: string): void {
   if (top < el.scrollTop) el.scrollTo({ top, behavior: 'smooth' });
   else if (bottom > el.scrollTop + el.clientHeight) el.scrollTo({ top: bottom - el.clientHeight, behavior: 'smooth' });
 }
+
+/**
+ * 「在图库中定位」：回到网格、去掉会把它筛掉的条件，等统计按新条件读完，
+ * 跳到那一天，选中它并打开详情
+ */
+async function locate({ id, timestamp }: LocateRequest): Promise<void> {
+  view.value = 'grid';
+  viewState.clearSelection();
+  focusedId.value = id;
+  detailId.value = id;
+  if (hasActiveFilters(filters.value)) {
+    filters.value = EMPTY_FILTERS;
+    // 搜索词有 200ms 防抖：等它也清空，免得按旧搜索词读完一轮又重读
+    await until(search).toBe('');
+    await nextTick();
+  }
+  await until(() => grid.hasLoadedStats.value && !grid.isLoadingStats.value).toBe(true);
+  const day = new Date(timestamp);
+  await grid.jump.handleJumpToPeriod(day.getFullYear(), day.getMonth(), day.getDate());
+  reveal(id);
+}
+
+watch([locateRequest, active], ([request, isActive]) => {
+  if (!request || !isActive) return;
+  locateRequest.value = null;
+  void locate(request);
+}, { immediate: true });
 
 function moveFocus(direction: GridDirection): void {
   const next = neighborTile(grid.virtual.layoutResult.value?.allRows ?? [], focusedId.value, direction);

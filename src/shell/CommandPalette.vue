@@ -16,6 +16,7 @@ import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import { useUploadController } from '@/composables/upload/useUploadController';
 import { uiPlatform } from '@/utils/platform';
 import { shortcutLabel } from './commandIndex';
+import { requestLocate } from './galleryLocate';
 import { useCommandPalette, type CommandEntry } from './useCommandPalette';
 import { useUrlDialog } from './useUrlDialog';
 
@@ -55,7 +56,8 @@ async function run(entry: CommandEntry, alt: boolean): Promise<void> {
   if (target.kind === 'image') {
     if (alt) {
       palette.hide();
-      void tauriEmit('navigate-to', 'history');
+      requestLocate(target.item.id, target.item.timestamp);
+      await router.push('/gallery');
       return;
     }
     const url = historyUrl(target.item);
