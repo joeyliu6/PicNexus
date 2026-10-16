@@ -1324,8 +1324,7 @@ button:focus-visible {
 /* 2. DataTable / 输入框 / 按钮 / Toast / Tag 的全局覆盖已移除
    —— 原先这些规则写成 `:deep(...)`，而 `:deep()` 只是 Vue SFC scoped 样式的编译期
    语法糖，普通 .css 文件里浏览器无法解析，整条规则会被直接丢弃，即它们从未生效过。
-   现状由各组件自行负责：DataTable 见 components/views/history/history-table.css，
-   输入框见各弹窗/设置面板的 scoped 样式。弹窗外壳统一见下方第 3 节。
+   现状由各组件自行负责：DataTable、输入框见用到它们的弹窗 / 面板的 scoped 样式。弹窗外壳统一见下方第 3 节。
    护栏：scripts/check-css-deep.mjs 会拦截 .css 文件里新增的 :deep()。 */
 
 /* 弹出菜单里的危险项（移除记录等）：菜单挂在 body 上，组件 scoped 样式够不着，只能写在这里。
@@ -1547,7 +1546,7 @@ button:focus-visible {
 }
 
 /* 全局 Popover 主题覆盖：统一去掉 PrimeVue 默认蓝色背景，使用项目卡片风格
-   影响范围：所有 <Popover> 组件（压缩预设、图床服务、历史记录等） */
+   影响范围：仍在用 PrimeVue <Popover> 的旧界面（如文档修复的备份选择） */
 .p-popover {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-subtle) !important;

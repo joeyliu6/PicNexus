@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, provide, ref } from 'vue';
-import Skeleton from 'primevue/skeleton';
-import DashboardStrip from '@/components/views/history/DashboardStrip.vue';
-import EmptyState from '@/components/common/EmptyState.vue';
 import ReloadBanner from '@/components/common/ReloadBanner.vue';
-import FavoritePhotoItem from '@/components/views/favorites/FavoritePhotoItem.vue';
-import TimelinePhotoGrid from '@/components/views/timeline/TimelinePhotoGrid.vue';
-import TimelineIndicator from '@/components/views/timeline/TimelineIndicator.vue';
-import TimelineSkeleton from '@/components/views/timeline/TimelineSkeleton.vue';
 import MdRescueInline from '@/components/views/link-check/MdRescueInline.vue';
 import MigrateSelectPhase from '@/components/views/link-check/migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from '@/components/views/link-check/migrate/MigrateProgressPhase.vue';
@@ -26,19 +19,16 @@ import { useConfirm } from '@/composables/useConfirm';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
 import type { CheckLinkResult, LinkCheckRow, BatchCheckProgress } from '@/types/linkCheck';
-import type { HistoryItem, ProfileSyncRecord, ServiceType, ThemeMode, WebDAVConfig } from '@/config/types';
+import type { ProfileSyncRecord, ThemeMode, WebDAVConfig } from '@/config/types';
 import type { ServiceHealthStatus } from '@/types/serviceHealth';
 import type { ServiceCheckSession } from '@/types/serviceCheck';
 import type { LinkFormat } from '@/utils/linkFormatter';
-import type { ImageMeta } from '@/types/image-meta';
-import type { PhotoGroup } from '@/composables/timeline/types';
-import type { SkeletonLayoutResult } from '@/utils/justifiedLayout';
 
-type VisualPage = 'history' | 'favorites' | 'timeline' | 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings' | 'dialogs';
+type VisualPage = 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings' | 'dialogs';
 type VisualState = string;
 
 const params = new URLSearchParams(window.location.search);
-const page = (params.get('page') || 'history') as VisualPage;
+const page = (params.get('page') || 'settings') as VisualPage;
 const state = (params.get('state') || 'empty') as VisualState;
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 const isDark = state === 'dark-theme' || prefersDark;
@@ -72,14 +62,6 @@ if (page === 'dialogs' && state in onboardingStepIndex) {
   onboarding.reopen();
   for (let i = 0; i < onboardingStepIndex[state]; i++) onboarding.nextStep();
 }
-
-const image = (seed: string) => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#60a5fa"/><stop offset="0.55" stop-color="#22c55e"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><rect width="640" height="420" fill="url(#g)"/><circle cx="486" cy="104" r="70" fill="rgba(255,255,255,.35)"/><path d="M0 330 150 190l92 78 86-112 312 174v90H0z" fill="rgba(15,23,42,.38)"/><text x="36" y="62" fill="white" font-family="Arial" font-size="30" font-weight="700">${seed}</text></svg>`;
-  // Why base64:收藏页 / 时间轴的缩略图会过 safeImageUrl 安全闸，
-  // 它只放行 base64 形式的 data:image URL（防止百分号编码里夹带脚本），
-  // URL-encoded 形式会被拦成空白卡片。
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
-};
 
 function result(kind: 'valid' | 'invalid' | 'timeout' | 'hotlink'): CheckLinkResult {
   if (kind === 'valid') return { link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false, response_time: 108 };
@@ -143,207 +125,6 @@ const linkRows = computed<LinkCheckRow[]>(() => {
 });
 
 const progressValue = computed<BatchCheckProgress | null>(() => (state === 'running' || state === 'paused') ? { checked: 5, total: 10, current_url: 'https://img.example/5/smms.jpg' } : null);
-
-const historyMode = ref<'table' | 'timeline' | 'favorites'>(
-  page === 'timeline' ? 'timeline' : page === 'favorites' ? 'favorites' : 'table'
-);
-const historyFilter = ref<ServiceType | 'all'>('all');
-const historyServices = [{ id: 'jd', count: 18 }, { id: 'weibo', count: 12 }, { id: 'r2', count: 9 }];
-const historyRows = Array.from({ length: 7 }, (_, index) => ({
-  id: index + 1,
-  fileName: `trip-album-${index + 1}.jpg`,
-  service: index % 3 === 0 ? 'JD' : index % 3 === 1 ? 'Weibo' : 'R2',
-  size: `${(1.2 + index / 3).toFixed(1)} MB`,
-  thumb: image(`H${index + 1}`),
-}));
-
-const serviceOrder: ServiceType[] = ['jd', 'weibo', 'r2', 'github'];
-
-function visualMeta(prefix: string, index: number, overrides: Partial<ImageMeta> = {}): ImageMeta {
-  const service = overrides.primaryService ?? serviceOrder[index % serviceOrder.length];
-  return {
-    id: `${prefix}-${index + 1}`,
-    timestamp: Date.UTC(2026, 3, 28, 9, 0) - index * 3_600_000,
-    localFileName: `${prefix}-shot-${String(index + 1).padStart(2, '0')}.jpg`,
-    aspectRatio: [1.35, 0.82, 1, 1.7, 0.68, 1.18][index % 6],
-    primaryService: service,
-    primaryUrl: image(`${prefix.toUpperCase()}${index + 1}`),
-    mirrorServices: [
-      { serviceId: service, url: image(`${prefix.toUpperCase()}${index + 1}`) },
-      { serviceId: service === 'r2' ? 'jd' : 'r2', url: image(`${prefix.toUpperCase()}${index + 1}B`) },
-    ],
-    isFavorited: true,
-    ...overrides,
-  };
-}
-
-const isFavoriteInitialLoading = computed(() => state === 'initial-loading');
-const isFavoriteNoResults = computed(() => state === 'no-results');
-const favoriteCount = computed(() => {
-  if (state === 'empty' || isFavoriteInitialLoading.value || isFavoriteNoResults.value) return 0;
-  if (state === 'scroll-middle') return 44;
-  if (state === 'loading-more') return 24;
-  if (state === 'mixed-services') return 20;
-  return 12;
-});
-const favoriteTotalCount = computed(() => {
-  if (isFavoriteNoResults.value || state === 'empty') return 0;
-  if (state === 'loading-more') return 48;
-  if (state === 'scroll-middle') return 86;
-  return favoriteCount.value;
-});
-const favoriteHasLoadMore = computed(() => state === 'loading-more');
-const favoriteMetas = computed<ImageMeta[]>(() => Array.from({ length: favoriteCount.value }, (_, index) => {
-  if (state !== 'mixed-services') return visualMeta('fav', index);
-  const service = serviceOrder[index % serviceOrder.length];
-  const mirror = service === 'github' ? 'r2' : 'github';
-  return visualMeta('fav', index, {
-    primaryService: service,
-    primaryUrl: image(`${service.toUpperCase()} F${index + 1}`),
-    mirrorServices: [
-      { serviceId: service, url: image(`${service.toUpperCase()} primary`) },
-      { serviceId: mirror, url: image(`${mirror.toUpperCase()} mirror`) },
-    ],
-  });
-}));
-const favoriteSelectedIds = computed(() => (
-  state === 'bulk-select' ? new Set(['fav-1', 'fav-2', 'fav-3', 'fav-4']) : new Set<string>()
-));
-const favoriteImageStates = computed<Record<string, 'loaded' | 'failed'>>(() => Object.fromEntries(
-  favoriteMetas.value.map((meta, index) => [
-    meta.id,
-    (state === 'image-fallback' && (index === 2 || index === 7))
-      || (state === 'mixed-services' && (index === 5 || index === 13))
-      ? 'failed'
-      : 'loaded',
-  ])
-));
-const favoriteThumbnailUrls = (meta: ImageMeta) => meta.mirrorServices?.map(service => service.url) ?? [meta.primaryUrl];
-
-const timelineMetas = Array.from({ length: 16 }, (_, index) => visualMeta('timeline', index, {
-  isFavorited: index % 3 === 0,
-  timestamp: Date.UTC(2026, 3, 28 - Math.floor(index / 5), 12, 0) - index * 1_800_000,
-}));
-const timelineGroups = computed<PhotoGroup[]>(() => [
-  {
-    id: '2026-3-28',
-    label: '2026年4月28日',
-    year: 2026,
-    month: 3,
-    day: 28,
-    date: new Date('2026-04-28T00:00:00Z'),
-    items: timelineMetas.slice(0, 8),
-  },
-  {
-    id: '2026-2-16',
-    label: '2026年3月16日',
-    year: 2026,
-    month: 2,
-    day: 16,
-    date: new Date('2026-03-16T00:00:00Z'),
-    items: timelineMetas.slice(8),
-  },
-]);
-const timelineItemWidth = 176;
-const timelineGap = 4;
-const timelineColumns = 5;
-const timelineHeaderHeight = 36;
-const timelineRowHeight = 156;
-const timelineGroupGap = 28;
-const timelineSecondGroupY = timelineHeaderHeight + timelineRowHeight * 2 + timelineGap * 2 + timelineGroupGap;
-const timelineTotalHeight = timelineSecondGroupY + timelineHeaderHeight + timelineRowHeight * 2 + timelineGroupGap + 120;
-const timelineVisibleHeaders = computed(() => [
-  { groupId: '2026-3-28', label: '2026年4月28日', y: 0, height: timelineHeaderHeight },
-  { groupId: '2026-2-16', label: '2026年3月16日', y: timelineSecondGroupY, height: timelineHeaderHeight },
-]);
-const timelineVisibleItems = computed(() => timelineGroups.value.flatMap((group, groupIndex) => {
-  const groupStartY = groupIndex === 0 ? timelineHeaderHeight : timelineSecondGroupY + timelineHeaderHeight;
-  return group.items.map((meta, index) => {
-    const column = index % timelineColumns;
-    const rowIndex = Math.floor(index / timelineColumns);
-    const height = Math.round(timelineItemWidth / meta.aspectRatio);
-    return {
-      meta,
-      groupId: group.id,
-      x: column * (timelineItemWidth + timelineGap),
-      y: groupStartY + rowIndex * (timelineRowHeight + timelineGap),
-      width: timelineItemWidth,
-      height: Math.min(height, timelineRowHeight),
-    };
-  });
-}));
-const timelineSkeletonLayout = computed<SkeletonLayoutResult>(() => ({
-  totalHeight: 560,
-  groups: [
-    { id: 'skeleton-april', headerY: 0 },
-    { id: 'skeleton-march', headerY: 280 },
-  ],
-  items: Array.from({ length: 14 }, (_, index) => {
-    const groupOffset = index < 7 ? timelineHeaderHeight : 280 + timelineHeaderHeight;
-    const localIndex = index < 7 ? index : index - 7;
-    const column = localIndex % timelineColumns;
-    const rowIndex = Math.floor(localIndex / timelineColumns);
-    return {
-      x: column * (timelineItemWidth + timelineGap),
-      y: groupOffset + rowIndex * (timelineRowHeight + timelineGap),
-      width: timelineItemWidth,
-      height: timelineRowHeight - (localIndex % 3) * 18,
-    };
-  }),
-}));
-const timelineTotalCount = computed(() => state === 'favorites-only-empty' ? 0 : 16);
-const timelineVisibleItemsForState = computed(() => (
-  state === 'fast-scroll' ? [] : timelineVisibleItems.value
-));
-const timelineFastModeItems = computed(() => timelineVisibleItems.value.slice(0, 14).map((item, index) => ({
-  x: item.x,
-  y: item.y,
-  width: item.width,
-  height: Math.max(72, item.height - (index % 4) * 14),
-})));
-const timelineDisplayMode = computed<'fast' | 'normal'>(() => state === 'fast-scroll' ? 'fast' : 'normal');
-const timelineHasSelection = computed(() => state === 'bulk-select');
-const timelineSelectedIds = computed(() => (
-  state === 'bulk-select'
-    ? new Set(['timeline-1', 'timeline-2', 'timeline-5', 'timeline-9'])
-    : new Set<string>()
-));
-const timelineFailedIds = computed(() => state === 'image-fallback' ? new Set(['timeline-3', 'timeline-10']) : new Set<string>());
-const timelineLoadedIds = computed(() => {
-  if (state === 'fast-scroll') return new Set<string>();
-  return new Set(timelineMetas.filter(meta => !timelineFailedIds.value.has(meta.id)).map(meta => meta.id));
-});
-const timelineFavoriteIds = new Set(timelineMetas.filter(meta => meta.isFavorited).map(meta => meta.id));
-const timelineHoverDetails = new Map<string, HistoryItem>();
-const timelineThumbnailUrls = (meta: ImageMeta) => meta.mirrorServices?.map(service => service.url) ?? [meta.primaryUrl];
-const timelinePeriods = [
-  { year: 2026, month: 3, count: 42, minTimestamp: Date.UTC(2026, 3, 1), maxTimestamp: Date.UTC(2026, 3, 28) },
-  { year: 2026, month: 2, count: 28, minTimestamp: Date.UTC(2026, 2, 1), maxTimestamp: Date.UTC(2026, 2, 16) },
-  { year: 2025, month: 10, count: 19, minTimestamp: Date.UTC(2025, 10, 1), maxTimestamp: Date.UTC(2025, 10, 24) },
-  { year: 2024, month: 6, count: 12, minTimestamp: Date.UTC(2024, 6, 4), maxTimestamp: Date.UTC(2024, 6, 30) },
-];
-const timelineLoadedMonths = computed(() => new Set(state === 'month-jump-skeleton'
-  ? ['2026-3']
-  : ['2026-3', '2026-2', '2025-10', '2024-6']));
-const timelineMonthLayoutPositions = computed(() => new Map([
-  ['2026-3', { start: 0, end: 0.32 }],
-  ['2026-2', { start: 0.32, end: 0.58 }],
-  ['2025-10', { start: 0.58, end: 0.78 }],
-  ['2024-6', { start: 0.78, end: 1 }],
-]));
-const timelineLightboxItem: HistoryItem = {
-  id: 'timeline-4',
-  timestamp: Date.UTC(2026, 3, 28, 8, 40),
-  localFileName: 'timeline-shot-04.jpg',
-  primaryService: 'r2',
-  results: [
-    { serviceId: 'r2', status: 'success', result: { serviceId: 'r2', fileKey: 'timeline/lightbox-r2.jpg', url: image('TLB-R2') } },
-    { serviceId: 'jd', status: 'success', result: { serviceId: 'jd', fileKey: 'timeline/lightbox-jd.jpg', url: image('TLB-JD') } },
-  ],
-  generatedLink: image('TLB-R2'),
-  aspectRatio: 1.7,
-  isFavorited: true,
-};
 
 const passwordDialogStates = [
   'password-dialog',
@@ -502,178 +283,14 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
     <aside class="visual-sidebar">
       <div class="visual-logo">PN</div>
       <div class="visual-nav"><i class="pi pi-cloud-upload"></i><span>Upload</span></div>
-      <div class="visual-nav" :class="{ active: page === 'history' || page === 'favorites' || page === 'timeline' }"><i class="pi pi-images"></i><span>History</span></div>
+      <div class="visual-nav"><i class="pi pi-images"></i><span>History</span></div>
       <div class="visual-nav" :class="{ active: isLinkFeaturePage }"><i class="pi pi-wrench"></i><span>Links</span></div>
       <div class="visual-nav" :class="{ active: isSettingsPage }"><i class="pi pi-cog"></i><span>Settings</span></div>
     </aside>
 
     <main class="visual-main">
-      <section v-if="page === 'history'" class="visual-page visual-history">
-        <DashboardStrip v-model:view-mode="historyMode" v-model:filter="historyFilter" :total-count="state === 'empty' ? 0 : 39" :service-counts="historyServices" />
-        <div v-if="state === 'empty'" class="visual-history-empty">
-          <EmptyState icon="pi pi-table" title="No history records" description="Uploaded images will appear here." />
-        </div>
-        <div v-else class="visual-history-grid">
-          <article v-for="item in historyRows" :key="item.id" class="history-row-card" :class="{ selected: state === 'bulk-select' && item.id <= 3 }">
-            <img :src="item.thumb" alt="" />
-            <div>
-              <strong>{{ item.fileName }}</strong>
-              <span>{{ item.service }} · {{ item.size }}</span>
-            </div>
-            <i class="pi" :class="state === 'bulk-select' && item.id <= 3 ? 'pi-check-circle' : 'pi-copy'"></i>
-          </article>
-        </div>
-        <div v-if="state === 'bulk-select'" class="visual-floating-bar">
-          <i class="pi pi-check-circle"></i>
-          <span>3</span>
-        </div>
-        <div v-if="state === 'lightbox'" class="visual-lightbox">
-          <img :src="image('Lightbox')" alt="" />
-          <div class="visual-lightbox-bar">
-            <strong>trip-album-1.jpg</strong><span>JD · Weibo · R2</span>
-            <button><i class="pi pi-copy"></i></button><button><i class="pi pi-star"></i></button>
-          </div>
-        </div>
-      </section>
-
-      <section v-else-if="page === 'favorites'" class="visual-page visual-history visual-favorites">
-        <DashboardStrip v-model:view-mode="historyMode" v-model:filter="historyFilter" :total-count="favoriteTotalCount" :service-counts="historyServices" />
-        <div v-if="isFavoriteNoResults" class="visual-filter-summary">
-          <span><i class="pi pi-search"></i> query: mountain raw</span>
-          <span><i class="pi pi-filter"></i> service: R2</span>
-        </div>
-        <div v-if="isFavoriteInitialLoading" class="visual-favorites-scroll">
-          <div class="visual-favorites-grid">
-            <div v-for="i in 18" :key="i" class="visual-favorites-skeleton-cell">
-              <Skeleton width="100%" height="100%" border-radius="8px" />
-            </div>
-          </div>
-        </div>
-        <div v-else-if="state === 'empty' || isFavoriteNoResults" class="visual-history-empty">
-          <EmptyState
-            icon="pi pi-star"
-            :title="isFavoriteNoResults ? 'No matching favorites' : '暂无收藏'"
-            :description="isFavoriteNoResults ? 'The current search and service filter returned no favorite images.' : '点击图片右上角的 ★ 开始收藏'"
-          />
-        </div>
-        <div v-else class="visual-favorites-scroll">
-          <div class="visual-favorites-grid">
-            <FavoritePhotoItem
-              v-for="meta in favoriteMetas"
-              :key="meta.id"
-              :meta="meta"
-              :thumbnail-urls="favoriteThumbnailUrls(meta)"
-              :image-state="favoriteImageStates[meta.id]"
-              :selected="favoriteSelectedIds.has(meta.id)"
-              @click="() => {}"
-              @toggle-select="() => {}"
-              @toggle-favorite="() => {}"
-              @image-state-change="() => {}"
-            />
-          </div>
-          <div v-if="state === 'image-fallback'" class="visual-state-note visual-state-note--warning">
-            <i class="pi pi-image"></i>
-            <span>2 thumbnails fell back to the failed-image placeholder.</span>
-          </div>
-          <div v-if="state === 'mixed-services'" class="visual-state-note">
-            <i class="pi pi-server"></i>
-            <span>JD, Weibo, R2, and GitHub mirrors are mixed in one favorites grid.</span>
-          </div>
-          <div v-if="favoriteHasLoadMore" class="visual-load-more-sentinel">
-            <i class="pi pi-spin pi-spinner"></i>
-            <span>Loading more favorites: {{ favoriteMetas.length }} / {{ favoriteTotalCount }}</span>
-          </div>
-        </div>
-        <div v-if="state === 'bulk-select'" class="visual-floating-bar">
-          <i class="pi pi-check-circle"></i>
-          <span>4</span>
-        </div>
-        <div v-if="state === 'lightbox'" class="visual-lightbox">
-          <img :src="image('Favorite lightbox')" alt="" />
-          <div class="visual-lightbox-bar">
-            <strong>fav-shot-01.jpg</strong><span>收藏 · JD · R2 mirror</span>
-            <button><i class="pi pi-copy"></i></button><button><i class="pi pi-star-fill"></i></button>
-          </div>
-        </div>
-      </section>
-
-      <section v-else-if="page === 'timeline'" class="visual-page visual-history visual-timeline">
-        <DashboardStrip v-model:view-mode="historyMode" v-model:filter="historyFilter" :total-count="timelineTotalCount" :service-counts="historyServices" />
-        <div v-if="state === 'empty' || state === 'favorites-only-empty'" class="visual-history-empty">
-          <EmptyState
-            :icon="state === 'favorites-only-empty' ? 'pi pi-star' : 'pi pi-images'"
-            :title="state === 'favorites-only-empty' ? '暂无收藏' : '暂无上传记录'"
-            :description="state === 'favorites-only-empty' ? 'Favorites-only timeline has no matching images.' : '上传图片后，历史记录将在这里显示'"
-          />
-        </div>
-        <div v-else-if="state === 'loading'" class="visual-timeline-scroll">
-          <TimelineSkeleton :layout="timelineSkeletonLayout" />
-        </div>
-        <div v-else class="visual-timeline-scroll">
-          <TimelinePhotoGrid
-            :groups="timelineGroups"
-            :visible-items="timelineVisibleItemsForState"
-            :visible-skeleton-slots="[]"
-            :visible-headers="timelineVisibleHeaders"
-            :fast-mode-items="timelineFastModeItems"
-            :total-height="timelineTotalHeight"
-            :display-mode="timelineDisplayMode"
-            :selected-ids="timelineSelectedIds"
-            :favorite-ids="timelineFavoriteIds"
-            :has-selection="timelineHasSelection"
-            :loaded-images="timelineLoadedIds"
-            :failed-images="timelineFailedIds"
-            :hover-details-map="timelineHoverDetails"
-            :get-thumbnail-urls="timelineThumbnailUrls"
-            @item-click="() => {}"
-            @item-toggle-select="() => {}"
-            @item-toggle-favorite="() => {}"
-            @item-hover="() => {}"
-            @image-load="() => {}"
-            @image-error="() => {}"
-          />
-          <div v-if="state === 'scroll-restored'" class="visual-timeline-restore-chip">
-            <i class="pi pi-history"></i><span>Restored to the middle of the timeline</span>
-          </div>
-          <div class="visual-timeline-end-spacer"></div>
-          <div v-if="state === 'fast-scroll'" class="visual-timeline-restore-chip">
-            <i class="pi pi-bolt"></i><span>Fast scroll mode is showing placeholders</span>
-          </div>
-          <div v-if="state === 'month-jump-skeleton'" class="visual-timeline-jump-overlay">
-            <TimelineSkeleton :layout="timelineSkeletonLayout" />
-          </div>
-          <div v-if="state === 'indicator-visible'" class="visual-timeline-indicator-shell">
-            <TimelineIndicator
-              :periods="timelinePeriods"
-              :scroll-progress="0.38"
-              :visible-ratio="0.22"
-              :total-height="timelineTotalHeight"
-              :loaded-months="timelineLoadedMonths"
-              :month-layout-positions="timelineMonthLayoutPositions"
-              @drag-scroll="() => {}"
-              @jump-to-period="() => {}"
-              @jump-to-year="() => {}"
-            />
-          </div>
-          <div v-if="state === 'layout-calculating'" class="visual-layout-indicator">
-            <i class="pi pi-spin pi-spinner"></i>
-          </div>
-        </div>
-        <div v-if="state === 'bulk-select'" class="visual-floating-bar">
-          <i class="pi pi-check-circle"></i>
-          <span>4</span>
-        </div>
-        <div v-if="state === 'lightbox'" class="visual-lightbox">
-          <img :src="timelineLightboxItem.generatedLink" alt="" />
-          <div class="visual-lightbox-bar">
-            <strong>{{ timelineLightboxItem.localFileName }}</strong><span>R2 · JD mirror</span>
-            <button><i class="pi pi-copy"></i></button><button><i class="pi pi-star-fill"></i></button>
-          </div>
-        </div>
-      </section>
-
       <section
-        v-else-if="isLinkFeaturePage"
+        v-if="isLinkFeaturePage"
         class="visual-page visual-linkcheck"
         :class="{ 'visual-linkcheck--native': true }"
       >

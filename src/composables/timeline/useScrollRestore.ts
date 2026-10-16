@@ -288,7 +288,5 @@ export function useScrollRestore(options: UseScrollRestoreOptions) {
     getLastStableScrollTop: () => lastStableScrollTop,
     getLastStableProgress: () => lastStableProgress,
     getLastStableAnchorId: () => lastStableAnchorId,
-    /** 更新拖拽时的进度 */
-    setLastStableProgress: (p: number) => { lastStableProgress = Math.min(1, Math.max(0, p)); },
   };
 }

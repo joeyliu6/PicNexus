@@ -7,7 +7,6 @@ import {
   getVisibleRowRange,
   getCurrentStickyHeader,
   findGroupScrollPosition,
-  generateSkeletonLayout,
   type LayoutItem,
   type LayoutOptions,
   type TimelineLayoutOptions,
@@ -440,76 +439,5 @@ describe('findGroupScrollPosition', () => {
 
   it('空分组数组 → null', () => {
     expect(findGroupScrollPosition([], 'g1')).toBeNull();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// generateSkeletonLayout
-// ═══════════════════════════════════════════════════════════════
-
-describe('generateSkeletonLayout', () => {
-  it('正常输入 → 返回 groups/items/totalHeight', () => {
-    const result = generateSkeletonLayout({
-      containerWidth: 1200,
-      viewportHeight: 800,
-    });
-    expect(result.groups.length).toBeGreaterThan(0);
-    expect(result.items.length).toBeGreaterThan(0);
-    expect(result.totalHeight).toBeGreaterThan(0);
-  });
-
-  it('containerWidth 为 0 → 返回空布局', () => {
-    const result = generateSkeletonLayout({ containerWidth: 0, viewportHeight: 800 });
-    expect(result.groups).toEqual([]);
-    expect(result.items).toEqual([]);
-    expect(result.totalHeight).toBe(0);
-  });
-
-  it('viewportHeight 为 0 → 返回空布局', () => {
-    const result = generateSkeletonLayout({ containerWidth: 1200, viewportHeight: 0 });
-    expect(result.groups).toEqual([]);
-    expect(result.items).toEqual([]);
-    expect(result.totalHeight).toBe(0);
-  });
-
-  it('负数 containerWidth → 返回空布局', () => {
-    const result = generateSkeletonLayout({ containerWidth: -1, viewportHeight: 500 });
-    expect(result.groups).toEqual([]);
-  });
-
-  it('默认参数生效（targetRowHeight / gap / headerHeight / groupGap 都有默认值）', () => {
-    const result = generateSkeletonLayout({
-      containerWidth: 800,
-      viewportHeight: 600,
-    });
-    expect(result.groups.length).toBeGreaterThan(0);
-  });
-
-  it('自定义参数透传', () => {
-    const result = generateSkeletonLayout({
-      containerWidth: 1000,
-      viewportHeight: 500,
-      targetRowHeight: 150,
-      gap: 8,
-      headerHeight: 40,
-      groupGap: 16,
-    });
-    expect(result.groups.length).toBeGreaterThan(0);
-    expect(result.items.length).toBeGreaterThan(0);
-  });
-
-  it('相同输入多次调用应产生完全一致的布局（确定性）', () => {
-    const opts = { containerWidth: 1000, viewportHeight: 500 };
-    const r1 = generateSkeletonLayout(opts);
-    const r2 = generateSkeletonLayout(opts);
-    expect(r1.groups).toEqual(r2.groups);
-    expect(r1.items).toEqual(r2.items);
-    expect(r1.totalHeight).toBe(r2.totalHeight);
-  });
-
-  it('视口越高 → 产生越多分组', () => {
-    const small = generateSkeletonLayout({ containerWidth: 1000, viewportHeight: 300 });
-    const large = generateSkeletonLayout({ containerWidth: 1000, viewportHeight: 2000 });
-    expect(large.groups.length).toBeGreaterThanOrEqual(small.groups.length);
   });
 });

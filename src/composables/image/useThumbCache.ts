@@ -378,7 +378,7 @@ export function generateMediumThumbnailUrl(
  * 把原图垫在第二位，组件的 onerror / 超时会自动落过去：代理通就享受小图省流量，
  * 代理挂了退化成加载原图（慢一点但看得见），不会像 issue #4 那样整片裂开。
  *
- * @see ThumbnailImage.vue / TimelinePhotoItem.vue 中的候选链消费逻辑
+ * @see ThumbnailImage.vue / useThumbnailFallbackChain.ts 中的候选链消费逻辑
  */
 function generateThumbnailUrls(
   serviceId: string,

@@ -24,9 +24,9 @@ import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } fro
  * 曲线两头都用 decelerate，理由见 EASE_DECELERATE。
  */
 /** = --duration-medium */
-export const SHOW_ANIMATION_DURATION = 300;
+const SHOW_ANIMATION_DURATION = 300;
 /** = --duration-normal */
-export const HIDE_ANIMATION_DURATION = 200;
+const HIDE_ANIMATION_DURATION = 200;
 /** = --duration-normal */
 export const ZOOM_ANIMATION_DURATION = 200;
 /**
@@ -275,8 +275,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   let pendingClose = false;
   /** PhotoSwipe 根元素，供 Vue Teleport 挂载自定义 UI */
   const pswpEl = ref<HTMLElement | null>(null);
-  /** 模糊背景图源：全程优先取中图（LQIP），加载秒到；无中图时回落到原图 */
-  const blurSrc = ref<string | null>(null);
   /** 大图加载中（延迟 LOADING_INDICATOR_DELAY 后才置 true，避免快图闪 spinner） */
   const isLoading = ref(false);
   let loadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
@@ -457,8 +455,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     pendingClose = false;
     // 重置方向：上一次会话残留的值不应影响新灯箱的首次切换判定
     switchDirection.value = null;
-    // 模糊背景优先用中图（LQIP）；回落 FLIP 占位图；再回落原图
-    blurSrc.value = options.mediumSrc.value || flipSrc || src;
 
     // thumbEl filter：每次计算 FLIP 起止点时实时查 DOM，作为 thumbCropped 的 SSOT
     //
@@ -513,7 +509,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       if (willFade) thisInstance.element?.classList.add('is-pswp-closing--fade');
 
       /*
-       * ⚠️ pswpEl / blurSrc 不在这里清 —— 拆卸必须等到 destroy，理由见下方的
+       * ⚠️ pswpEl 不在这里清 —— 拆卸必须等到 destroy，理由见下方的
        * destroy 回调。在这里清等于亲手把刚挂上的 is-pswp-closing 作废。
        */
       clearLoadingIndicator();
@@ -598,7 +594,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     pswp.on('destroy', () => {
       if (pswpEl.value !== thisInstance.element) return;
       pswpEl.value = null;
-      blurSrc.value = null;
     });
 
     // 补执行开场期间被搁置的关闭请求（见 closePswp）
@@ -676,8 +671,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     clearLoadingIndicator();
     clearLoadRetryTimer();
     pswp.refreshSlideContent(0);
-    // 模糊背景：导航时用中图（秒到），避免切换瞬间变黑
-    blurSrc.value = medium || src;
   }
 
   // ── Watch: visible → 打开/关闭 ──────────────
@@ -729,5 +722,5 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     }
   });
 
-  return { pswpEl, blurSrc, isLoading, setSwitchDirection };
+  return { pswpEl, isLoading, setSwitchDirection };
 }

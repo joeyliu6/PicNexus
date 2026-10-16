@@ -12,39 +12,6 @@
  *   4. 跑 `npm run test:visual -- --project=layout-chromium` 确认哨兵不报警
  */
 export const VISUAL_STATES = {
-  history: [
-    'empty',
-    'populated',
-    'service-menu',
-    'bulk-select',
-    'lightbox',
-  ],
-  favorites: [
-    'empty',
-    'populated',
-    'bulk-select',
-    'lightbox',
-    'image-fallback',
-    'initial-loading',
-    'loading-more',
-    'no-results',
-    'scroll-middle',
-    'mixed-services',
-  ],
-  timeline: [
-    'loading',
-    'empty',
-    'populated',
-    'image-fallback',
-    'lightbox',
-    'scroll-restored',
-    'indicator-visible',
-    'fast-scroll',
-    'layout-calculating',
-    'favorites-only-empty',
-    'bulk-select',
-    'month-jump-skeleton',
-  ],
   'backup-sync': [
     'default',
     'local-backing-up',

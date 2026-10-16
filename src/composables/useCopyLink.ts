@@ -102,10 +102,6 @@ export function useCopyLink() {
     return applyLinkPrefix(url, serviceId, configManager.config.value);
   }
 
-  function applyConfiguredUrl(url: string, serviceId?: string): string {
-    return applyConfiguredUrlWithConfig(url, serviceId, configManager.config.value);
-  }
-
   function getFormatConfig() {
     return getLinkFormatConfig(configManager.config.value);
   }
@@ -239,7 +235,6 @@ export function useCopyLink() {
     copyLinks,
     formatSingleLink,
     applyPrefix,
-    applyConfiguredUrl,
     getFormatConfig,
   };
 }

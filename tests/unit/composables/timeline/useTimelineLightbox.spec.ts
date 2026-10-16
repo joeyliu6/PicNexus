@@ -81,8 +81,7 @@ function mountLightbox(overrides: Partial<Parameters<typeof useTimelineLightbox>
     loadedDayKeys.value = new Set([...loadedDayKeys.value, ...dayKeys]);
   });
   const scrollToItem = vi.fn();
-  const deleteHistoryItem = vi.fn().mockResolvedValue(true);
-  const toast = { success: vi.fn(), error: vi.fn() };
+  const toast = { error: vi.fn() };
 
   let api!: ReturnType<typeof useTimelineLightbox>;
   const Harness = defineComponent({
@@ -95,7 +94,6 @@ function mountLightbox(overrides: Partial<Parameters<typeof useTimelineLightbox>
         findDayAfter: (key: string) => (key === dayTwoKey ? dayOneKey : null),
         detailCache,
         config: ref({} as UserConfig),
-        deleteHistoryItem,
         scrollToItem,
         toast,
         ...overrides,
@@ -116,7 +114,6 @@ function mountLightbox(overrides: Partial<Parameters<typeof useTimelineLightbox>
     detailCache,
     ensureDaysLoaded,
     scrollToItem,
-    deleteHistoryItem,
     toast,
   };
 }
@@ -183,28 +180,5 @@ describe('useTimelineLightbox', () => {
     expect(scrollToItem).toHaveBeenLastCalledWith('day-one-old');
     expect(api.lightboxHasPrev.value).toBe(true);
     expect(api.lightboxHasNext.value).toBe(true);
-  });
-
-  it('delegates deletion to the shared lightbox core', async () => {
-    const { api, dayOneItems, deleteHistoryItem, toast } = mountLightbox();
-    await api.openLightbox(dayOneItems[0]);
-
-    await api.handleLightboxDelete(makeDetail('day-one-new'));
-
-    expect(deleteHistoryItem).toHaveBeenCalledWith('day-one-new');
-    expect(api.lightboxVisible.value).toBe(false);
-    expect(toast.success).toHaveBeenCalled();
-  });
-
-  it('keeps the lightbox open when the shared delete handler reports cancellation', async () => {
-    const deleteHistoryItem = vi.fn().mockResolvedValue(false);
-    const { api, dayOneItems, toast } = mountLightbox({ deleteHistoryItem });
-    await api.openLightbox(dayOneItems[0]);
-
-    await api.handleLightboxDelete(makeDetail('day-one-new'));
-
-    expect(deleteHistoryItem).toHaveBeenCalledWith('day-one-new');
-    expect(api.lightboxVisible.value).toBe(true);
-    expect(toast.success).not.toHaveBeenCalled();
   });
 });

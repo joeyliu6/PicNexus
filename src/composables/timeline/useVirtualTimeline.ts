@@ -97,9 +97,8 @@ export function useVirtualTimeline(
     visibleHeaders,
     currentStickyHeader,
     totalHeight,
-    scrollProgress,
     visibleDayKeys,
-  } = useVisibleArea(scrollTop, viewportHeight, layoutResult, groups, containerRef, config);
+  } = useVisibleArea(scrollTop, viewportHeight, layoutResult, groups, config);
 
   const {
     scrollVelocity,
@@ -220,7 +219,7 @@ export function useVirtualTimeline(
     // 直接切回 normal 模式（不走 startModeRecovery 的 200ms 延迟）。
     // 否则 useScrollAnchor 在 layout 重算后修正 scrollTop 引发的次级 scroll 事件，
     // 会被 updateScrollVelocity 误判为高速滚动 → 重新置 fast → 取消恢复 timer，
-    // 导致 displayMode 永久卡 fast、TimelinePhotoItem 的 img v-if 不通过、图片永不加载。
+    // 导致 displayMode 永久卡 fast、GalleryTile 的 img v-if 不通过、图片永不加载。
     forceNormalMode();
   }
 
@@ -386,7 +385,6 @@ export function useVirtualTimeline(
     scrollTop,
     viewportHeight,
     totalHeight,
-    scrollProgress,
     isCalculating,
 
     // 三阶段渲染状态

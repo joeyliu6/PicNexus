@@ -18,10 +18,8 @@ import { DEFAULT_OPTIONS } from './types';
  *
  * @param scrollTop 滚动位置 ref
  * @param viewportHeight 视口高度 ref
- * @param containerWidth 容器宽度 ref（用于 scrollProgress）
  * @param layoutResult 布局结果 ref
  * @param groups 图片分组数据
- * @param containerRef 滚动容器 ref（用于 scrollProgress）
  * @param options 配置选项
  */
 export function useVisibleArea(
@@ -29,7 +27,6 @@ export function useVisibleArea(
   viewportHeight: Ref<number>,
   layoutResult: Ref<TimelineLayoutResult | null>,
   groups: Ref<PhotoGroup[]>,
-  containerRef: Ref<HTMLElement | null>,
   options: Required<VirtualTimelineOptions> = DEFAULT_OPTIONS
 ) {
   const config = options;
@@ -175,19 +172,10 @@ export function useVisibleArea(
   /** 总高度（用于滚动容器） */
   const totalHeight = computed(() => layoutResult.value?.totalHeight || 0);
 
-  /** 滚动进度 (0-1) */
-  const scrollProgress = computed(() => {
-    if (!containerRef.value || totalHeight.value <= viewportHeight.value) {
-      return 0;
-    }
-    const maxScroll = totalHeight.value - viewportHeight.value;
-    return Math.min(1, Math.max(0, scrollTop.value / maxScroll));
-  });
-
   /**
    * 当前视口内可见的 dayKey 集合
    * 仅返回内容区域与视口有重叠的 group id（即 dayKey）。
-   * TimelineView 在此基础上扩展前后缓冲后调用 ensureDaysLoaded。
+   * useVisibleDayBuffer 在此基础上扩展前后缓冲后调用 ensureDaysLoaded。
    */
   const visibleDayKeys = computed<string[]>(() => {
     if (!layoutResult.value) return [];
@@ -206,7 +194,6 @@ export function useVisibleArea(
     visibleHeaders,
     currentStickyHeader,
     totalHeight,
-    scrollProgress,
     visibleDayKeys,
   };
 }

@@ -1,8 +1,7 @@
 /**
  * 通用图片缩放、平移、滑块拖拽交互逻辑
  *
- * 可复用于 CompressionPreviewDialog（对比滑块 + 滚轮缩放）和
- * HistoryLightbox（拖拽平移 + Ctrl+滚轮缩放）等场景。
+ * 用于 CompressionPreviewDialog（对比滑块 + 滚轮缩放）。
  */
 import { ref, computed, onBeforeUnmount, type Ref } from 'vue';
 

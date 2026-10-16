@@ -120,7 +120,7 @@ const ticks = computed(() => {
 });
 
 function jump(year: number, month: number | undefined): void {
-  void (month === undefined ? grid.drag.handleJumpToYear(year) : grid.drag.handleJumpToPeriod(year, month));
+  void (month === undefined ? grid.jump.handleJumpToYear(year) : grid.jump.handleJumpToPeriod(year, month));
 }
 
 /** 鼠标靠近图片右缘时浮出刻度条（不另放一块挡住图片的感应区） */

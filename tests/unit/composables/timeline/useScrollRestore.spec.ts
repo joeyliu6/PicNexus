@@ -158,28 +158,6 @@ describe('saveStablePosition', () => {
   });
 });
 
-// ─── setLastStableProgress ────────────────────────────────────────────────────
-
-describe('setLastStableProgress', () => {
-  it('设置合法进度值', () => {
-    const restore = makeRestore();
-    restore.setLastStableProgress(0.75);
-    expect(restore.getLastStableProgress()).toBeCloseTo(0.75, 2);
-  });
-
-  it('超过 1 的值被截断到 1', () => {
-    const restore = makeRestore();
-    restore.setLastStableProgress(1.5);
-    expect(restore.getLastStableProgress()).toBe(1);
-  });
-
-  it('负值被截断到 0', () => {
-    const restore = makeRestore();
-    restore.setLastStableProgress(-0.5);
-    expect(restore.getLastStableProgress()).toBe(0);
-  });
-});
-
 // ─── trackScrollPosition ─────────────────────────────────────────────────────
 
 describe('trackScrollPosition', () => {

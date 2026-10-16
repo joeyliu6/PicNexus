@@ -1,10 +1,9 @@
-// 批量操作（导出/删除）从 useHistory.ts 抽离，降低主文件体积
+// 批量操作（导出 / 移除记录 / 撤销移除）从 useHistory.ts 抽离，降低主文件体积
 
 import type { Ref } from 'vue';
 import type { HistoryItem } from '@/config/types';
 import { historyDB } from '@/services/database';
 import { useToast } from '@/composables/useToast';
-import { useConfirm } from '@/composables/useConfirm';
 import { TOAST_MESSAGES } from '@/constants';
 import { emitHistoryDeleted, emitHistoryUpdated } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';
@@ -24,7 +23,6 @@ export interface BulkOpsContext {
 
 export function createBulkOps(ctx: BulkOpsContext) {
   const toast = useToast();
-  const { confirm } = useConfirm();
 
   async function bulkExportJSON(selectedIds: string[]): Promise<void> {
     try {
@@ -55,49 +53,6 @@ export function createBulkOps(ctx: BulkOpsContext) {
     } catch (error) {
       log.error('[批量操作] 导出失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error instanceof Error ? error.message : String(error)));
-    }
-  }
-
-  async function bulkDeleteRecords(selectedIds: string[]): Promise<boolean> {
-    try {
-      if (selectedIds.length === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
-        return false;
-      }
-      const confirmed = await confirm(
-        `确定要删除选中的 ${selectedIds.length} 条历史记录吗？此操作不可撤销。`,
-        { header: '批量删除确认', acceptLabel: '删除', acceptClass: 'p-button-danger' },
-      );
-      if (!confirmed) return false;
-
-      const deletedIds = await historyDB.deleteMany(selectedIds);
-
-      // 详情缓存对所有选中目标清理：陈旧目标的记录同样已不在库里
-      selectedIds.forEach(id => ctx.detailCache.removeDetail(id));
-
-      // 陈旧目标（已被别处删除）不计数、不弹 toast、不广播——真正删它的那次操作
-      // 已经做过这些，重播会让其他窗口重复扣减（与 bulkDeleteHistoryResults 口径一致）
-      if (deletedIds.length < selectedIds.length) {
-        log.warn(`[批量操作] ${selectedIds.length - deletedIds.length} 条目标已不存在，仅移除视图行`);
-      }
-      if (deletedIds.length > 0) {
-        toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(deletedIds.length));
-
-        ctx.totalCount.value = Math.max(0, ctx.totalCount.value - deletedIds.length);
-        ctx.removeFavoritesFromIds(deletedIds);
-        await ctx.refreshServiceCounts();
-        void ctx.refreshTimePeriodStats();
-        ctx.dataVersion.value++;
-
-        emitHistoryDeleted(deletedIds).catch(e => {
-          log.warn('[历史记录] 跨窗口通知失败:', e);
-        });
-      }
-      return true;
-    } catch (error) {
-      log.error('[批量操作] 删除失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error instanceof Error ? error.message : String(error)));
-      return false;
     }
   }
 
@@ -145,5 +100,5 @@ export function createBulkOps(ctx: BulkOpsContext) {
     }
   }
 
-  return { bulkExportJSON, bulkDeleteRecords, removeRecords, restoreRecords };
+  return { bulkExportJSON, removeRecords, restoreRecords };
 }

@@ -1,5 +1,4 @@
 import type { HistoryItem, ServiceType } from '@/config/types';
-import type { ImageMeta } from '@/types/image-meta';
 
 export interface LinkCheckLiteRow {
   id: string;
@@ -29,19 +28,6 @@ export interface SearchOptions {
 
 export interface SearchResult {
   items: HistoryItem[];
-  total: number;
-  hasMore: boolean;
-}
-
-export interface FavoritesMetaPageOptions {
-  offset: number;
-  limit: number;
-  serviceFilter?: ServiceType | 'all';
-  searchTerm?: string;
-}
-
-export interface FavoritesMetaPageResult {
-  items: ImageMeta[];
   total: number;
   hasMore: boolean;
 }

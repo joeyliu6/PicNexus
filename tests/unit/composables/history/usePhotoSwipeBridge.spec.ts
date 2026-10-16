@@ -212,7 +212,6 @@ describe('usePhotoSwipeBridge image loading', () => {
       showHideAnimationType: 'zoom',
       mainClass: 'pswp--picnexus',
     });
-    expect(harness.api().blurSrc.value).toBe('https://example.com/medium.jpg');
     expect(harness.api().pswpEl.value).toBe(pswp.element);
     harness.wrapper.unmount();
   });
@@ -598,16 +597,14 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     harness.visible.value = false;
     await nextTick();
 
-    // 收回动画进行中：teleport 目标和模糊背景的图源都必须还在
+    // 收回动画进行中：teleport 目标必须还在
     expect(pswp.closeCalls).toBe(1);
     expect(harness.api().pswpEl.value).toBe(pswp.element);
-    expect(harness.api().blurSrc.value).not.toBeNull();
     expect(pswp.element.classList.contains('is-pswp-closing')).toBe(true);
 
     // 动画结束才拆
     pswp.finishClosingAnimation();
     expect(harness.api().pswpEl.value).toBeNull();
-    expect(harness.api().blurSrc.value).toBeNull();
 
     harness.wrapper.unmount();
   });

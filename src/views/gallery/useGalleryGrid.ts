@@ -3,18 +3,19 @@
 
 import { computed, onUnmounted, watch, type Ref } from 'vue';
 import type { DayStatsFilter } from '@/services/database/types';
+import type { ImageMeta } from '@/types/image-meta';
 import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
 import { useHistoryManager } from '@/composables/history/useHistory';
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
 import { useImageLoadManager } from '@/composables/image/useImageLoadManager';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
+import { getMetaThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useTimelineSidebarControl } from '@/composables/timeline/useTimelineSidebarControl';
 import { useScrollRestore } from '@/composables/timeline/useScrollRestore';
 import { useImagePreload } from '@/composables/timeline/useImagePreload';
 import { useTimelineLightbox } from '@/composables/timeline/useTimelineLightbox';
-import { useTimelineDragAndSkeleton } from '@/composables/timeline/useTimelineDragAndSkeleton';
-import { useTimelineData } from '@/composables/timeline/useTimelineData';
+import { useTimelineJump } from '@/composables/timeline/useTimelineJump';
 import { useTimelineDayPagination } from '@/composables/timeline/useTimelineDayPagination';
 import { useVisibleDayBuffer } from '@/composables/timeline/useVisibleDayBuffer';
 import { useScrollAnchor } from '@/composables/timeline/useScrollAnchor';
@@ -67,15 +68,17 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
   /** 已加载天的 metas（展平），给选择与灯箱用 */
   const allLoadedMetas = computed(() => groups.value.flatMap((g) => g.items));
 
-  const data = useTimelineData({
-    filteredMetas: allLoadedMetas,
-    favoriteSet: historyManager.favoriteSet,
-    favoritesOnly: computed(() => filter.value.favoritesOnly),
-    selectedIdList: computed(() => viewState.selectedIdList.value),
-    config: configManager.config,
-    detailCache: viewState.detailCache,
-    toggleFavorite: historyManager.toggleFavorite,
-  });
+  /** 缩略图候选链：主服务排第 0 位，加载失败时 <img> 自动换下一条 */
+  const getThumbnailUrls = (meta: ImageMeta): string[] => getMetaThumbnailCandidates(meta, configManager.config.value);
+
+  /** 切换收藏：失败时 useHistory 已回滚并提示，这里只接住异常，免得点击处理留下未处理的 rejection */
+  async function toggleFavorite(id: string): Promise<void> {
+    try {
+      await historyManager.toggleFavorite(id);
+    } catch {
+      // 已提示
+    }
+  }
 
   const virtual = useVirtualTimeline(scrollContainer, groups, GALLERY_GRID);
 
@@ -109,7 +112,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     allMetas: allLoadedMetas,
     displayMode: virtual.displayMode,
     scrollDirection: virtual.scrollDirection,
-    getThumbnailUrls: data.getThumbnailUrls,
+    getThumbnailUrls,
     isImageLoaded: imageLoad.isImageLoaded,
     onImageLoad: imageLoad.onImageLoad,
   });
@@ -120,9 +123,8 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     ensureDaysLoaded,
     findDayBefore: pagination.findDayBefore,
     findDayAfter: pagination.findDayAfter,
-    detailCache: viewState.detailCache,
+    detailCache: historyManager.detailCache,
     config: configManager.config,
-    deleteHistoryItem: viewState.deleteHistoryItem,
     scrollToItem: virtual.scrollToItem,
     toast,
   });
@@ -130,17 +132,14 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
   // layout 重算时保持视口锚点，消除高度估算偏差带来的跳动
   const anchor = useScrollAnchor(scrollContainer, virtual.layoutResult, virtual.isCalculating, virtual.visibleItems);
 
-  const drag = useTimelineDragAndSkeleton({
+  const jump = useTimelineJump({
     scrollContainer,
     groups,
     isCalculating: virtual.isCalculating,
-    visible: computed(() => visible.value),
     totalHeight: virtual.totalHeight,
-    scrollProgress: virtual.scrollProgress,
     viewportHeight: virtual.viewportHeight,
     layoutResult: virtual.layoutResult,
     timePeriodStats: months,
-    setLastStableProgress: scrollRestore.setLastStableProgress,
     scrollToProgress: virtual.scrollToProgress,
     scrollToItem: virtual.scrollToItem,
     forceUpdateVisibleArea: virtual.forceUpdateVisibleArea,
@@ -160,7 +159,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
   function onScroll(): void {
     scrollRestore.trackScrollPosition();
     virtual.handleScroll();
-    if (!drag.getIsDragging()) scrubber.onScroll();
+    scrubber.onScroll();
   }
 
   /** 选择框 / Ctrl·⌘ 单击 / Shift 连选，按页面上的顺序 */
@@ -181,8 +180,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     imageLoad.clearAll();
     scrubber.cleanup();
     preload.cleanup();
-    viewState.reset();
-    drag.cleanup();
+    viewState.clearSelection();
   });
 
   return {
@@ -196,14 +194,14 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     isLoadingStats,
     hasLoadedStats,
     allLoadedMetas,
-    getThumbnailUrls: data.getThumbnailUrls,
-    toggleFavorite: data.handleToggleFavorite,
+    getThumbnailUrls,
+    toggleFavorite,
     loadedImages,
     failedImages,
     onImageLoad: imageLoad.onImageLoad,
     onImageError: imageLoad.onImageError,
     virtual,
-    drag,
+    jump,
     scrubber,
     lightbox,
     onScroll,

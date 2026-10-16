@@ -363,15 +363,12 @@ describe('HistoryDatabase', () => {
     expect(second.items.map(item => item.id)).toEqual(['tie-a']);
   });
 
-  it('uses the same stable order for favorite pages and full streams', async () => {
+  it('uses the same stable order for full streams', async () => {
     const { historyDB } = await import('@/services/database');
     await historyDB.clear();
     await historyDB.insert(makeHistoryItem({ id: 'tie-a', timestamp: 100, isFavorited: true }));
     await historyDB.insert(makeHistoryItem({ id: 'tie-c', timestamp: 100, isFavorited: true }));
     await historyDB.insert(makeHistoryItem({ id: 'tie-b', timestamp: 100, isFavorited: false }));
-
-    const favorites = await historyDB.getFavoritesMetaPage({ offset: 0, limit: 10 });
-    expect(favorites.items.map(item => item.id)).toEqual(['tie-c', 'tie-a']);
 
     const streamed: string[] = [];
     for await (const batch of historyDB.getAllStream(2)) {
@@ -668,31 +665,15 @@ describe('HistoryDatabase', () => {
       };
     }
 
-    it('setFavorite 在途时 getFavoritesMetaPage 等写盘完成再查（含新收藏）', async () => {
+    it('setFavorite 在途时 getFavoriteIdList 等写盘完成再查（含新收藏）', async () => {
       const { historyDB } = await import('@/services/database');
-      // 本组断言依赖全局计数（total / 全量 id 列表），先清库与其他用例的数据隔离
-      await historyDB.clear();
-      await historyDB.insert(makeHistoryItem({ id: 'fav-race-a', timestamp: 1000 }));
-      await historyDB.insert(makeHistoryItem({ id: 'fav-race-b', timestamp: 2000 }));
-
-      interceptFavoriteUpdate(() => new Promise(resolve => setTimeout(resolve, 20)));
-
-      // 不 await：模拟乐观更新后 watcher 立刻重查的真实时序
-      const writePromise = historyDB.setFavorite('fav-race-b', true);
-      const page = await historyDB.getFavoritesMetaPage({ offset: 0, limit: 80 });
-      await writePromise;
-
-      expect(page.items.map(item => item.id)).toContain('fav-race-b');
-      expect(page.total).toBe(1);
-    });
-
-    it('setFavorite 在途时 getFavoriteIdList 同样等写盘完成', async () => {
-      const { historyDB } = await import('@/services/database');
+      // 本组断言依赖全量 id 列表，先清库与其他用例的数据隔离
       await historyDB.clear();
       await historyDB.insert(makeHistoryItem({ id: 'fav-race-c', timestamp: 1000 }));
 
       interceptFavoriteUpdate(() => new Promise(resolve => setTimeout(resolve, 20)));
 
+      // 不 await：模拟乐观更新后 watcher 立刻重查的真实时序
       const writePromise = historyDB.setFavorite('fav-race-c', true);
       const ids = await historyDB.getFavoriteIdList();
       await writePromise;
@@ -711,9 +692,9 @@ describe('HistoryDatabase', () => {
       });
 
       const writePromise = historyDB.setFavorite('fav-race-d', true);
-      const page = await historyDB.getFavoritesMetaPage({ offset: 0, limit: 80 });
+      const ids = await historyDB.getFavoriteIdList();
 
-      expect(page.total).toBe(0);
+      expect(ids).toEqual([]);
       await expect(writePromise).rejects.toThrow('disk fail');
     });
   });

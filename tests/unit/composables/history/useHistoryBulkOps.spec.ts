@@ -9,7 +9,6 @@ const {
   historyInsertOrIgnoreMock,
   toastShowConfigMock,
   toastErrorMock,
-  confirmMock,
   emitHistoryDeletedMock,
   emitHistoryUpdatedMock,
 } = vi.hoisted(() => ({
@@ -17,7 +16,6 @@ const {
   historyInsertOrIgnoreMock: vi.fn(),
   toastShowConfigMock: vi.fn(),
   toastErrorMock: vi.fn(),
-  confirmMock: vi.fn(),
   emitHistoryDeletedMock: vi.fn(),
   emitHistoryUpdatedMock: vi.fn(),
 }));
@@ -35,12 +33,6 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     showConfig: toastShowConfigMock,
     error: toastErrorMock,
-  }),
-}));
-
-vi.mock('@/composables/useConfirm', () => ({
-  useConfirm: () => ({
-    confirm: confirmMock,
   }),
 }));
 
@@ -94,100 +86,12 @@ function makeCtx() {
 describe('createBulkOps', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    confirmMock.mockResolvedValue(true);
     invokeMock.mockResolvedValue('/tmp/history.json');
     // deleteMany 返回实际删除的 id 列表（默认回显入参 = 全部存在）
     historyDeleteManyMock.mockImplementation(async (ids: string[]) => ids);
-    emitHistoryDeletedMock.mockResolvedValue(undefined);
     historyInsertOrIgnoreMock.mockResolvedValue(undefined);
+    emitHistoryDeletedMock.mockResolvedValue(undefined);
     emitHistoryUpdatedMock.mockResolvedValue(undefined);
-  });
-
-  it('returns false and warns when bulkDeleteRecords is called with an empty selection', async () => {
-    const { ctx } = makeCtx();
-    const { bulkDeleteRecords } = createBulkOps(ctx);
-
-    const result = await bulkDeleteRecords([]);
-
-    expect(result).toBe(false);
-    expect(historyDeleteManyMock).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.any(Object));
-  });
-
-  it('returns false without deleting anything when the user cancels bulkDeleteRecords', async () => {
-    confirmMock.mockResolvedValueOnce(false);
-    const { ctx } = makeCtx();
-    const { bulkDeleteRecords } = createBulkOps(ctx);
-
-    const result = await bulkDeleteRecords(['a', 'b']);
-
-    expect(result).toBe(false);
-    expect(historyDeleteManyMock).not.toHaveBeenCalled();
-  });
-
-  it('deletes records, updates counters and clears caches on a successful bulk delete', async () => {
-    const { ctx, detailCache, removedFavoriteBatches, refreshServiceCounts, refreshTimePeriodStats } = makeCtx();
-    const { bulkDeleteRecords } = createBulkOps(ctx);
-
-    const result = await bulkDeleteRecords(['a', 'b']);
-
-    expect(result).toBe(true);
-    expect(historyDeleteManyMock).toHaveBeenCalledWith(['a', 'b']);
-    expect(ctx.totalCount.value).toBe(3);
-    expect(ctx.dataVersion.value).toBe(2);
-    expect(removedFavoriteBatches).toEqual([['a', 'b']]);
-    expect(refreshServiceCounts).toHaveBeenCalledTimes(1);
-    expect(refreshTimePeriodStats).toHaveBeenCalledTimes(1);
-    expect(detailCache.removeDetail).toHaveBeenCalledTimes(2);
-    expect(detailCache.removeDetail).toHaveBeenNthCalledWith(1, 'a');
-    expect(detailCache.removeDetail).toHaveBeenNthCalledWith(2, 'b');
-    expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['a', 'b']);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
-  });
-
-  // 陈旧目标（记录已被别处删掉）：toast 报实际条数、只广播真删掉的 id，
-  // 否则其他窗口会按虚报的 ids 重复扣减计数
-  it('reports only actually deleted rows when some targets are stale', async () => {
-    historyDeleteManyMock.mockResolvedValueOnce(['a']);
-    const { ctx, detailCache, removedFavoriteBatches } = makeCtx();
-    const { bulkDeleteRecords } = createBulkOps(ctx);
-
-    const result = await bulkDeleteRecords(['a', 'ghost']);
-
-    expect(result).toBe(true);
-    expect(ctx.totalCount.value).toBe(4);
-    expect(removedFavoriteBatches).toEqual([['a']]);
-    expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['a']);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
-    // 详情缓存对陈旧目标一样要清：那条记录已不在库里
-    expect(detailCache.removeDetail).toHaveBeenCalledWith('ghost');
-  });
-
-  it('stays silent when every target is stale: no toast, no broadcast, counters untouched', async () => {
-    historyDeleteManyMock.mockResolvedValueOnce([]);
-    const { ctx } = makeCtx();
-    const { bulkDeleteRecords } = createBulkOps(ctx);
-
-    const result = await bulkDeleteRecords(['ghost-1', 'ghost-2']);
-
-    expect(result).toBe(true);
-    expect(ctx.totalCount.value).toBe(5);
-    expect(ctx.dataVersion.value).toBe(1);
-    expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).not.toHaveBeenCalledWith('success', expect.any(Object));
-  });
-
-  it('shows an error toast and keeps state unchanged when bulkDeleteRecords fails', async () => {
-    historyDeleteManyMock.mockRejectedValueOnce(new Error('db offline'));
-    const { ctx } = makeCtx();
-    const { bulkDeleteRecords } = createBulkOps(ctx);
-
-    const result = await bulkDeleteRecords(['a']);
-
-    expect(result).toBe(false);
-    expect(ctx.totalCount.value).toBe(5);
-    expect(ctx.dataVersion.value).toBe(1);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
   });
 
   // 同一个 id 每次拿到同一条（工厂按序号生成时间戳，现造两次会不相等）

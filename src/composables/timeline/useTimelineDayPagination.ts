@@ -524,14 +524,12 @@ export function useTimelineDayPagination(
     void loadDayStats();
   });
 
-  // v7：timeline 组件 mounted 就开始预加载,不等 visible=true
-  // HistoryView 用 KeepAlive + v-show 同时挂载三个子 view,TimelineView 在表格视图时
-  // 已经处于 mounted 状态。提前预加载让用户切到 timeline 时零等待。
-  // 代价：用户如果从不开 timeline,浪费 1-2s SQL + 5MB 内存（对图片管理工具可接受）。
+  // 挂载就开始预加载，不等 visible=true：图库在列表视图时网格也已挂载（v-show），
+  // 外壳的 KeepAlive 也会保活，提前预加载让切到网格时零等待。
   // 即使 visible=false 时 filter 变化也会触发重载（上面的 watch），逻辑等价。
   //
   // 保留 visible watch 作为兜底：极端场景（组件挂载时 loadDayStats 竞态失败）下
-  // 用户切到 timeline 视图仍会补触发一次加载。
+  // 切到网格时仍会补触发一次加载。
   if (!hasLoadedStats.value) void loadDayStats();
   watch(visible, (v) => {
     if (v && !hasLoadedStats.value) void loadDayStats();

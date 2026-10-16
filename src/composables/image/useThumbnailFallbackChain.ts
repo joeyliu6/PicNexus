@@ -48,16 +48,16 @@ interface UseThumbnailFallbackChainOptions {
   /**
    * 已被用户显式确认过可走明文 HTTP 的主机名集合（响应式 getter，可选）
    *
-   * 由调用方用 `getConfirmedHttpHosts(config)` 从配置里取（见 FavoritesView / TimelineView），
+   * 由调用方用 `getConfirmedHttpHosts(config)` 从配置里取（图库网格见 useGalleryGrid 的 confirmedHttpHosts），
    * 与 ThumbnailImage 的 `confirmedHttpHosts` prop 同一份数据、同一个去处：
    * 交给 {@link safeImageUrl} 判断某个明文 HTTP 地址算不算「用户担保过」。
    *
    * 不传等于「一个都没确认」——公网明文 HTTP 候选会被过滤掉，这是安全的默认值。
    *
    * 名单变大（用户在设置页刚确认完域名）时，本 composable 只负责重新纳入候选、回到第 0 条；
-   * **调用方已经记下的「失败」状态得由调用方自己撤销**——那状态属于父组件（收藏页的
-   * `imageStates`、时间轴的 `failedImages`），composable 够不着。两个视图都已接上：
-   * 它们 watch `confirmedHttpHostsKey(...)`，名单内容真变了才清失败态。
+   * **调用方已经记下的「失败」状态得由调用方自己撤销**——那状态属于父组件（图库网格的
+   * `failedImages`），composable 够不着。图库已接上：useGalleryGrid watch
+   * `confirmedHttpHostsKey(...)`，名单内容真变了才清失败态。
    * 新增消费方若也记失败状态，照着接一条，否则确认完域名那一屏要等重启才恢复。
    */
   confirmedHttpHosts?: () => ReadonlySet<string> | undefined;

@@ -108,7 +108,7 @@ export function useImagePreload(options: UseImagePreloadOptions) {
       };
       // 预加载失败**既不标记这张图失败，也不上报**，直接放着不管：
       // - 不标记：这只是离屏预热、试的还只是候选链第一条。标进 failedImages 会让
-      //   TimelinePhotoItem 直接走占位分支（见其模板 v-if），候选链里垫底的原图
+      //   GalleryTile 直接显示「图片加载失败」，候选链里垫底的原图
       //   永远没机会顶上——正好复现 issue #4 症状②。
       // - 不上报：单条失败分不清「代理不通」还是「这张图被删了」，而上报会把整个会话
       //   降级。预热只有一条 URL，没有「下一条成功了」这个对照，无从定性。

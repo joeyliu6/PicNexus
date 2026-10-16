@@ -58,7 +58,6 @@ import { exportHistoryToJson, importHistoryFromJson, type HistoryImportResult } 
 import type {
   LinkCheckLiteRow, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
-  FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
   DayStats, DayStatsFilter,
 } from './types';
@@ -77,7 +76,6 @@ interface MetaRow {
 export type {
   LinkCheckLiteRow, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
-  FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
   DayStats, DayStatsFilter,
   HistoryImportResult,
@@ -792,50 +790,6 @@ class HistoryDatabase {
       ids,
     );
     return rows.map(row => this.rowToImageMeta(row));
-  }
-
-  /** 收藏元数据分页查询（服务端过滤 + LIMIT/OFFSET，避免前端全量加载） */
-  async getFavoritesMetaPage(options: FavoritesMetaPageOptions): Promise<FavoritesMetaPageResult> {
-    await this.awaitPendingFavoriteWrites();
-    const db = await this.connection.getDb();
-    const { offset, limit, serviceFilter = 'all', searchTerm } = options;
-
-    const params: (string | number)[] = [];
-    let whereClause = 'WHERE is_favorited = 1';
-    const nextParam = () => `$${params.length + 1}`;
-
-    if (serviceFilter !== 'all') {
-      whereClause += ` AND primary_service = ${nextParam()}`;
-      params.push(serviceFilter);
-    }
-
-    const trimmed = searchTerm?.trim().toLowerCase();
-    if (trimmed) {
-      whereClause += ` AND local_file_name_lower LIKE ${nextParam()} ESCAPE '\\'`;
-      params.push(`%${escapeLikePattern(trimmed)}%`);
-    }
-
-    const limitPh = nextParam();
-    params.push(limit);
-    const offsetPh = nextParam();
-    params.push(offset);
-
-    const rows = await db.select<(MetaRow & { _total: number })[]>(
-      `SELECT
-        id, timestamp, local_file_name, aspect_ratio,
-        primary_service, generated_link, results, is_favorited,
-        COUNT(*) OVER() as _total
-      FROM history_items
-      ${whereClause}
-      ORDER BY timestamp DESC, id DESC
-      LIMIT ${limitPh} OFFSET ${offsetPh}`,
-      params,
-    );
-
-    const total = rows[0]?._total ?? 0;
-    const items = rows.map(row => this.rowToImageMeta(row));
-    const hasMore = offset + items.length < total;
-    return { items, total, hasMore };
   }
 
   private rowToImageMeta(row: MetaRow): ImageMeta {

@@ -34,14 +34,10 @@ const thresholds = {
   // branches 分母从 1 涨到 83，旧的 100% 正是注释预告的假象；这次真分支全覆盖，
   // 阈值按实测新值重新定线，没有沿用旧数字。
   'src/composables/history/useHistoryResultOps.ts': { lines: 95, statements: 95, functions: 95, branches: 95 },
-  // 2026-08-13 补完拖拽/跳转骨架单测后从「低覆盖」组毕业：
-  // 3.8/3.8/0/100(分母 0) → 100/100/100/99.13(分母 115)。
-  // 唯一未覆盖的分支是 useTimelineDragAndSkeleton.ts:113 的 `oldLen ?? 0`：
-  // 非 immediate 的 watch 永远给得出已定义的旧值，取不到，不为凑数造畸形场景。
-  'src/composables/timeline/useTimelineDragAndSkeleton.ts': { lines: 95, statements: 95, functions: 95, branches: 94 },
+  // 图库刻度条跳转（年 / 月，拖动时只跳最后一个请求）：实测 100/100/100/100。
+  'src/composables/timeline/useTimelineJump.ts': { lines: 95, statements: 95, functions: 95, branches: 95 },
 
-  // 「低覆盖核心文件」组到此清空——三个占位条目（UploadQueue.ts / useHistoryResultOps.ts /
-  // useTimelineDragAndSkeleton.ts）都已补齐真实单测并毕业到上面。
+  // 「低覆盖核心文件」组到此清空——占位条目都已补齐真实单测并毕业到上面。
   //
   // ⚠️ 将来若再往这里挂低覆盖文件，branches 一律先设 0：这类文件的 branches 现值
   // 常显示 100%，但分母只有个位数甚至 0——那是「几乎没有分支被 v8 记录到」的假象，

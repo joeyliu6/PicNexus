@@ -2,7 +2,7 @@
  * 灯箱（Lightbox）逻辑 Composable
  * 支持日内快翻（无延迟）和跨日按需加载（意图缓冲）
  *
- * 公共部分（visible / item / showItem / deleteCurrent）走 useLightboxCore，
+ * 公共部分（visible / item / showItem / loadItem）走 useLightboxCore，
  * 这里只负责时间轴特有的「日内 + 跨日」复杂导航与意图缓冲。
  */
 import { ref, computed, type Ref } from 'vue';
@@ -36,13 +36,10 @@ interface UseTimelineLightboxOptions {
   detailCache: { getDetail: (id: string) => Promise<HistoryItem> };
   /** 配置（用于生成图片 URL） */
   config: Ref<UserConfig>;
-  /** 删除历史记录方法 */
-  deleteHistoryItem: (id: string) => Promise<boolean>;
   /** 滚动到指定元素 */
   scrollToItem: (id: string, behavior?: ScrollBehavior) => void;
-  /** Toast 通知 */
+  /** Toast 通知（读详情失败时提示） */
   toast: {
-    success: (msg: string) => void;
     error: (title: string, detail?: string) => void;
   };
 }
@@ -51,7 +48,7 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
   const {
     dayMetaCache, loadedDayKeys, ensureDaysLoaded,
     findDayBefore, findDayAfter,
-    detailCache, config, deleteHistoryItem, scrollToItem, toast,
+    detailCache, config, scrollToItem, toast,
   } = options;
 
   const core = useLightboxCore({ silentLoadError: true, toast });
@@ -201,7 +198,7 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     }
   }
 
-  // ==================== 打开 / 删除 ====================
+  // ==================== 打开 ====================
 
   async function openLightbox(meta: ImageMeta): Promise<void> {
     const dayKey = tsToDayKey(meta.timestamp);
@@ -224,16 +221,12 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     }
   }
 
-  const handleLightboxDelete = (item: HistoryItem) =>
-    core.deleteCurrent(item, deleteHistoryItem);
-
   return {
     lightboxVisible: core.lightboxVisible,
     lightboxItem: core.lightboxItem,
     lightboxHasPrev,
     lightboxHasNext,
     openLightbox,
-    handleLightboxDelete,
     handleLightboxNavigate,
   };
 }

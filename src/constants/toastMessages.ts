@@ -13,21 +13,8 @@ type StaticMessage = ToastMessageConfig;
 export const TOAST_MESSAGES = {
   // === 通用操作 ===
   common: {
-    copySuccess: (count?: number): ToastMessageConfig => ({
-      summary: '已复制',
-      detail: count ? `${count} 个链接` : '链接已复制到剪贴板',
-      life: 1500
-    }),
     copyFailed: (error: string): ToastMessageConfig => ({
       summary: '复制失败',
-      detail: error
-    }),
-    deleteSuccess: (count: number): ToastMessageConfig => ({
-      summary: '已删除',
-      detail: `${count} 条记录`
-    }),
-    deleteFailed: (error: string): ToastMessageConfig => ({
-      summary: '删除失败',
       detail: error
     }),
     clearSuccess: (target: string): ToastMessageConfig => ({
@@ -325,10 +312,6 @@ export const TOAST_MESSAGES = {
       summary: '跳转失败',
       detail: error
     }),
-    invalidId: {
-      summary: '删除失败',
-      detail: '无效的项目ID'
-    } as StaticMessage,
     noLink: (serviceName?: string): ToastMessageConfig => ({
       summary: '无可用链接',
       detail: serviceName ? `${serviceName} 图床没有可用的链接` : '该项目没有可用的链接'

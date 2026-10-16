@@ -1,14 +1,9 @@
 // 历史记录管理 Composable（单例模式）
-// 纯数据层：使用 SQLite 数据库存储，支持大数据量分页和搜索
-// v3.0: 视图状态已移至 useHistoryViewState.ts
+// 纯数据层：使用 SQLite 数据库存储；图库的多选状态在 useHistoryViewState.ts
 
 import { ref, shallowRef, type Ref } from 'vue';
-import type { HistoryItem, ServiceType } from '@/config/types';
-import {
-  historyDB,
-  type PageResult, type SearchResult, type SearchOptions,
-  type TimePeriodStats,
-} from '@/services/database';
+import type { HistoryItem } from '@/config/types';
+import { historyDB, type TimePeriodStats } from '@/services/database';
 import { useImageDetailCache } from '@/composables/image/useImageDetailCache';
 import { useToast } from '@/composables/useToast';
 import { TOAST_MESSAGES } from '@/constants';
@@ -16,7 +11,6 @@ import { useConfirm } from '@/composables/useConfirm';
 import { useUndoToast } from '@/composables/useUndoToast';
 import {
   onCacheEvent,
-  emitHistoryDeleted,
   emitHistoryCleared,
   WINDOW_SESSION_ID,
   type CacheEventPayload,
@@ -161,7 +155,7 @@ function initCrossWindowListener(): void {
 
     switch (payload.type) {
       case 'history-deleted':
-        // 自发事件：本窗口删除时已在 deleteHistoryItem/bulkDeleteRecords 中本地更新过，跳过
+        // 自发事件：本窗口删除时已在 removeRecords / bulkDeleteHistoryResults 中本地更新过，跳过
         if (data?.source === WINDOW_SESSION_ID) break;
         if (data?.ids && data.ids.length > 0) {
           // metas 已彻底下线，视图内部各自按 SQL 重拉；此处只维护模块级 stats
@@ -261,61 +255,6 @@ export function useHistoryManager() {
   }
 
   /**
-   * 删除单个历史记录项
-   */
-  async function deleteHistoryItem(itemId: string): Promise<boolean> {
-    try {
-      if (!itemId || typeof itemId !== 'string' || itemId.trim().length === 0) {
-        log.error('[历史记录] 删除失败: 无效的 itemId:', itemId);
-        toast.showConfig('error', TOAST_MESSAGES.history.invalidId);
-        return false;
-      }
-
-      const confirmed = await confirm(
-        '确定要删除这条历史记录吗？此操作不可撤销。',
-        { header: '确认删除', acceptLabel: '删除', acceptClass: 'p-button-danger' }
-      );
-
-      if (!confirmed) {
-        return false;
-      }
-
-      const deleted = await historyDB.delete(itemId);
-
-      // 清除详情缓存：无论真删还是陈旧目标，这条记录都已不在库里
-      detailCache.removeDetail(itemId);
-
-      // 目标本就不存在（已被别处删除）：不计数、不弹 toast、不广播——
-      // 真正删它的那次操作已经做过这些，重播会让其他窗口重复扣减
-      // （与 bulkDeleteHistoryResults 的陈旧目标口径一致）
-      if (!deleted) {
-        log.warn('[历史记录] 删除目标已不存在，仅移除视图行:', itemId);
-        return true;
-      }
-
-      toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
-
-      totalCount.value = Math.max(0, totalCount.value - 1);
-
-      removeFavoritesFromIds([itemId]);
-      await refreshServiceCounts();
-      void refreshTimePeriodStats();
-      dataVersion.value++;
-
-      emitHistoryDeleted([itemId]).catch(e => {
-        log.warn('[历史记录] 跨窗口通知失败:', e);
-      });
-
-      return true;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      log.error('[历史记录] 删除失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(errorMsg));
-      return false;
-    }
-  }
-
-  /**
    * 清空所有历史记录
    */
   async function clearHistory(): Promise<void> {
@@ -358,8 +297,8 @@ export function useHistoryManager() {
     }
   }
 
-  // 批量操作（导出 JSON / 批量删除）从 useHistoryBulkOps 引入
-  const { bulkExportJSON, bulkDeleteRecords, removeRecords, restoreRecords } = createBulkOps({
+  // 批量操作（导出 JSON / 移除记录 / 撤销移除）从 useHistoryBulkOps 引入
+  const { bulkExportJSON, removeRecords, restoreRecords } = createBulkOps({
     totalCount,
     dataVersion,
     detailCache,
@@ -394,45 +333,6 @@ export function useHistoryManager() {
   }
 
   /**
-   * 按页码加载数据（用于表格视图服务端分页）
-   * 返回独立的分页结果，不影响模块级 stats 缓存
-   *
-   * @param page 页码（从 1 开始）
-   * @param pageSize 每页数量（默认 100）
-   * @param serviceFilter 图床筛选
-   * @returns 分页结果
-   */
-  async function loadPageByNumber(
-    page: number,
-    pageSize: number = 100,
-    serviceFilter: ServiceType | 'all' = 'all'
-  ): Promise<PageResult> {
-    await initDatabase();
-    const result = await historyDB.getPage({
-      page,
-      pageSize,
-      serviceFilter: serviceFilter === 'all' ? undefined : serviceFilter,
-    });
-    return result;
-  }
-
-  /**
-   * 搜索历史记录（支持分页）
-   *
-   * @param keyword 搜索关键词
-   * @param options 搜索选项（serviceFilter、limit、offset）
-   * @returns 搜索结果
-   */
-  async function searchHistory(
-    keyword: string,
-    options: SearchOptions = {}
-  ): Promise<SearchResult> {
-    await initDatabase();
-    const result = await historyDB.search(keyword, options);
-    return result;
-  }
-
-  /**
    * 加载时间段统计信息（轻量级，用于时间轴完整显示）
    * 只在首次加载或数据变化时调用
    */
@@ -457,7 +357,7 @@ export function useHistoryManager() {
 
   /**
    * 跳转到指定月份（仅校验该月份在 SQL 聚合的 timePeriodStats 中存在）
-   * 实际滚动定位由 TimelineView 的按日分页层负责
+   * 实际滚动定位由图库的按日分页（useTimelineDayPagination）与跳转（useTimelineJump）负责
    *
    * @param year 年份
    * @param month 月份 (0-11)
@@ -559,7 +459,6 @@ export function useHistoryManager() {
   return {
     // 状态
     isLoading,
-    isStatsLoaded,
 
     // 统计
     totalCount,
@@ -574,13 +473,9 @@ export function useHistoryManager() {
     // 方法
     loadStats,
     loadAllHistory,
-    loadPageByNumber,
-    searchHistory,
     invalidateCache,
-    deleteHistoryItem,
     clearHistory,
     bulkExportJSON,
-    bulkDeleteRecords,
     removeRecords,
     restoreRecords,
     bulkDeleteHistoryResults,

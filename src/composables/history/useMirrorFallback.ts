@@ -154,20 +154,8 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
     return list;
   });
 
-  /** 主图床在 linkCheck 中被标记为失效（未检测不算） */
-  const isPrimaryBroken = computed(() => {
-    const primary = mirrors.value.find(m => m.isPrimary);
-    return primary?.checkState === 'invalid';
-  });
-
   /** 是否有至少一条非主图床的成功备份——没有就没必要展示"图床管理"按钮 */
   const hasAlternatives = computed(() => mirrors.value.some(m => !m.isPrimary));
-
-  /** 全部图床链接均已失效（包括主图床）。用于触发"整条记录失效"提示 */
-  const allMirrorsBroken = computed(() => {
-    const list = mirrors.value;
-    return list.length > 0 && list.every(m => m.checkState === 'invalid');
-  });
 
   /**
    * 推荐接班的图床：优先 linkCheck 通过的，其次未检测的
@@ -412,9 +400,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
 
   return {
     mirrors,
-    isPrimaryBroken,
     hasAlternatives,
-    allMirrorsBroken,
     suggestedMirror,
     checkingServices,
     switchPrimary,

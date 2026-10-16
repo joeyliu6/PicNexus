@@ -33,7 +33,7 @@ const props = defineProps<{
    * 已通过 fake-ip 逃生舱确认的 HTTP 主机名（需先用 normalizeHost 归一化）
    *
    * Why 这里只接 prop 不自己查配置：本组件是到处复用的通用缩略图，配置读取
-   * 交给调用方（如 HistoryTableView / FocusCard，见 getConfirmedHttpHosts）。
+   * 交给调用方（如图库列表 / 详情、首页 FocusCard，见 getConfirmedHttpHosts）。
    */
   confirmedHttpHosts?: ReadonlySet<string>;
 }>();

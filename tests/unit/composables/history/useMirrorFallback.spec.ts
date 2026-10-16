@@ -157,31 +157,6 @@ describe('useMirrorFallback - 派生态', () => {
     expect(list[2].checkState).toBe('unchecked'); // weibo
   });
 
-  it('isPrimaryBroken 仅主服务 invalid 为真；未检测不算', () => {
-    const broken = mountHarness(makeItem('jd', {
-      jd: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
-    }));
-    expect(broken.api().isPrimaryBroken.value).toBe(true);
-
-    const unchecked = mountHarness(makeItem('jd'));
-    expect(unchecked.api().isPrimaryBroken.value).toBe(false);
-  });
-
-  it('allMirrorsBroken 要求所有行都 invalid', () => {
-    const allBad = mountHarness(makeItem('jd', {
-      jd: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
-      qiyu: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
-      weibo: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
-    }));
-    expect(allBad.api().allMirrorsBroken.value).toBe(true);
-
-    const mixed = mountHarness(makeItem('jd', {
-      jd: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
-      qiyu: { isValid: true, lastCheckTime: 1, errorType: 'success' },
-    }));
-    expect(mixed.api().allMirrorsBroken.value).toBe(false);
-  });
-
   it('suggestedMirror 优先 valid，其次 unchecked，全失效返回 undefined', () => {
     const hasValid = mountHarness(makeItem('jd', {
       qiyu: { isValid: true, lastCheckTime: 1, errorType: 'success' },
