@@ -25,7 +25,7 @@
  *   - 引用集 = src/** 的 .css / .vue 里所有 `var(--name`（含带 fallback 的写法：
  *     fallback 只是掩盖问题，不是定义，同样要报）。
  *   - 引用集 − 定义集 非空即失败。
- *   - `--p-*` 是 PrimeVue 库内定义的令牌，项目里不会出现它们的声明，跳过。
+ *   - `--p-*`（PrimeVue）与 `--reka-*`（Reka UI 写在浮层上的触发器尺寸等）由库在运行时定义，跳过。
  *   - 注释里的内容先剥掉（CSS 块注释、HTML 注释），避免示例代码误报。
  *
  * 用法：npm run lint 自动执行；单独跑 `node scripts/check-css-undefined-vars.mjs`
@@ -49,8 +49,8 @@ const REFERENCE_SCAN = {
   extensions: /\.(css|vue)$/,
 };
 
-/** 由第三方库在运行时定义、项目源码里不会出现声明的前缀 */
-const LIBRARY_PREFIXES = ['--p-'];
+/** 由第三方库在运行时定义、项目源码里不会出现声明的前缀（PrimeVue / Reka UI 的浮层尺寸变量） */
+const LIBRARY_PREFIXES = ['--p-', '--reka-'];
 
 function walk(dir, onFile) {
   let entries;
@@ -84,8 +84,11 @@ function lineOf(source, index) {
 // ---- 1. 收集定义 ----
 
 const defined = new Set();
-/** `--name:` 前面不能是字母/连字符，否则 `a--b:` 这种会被误抓 */
-const DECLARATION = /(^|[^\w-])(--[\w-]+)\s*:/g;
+/**
+ * `--name:` 前面不能是字母/连字符，否则 `a--b:` 这种会被误抓；
+ * 名字后允许一个收尾引号，这样 TS / 模板里的对象键 `'--name': value`（:style 绑定）也算定义
+ */
+const DECLARATION = /(^|[^\w-])(--[\w-]+)['"]?\s*:/g;
 const SET_PROPERTY = /setProperty\(\s*['"`](--[\w-]+)['"`]/g;
 
 function collectDefinitions(file) {
