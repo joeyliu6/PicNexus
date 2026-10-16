@@ -123,7 +123,7 @@
 </Dialog>
 ```
 
-PrimeVue 的 `<ConfirmDialog>` 自带 `.p-confirmdialog` 类，自动命中同一套规格，无需接入。
+确认框（`useConfirm`）不走这套外壳，画在新界面的 `src/components/pn/PnConfirmHost.vue`（宽 520，规格见 `docs/design/redesign/`）。
 
 | 底栏按钮 class | 外观 | 位置 |
 |----------------|------|------|

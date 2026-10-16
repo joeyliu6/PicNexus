@@ -251,7 +251,6 @@
   --z-sticky: 200;
   --z-overlay: 1000;
   --z-modal: 1100;
-  --z-toast: 10000;
   --z-tooltip: 1300;
   --z-lightbox: 9999;
   --z-titlebar: 10001;
@@ -669,15 +668,6 @@ button:focus-visible {
 
 .icon-btn:active {
   transform: scale(0.95);
-}
-
-
-/* PrimeVue Toast 定位调整 - 避免与TitleBar重叠 */
-.p-toast.p-toast-top-right {
-  top: 52px !important;  /* TitleBar(32px) + 间距(20px) */
-  right: var(--space-lg-xl);
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 覆盖 PrimeVue 内联 z-index，确保 Toast 显示在灯箱(--z-lightbox: 9999)之上 */
-  z-index: var(--z-toast) !important;
 }
 
 
@@ -1338,15 +1328,6 @@ button:focus-visible {
    输入框见各弹窗/设置面板的 scoped 样式。弹窗外壳统一见下方第 3 节。
    护栏：scripts/check-css-deep.mjs 会拦截 .css 文件里新增的 :deep()。 */
 
-/* Toast 图标与文字垂直对齐 */
-.p-toast .p-toast-message-content {
-  align-items: flex-start;
-}
-
-.p-toast .p-toast-message-icon {
-  margin-top: var(--space-2xs);
-}
-
 /* 弹出菜单里的危险项（移除记录等）：菜单挂在 body 上，组件 scoped 样式够不着，只能写在这里。
    用法：菜单项 `{ label, icon, class: 'menu-item-danger' }` */
 .p-menu .menu-item-danger .p-menu-item-icon,
@@ -1360,21 +1341,14 @@ button:focus-visible {
 
    接入方式（PrimeVue Dialog）：
      :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
-   ConfirmDialog 由 PrimeVue 自带 .p-confirmdialog 类，无需接入，自动命中。
    需要局部差异时再叠加自己的类（如 .onboarding-dialog），只写差异、不复制外壳。
 
    ⚠️ 按钮样式必须写在这里（全局），不能写进弹窗组件的 scoped `:deep()`：
    PrimeVue Dialog 会 Teleport 到 body，其根节点 .p-dialog 不带 data-v 作用域属性，
    `:deep(.x)` 编译出的 `[data-v-*] .x` 找不到祖先，规则永远不生效。 */
 
-/* 确保确认对话框在 Lightbox 之上，仅针对 ConfirmDialog */
-.p-dialog-mask:has(.p-confirmdialog) {
-  z-index: var(--z-titlebar) !important;
-}
-
 /* ---- 3.1 外壳：圆角 / 背景 / 阴影 ---- */
-.p-dialog.app-dialog,
-.p-confirmdialog {
+.p-dialog.app-dialog {
   max-width: 90vw;
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -1383,40 +1357,30 @@ button:focus-visible {
   box-shadow: var(--shadow-dialog);
 }
 
-/* ConfirmDialog 无法传 :style，宽度在这里兜底；其余弹窗用 --dialog-width-* 自行指定 */
-.p-confirmdialog {
-  width: var(--dialog-width-md);
-}
-
-:root.light-theme .p-dialog.app-dialog,
-:root.light-theme .p-confirmdialog {
+:root.light-theme .p-dialog.app-dialog {
   background: var(--bg-surface);
   box-shadow: var(--shadow-dialog);
 }
 
 /* ---- 3.2 标题栏 ---- */
-.p-dialog.app-dialog .p-dialog-header,
-.p-dialog.p-confirmdialog .p-dialog-header {
+.p-dialog.app-dialog .p-dialog-header {
   background: transparent;
   border-bottom: none;
   padding: var(--space-xl) var(--space-xl) 0;
 }
 
-.p-dialog.app-dialog .p-dialog-title,
-.p-dialog.p-confirmdialog .p-dialog-title {
+.p-dialog.app-dialog .p-dialog-title {
   font-size: var(--text-lg-xl);
   font-weight: var(--weight-bold);
   color: var(--text-main);
 }
 
-:root.light-theme .p-dialog.app-dialog .p-dialog-title,
-:root.light-theme .p-dialog.p-confirmdialog .p-dialog-title {
+:root.light-theme .p-dialog.app-dialog .p-dialog-title {
   color: var(--text-on-surface);
 }
 
 /* ---- 3.3 关闭按钮 ---- */
-.p-dialog.app-dialog .p-dialog-header-close,
-.p-dialog.p-confirmdialog .p-dialog-header-close {
+.p-dialog.app-dialog .p-dialog-header-close {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
@@ -1424,16 +1388,13 @@ button:focus-visible {
   transition: all var(--duration-fast) ease;
 }
 
-.p-dialog.app-dialog .p-dialog-header-close:hover,
-.p-dialog.p-confirmdialog .p-dialog-header-close:hover {
+.p-dialog.app-dialog .p-dialog-header-close:hover {
   background: var(--hover-overlay);
   color: var(--text-main);
 }
 
 .p-dialog.app-dialog .p-dialog-header-close:focus,
-.p-dialog.app-dialog .p-dialog-header-close:focus-visible,
-.p-dialog.p-confirmdialog .p-dialog-header-close:focus,
-.p-dialog.p-confirmdialog .p-dialog-header-close:focus-visible {
+.p-dialog.app-dialog .p-dialog-header-close:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
@@ -1448,39 +1409,13 @@ button:focus-visible {
 }
 
 /* ---- 3.4 内容区 ---- */
-.p-dialog.app-dialog .p-dialog-content,
-.p-dialog.p-confirmdialog .p-dialog-content {
+.p-dialog.app-dialog .p-dialog-content {
   background: transparent;
   padding: var(--space-lg-xl) var(--space-xl) var(--space-xl);
 }
 
-.p-dialog.p-confirmdialog .p-dialog-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  gap: var(--space-md);
-}
-
-/* 图标隐藏 */
-.p-dialog.p-confirmdialog .p-confirmdialog-icon {
-  font-size: var(--text-3xl);
-  flex-shrink: 0;
-  display: none;
-}
-
-/* 消息文本 */
-.p-dialog.p-confirmdialog .p-confirmdialog-message {
-  font-size: var(--text-base);
-  line-height: 1.6;
-  color: var(--text-secondary);
-  white-space: pre-line;
-  word-break: break-word;
-}
-
 /* ---- 3.5 底栏：右对齐横排 ---- */
-.p-dialog.app-dialog .p-dialog-footer,
-.p-dialog.p-confirmdialog .p-dialog-footer {
+.p-dialog.app-dialog .p-dialog-footer {
   background: transparent;
   border-top: none;
   padding: var(--space-sm) var(--space-xl) var(--space-xl);
@@ -1493,13 +1428,10 @@ button:focus-visible {
 
 /* ---- 3.6 底栏按钮：全项目统一规格 ----
    高 40px（10px 上下内边距 + 14px 行高）· 圆角 8px · 14px 字 · 600 字重。
-   .dialog-btn-* 由业务弹窗手动挂在 <Button class="..."> 上；
-   .p-confirmdialog-*-button 是 PrimeVue ConfirmDialog 自带类名。 */
+   .dialog-btn-* 由业务弹窗手动挂在 <Button class="..."> 上。 */
 .p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept,
 .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject,
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-secondary,
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button,
-.p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-secondary {
   padding: var(--space-sm-md) var(--space-xl);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
@@ -1512,44 +1444,36 @@ button:focus-visible {
 }
 
 .p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept:active,
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:active,
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:active,
-.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:active {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:active {
   transform: scale(0.98);
 }
 
-.p-dialog.app-dialog .p-dialog-footer .p-button:focus-visible,
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:focus-visible,
-.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:focus-visible {
+.p-dialog.app-dialog .p-dialog-footer .p-button:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
 
 /* 确认按钮 — 实心主色（右） */
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept,
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept {
   background: var(--primary);
   border-color: transparent;
   color: var(--text-on-primary);
   order: 1;
 }
 
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept:hover:not(:disabled),
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:hover {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept:hover:not(:disabled) {
   opacity: 0.9;
 }
 
 /* 取消按钮 — outlined 次要（左） */
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject,
-.p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject {
   background: transparent;
   border-color: var(--border-subtle);
   color: var(--text-secondary);
   order: 0;
 }
 
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:hover,
-.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:hover {
   background: var(--hover-overlay);
   border-color: var(--text-muted);
 }
@@ -1568,24 +1492,12 @@ button:focus-visible {
 }
 
 /* danger 按钮（删除/关闭保护类操作） */
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept.p-button-danger,
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept.p-button-danger {
   background: var(--error);
   color: var(--text-on-primary);
 }
 
-.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept.p-button-danger:hover:not(:disabled),
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:hover {
-  opacity: 0.9;
-}
-
-/* warning 按钮 */
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning {
-  background: var(--warning);
-  color: var(--text-on-warning);
-}
-
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:hover {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept.p-button-danger:hover:not(:disabled) {
   opacity: 0.9;
 }
 
@@ -1596,39 +1508,33 @@ button:focus-visible {
 }
 
 /* 浅色主题取消按钮 */
-:root.light-theme .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject,
-:root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
+:root.light-theme .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject {
   background: transparent;
   border-color: var(--border-subtle);
   /* stylelint-disable-next-line declaration-property-value-allowed-list -- Gray-700 无对应 Slate 变量，PrimeVue 覆盖专用 */
   color: #374151;
 }
 
-:root.light-theme .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:hover,
-:root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
+:root.light-theme .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:hover {
   background-color: var(--bg-input);
   border-color: var(--text-tertiary);
 }
 
 /* ---- 3.7 进出场动画 ---- */
-.app-dialog.p-dialog-enter-active,
-.p-confirmdialog.p-dialog-enter-active {
+.app-dialog.p-dialog-enter-active {
   transition: all var(--duration-normal) var(--ease-overshoot);
 }
 
-.app-dialog.p-dialog-enter-from,
-.p-confirmdialog.p-dialog-enter-from {
+.app-dialog.p-dialog-enter-from {
   opacity: 0;
   transform: scale(0.92);
 }
 
-.app-dialog.p-dialog-leave-active,
-.p-confirmdialog.p-dialog-leave-active {
+.app-dialog.p-dialog-leave-active {
   transition: all var(--duration-fast) var(--ease-standard);
 }
 
-.app-dialog.p-dialog-leave-to,
-.p-confirmdialog.p-dialog-leave-to {
+.app-dialog.p-dialog-leave-to {
   opacity: 0;
   transform: scale(0.95);
 }
