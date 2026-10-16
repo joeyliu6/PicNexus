@@ -22,7 +22,8 @@ const PLATE: Record<number, { box: number; radius: number }> = {
 const props = withDefaults(defineProps<{
   /** 图床 ID，支持 custom_s3:xxx / webdav:xxx 复合 ID */
   host: string;
-  size?: 16 | 20 | 24 | 32 | 44;
+  /** 规范档位 16 / 20 / 24 / 32 / 44；首页标签里用到 14、15 */
+  size?: number;
   /** 认不出图标时显示的名字（取前两个字） */
   name?: string;
   plate?: boolean;
@@ -35,7 +36,8 @@ const svg = computed(() => {
 });
 
 const mark = computed(() => (props.name ?? props.host).slice(0, 2));
-const plateSize = computed(() => PLATE[props.size]);
+// 规范档位照表取底板；其余尺寸按 16 → 22、圆角约三分之一推算
+const plateSize = computed(() => PLATE[props.size] ?? { box: Math.round(props.size * 1.375), radius: Math.round(props.size / 3) });
 </script>
 
 <template>

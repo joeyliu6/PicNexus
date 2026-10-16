@@ -174,6 +174,7 @@
 
   /* 骨架 / 空状态 / 快捷键标签 */
   --pn-size-skeleton-text: 12px;
+  --pn-size-skeleton-line: 10px;
   --pn-space-empty-bottom: 80px;
   --pn-size-empty-text: 360px;
   --pn-space-kbd-x: 5px;
@@ -191,6 +192,81 @@
   --pn-space-toast-edge: 20px;
   --pn-size-countdown: 2px;
   --pn-opacity-toast-older: 0.92;
+
+  /* 首页·快传（HomeScreen.dc.html） */
+  --pn-size-home-column: 800px;
+  --pn-size-drop-bar: 60px;
+  --pn-size-drop-first-use: 300px;
+  --pn-space-drop-bar-left: 18px;
+  --pn-size-focus-thumb-w: 288px;
+  --pn-size-focus-thumb-h: 162px;
+  --pn-size-pill: 24px;
+  --pn-size-chip: 28px;
+  --pn-size-host-chip: 30px;
+  --pn-size-batch-tile: 50px;
+  --pn-space-batch-bottom: 18px;
+  --pn-size-recent-row: 58px;
+  --pn-size-recent-thumb: 44px;
+  --pn-size-recent-action: 120px;
+  --pn-size-stack-card: 36px;
+  --pn-space-recent-line-gap: 3px;
+  --pn-space-recent-status-gap: 7px;
+  --pn-border-dashed: 1.5px;
+  --pn-radius-kbd: 5px;
+  --pn-size-upload-to-panel: 360px;
+  --pn-size-upload-to-panel-wide: 420px;
+  --pn-size-upload-to-scroll: 176px;
+  --pn-size-fast-hint: 300px;
+  --pn-space-fast-hint-top: 80px;
+  --pn-space-fast-hint-left: 128px;
+  --pn-space-fast-hint-arrow: 44px;
+  --pn-size-url-input: 112px;
+  --pn-space-transfer-top: 44px;
+  --pn-space-transfer-gap: 18px;
+  --pn-space-transfer-x: 18px;
+  --pn-space-palette-top: 110px;
+  --pn-size-palette: 640px;
+  --pn-size-palette-item: 36px;
+  --pn-size-palette-item-tall: 48px;
+  --pn-size-palette-thumb-w: 36px;
+  --pn-size-palette-thumb-h: 26px;
+  --pn-size-palette-foot: 38px;
+  --pn-size-progress: 4px;
+  --pn-space-home-first-use-top: 68px;
+  --pn-space-home-no-host-top: 96px;
+  --pn-space-no-host-y: 48px;
+  --pn-space-no-host-x: 40px;
+  --pn-size-no-host-text: 440px;
+  --pn-size-button-xl: 36px;
+  --pn-space-recent-gap: 14px;
+  --pn-space-recent-top: 28px;
+  --pn-shadow-hint: 0 12px 32px -8px rgba(0, 0, 0, 0.35);
+  --pn-hint-button-bg: rgba(255, 255, 255, 0.16);
+  --pn-tile-uploading-veil: rgba(255, 255, 255, 0.6);
+  --pn-tile-failed-veil: rgba(185, 28, 28, 0.62);
+  --pn-tile-failed-ring: #B91C1C;
+  --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
+  --pn-opacity-tile-waiting: 0.35;
+
+  /* 拖放遮罩里的两张小照片插画（HomeScreen.dc.html H07），数值照抄设计稿 */
+  --pn-size-drop-art-w: 150px;
+  --pn-size-drop-art-h: 110px;
+  --pn-size-drop-photo-w: 96px;
+  --pn-size-drop-photo-h: 74px;
+  --pn-space-drop-back-top: 18px;
+  --pn-space-drop-front-left: 42px;
+  --pn-size-drop-sun: 13px;
+  --pn-size-drop-count: 22px;
+  --pn-space-drop-count-x: 7px;
+  --pn-drop-photo-frame: #FFFFFF;
+  --pn-drop-sky-sunset: linear-gradient(180deg, #F5A97F, #FAD9B5);
+  --pn-drop-sun-sunset: #FFF4DA;
+  --pn-drop-hill-sunset-far: #9C7BC0;
+  --pn-drop-hill-sunset-near: #6E58A0;
+  --pn-drop-sky-day: linear-gradient(180deg, #7DB8F2, #D6E9FB);
+  --pn-drop-sun-day: #FFD66E;
+  --pn-drop-hill-day-far: #5BAE7E;
+  --pn-drop-hill-day-near: #2F8A5C;
 
   /* 焦点环：品牌蓝 2px 外环 */
   --pn-ring-width: 2px;

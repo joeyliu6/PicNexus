@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  formatShortDateTime,
   formatDateCompact,
   formatFileSize,
   formatRelativeTime,
@@ -115,5 +116,19 @@ describe('formatRelativeTime', () => {
     expect(result).not.toContain('分钟');
     expect(result).not.toContain('小时');
     expect(result).not.toContain('天');
+  });
+});
+
+describe('formatShortDateTime', () => {
+  const now = new Date(2026, 9, 16, 14, 30).getTime();
+
+  it('writes only the time for today and 昨天 for yesterday', () => {
+    expect(formatShortDateTime(new Date(2026, 9, 16, 9, 5).getTime(), now)).toBe('09:05');
+    expect(formatShortDateTime(new Date(2026, 9, 15, 18, 30).getTime(), now)).toBe('昨天 18:30');
+  });
+
+  it('writes the date for older records, with the year only when it differs', () => {
+    expect(formatShortDateTime(new Date(2026, 8, 28, 10, 0).getTime(), now)).toBe('9月28日');
+    expect(formatShortDateTime(new Date(2025, 4, 22, 10, 0).getTime(), now)).toBe('2025年5月22日');
   });
 });

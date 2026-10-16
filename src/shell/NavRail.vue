@@ -5,6 +5,7 @@ import PnIcon from '@/components/pn/PnIcon.vue';
 import PnTooltip from '@/components/pn/PnTooltip.vue';
 import { uiPlatform } from '@/utils/platform';
 import { MAIN_NAV, SETTINGS_NAV, type NavBadge, type NavItem, type PageKey } from './navItems';
+import SidebarSearch from './SidebarSearch.vue';
 
 defineProps<{
   current: PageKey | undefined;
@@ -28,7 +29,7 @@ const isMac = uiPlatform() === 'macos';
       <BrandMark v-if="!isMac" :size="20" />
     </div>
 
-    <slot name="search" />
+    <SidebarSearch rail />
 
     <PnTooltip v-for="item in MAIN_NAV" :key="item.key" :text="item.label" side="right" :side-offset="10">
       <a

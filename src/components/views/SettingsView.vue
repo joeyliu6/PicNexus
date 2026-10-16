@@ -192,6 +192,8 @@ onMounted(async () => {
     if (updated?.imageCompression) formData.value.imageCompression = { ...updated.imageCompression };
   });
 
+  // 新 Cookie 由应用级的 useCookieLogin 统一保存（设置页没打开过也要能存上）；
+  // 这里只把表单里的值同步过来，免得之后保存表单时用旧 Cookie 把新的覆盖掉
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
     if (sid === 'weibo') {
       formData.value.weiboCookie = cookie;
@@ -199,7 +201,6 @@ onMounted(async () => {
       || sid === 'bilibili' || sid === 'chaoxing') {
       formData.value[sid].cookie = cookie;
     }
-    await saveSettings();
   });
 
   isSettingsReady.value = true;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 页面顶部标题行（交接说明 3.2）：单栏页标题在左（左距 24，高 40，margin-top 6），
-// 右侧依次是页面自带的操作、传输中心入口、窗口按钮。整行可拖动窗口。
+// 右侧依次是页面自带的操作、传输中心入口（有任务时才出现）、窗口按钮。整行可拖动窗口。
+import TransferButton from './TransferButton.vue';
 import WindowControls from './WindowControls.vue';
 
 defineProps<{
@@ -14,6 +15,7 @@ defineProps<{
     <h1 v-if="title" class="title-row__title" data-tauri-drag-region>{{ title }}</h1>
     <div class="title-row__spacer" data-tauri-drag-region />
     <slot name="actions" />
+    <TransferButton />
     <WindowControls />
   </header>
 </template>

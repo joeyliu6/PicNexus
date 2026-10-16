@@ -26,7 +26,9 @@ import AppShell from '@/shell/AppShell.vue';
 import { __resetSidebarCollapseForTests } from '@/shell/useSidebarCollapse';
 
 type Handler = (event: { payload: unknown }) => void;
-const handlers: Record<string, Handler> = {};
+// 同一个事件可以有好几个监听（外壳的跳转和上传控制器都听 tray-action），和 Tauri 一样全部通知到
+const handlers: Record<string, Handler[]> = {};
+const fire = (event: string, payload: unknown) => (handlers[event] ?? []).forEach((handler) => handler({ payload }));
 const unlistenNavigate = vi.fn();
 const unlistenTrayAction = vi.fn();
 
@@ -79,8 +81,9 @@ beforeEach(() => {
   __resetSidebarCollapseForTests();
   mockState.hasUpdate.value = false;
   mockState.setupTrayMenu.mockResolvedValue(mockState.unlistenTrayMenu);
+  for (const key of Object.keys(handlers)) delete handlers[key];
   getListenMock().mockImplementation(async (event, handler) => {
-    handlers[event as string] = handler as Handler;
+    (handlers[event as string] ??= []).push(handler as Handler);
     if (event === 'navigate-to') return unlistenNavigate;
     if (event === 'tray-action') return unlistenTrayAction;
     return vi.fn();
@@ -109,12 +112,12 @@ describe('AppShell', () => {
   it('routes navigate-to events and hands the settings section to the hosts page', async () => {
     const { wrapper, router } = await mountShell();
 
-    handlers['navigate-to']({ payload: { view: 'settings', tab: 'hosting', section: 'weibo' } });
+    fire('navigate-to', { view: 'settings', tab: 'hosting', section: 'weibo' });
     await flushPromisesAndTicks();
     expect(router.currentRoute.value.path).toBe('/hosts');
     expect(wrapper.get('[data-testid="settings"]').attributes('data-section')).toBe('weibo');
 
-    handlers['navigate-to']({ payload: 'history' });
+    fire('navigate-to', 'history');
     await flushPromisesAndTicks();
     expect(router.currentRoute.value.path).toBe('/gallery');
   });
@@ -122,7 +125,7 @@ describe('AppShell', () => {
   it('passes the link-check tab and cleans up every listener on unmount', async () => {
     const { wrapper } = await mountShell();
 
-    handlers['navigate-to']({ payload: { view: 'link-check', tab: 'migrate' } });
+    fire('navigate-to', { view: 'link-check', tab: 'migrate' });
     await flushPromisesAndTicks();
     expect(wrapper.get('[data-testid="health"]').attributes('data-tab')).toBe('migrate');
 
@@ -136,7 +139,7 @@ describe('AppShell', () => {
     const { wrapper, router } = await mountShell();
     await router.push('/gallery');
 
-    handlers['tray-action']({ payload: 'select_upload_files' });
+    fire('tray-action', 'select_upload_files');
     await flushPromisesAndTicks();
     expect(router.currentRoute.value.path).toBe('/home');
   });

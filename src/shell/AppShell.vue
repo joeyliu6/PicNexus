@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 应用外壳（交接说明 3.1）：侧栏 208 / 窄窗口 56px 图标栏 + 主栏。
 // 主栏铺满窗口；每个新页面自己画顶部标题行（含窗口按钮），尚未重写的旧页面由外壳代画。
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useEventListener } from '@vueuse/core';
 import { TooltipProvider } from 'reka-ui';
 import AppSidebar from './AppSidebar.vue';
@@ -11,13 +12,40 @@ import TitleRow from './TitleRow.vue';
 import { useSidebarCollapse } from './useSidebarCollapse';
 import { useNavBadges } from './useNavBadges';
 import { useAppNavigation } from './useAppNavigation';
+import { useAppShortcuts } from './useAppShortcuts';
+import { useGlobalUploadInput } from './useGlobalUploadInput';
+import CommandPalette from './CommandPalette.vue';
+import DropOverlay from './DropOverlay.vue';
+import TransferCenter from './TransferCenter.vue';
 import type { NavItem } from './navItems';
+import { useUploadController } from '@/composables/upload/useUploadController';
+import { useRecentUploads } from '@/composables/history/useRecentUploads';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('AppShell');
 
 const route = useRoute();
 const router = useRouter();
 const { narrow, collapsed, toggle } = useSidebarCollapse();
 const badges = useNavBadges();
 useAppNavigation();
+
+// 上传在任何页面都能发起（拖入 / 粘贴 / 托盘 / 命令面板），控制器是应用级单例，第一次取在这里
+const upload = useUploadController();
+upload.setHomeVisible(() => route.path === '/home');
+const recentUploads = useRecentUploads();
+const { overlay } = useGlobalUploadInput();
+useAppShortcuts();
+
+const disposers: UnlistenFn[] = [];
+onMounted(async () => {
+  // 两件事互不依赖：一件失败不能拖住另一件
+  await Promise.all([
+    upload.init().then((dispose) => disposers.push(dispose)).catch((error) => log.error('上传控制器初始化失败', error)),
+    recentUploads.install().then((dispose) => disposers.push(dispose)).catch((error) => log.error('最近上传初始化失败', error)),
+  ]);
+});
+onUnmounted(() => disposers.splice(0).forEach((dispose) => dispose()));
 
 const currentPage = computed(() => route.meta.pageKey);
 const legacyTitle = computed(() => route.meta.legacyTitle);
@@ -62,8 +90,11 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
             </KeepAlive>
           </RouterView>
         </div>
+        <DropOverlay :state="overlay" />
+        <TransferCenter />
       </main>
     </div>
+    <CommandPalette />
   </TooltipProvider>
 </template>
 

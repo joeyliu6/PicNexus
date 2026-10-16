@@ -51,6 +51,21 @@ export function formatRelativeTime(timestamp: number): string {
 }
 
 /**
+ * 较早记录的时间（首页「最近上传 · 更早」）：今天写「HH:mm」，昨天写「昨天 HH:mm」，
+ * 今年写「M月D日」，更早写「YYYY年M月D日」
+ */
+export function formatShortDateTime(timestamp: number, now: number = Date.now()): string {
+  const date = new Date(timestamp);
+  const today = new Date(now);
+  const hm = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (timestamp >= startOfToday) return hm;
+  if (timestamp >= startOfToday - 24 * 60 * 60 * 1000) return `昨天 ${hm}`;
+  if (date.getFullYear() === today.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日`;
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+/**
  * 格式化文件大小
  * @param bytes 字节数
  * @param options.emptyText 0 字节时显示的文本，默认 '0 B'

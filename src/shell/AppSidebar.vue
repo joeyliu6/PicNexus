@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 侧栏 208px（HomeScreen.dc.html）：Logo 行 52 → 搜索 → 导航 → 底部设置 + 收起
+// 侧栏 208px（HomeScreen.dc.html）：Logo 行 52 → 搜索（命令面板）→ 导航 → 底部设置 + 收起
 import BrandMark from '@/components/biz/BrandMark.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import { uiPlatform } from '@/utils/platform';
 import { MAIN_NAV, SETTINGS_NAV, type NavBadge, type NavItem, type PageKey } from './navItems';
+import SidebarSearch from './SidebarSearch.vue';
 
 defineProps<{
   current: PageKey | undefined;
@@ -29,7 +30,7 @@ const collapseTitle = `收起侧栏  ${isMac ? '⌘' : 'Ctrl+'}\\`;
       </template>
     </div>
 
-    <slot name="search" />
+    <SidebarSearch />
 
     <div class="app-sidebar__list">
       <a
