@@ -11,8 +11,8 @@
  *
  * ── 真相源 ──
  * 按浏览器里的层叠顺序把 `:root` 变量摞起来：app.css 的全局别名 → dark-theme.css →
- * （亮色时再叠）light-theme.css。`var(--x)` 会被递归解开，所以副本里可以直接抄
- * `--state-info-bg` 展开后的 rgba 字面量。
+ * （亮色时再叠）light-theme.css，再叠新界面的 `src/styles/tokens*.css`（--pn-*，按 data-theme 取浅 / 深）。
+ * `var(--x)` 会被递归解开，所以副本里可以直接抄 `--state-info-bg` 展开后的 rgba 字面量。
  *
  * ── 新增一处副本 ──
  * 往 COPIES 里加一条。两种写法：
@@ -33,15 +33,28 @@ import path from 'node:path';
 const root = process.cwd();
 
 /** 真相源：数组顺序 = 层叠顺序，后者覆盖前者 */
+// 新界面的 --pn-* 令牌（src/styles/tokens*.css）与旧页面的主题变量并存，名字不重叠，摞在同一张表里
+const PN_LIGHT = [
+  { file: 'src/styles/tokens.css', selector: ':root, [data-theme="light"]' },
+  { file: 'src/styles/tokens-extra.css', selector: ':root, [data-theme="light"]' },
+];
+const PN_DARK = [
+  ...PN_LIGHT,
+  { file: 'src/styles/tokens.css', selector: '[data-theme="dark"]' },
+  { file: 'src/styles/tokens-extra.css', selector: '[data-theme="dark"]' },
+];
+
 const TOKEN_LAYERS = {
   dark: [
     { file: 'src/styles/app.css', selector: ':root' },
     { file: 'src/theme/dark-theme.css', selector: ':root, :root.dark-theme' },
+    ...PN_DARK,
   ],
   light: [
     { file: 'src/styles/app.css', selector: ':root' },
     { file: 'src/theme/dark-theme.css', selector: ':root, :root.dark-theme' },
     { file: 'src/theme/light-theme.css', selector: ':root.light-theme' },
+    ...PN_LIGHT,
   ],
 };
 
@@ -57,19 +70,19 @@ const COPIES = [
   },
   {
     file: 'public/preload.css',
-    why: '主窗口首屏防白闪样式，先于打包产物加载，拿不到 app.css 里的变量',
+    why: '主窗口首屏防白闪样式，先于打包产物加载，拿不到 tokens.css 里的变量',
     blocks: [
       {
-        selector: 'html.dark-theme, html.dark-theme body',
+        selector: 'html[data-theme="dark"], html[data-theme="dark"] body',
         theme: 'dark',
         kind: 'declarations',
-        map: { 'background-color': '--bg-app', color: '--text-main' },
+        map: { 'background-color': '--pn-canvas', color: '--pn-text1' },
       },
       {
-        selector: 'html.light-theme, html.light-theme body',
+        selector: 'html[data-theme="light"], html[data-theme="light"] body',
         theme: 'light',
         kind: 'declarations',
-        map: { 'background-color': '--bg-app', color: '--text-main' },
+        map: { 'background-color': '--pn-canvas', color: '--pn-text1' },
       },
     ],
   },
@@ -283,9 +296,9 @@ if (failures.length > 0) {
     console.error(`  ${failure}`);
   }
   console.error('\n修复方式：把副本里的值改回真相源的值；若确实是主题色本身变了，两边一起改。');
-  console.error('参考：src/theme/dark-theme.css、src/theme/light-theme.css\n');
+  console.error('参考：src/styles/tokens.css、src/styles/tokens-extra.css（新界面）；src/theme/*.css（旧页面）\n');
   process.exit(1);
 }
 
 const copiedCount = COPIES.reduce((sum, copy) => sum + copy.blocks.length, 0);
-console.log(`✅ 首屏主题令牌副本检查通过（${COPIES.length} 个文件 / ${copiedCount} 个块与 src/theme/ 一致）`);
+console.log(`✅ 首屏主题令牌副本检查通过（${COPIES.length} 个文件 / ${copiedCount} 个块与主题令牌一致）`);

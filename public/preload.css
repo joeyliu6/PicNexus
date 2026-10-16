@@ -7,19 +7,19 @@ body {
   overflow: hidden;
 }
 
-/* 抄自 src/theme/dark-theme.css 的 --bg-app / --text-main；
+/* 抄自 src/styles/tokens.css 的 --pn-canvas / --pn-text1（data-theme 由 preload-theme.js 先行写上）；
    一致性由 scripts/check-theme-token-copies.mjs 在 npm run lint 时比对 */
-html.dark-theme,
-html.dark-theme body {
-  background-color: #131316;
-  color: #f4f4f5;
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background-color: #1C1C1E;
+  color: #EBEBEC;
 }
 
-/* 抄自 src/theme/light-theme.css 的 --bg-app / --text-main；同上由门禁比对 */
-html.light-theme,
-html.light-theme body {
-  background-color: #f1f5f9;
-  color: #0f172a;
+/* 同上，浅色 */
+html[data-theme="light"],
+html[data-theme="light"] body {
+  background-color: #FFFFFF;
+  color: #171717;
 }
 
 #app {

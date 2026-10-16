@@ -11,7 +11,7 @@
  * 整个应用直接白屏，所有 E2E 用例齐刷刷卡在"等主界面出现"这一步。
  *
  * 真实案例：`7fb363c` 新建的 `mdTextIo.ts` 用了 `readFile`，而 `mocks/fs.ts` 没有它。
- * mdTextIo 挂在 MainLayout → LinkCheckView → MdRescueInline → useFileBackup 这条静态链上，
+ * mdTextIo 挂在 AppShell 路由 → LinkCheckView → MdRescueInline → useFileBackup 这条静态链上，
  * 于是 8 条 smoke 用例全红，且连续 5 次 push 无人察觉。
  *
  * 为什么其他门禁一个都拦不住：

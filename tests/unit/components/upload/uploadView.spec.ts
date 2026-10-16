@@ -189,7 +189,7 @@ const OtherViewStub = defineComponent({
 });
 
 /**
- * 复刻 MainLayout 的 KeepAlive 视图切换
+ * 复刻 AppShell 的 KeepAlive 视图切换
  *
  * onActivated / onDeactivated 只有在 KeepAlive 内才会触发，直接 mount 测不出
  * "切走后 Ctrl+V 不应响应"——那正是本组件唯一的视图感知手段。
@@ -499,7 +499,7 @@ describe('UploadView paste shortcut scope', () => {
     expect(mockState.handleFilesUpload).toHaveBeenCalledWith(['clipboard.png']);
   });
 
-  // Why: 监听挂在 window 上，而 MainLayout 的 KeepAlive 上限正好等于视图数，UploadView
+  // Why: 监听挂在 window 上，而 AppShell 的 KeepAlive 上限正好等于页面数，UploadView
   //   永不卸载。没有 isViewActive 早退，在历史/链接检测/设置页按 Ctrl+V 都会误触发上传。
   it('ignores Ctrl+V once the upload view is deactivated', async () => {
     const wrapper = await mountViewInKeepAlive();

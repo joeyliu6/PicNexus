@@ -2,6 +2,7 @@
 
 import { createApp } from 'vue';
 import App from './App.vue';
+import { createAppRouter } from './router';
 
 // PrimeVue 相关导入
 import PrimeVue from 'primevue/config';
@@ -37,6 +38,7 @@ import './theme/light-theme.css';
 import './theme/primevue-overrides.css';
 import './styles/motion.css';
 import './styles/tokens.css';
+import './styles/tokens-extra.css';
 import './styles/bottom-bar-buttons.css';
 
 const log = createLogger('Init');
@@ -78,6 +80,8 @@ app.use(ToastService);
 app.use(ConfirmationService);
 app.directive('tooltip', Tooltip);
 app.directive('ripple', Ripple);
+
+app.use(createAppRouter());
 
 /**
  * 确保配置同步

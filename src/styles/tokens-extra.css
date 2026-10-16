@@ -1,0 +1,124 @@
+/*
+ * 设计源文件里用到、导出令牌（tokens.css）没收录的值
+ *
+ * 颜色：取自各 *Screen.dc.html 的 renderVals() 调色板（浅 / 深各一份）。
+ * 尺寸：交接说明 design-tokens.json 的 size 段 + 源文件里不在间距刻度上的具名值。
+ * 不在刻度上的值照源文件写成具名令牌，不凑到最近的刻度，也不在组件里硬写。
+ */
+
+:root,
+[data-theme="light"] {
+  --pn-nav-text: #404040;
+  --pn-search-bg: rgba(255, 255, 255, 0.75);
+  --pn-field: #FFFFFF;
+  --pn-check-border: #A3A3A3;
+  --pn-track-off: #D4D4D4;
+  --pn-ring-soft: rgba(57, 133, 237, 0.22);
+  --pn-secondary-bg: #FFFFFF;
+  --pn-secondary-ring: inset 0 0 0 1px #D4D4D4;
+  --pn-seg-on: #FFFFFF;
+  --pn-seg-shadow: 0 1px 2px rgba(0, 0, 0, 0.10), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --pn-tooltip-fg: #FFFFFF;
+  --pn-petal-empty: #EDEDED;
+  --pn-petal-wait: #D4D4D4;
+  --pn-skeleton: #E8E8E8;
+  --pn-kbd-bg: #FAFAFA;
+  --pn-drag-veil: rgba(255, 255, 255, 0.72);
+  --pn-scrim-light: rgba(23, 23, 23, 0.12);
+  --pn-chip-on: #EAF2FD;
+  --pn-danger-button: #B91C1C;
+}
+
+[data-theme="dark"] {
+  --pn-nav-text: #C4C4C6;
+  --pn-search-bg: rgba(255, 255, 255, 0.04);
+  --pn-field: #202023;
+  --pn-check-border: #5C5C61;
+  --pn-track-off: #4A4A4F;
+  --pn-ring-soft: rgba(76, 147, 245, 0.30);
+  --pn-secondary-bg: #2A2A2D;
+  --pn-secondary-ring: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  --pn-seg-on: #48484D;
+  --pn-seg-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --pn-tooltip-fg: #EBEBEC;
+  --pn-petal-empty: #36363A;
+  --pn-petal-wait: #55555A;
+  --pn-skeleton: #36363A;
+  --pn-kbd-bg: #252528;
+  --pn-drag-veil: rgba(28, 28, 30, 0.72);
+  --pn-scrim-light: rgba(0, 0, 0, 0.35);
+  --pn-chip-on: rgba(76, 147, 245, 0.16);
+  --pn-danger-button: #C42B2B;
+}
+
+:root {
+  /* 字号 / 行高（只允许这六档 + 等宽） */
+  --pn-text-title: 20px;
+  --pn-leading-title: 26px;
+  --pn-text-dialog-title: 17px;
+  --pn-leading-dialog-title: 24px;
+  --pn-text-headline: 15px;
+  --pn-leading-headline: 22px;
+  --pn-text-body: 13px;
+  --pn-leading-body: 20px;
+  --pn-text-footnote: 12px;
+  --pn-leading-footnote: 16px;
+  --pn-text-caption: 11px;
+  --pn-leading-caption: 14px;
+  --pn-text-mono: 12px;
+  --pn-leading-mono: 18px;
+  --pn-weight-regular: 400;
+  --pn-weight-medium: 500;
+  --pn-weight-semibold: 600;
+  --pn-tracking-title: -0.012em;
+  --pn-tracking-headline: -0.01em;
+
+  /* 外壳 */
+  --pn-size-sidebar: 208px;
+  --pn-size-nav-rail: 56px;
+  --pn-size-logo-row: 52px;
+  --pn-size-title-bar: 40px;
+  --pn-size-page-title-row: 46px;
+  --pn-size-toolbar-row: 48px;
+  --pn-size-nav-item: 32px;
+  --pn-size-rail-item: 36px;
+  --pn-radius-rail-item: 9px;
+  --pn-size-search-box: 32px;
+  --pn-space-sidebar-x: 10px;
+  --pn-space-sidebar-search-after: 14px;
+  --pn-space-nav-icon-gap: 10px;
+  --pn-size-status-dot: 6px;
+  --pn-size-icon-sm: 14px;
+  --pn-size-icon-md: 16px;
+  --pn-size-logo: 18px;
+  --pn-size-logo-rail: 20px;
+
+  /* 窗口按钮 */
+  --pn-size-win-button-w: 46px;
+  --pn-size-win-button-h: 40px;
+  --pn-size-linux-button: 24px;
+  --pn-space-linux-button-gap: 10px;
+
+  /* 按钮高度 */
+  --pn-size-button-sm: 28px;
+  --pn-size-button-md: 30px;
+  --pn-size-button-lg: 32px;
+  --pn-size-button-dialog: 34px;
+
+  /* 焦点环：品牌蓝 2px 外环 */
+  --pn-ring-width: 2px;
+  --pn-ring-offset: 2px;
+
+  /* 层级 */
+  --pn-z-tooltip: 1300;
+  --pn-z-toast: 1200;
+  --pn-z-dialog: 1100;
+  --pn-z-popover: 1000;
+  --pn-z-drop-overlay: 900;
+}
+
+:root {
+  /* Windows 标题栏关闭键悬停：沿用系统外观（红底白叉），与「红 = 操作失败」无关 */
+  --pn-window-close-hover: #C42B1C;
+  --pn-window-close-fg: #FFFFFF;
+}

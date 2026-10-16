@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit as emitTauriEvent, type UnlistenFn } from '@tauri-apps/api/event';
-import MainLayout from '@/components/layout/MainLayout.vue';
+import AppShell from '@/shell/AppShell.vue';
 import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
 import type { BackupPasswordConfirmPayload } from '@/components/dialogs/backupPasswordDialogTypes';
@@ -245,7 +245,7 @@ onUnmounted(() => {
 
 <template>
   <div id="app" :class="rootClass">
-    <MainLayout />
+    <AppShell />
 
     <!-- 首次使用引导 -->
     <OnboardingDialog />

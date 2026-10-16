@@ -3,6 +3,7 @@
 // 本组件仅负责：tab 导航、事件编排、面板 props 传递
 
 import { ref, watch, inject, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue';
+import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -99,14 +100,19 @@ const {
 // ---- 导航 ----
 
 type SettingsTab = 'general' | 'hosting' | 'advanced' | 'backup' | 'about';
-const activeTab = ref<SettingsTab>('general');
+
+// 界面重构过渡期：图床已是独立页面（路由 /hosts 以 fixedTab='hosting' 复用本组件），
+// 设置页自己的导航里不再出现「图床」。图床页按新设计重写后删除 fixedTab。
+const props = defineProps<{ fixedTab?: SettingsTab }>();
+const router = useRouter();
+const activeTab = ref<SettingsTab>(props.fixedTab ?? 'general');
 const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTargetTab');
 const settingsTargetSection = inject<import('vue').Ref<string | null>>('settingsTargetSection');
 const targetCardId = ref<string | null>(null);
 
 const applyHostingTargetSection = () => {
   const section = settingsTargetSection?.value;
-  if (!section) return;
+  if (!section || props.fixedTab !== 'hosting') return;
 
   const pendingTab = settingsTargetTab?.value;
   if (pendingTab && pendingTab !== 'hosting') return;
@@ -117,7 +123,7 @@ const applyHostingTargetSection = () => {
 };
 
 const applyTargetTab = () => {
-  if (!settingsTargetTab?.value) {
+  if (props.fixedTab || !settingsTargetTab?.value) {
     applyHostingTargetSection();
     return;
   }
@@ -147,7 +153,6 @@ const executablePath = ref('');
 const navGroups = [{
   items: [
     { id: 'general' as SettingsTab, label: UI_COPY.navigation.settings.general, icon: 'pi pi-cog' },
-    { id: 'hosting' as SettingsTab, label: UI_COPY.navigation.settings.hosting, icon: 'pi pi-images' },
     { id: 'advanced' as SettingsTab, label: UI_COPY.navigation.settings.advanced, icon: 'pi pi-sliders-h' },
     { id: 'backup' as SettingsTab, label: UI_COPY.navigation.settings.backup, icon: 'pi pi-database' },
     { id: 'about' as SettingsTab, label: UI_COPY.navigation.settings.about, icon: 'pi pi-info-circle' },
@@ -211,7 +216,7 @@ onUnmounted(() => {
 
 <template>
   <div class="settings-layout">
-    <div class="settings-sidebar">
+    <div v-if="!fixedTab" class="settings-sidebar">
       <div class="sidebar-title">{{ UI_COPY.navigation.settings.title }}</div>
       <nav class="nav-list">
         <div v-for="(group, idx) in navGroups" :key="idx" class="nav-group">
@@ -274,7 +279,7 @@ onUnmounted(() => {
           :custom-s3-profiles="formData.custom_s3_profiles" :webdav-profiles="formData.webdav_profiles"
           @update:image-compression="(v: ImageCompressionConfig) => { formData.imageCompression = v; debouncedSaveSettingsWithStatus(); }"
           @update:editor-server="async (v: EditorServerConfig) => { formData.editorServer = v; await applyEditorServer(v); debouncedSaveSettingsWithStatus(); }"
-          @navigate-hosting="activeTab = 'hosting'"
+          @navigate-hosting="router.push('/hosts')"
           @save="debouncedSaveSettingsWithStatus"
         />
       </div>

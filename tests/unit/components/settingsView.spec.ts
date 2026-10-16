@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { shallowMountWithDefaults } from '../helpers/vueMount';
 import { flushPromisesAndTicks } from '../helpers/wait';
 import { getInvokeMock, resetTauriMocks, setupInvokeResponses } from '../helpers/tauriMock';
@@ -332,9 +333,19 @@ function makeFormData() {
   });
 }
 
-async function mountSettings(provide: Record<string, unknown> = {}) {
+// 图床已是独立页面：路由 /hosts 以 fixedTab='hosting' 复用 SettingsView，设置页自己的导航里没有「图床」
+function makeRouter() {
+  const Blank = { template: '<div />' };
+  return createRouter({ history: createMemoryHistory(), routes: [{ path: '/settings', component: Blank }, { path: '/hosts', component: Blank }] });
+}
+
+async function mountSettings(provide: Record<string, unknown> = {}, props: { fixedTab?: 'hosting' } = {}) {
+  const router = makeRouter();
+  await router.push('/settings');
   const wrapper = shallowMountWithDefaults(SettingsView, {
+    props,
     global: {
+      plugins: [router],
       provide: {
         settingsTargetTab: ref<string | null>(null),
         settingsTargetSection: ref<string | null>(null),
@@ -351,8 +362,10 @@ async function mountSettings(provide: Record<string, unknown> = {}) {
   });
 
   await flushPromisesAndTicks(3);
-  return wrapper;
+  return Object.assign(wrapper, { router });
 }
+
+const mountHosts = (provide: Record<string, unknown> = {}) => mountSettings(provide, { fixedTab: 'hosting' });
 
 beforeEach(() => {
   resetTauriMocks();
@@ -390,17 +403,18 @@ describe('SettingsView page interactions', () => {
     const wrapper = await mountSettings();
     const navItems = wrapper.findAll('.nav-item');
 
-    expect(navItems[4].classes()).toContain('has-update-badge');
-    expect(navItems.slice(0, 4).every(item => !item.classes().includes('has-update-badge'))).toBe(true);
+    expect(navItems).toHaveLength(4);
+    expect(navItems[3].classes()).toContain('has-update-badge');
+    expect(navItems.slice(0, 3).every(item => !item.classes().includes('has-update-badge'))).toBe(true);
   });
 
   it('does not show the about update badge when no update is available', async () => {
     const wrapper = await mountSettings();
 
-    expect(wrapper.findAll('.nav-item')[4].classes()).not.toContain('has-update-badge');
+    expect(wrapper.findAll('.nav-item')[3].classes()).not.toContain('has-update-badge');
   });
 
-  it('switches from compression target to hosting tab', async () => {
+  it('opens the compression target and goes to the hosts page from the advanced tab', async () => {
     const settingsTargetTab = ref<string | null>('compression');
     const settingsTargetSection = ref<string | null>('imageCompression');
     const wrapper = await mountSettings({ settingsTargetTab, settingsTargetSection });
@@ -410,15 +424,15 @@ describe('SettingsView page interactions', () => {
     expect(settingsTargetSection.value).toBe('imageCompression');
 
     await wrapper.get('.advanced-go-hosting').trigger('click');
-    expect(wrapper.find('[data-testid="hosting-panel"]').exists()).toBe(true);
+    await flushPromisesAndTicks();
+    expect(wrapper.router.currentRoute.value.path).toBe('/hosts');
   });
 
   // 其他 cookie 服务在 formData 里是 `{ cookie }` 对象，只有微博是扁平字符串 weiboCookie。
   // 曾经就地拼 `{ cookie: formData.weiboCookie }` 传下去——子组件按引用改的是那个临时对象里
   // 的字符串副本，formData 纹丝不动，保存时读回旧值，手动编辑的微博 Cookie 被静默丢弃。
   it('routes Weibo cookie edits back into formData', async () => {
-    const settingsTargetTab = ref<string | null>('hosting');
-    const wrapper = await mountSettings({ settingsTargetTab });
+    const wrapper = await mountHosts();
 
     const panel = wrapper.findComponent(HostingSettingsPanelStub);
     const cookieFormData = panel.props('cookieFormData') as { weibo: { cookie: string } };
@@ -434,21 +448,19 @@ describe('SettingsView page interactions', () => {
     ).toBe('SUB=edited-by-hand');
   });
 
-  it('opens hosting tab with a target service card from navigation section', async () => {
-    const settingsTargetTab = ref<string | null>('hosting');
+  it('opens the hosts page on a target service card from navigation section', async () => {
     const settingsTargetSection = ref<string | null>('r2');
-    const wrapper = await mountSettings({ settingsTargetTab, settingsTargetSection });
+    const wrapper = await mountHosts({ settingsTargetSection });
 
     const hostingPanel = wrapper.get('[data-testid="hosting-panel"]');
     expect(hostingPanel.attributes('data-target-card')).toBe('r2');
-    expect(settingsTargetTab.value).toBeNull();
     expect(settingsTargetSection.value).toBeNull();
+    expect(wrapper.find('.nav-item').exists()).toBe(false);
   });
 
   it('enables and disables hosting services and saves through the page handler', async () => {
-    const wrapper = await mountSettings();
+    const wrapper = await mountHosts();
 
-    await wrapper.findAll('.nav-item')[1].trigger('click');
     expect(wrapper.get('[data-testid="hosting-panel"]').attributes('data-services')).toBe('jd,r2');
 
     await wrapper.get('.disable-r2').trigger('click');
@@ -465,9 +477,8 @@ describe('SettingsView page interactions', () => {
   });
 
   it('records public service risk acknowledgement from hosting settings', async () => {
-    const wrapper = await mountSettings();
+    const wrapper = await mountHosts();
 
-    await wrapper.findAll('.nav-item')[1].trigger('click');
     await wrapper.get('.accept-public-risk').trigger('click');
 
     expect(mockState.formData.value.publicServiceRiskAccepted).toBe(true);
@@ -477,7 +488,7 @@ describe('SettingsView page interactions', () => {
   it('saves compression changes from the advanced tab', async () => {
     const wrapper = await mountSettings();
 
-    await wrapper.findAll('.nav-item')[2].trigger('click');
+    await wrapper.findAll('.nav-item')[1].trigger('click');
     await wrapper.get('.update-compression').trigger('click');
     await flushPromisesAndTicks();
 
@@ -489,9 +500,8 @@ describe('SettingsView page interactions', () => {
   });
 
   it('runs private, token, cookie, builtin, and batch connection tests from hosting', async () => {
-    const wrapper = await mountSettings();
+    const wrapper = await mountHosts();
 
-    await wrapper.findAll('.nav-item')[1].trigger('click');
     await wrapper.get('.test-r2').trigger('click');
     await wrapper.get('.test-smms').trigger('click');
     await wrapper.get('.test-weibo').trigger('click');
@@ -506,9 +516,8 @@ describe('SettingsView page interactions', () => {
   });
 
   it('targets the newly created custom S3 card after adding a profile', async () => {
-    const wrapper = await mountSettings();
+    const wrapper = await mountHosts();
 
-    await wrapper.findAll('.nav-item')[1].trigger('click');
     await wrapper.get('.add-custom-s3').trigger('click');
     await flushPromisesAndTicks();
 
@@ -530,7 +539,7 @@ describe('SettingsView page interactions', () => {
     };
     const wrapper = await mountSettings();
 
-    await wrapper.findAll('.nav-item')[3].trigger('click');
+    await wrapper.findAll('.nav-item')[2].trigger('click');
     await wrapper.get('.test-webdav').trigger('click');
     await flushPromisesAndTicks();
 
@@ -562,7 +571,7 @@ describe('SettingsView page interactions', () => {
     };
     const wrapper = await mountSettings();
 
-    await wrapper.findAll('.nav-item')[3].trigger('click');
+    await wrapper.findAll('.nav-item')[2].trigger('click');
     await wrapper.get('.test-webdav').trigger('click');
     await flushPromisesAndTicks();
 
@@ -590,7 +599,7 @@ describe('SettingsView page interactions', () => {
     };
     const wrapper = await mountSettings();
 
-    await wrapper.findAll('.nav-item')[3].trigger('click');
+    await wrapper.findAll('.nav-item')[2].trigger('click');
     await wrapper.get('.test-webdav').trigger('click');
     await flushPromisesAndTicks();
 
