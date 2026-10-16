@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  formatCalendarDate,
+  formatDayHeading,
   formatShortDateTime,
   formatDateCompact,
   formatFileSize,
+  formatListTime,
   formatRelativeTime,
   formatSizeChange,
   formatTimestampCompact,
@@ -55,6 +58,26 @@ describe('formatSizeChange', () => {
   it('shows only the original size when nothing got smaller', () => {
     expect(formatSizeChange(386 * 1024)).toBe('386 KB');
     expect(formatSizeChange(386 * 1024, 400 * 1024)).toBe('386 KB');
+  });
+});
+
+// 图库详情的日期（GalleryScreen.dc.html）：今年写「10月14日」，往年带年份「2024年8月2日」；不写「昨天」
+describe('formatCalendarDate', () => {
+  const now = new Date(2026, 9, 15, 12).getTime();
+  it('drops the year within this year and keeps it otherwise', () => {
+    expect(formatCalendarDate(new Date(2026, 9, 14, 9).getTime(), now)).toBe('10月14日');
+    expect(formatCalendarDate(new Date(2024, 7, 2, 21).getTime(), now)).toBe('2024年8月2日');
+  });
+});
+
+// 图库列表的上传时间（GalleryScreen.dc.html G02）：「今天 14:22」「昨天 18:30」，更早写日期加时刻
+describe('formatListTime', () => {
+  const now = new Date(2026, 9, 15, 16).getTime();
+  it('names today and yesterday, dates the rest', () => {
+    expect(formatListTime(new Date(2026, 9, 15, 14, 22).getTime(), now)).toBe('今天 14:22');
+    expect(formatListTime(new Date(2026, 9, 14, 18, 30).getTime(), now)).toBe('昨天 18:30');
+    expect(formatListTime(new Date(2026, 9, 13, 9, 12).getTime(), now)).toBe('10月13日 09:12');
+    expect(formatListTime(new Date(2024, 7, 2, 21, 40).getTime(), now)).toBe('2024年8月2日 21:40');
   });
 });
 
@@ -147,5 +170,20 @@ describe('formatShortDateTime', () => {
   it('writes the date for older records, with the year only when it differs', () => {
     expect(formatShortDateTime(new Date(2026, 8, 28, 10, 0).getTime(), now)).toBe('9月28日');
     expect(formatShortDateTime(new Date(2025, 4, 22, 10, 0).getTime(), now)).toBe('2025年5月22日');
+  });
+});
+
+// GalleryScreen.dc.html 的日期标题：「今天 10月15日」「昨天 10月14日」，更早的只写日期
+describe('formatDayHeading', () => {
+  const now = new Date(2026, 9, 15, 9, 0).getTime();
+
+  it('names today and yesterday and puts the date beside them', () => {
+    expect(formatDayHeading(2026, 9, 15, now)).toEqual({ title: '今天', sub: '10月15日' });
+    expect(formatDayHeading(2026, 9, 14, now)).toEqual({ title: '昨天', sub: '10月14日' });
+  });
+
+  it('writes older days as a full date', () => {
+    expect(formatDayHeading(2026, 9, 13, now)).toEqual({ title: '2026年10月13日', sub: '' });
+    expect(formatDayHeading(2025, 11, 31, now)).toEqual({ title: '2025年12月31日', sub: '' });
   });
 });

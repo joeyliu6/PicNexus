@@ -9,13 +9,15 @@ const props = withDefaults(defineProps<{
   size?: number;
   /** 读屏文字（如「3 个图床：京东、R2 已完成，微博上传失败」）；不给则视为装饰 */
   label?: string;
-}>(), { size: 16, label: undefined });
+  /** 盖在图片上（图库格子）：亮的白色、未亮的 30% 白 */
+  onImage?: boolean;
+}>(), { size: 16, label: undefined, onImage: false });
 
 const layout = computed(() => layoutPetals(props.states));
 </script>
 
 <template>
-  <span class="petals" :style="{ width: `${size}px`, height: `${size}px` }" :role="label ? 'img' : undefined" :aria-label="label">
+  <span class="petals" :class="{ 'petals--on-image': onImage }" :style="{ width: `${size}px`, height: `${size}px` }" :role="label ? 'img' : undefined" :aria-label="label">
     <svg :width="size" :height="size" viewBox="-4 -4 136 136" aria-hidden="true" focusable="false">
       <path
         v-for="(petal, i) in layout.petals"
@@ -45,6 +47,8 @@ const layout = computed(() => layoutPetals(props.states));
 .petals__petal--failed { fill: var(--pn-danger-fill); }
 .petals__petal--limited { fill: var(--pn-warning-fill); }
 .petals__petal--empty { fill: var(--pn-petal-empty); }
+.petals--on-image .petals__petal--ok { fill: var(--pn-media-fg); }
+.petals--on-image .petals__petal--empty { fill: var(--pn-media-fg-dim); }
 
 .petals__count {
   position: absolute;

@@ -51,6 +51,20 @@ export function formatRelativeTime(timestamp: number): string {
 }
 
 /**
+ * 图库按天分组的标题（GalleryScreen.dc.html）：今天、昨天写名字并在旁边写日期，更早的只写完整日期
+ * @param month 0–11（与 DayStats 一致）
+ */
+export function formatDayHeading(year: number, month: number, day: number, now: number = Date.now()): { title: string; sub: string } {
+  const today = new Date(now);
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfDay = new Date(year, month, day).getTime();
+  const date = `${month + 1}月${day}日`;
+  if (startOfDay === startOfToday) return { title: '今天', sub: date };
+  if (startOfDay === new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime()) return { title: '昨天', sub: date };
+  return { title: `${year}年${date}`, sub: '' };
+}
+
+/**
  * 较早记录的时间（首页「最近上传 · 更早」）：今天写「HH:mm」，昨天写「昨天 HH:mm」，
  * 今年写「M月D日」，更早写「YYYY年M月D日」
  */
@@ -61,8 +75,25 @@ export function formatShortDateTime(timestamp: number, now: number = Date.now())
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   if (timestamp >= startOfToday) return hm;
   if (timestamp >= startOfToday - 24 * 60 * 60 * 1000) return `昨天 ${hm}`;
-  if (date.getFullYear() === today.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日`;
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  return formatCalendarDate(timestamp, now);
+}
+
+/** 图库列表的上传时间：「今天 14:22」「昨天 18:30」，更早写日期加时刻（GalleryScreen.dc.html G02） */
+export function formatListTime(timestamp: number, now: number = Date.now()): string {
+  const date = new Date(timestamp);
+  const today = new Date(now);
+  const hm = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (timestamp >= startOfToday) return `今天 ${hm}`;
+  if (timestamp >= startOfToday - 24 * 60 * 60 * 1000) return `昨天 ${hm}`;
+  return `${formatCalendarDate(timestamp, now)} ${hm}`;
+}
+
+/** 只写日期：今年「10月14日」，往年「2024年8月2日」（图库详情这类不说「昨天」的地方） */
+export function formatCalendarDate(timestamp: number, now: number = Date.now()): string {
+  const date = new Date(timestamp);
+  const md = `${date.getMonth() + 1}月${date.getDate()}日`;
+  return date.getFullYear() === new Date(now).getFullYear() ? md : `${date.getFullYear()}年${md}`;
 }
 
 /**

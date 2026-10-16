@@ -9,9 +9,12 @@ const props = withDefaults(defineProps<{
   size?: number;
   /** 描边粗细，设计稿按尺寸取 1.4–2.6 */
   stroke?: number;
+  /** 实心（如已收藏的星）：填 currentColor */
+  filled?: boolean;
 }>(), {
   size: 16,
   stroke: 1.6,
+  filled: false,
 });
 
 const shapes = computed(() => ICONS[props.name]);
@@ -22,7 +25,7 @@ const shapes = computed(() => ICONS[props.name]);
     :width="size"
     :height="size"
     viewBox="0 0 24 24"
-    fill="none"
+    :fill="filled ? 'currentColor' : 'none'"
     stroke="currentColor"
     :stroke-width="stroke"
     stroke-linecap="round"

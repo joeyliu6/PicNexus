@@ -176,7 +176,8 @@
   --pn-size-skeleton-text: 12px;
   --pn-size-skeleton-line: 10px;
   --pn-space-empty-bottom: 80px;
-  --pn-size-empty-text: 360px;
+  /* 按钮在说明下方 8 + 10（G09–G11） */
+  --pn-space-empty-action-top: 10px;
   --pn-space-kbd-x: 5px;
 
   /* 弹窗 / 通知 */
@@ -311,9 +312,113 @@
   --pn-window-close-fg: var(--pn-on-fill);
   --pn-dur-spin: 900ms;
 
+  /* 图库格子（GalleryScreen.dc.html）：盖在图片上的元素不随主题变 */
+  --pn-media-fg: #FFFFFF;
+  --pn-media-fg-dim: rgba(255, 255, 255, 0.3);
+  --pn-media-badge-bg: rgba(23, 23, 23, 0.72);
+  --pn-media-badge-warn: #F7B955;
+  --pn-media-chip-bg: rgba(255, 255, 255, 0.94);
+  --pn-media-chip-fg: #171717;
+  --pn-media-hover: linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.34));
+  --pn-media-select-bg: rgba(0, 0, 0, 0.12);
+  --pn-media-select-idle-bg: rgba(0, 0, 0, 0.16);
+  --pn-media-select-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --pn-media-icon-shadow: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  --pn-border-tile-select: 1.5px;
+  --pn-size-tile-select: 18px;
+  --pn-radius-tile-select: 5px;
+  --pn-size-tile-select-idle: 20px;
+  --pn-size-tile-check: 22px;
+  --pn-size-tile-badge: 22px;
+  --pn-space-tile-badge-x: 7px;
+  --pn-size-tile-chip: 24px;
+  --pn-space-tile-petals-bottom: 9px;
+  /* 选中的图在自己的格子里缩小到 86%，不向外扩边 */
+  --pn-scale-tile-selected: 0.86;
+
   /* 焦点卡「+N」展开的图床列表（CopyMulti.dc.html ②）：外宽 330 含浮层内边距 8 */
   --pn-size-copy-more: 314px;
   --pn-size-copy-more-row: 36px;
   --pn-size-copy-more-button: 24px;
   --pn-space-copy-more-gap: 10px;
+
+  /* 图库工具栏（GalleryScreen.dc.html）：搜索框宽 260（窄窗口 180）、左内距 10；筛选按钮左右 9；计数与视图切换间隔 10 */
+  --pn-size-gallery-search: 260px;
+  --pn-size-gallery-search-narrow: 180px;
+  --pn-space-search-x: 10px;
+  --pn-space-filter-x: 9px;
+  --pn-space-count-gap: 10px;
+
+  /* 筛选小标签：整行 36，标签高 24，移除按钮 18 */
+  --pn-size-filter-row: 36px;
+  --pn-size-filter-chip: 24px;
+  --pn-size-filter-chip-remove: 18px;
+
+  /* 图库按天分组：标题行 34；吸顶时连同与首行的间距一起盖住（34 + 6） */
+  --pn-size-day-heading: 34px;
+  --pn-size-day-heading-sticky: 40px;
+
+  /* 图库刻度条：一块毛玻璃浮在图片右缘（GalleryScreen.dc.html） */
+  --pn-size-scrubber-w: 44px;
+  --pn-radius-scrubber: 12px;
+  --pn-glass-blur: blur(20px) saturate(180%);
+  --pn-glass-drop: 0 4px 16px -6px rgba(0, 0, 0, 0.18);
+  --pn-size-scrubber-year: 34px;
+  --pn-size-scrubber-month: 26px;
+  --pn-size-scrubber-marker-w: 14px;
+  --pn-size-scrubber-marker-h: 2px;
+  --pn-size-scrubber-tip: 28px;
+  --pn-space-scrubber-tip-gap: 52px;
+  --pn-space-scrubber-tip-x: 10px;
+
+  /* 图库冷启动骨架（G12）：日期条 14 高、140 / 160 宽，行高 160；右侧给刻度条留 48 */
+  --pn-size-skeleton-heading: 14px;
+  --pn-size-skeleton-heading-w: 140px;
+  --pn-size-skeleton-heading-w2: 160px;
+  --pn-size-skeleton-row: 160px;
+  --pn-space-skeleton-right: 48px;
+  --pn-space-skeleton-first: 14px;
+  --pn-space-skeleton-next: 22px;
+
+  /* 图库列表（G02）：表头 34、行高 54，缩略图 56 × 40；列宽照设计稿，窄窗口去掉「尺寸 · 大小」 */
+  --pn-size-list-head: 34px;
+  --pn-size-list-row: 54px;
+  --pn-size-list-thumb-w: 56px;
+  --pn-size-list-thumb-h: 40px;
+  --pn-grid-gallery-list: 56px minmax(0, 1fr) 190px 150px 130px 110px 72px;
+  --pn-grid-gallery-list-narrow: 56px minmax(0, 1fr) 150px 120px 90px 64px;
+
+  /* 图库灯箱（G08）：不随主题的深色底；在拖放遮罩之上、菜单与对话框之下；顶栏 52、底栏 64 */
+  --pn-z-lightbox: 950;
+  --pn-lightbox-bg: #0E0E10;
+  --pn-lightbox-button: rgba(255, 255, 255, 0.08);
+  --pn-lightbox-button-hover: rgba(255, 255, 255, 0.14);
+  --pn-lightbox-chip: rgba(255, 255, 255, 0.1);
+  --pn-lightbox-rule: rgba(255, 255, 255, 0.06);
+  --pn-lightbox-menu-active: #36363A;
+  --pn-lightbox-plate-active: #45454A;
+  --pn-lightbox-menu-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 16px 40px -8px rgba(0, 0, 0, 0.7);
+  --pn-lightbox-switch: 20px;
+  --pn-size-lightbox-top: 52px;
+  --pn-size-lightbox-bottom: 64px;
+  --pn-size-lightbox-nav: 40px;
+  --pn-size-lightbox-banner: 34px;
+  --pn-size-lightbox-chip: 26px;
+  --pn-size-lightbox-menu: 300px;
+  --pn-size-lightbox-menu-row: 46px;
+  --pn-size-lightbox-plate: 20px;
+  --pn-size-lightbox-failed-w: 420px;
+  --pn-size-lightbox-failed-h: 560px;
+
+  /* 图库详情（G05–G07）：宽 340，预览区高 188 */
+  --pn-size-gallery-detail: 340px;
+  --pn-size-detail-preview: 188px;
+  /* 详情里的链接块：上下 7，最多三行（54） */
+  --pn-space-link-compact-y: 7px;
+  --pn-size-link-compact-max: 54px;
+  /* 详情「存放在」：每行至少 50，图床图标底板 22 */
+  --pn-size-detail-host-row: 50px;
+  --pn-size-detail-host-plate: 22px;
+  /* 详情链接旁的「复制」宽 52 */
+  --pn-size-detail-copy: 52px;
 }
