@@ -61,9 +61,11 @@ const {
 // ==================== 服务端分页数据源 ====================
 
 const timelinePagination = useTimelineDayPagination({
-  filter: computed(() => props.filter ?? 'all'),
-  searchTerm: computed(() => props.searchTerm ?? ''),
-  favoritesOnly: computed(() => props.favoritesOnly ?? false),
+  filter: computed(() => ({
+    serviceFilter: props.filter ?? 'all',
+    searchTerm: props.searchTerm ?? '',
+    favoritesOnly: props.favoritesOnly ?? false,
+  })),
   visible: computed(() => props.visible ?? false),
 });
 const { groups, dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, totalCount: dayTotalCount, isLoadingStats, hasLoadedStats, isFullyPreloaded } = timelinePagination;

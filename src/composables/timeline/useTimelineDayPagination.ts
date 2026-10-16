@@ -4,7 +4,7 @@
  * 替代 sharedImageMetas 全量路径，专为时间轴设计：
  * 1. 首屏只拉 getDayStats（<50ms），生成骨架 groups
  * 2. 滚动可见时 ensureDaysLoaded 合并查询 getItemsByDayRange（按天）
- * 3. filter/search/favoritesOnly 变化时重置并重载
+ * 3. 筛选条件变化时重置并重载
  */
 
 import {
@@ -17,7 +17,6 @@ import { onCacheEventType, type HistoryEventData } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';
 import { getDayKey } from '@/utils/formatters';
 import type { ImageMeta } from '@/types/image-meta';
-import type { ServiceType } from '@/config/types';
 import type { PhotoGroup } from './types';
 
 const log = createLogger('DayPagination');
@@ -59,9 +58,8 @@ function formatDayLabel(year: number, month: number, day: number): string {
 }
 
 export interface UseTimelineDayPaginationParams {
-  filter: Ref<ServiceType | 'all'>;
-  searchTerm: Ref<string>;
-  favoritesOnly: Ref<boolean>;
+  /** 全部筛选条件；内容不变时换一个新对象不会重载 */
+  filter: Ref<DayStatsFilter>;
   visible: Ref<boolean>;
 }
 
@@ -97,7 +95,7 @@ export interface UseTimelineDayPaginationReturn {
 export function useTimelineDayPagination(
   params: UseTimelineDayPaginationParams,
 ): UseTimelineDayPaginationReturn {
-  const { filter, searchTerm, favoritesOnly, visible } = params;
+  const { filter, visible } = params;
 
   const dayStats = shallowRef<DayStats[]>([]);
   const dayMetaCache = new Map<string, ImageMeta[]>();
@@ -191,11 +189,7 @@ export function useTimelineDayPagination(
   });
 
   function buildFilter(): DayStatsFilter {
-    return {
-      serviceFilter: filter.value,
-      searchTerm: searchTerm.value,
-      favoritesOnly: favoritesOnly.value,
-    };
+    return filter.value;
   }
 
   /**
@@ -517,10 +511,10 @@ export function useTimelineDayPagination(
     return `${d.year}-${d.month}-${d.day}`;
   }
 
-  // filter 三件套变化 → 重置 cache + 重载 dayStats
+  // 筛选条件变化 → 重置 cache + 重载 dayStats（按内容比，调用方每次算出新对象也不会白重载）
   // 不守卫 hasLoadedStats：首次加载在途时若用户切 filter，应让新 filter 赢得竞态，
   // loadDayStats 内部的 statsVersion 会自动作废在途的旧请求
-  watch([filter, searchTerm, favoritesOnly], () => {
+  watch(() => JSON.stringify(filter.value), () => {
     dayLoadVersion++;
     aspectRatiosVersion++;
     dayMetaCache.clear();

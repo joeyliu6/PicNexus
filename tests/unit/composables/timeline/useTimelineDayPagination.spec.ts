@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref, type Ref } from 'vue';
+import { computed, defineComponent, ref, type Ref } from 'vue';
 import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../helpers/wait';
 import type { ImageMeta } from '@/types/image-meta';
 import type { ServiceType } from '@/config/types';
-import type { DayStats } from '@/services/database';
+import type { DayStats, DayStatsFilter } from '@/services/database';
 
 const historyDbMock = vi.hoisted(() => ({
   getDayStats: vi.fn(),
@@ -88,7 +88,8 @@ function mountPagination(overrides: {
 
   const Harness = defineComponent({
     setup() {
-      api = useTimelineDayPagination({ filter, searchTerm, favoritesOnly, visible });
+      const query = computed<DayStatsFilter>(() => ({ serviceFilter: filter.value, searchTerm: searchTerm.value, favoritesOnly: favoritesOnly.value }));
+      api = useTimelineDayPagination({ filter: query, visible });
       return () => null;
     },
   });
@@ -255,5 +256,24 @@ describe('useTimelineDayPagination', () => {
       { serviceFilter: 'all', searchTerm: '', favoritesOnly: false },
     );
     expect(api.groups.value[0].aspectRatios).toEqual([1.2, 1.8]);
+  });
+
+  it('reloads when a gallery filter changes, but not for an equal filter object', async () => {
+    const query = ref<DayStatsFilter>({ statusFilter: ['dead'] });
+    let api!: ReturnType<typeof useTimelineDayPagination>;
+    mountedWrappers.push(mountWithDefaults(defineComponent({
+      setup() { api = useTimelineDayPagination({ filter: query, visible: ref(true) }); return () => null; },
+    })));
+    await flushPromisesAndTicks(2);
+    expect(historyDbMock.getDayStats).toHaveBeenCalledTimes(1);
+
+    query.value = { statusFilter: ['dead'] };
+    await flushPromisesAndTicks(2);
+    expect(historyDbMock.getDayStats).toHaveBeenCalledTimes(1);
+
+    query.value = { statusFilter: ['dead', 'limited'], since: 1 };
+    await flushPromisesAndTicks(2);
+    expect(historyDbMock.getDayStats).toHaveBeenLastCalledWith({ statusFilter: ['dead', 'limited'], since: 1 });
+    expect(api.hasLoadedStats.value).toBe(true);
   });
 });
