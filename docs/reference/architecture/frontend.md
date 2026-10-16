@@ -35,11 +35,6 @@ src/components/
 │   ├── UploaderSettings.vue # 图床设置
 │   └── GeneralSettings.vue  # 通用设置
 │
-├── layout/                   # 布局组件
-│   ├── TitleBar.vue         # 标题栏（窗口控制）
-│   ├── Sidebar.vue          # 侧边导航
-│   └── MainLayout.vue       # 主布局容器
-│
 ├── common/                   # 通用组件
 │   ├── ThumbnailImage.vue   # 缩略图组件
 │   ├── ServiceBadge.vue     # 服务标识
@@ -222,33 +217,17 @@ src/theme/
 
 ## 路由与导航
 
-项目采用侧边栏导航 + 视图切换模式，不使用 Vue Router。
+外壳在 `src/shell/`（`AppShell.vue` = 侧栏 / 窄窗口图标栏 + 主栏），页面切换用 vue-router 内存模式（`src/router.ts`）。
 
-### 视图切换
-
-```typescript
-// Sidebar.vue
-const currentView = ref<ViewType>('upload');
-
-const views = {
-  upload: UploadView,
-  history: HistoryTableView,
-  timeline: TimelineView,
-  settings: SettingsPanel,
-};
-```
-
-### 视图类型
-
-| 视图 | 组件 | 说明 |
+| 路径 | 页面 | 说明 |
 |------|------|------|
-| `upload` | `UploadView` | 默认视图，上传入口 |
-| `history` | `HistoryTableView` | 表格形式历史记录 |
-| `grid` | `HistoryGridView` | 网格形式历史记录 |
-| `timeline` | `TimelineView` | 时间线浏览 |
-| `settings` | `SettingsPanel` | 设置面板 |
+| `/home` | 快传 | 默认页 |
+| `/gallery` | 图库 | |
+| `/health` | 链接健康 | |
+| `/hosts` | 图床 | 从设置里搬出来的独立页 |
+| `/settings` | 设置 | |
 
----
+托盘与应用内各处仍发 `navigate-to` 事件（旧的视图名 `upload` / `history` / `link-check` / `settings`），由 `src/shell/navigatePayload.ts` 翻译成路径、`src/shell/useAppNavigation.ts` 执行跳转。界面重构进度与过渡期安排见 `docs/design/redesign/README.md`。
 
 ## 与 Tauri 交互
 

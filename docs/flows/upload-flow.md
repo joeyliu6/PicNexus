@@ -338,7 +338,7 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | NAS 目录里文件名都带 `_20260817_a3f9` | 防覆盖的唯一段，故意放在原名之后好让你先看到文件名；不想要就关掉那个开关 | WebDAV 可以关掉唯一化 |
 | S3 桶里有对象但历史里查不到 | 上传失败重试留下的孤儿对象（重试用新 key，不覆盖） | S3 系图床 → 对象名唯一化「代价」 |
 | 未知扩展名的文件上传后类型是 `application/octet-stream` | `mime_guess` 无法识别该扩展名，按设计回退 | S3 系图床 → Content-Type |
-| 在历史/链接检测/设置页按 Ctrl+V 也触发了上传 | `UploadView` 的 keydown 监听挂在 `window` 上，且 `MainLayout` 的 `KeepAlive` 上限等于视图数、本组件永不卸载，必须靠 `isViewActive` 早退收敛 | 图1 节点 A3 |
+| 在历史/链接检测/设置页按 Ctrl+V 也触发了上传 | `UploadView` 的 keydown 监听挂在 `window` 上，且 `AppShell` 的 `KeepAlive` 上限等于页面数、本组件永不卸载，必须靠 `isViewActive` 早退收敛 | 图1 节点 A3 |
 | 在上传页按 Ctrl+V 没反应 | 切走再切回后 `onActivated` 未触发（`isViewActive` 卡在 false）；或焦点在 `INPUT`/`TEXTAREA` 内被有意跳过 | 图1 节点 A3 |
 | 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关 | `src/composables/useGlobalShortcut.ts` |
 

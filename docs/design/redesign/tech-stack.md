@@ -9,10 +9,11 @@
 | 层 | 现在 | 重构后 |
 |---|---|---|
 | 桌面框架 | Tauri 2 | 不变 |
-| 后端 | Rust | 不变；为托盘原生菜单、侧栏材质、上传日历等加少量命令 |
+| 后端 | Rust | 不变；为托盘原生菜单、上传日历等加少量命令 |
 | 前端框架 | Vue 3 + TypeScript + Vite | 不变 |
 | 业务逻辑 | composables / core / services / uploaders / store | 保留，只在设计要求变行为的地方定点修改 |
-| 界面零件 | PrimeVue 4 + PrimeIcons | **Reka UI**（无样式，只管键盘、焦点、读屏）+ 自写 `Pn*` 组件；图标用 Lucide 的 Vue 包 |
+| 界面零件 | PrimeVue 4 + PrimeIcons | **Reka UI**（无样式，只管键盘、焦点、读屏）+ 自写 `Pn*` 组件 |
+| 图标 | PrimeIcons | `PnIcon`：形状照抄设计源文件的 SVG（`src/components/pn/icons.ts`），不从图标库里挑近似的；图床 logo 继续用项目自带的 SVG |
 | 样式 | 主题 CSS + PrimeVue 覆盖样式 | scoped CSS，只引用 `var(--pn-*)` 令牌（[handoff/tokens/tokens.css](./handoff/tokens/tokens.css)） |
 | 通知 / 确认框 | PrimeVue Toast / ConfirmDialog | 自写 PnToast / PnDialog，挂在现有 `useToast` / `useConfirm` / `useUndoToast` 下面，调用方式不变 |
 | 长列表 | PrimeVue VirtualScroller + 自写虚拟时间轴 | `@tanstack/vue-virtual`；等高行排版算法（`utils/justifiedLayout.ts`）保留 |
@@ -33,8 +34,8 @@
 
 | 规矩 | 重构后 |
 |---|---|
-| CSS 禁止写死颜色、间距等 | 保留。设计稿里不在刻度上的尺寸写成具名尺寸令牌（`src/styles/tokens-size.css`），不硬写、也不凑到最近的刻度 |
-| 令牌位置 | `src/styles/tokens.css`（设计包原样）；旧的 `light-theme.css` / `dark-theme.css` 在最后一个旧页面删掉时一并删除；`check-theme-token-copies.mjs` 改读新位置 |
+| CSS 禁止写死颜色、间距等 | 保留。设计稿用到而导出令牌没收录的颜色、尺寸，以及不在刻度上的值，写成具名令牌放进 `src/styles/tokens-extra.css`，不硬写、也不凑到最近的刻度 |
+| 令牌位置 | `src/styles/tokens.css`（设计包原样）+ `src/styles/tokens-extra.css`；旧的 `light-theme.css` / `dark-theme.css` 在最后一个旧页面删掉时一并删除；`check-theme-token-copies.mjs` 改读新位置 |
 | 主题与平台 | 根元素 `data-theme="light|dark"`、`data-platform="windows|macos|linux"` |
 | 单个 `.vue` 不超过 500 行 | 保留 |
 | Logger、Store 单例、配置深拷贝 | 不变 |
@@ -42,7 +43,6 @@
 
 ## 4. 落地时要核实的事
 
-- 各库的确切版本（以 npm / crates.io 当天为准）；Lucide 的 Vue 包名。
+- 各库的确切版本（以 npm / crates.io 当天为准）。vue-router 5 要求 vue ≥ 3.5.34，项目是 3.5.24，所以用 vue-router 4。
 - Tauri 原生菜单能否「勾选后不关菜单」、Windows 上能否把「打开 PicNexus」设为加粗默认项；做不到按系统默认行为，并记在 [README](./README.md)。
-- 侧栏材质：Windows 11 Mica、macOS 毛玻璃在透明窗口下的表现；做不到时退回令牌里的纯色侧栏。
 - macOS / Linux 的 WebKit 对 `backdrop-filter`（图库刻度条毛玻璃）的支持。

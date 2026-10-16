@@ -95,8 +95,8 @@ flowchart TD
     E -- open_history --> A4[show main<br/>emit navigate-to history]
     E -- quit --> A5[plugin-process exit 0]
 
-    A1 & A2 & A4 --> F[MainLayout / UploadView]
-    F --> F1[listen navigate-to<br/>切换 View]
+    A1 & A2 & A4 --> F[AppShell / UploadView]
+    F --> F1[listen navigate-to<br/>切换路由]
     F --> F2[listen tray-action<br/>上传动作]
 
     style A fill:#e3f2fd,stroke:#1976d2

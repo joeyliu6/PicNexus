@@ -20,10 +20,10 @@ flowchart TD
         V5[LinkCheckView<br/>链接检测]
     end
 
-    subgraph Layout["布局层 (src/components/layout/)"]
-        L1[MainLayout]
-        L2[TitleBar]
-        L3[Sidebar]
+    subgraph Layout["外壳 (src/shell/)"]
+        L1[AppShell]
+        L2[TitleRow / WindowControls]
+        L3[AppSidebar / NavRail]
     end
 
     subgraph Composables["Composables 层 (src/composables/)"]

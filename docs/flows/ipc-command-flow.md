@@ -200,8 +200,8 @@ flowchart LR
 | `link-check://progress` | `{batch_id?, checked, total, current_url, current_result?, recent_results}` | `batch_check_links` | `useLinkCheck.ts` |
 | `md-scan://progress` | `{scanned, total, current_file}` | `scan_md_folder` | `useMdScan.ts` |
 | `config-updated` | `{timestamp}` | `useConfig.saveConfig` | 所有需要响应配置变更的 composable |
-| `navigate-to` | `string` 或 `{view, tab?, section?}` | 托盘菜单 / macOS 菜单栏 / 前端跳转 | `MainLayout.vue` |
-| `tray-action` | `'upload_clipboard' \| 'select_upload_files'` | 托盘菜单 | `MainLayout.vue` / `UploadView.vue` |
+| `navigate-to` | `string` 或 `{view, tab?, section?}` | 托盘菜单 / macOS 菜单栏 / 前端跳转 | `src/shell/useAppNavigation.ts`（路径映射见 `navigatePayload.ts`） |
+| `tray-action` | `'upload_clipboard' \| 'select_upload_files'` | 托盘菜单 | `src/shell/useAppNavigation.ts` / `UploadView.vue` |
 
 ```mermaid
 sequenceDiagram
