@@ -113,6 +113,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     displayMode: virtual.displayMode,
     scrollDirection: virtual.scrollDirection,
     getThumbnailUrls,
+    confirmedHttpHosts: () => confirmedHttpHosts.value,
     isImageLoaded: imageLoad.isImageLoaded,
     onImageLoad: imageLoad.onImageLoad,
   });
@@ -125,6 +126,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     findDayAfter: pagination.findDayAfter,
     detailCache: historyManager.detailCache,
     config: configManager.config,
+    confirmedHttpHosts: () => confirmedHttpHosts.value,
     scrollToItem: virtual.scrollToItem,
     toast,
   });

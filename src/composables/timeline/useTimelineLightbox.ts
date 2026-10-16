@@ -15,6 +15,7 @@ import { useLightboxPreloader } from '@/composables/image/useLightboxPreloader';
 import { useLightboxCore } from '@/composables/common/useLightboxCore';
 import { warmImages } from '@/utils/imagePreload';
 import { getMetaThumbnailUrl } from '@/composables/image/useThumbCache';
+import { safeImageUrl } from '@/security/networkPolicy';
 
 const logger = createLogger('TimelineLightbox');
 
@@ -36,6 +37,13 @@ interface UseTimelineLightboxOptions {
   detailCache: { getDetail: (id: string) => Promise<HistoryItem> };
   /** 配置（用于生成图片 URL） */
   config: Ref<UserConfig>;
+  /**
+   * 已确认可走明文 HTTP 的主机名（与缩略图、灯箱显示的大图同一份）
+   *
+   * 预热也是真实的网络请求：当前图与 ±1 相邻图的地址先过 safeImageUrl，拦下的不预热。
+   * CSP 的 img-src 已放开 http:，这里不拦就没有闸。
+   */
+  confirmedHttpHosts: () => ReadonlySet<string> | undefined;
   /** 滚动到指定元素 */
   scrollToItem: (id: string, behavior?: ScrollBehavior) => void;
   /** Toast 通知（读详情失败时提示） */
@@ -48,7 +56,7 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
   const {
     dayMetaCache, loadedDayKeys, ensureDaysLoaded,
     findDayBefore, findDayAfter,
-    detailCache, config, scrollToItem, toast,
+    detailCache, config, confirmedHttpHosts, scrollToItem, toast,
   } = options;
 
   const core = useLightboxCore({ silentLoadError: true, toast });
@@ -81,11 +89,13 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
   let pendingDirection: 'prev' | 'next' | null = null;
   let isNavigating = false;
 
+  const gate = (url: string | null | undefined): string | null => safeImageUrl(url, confirmedHttpHosts()) ?? null;
+
   function warmCurrentUrls(meta: ImageMeta, detail: HistoryItem): void {
     const largeUrl = Array.isArray(detail.results)
       ? getPrimaryImageUrl(detail, config.value)
       : null;
-    warmImages([getMetaThumbnailUrl(meta, config.value), largeUrl]);
+    warmImages([gate(getMetaThumbnailUrl(meta, config.value)), gate(largeUrl)]);
   }
 
   /**
@@ -170,7 +180,7 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
       const meta = items[preloadIdx];
       if (!meta) return null;
       const detail = await detailCache.getDetail(meta.id);
-      return getPrimaryImageUrl(detail, config.value) || null;
+      return gate(getPrimaryImageUrl(detail, config.value));
     },
   });
 

@@ -160,11 +160,12 @@ export function getConfirmedWebdavHttpHosts(
  * **调用方清单**（新增渲染图片的视图时请一并接上，否则那个视图等于不设防）：
  * - 每一处 `ThumbnailImage` → `confirmedHttpHosts` prop（新界面用 `useConfirmedHttpHosts` 取；
  *   `tests/unit/security/thumbnailConfirmedHosts.spec.ts` 逐个检查，漏传就失败）
- * - `FavoritesView` / `TimelineView` → `useThumbnailFallbackChain` 的 `confirmedHttpHosts` 选项
+ * - 图库网格的 `GalleryTile` → `useThumbnailFallbackChain` 的 `confirmedHttpHosts` 选项
+ * - 图库滚动预热 `useImagePreload`、灯箱当前图与 ±1 预热 `useTimelineLightbox` → 各自的 `confirmedHttpHosts` 选项
+ * - 灯箱显示的大图（`GalleryLightbox`）→ 直接过 `safeImageUrl`
  *
- * 后两个是 2026-08-19 补上的：给 CSP 的 `img-src` 放开 `http:` 之前，CSP 是收藏页 /
- * 时间轴仅有的图片闸门，放开之后它们一度处于无校验状态。详见
- * `docs/audits/http-image-host-2026-08-19.md`。
+ * 给 CSP 的 `img-src` 放开 `http:` 之后，没走这些入口的图片请求就没有任何闸门
+ * （预热这类后台 `new Image()` 同样算请求）。详见 `docs/audits/http-image-host-2026-08-19.md`。
  */
 export function getConfirmedHttpHosts(config: {
   services?: Record<string, unknown> | undefined;

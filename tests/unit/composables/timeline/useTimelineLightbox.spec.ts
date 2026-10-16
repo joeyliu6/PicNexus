@@ -4,6 +4,7 @@ import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import { createHistoryItem } from '../../factories/historyFactory';
 import { useTimelineLightbox } from '@/composables/timeline/useTimelineLightbox';
+import { useLightboxPreloader } from '@/composables/image/useLightboxPreloader';
 import type { ImageMeta } from '@/types/image-meta';
 import type { HistoryItem, ServiceType, UserConfig } from '@/config/types';
 
@@ -94,6 +95,7 @@ function mountLightbox(overrides: Partial<Parameters<typeof useTimelineLightbox>
         findDayAfter: (key: string) => (key === dayTwoKey ? dayOneKey : null),
         detailCache,
         config: ref({} as UserConfig),
+        confirmedHttpHosts: () => undefined,
         scrollToItem,
         toast,
         ...overrides,
@@ -140,6 +142,24 @@ describe('useTimelineLightbox', () => {
       'https://thumb.example.com/day-one-new.jpg',
       'https://large.example.com/day-one-new.jpg',
     ]);
+  });
+
+  // 回归：灯箱显示的大图过了 safeImageUrl，「当前图预热」和「±1 预热」却直接拿原始地址发请求，
+  // 云元数据地址、没确认过的明文 HTTP 域名照样在后台被请求（CSP 的 img-src 已放开 http:，没有兜底）
+  it('warms the current and adjacent images only through the image safety gate', async () => {
+    const blocked = (id: string) => `http://169.254.169.254/latest/meta-data/${id}.jpg`;
+    const detailCache = {
+      getDetail: vi.fn(async (id: string) => createHistoryItem({ id, localFileName: `${id}.jpg`, generatedLink: blocked(id) })),
+    };
+    const { api, dayOneItems } = mountLightbox({ detailCache });
+
+    await api.openLightbox(dayOneItems[0]);
+
+    const warmed = warmImagesMock.mock.calls.flat(2);
+    expect(warmed).toContain('https://thumb.example.com/day-one-new.jpg');
+    expect(warmed).not.toContain(blocked('day-one-new'));
+    const { resolveAdjacentUrl } = vi.mocked(useLightboxPreloader).mock.calls.at(-1)![0];
+    await expect(Promise.resolve(resolveAdjacentUrl('next'))).resolves.toBeNull();
   });
 
   it('navigates within a loaded day before requesting the older day', async () => {

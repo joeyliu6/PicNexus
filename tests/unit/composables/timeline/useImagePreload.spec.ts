@@ -63,11 +63,12 @@ function createPreloadContext(overrides: Partial<Parameters<typeof useImagePrelo
   const getThumbnailUrls = vi.fn().mockReturnValue(['https://thumb.example.com/img.jpg']);
   const isImageLoaded = vi.fn().mockReturnValue(false);
   const onImageLoad = vi.fn();
+  const confirmedHttpHosts = () => undefined;
 
   return {
     visibleItems, allMetas, displayMode, scrollDirection,
     getThumbnailUrls, isImageLoaded, onImageLoad,
-    ...useImagePreload({ visibleItems, allMetas, displayMode, scrollDirection, getThumbnailUrls, isImageLoaded, onImageLoad, ...overrides }),
+    ...useImagePreload({ visibleItems, allMetas, displayMode, scrollDirection, getThumbnailUrls, confirmedHttpHosts, isImageLoaded, onImageLoad, ...overrides }),
   };
 }
 
@@ -194,6 +195,30 @@ describe('preloadNextScreen — 向下预加载', () => {
 
     expect(reportFailedMock).not.toHaveBeenCalled();
     expect(ctx.onImageLoad).not.toHaveBeenCalled();
+  });
+
+  // 回归：缩略图、详情、灯箱都过 safeImageUrl，只有滚动预热直接拿候选链首条去请求，
+  // 云元数据地址、没确认过的明文 HTTP 域名照样发出请求（CSP 的 img-src 已放开 http:，没有兜底）
+  it('预热与缩略图同一道闸：拦下的地址不请求，跳到下一条可用候选', () => {
+    const metas = [makeMeta('a'), makeMeta('b')];
+    const getThumbnailUrls = vi.fn().mockReturnValue([
+      'http://169.254.169.254/latest/meta-data/b.jpg',
+      'http://plain.example.com/b.jpg',
+      'https://thumb.example.com/b.jpg',
+    ]);
+    const confirmed = ref<ReadonlySet<string> | undefined>(undefined);
+    const ctx = makePreload({ getThumbnailUrls, confirmedHttpHosts: () => confirmed.value });
+    ctx.allMetas.value = metas;
+    ctx.visibleItems.value = [makeVisibleItem('a')];
+    ctx.scrollDirection.value = 'down';
+
+    ctx.preloadNextScreen();
+    expect(createdImages.map((img) => img.src)).toEqual(['https://thumb.example.com/b.jpg']);
+
+    createdImages.length = 0;
+    confirmed.value = new Set(['plain.example.com']);
+    ctx.preloadNextScreen();
+    expect(createdImages.map((img) => img.src)).toEqual(['http://plain.example.com/b.jpg']);
   });
 });
 

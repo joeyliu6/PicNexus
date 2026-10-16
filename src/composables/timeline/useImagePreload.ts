@@ -6,6 +6,7 @@ import { watch, onUnmounted, type Ref } from 'vue';
 import type { ImageMeta } from '@/types/image-meta';
 import type { VisibleItem } from '@/composables/timeline/useVirtualTimeline';
 import { reportThumbnailUrlLoaded } from '@/composables/image/useThumbCache';
+import { safeImageUrl } from '@/security/networkPolicy';
 
 /** 预加载配置 */
 const PRELOAD_CONFIG = {
@@ -34,6 +35,13 @@ interface UseImagePreloadOptions {
    * 状态，代理不通时预热的还是死链。这里只用首条预热，但取自候选链才能跟随降级。
    */
   getThumbnailUrls: GetThumbnailUrlsFn;
+  /**
+   * 已确认可走明文 HTTP 的主机名（与缩略图 useThumbnailFallbackChain 同一份）
+   *
+   * 预热也是一次真实的网络请求：先过 safeImageUrl，拦下的候选跳过，取第一条放行的——
+   * 正好是缩略图自己会先试的那条。CSP 的 img-src 已放开 http:，这里不拦就没有闸。
+   */
+  confirmedHttpHosts: () => ReadonlySet<string> | undefined;
   /** 判断图片是否已加载 */
   isImageLoaded: (id: string) => boolean;
   /** 图片加载成功回调 */
@@ -47,6 +55,7 @@ export function useImagePreload(options: UseImagePreloadOptions) {
     displayMode,
     scrollDirection,
     getThumbnailUrls,
+    confirmedHttpHosts,
     isImageLoaded,
     onImageLoad,
   } = options;
@@ -97,7 +106,8 @@ export function useImagePreload(options: UseImagePreloadOptions) {
       const meta = metas[i];
       if (!meta || currentVisibleIds.has(meta.id) || isImageLoaded(meta.id)) continue;
 
-      const url = getThumbnailUrls(meta)[0];
+      const confirmed = confirmedHttpHosts();
+      const url = getThumbnailUrls(meta).map((candidate) => safeImageUrl(candidate, confirmed)).find(Boolean);
       if (!url) continue;
 
       const img = new Image();
