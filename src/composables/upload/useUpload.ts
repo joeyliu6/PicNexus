@@ -12,6 +12,7 @@ import {
   isPublicRiskService,
 } from '@/config/types';
 import type { UploadQueueManager } from '@/core/UploadQueue';
+import { UPLOAD_CONCURRENCY } from '@/core/uploadConcurrency';
 import { useToast } from '@/composables/useToast';
 import { useCopyLink, type CopyLinkItem, type CopyLinkResult } from '@/composables/useCopyLink';
 import { TOAST_MESSAGES } from '@/constants';
@@ -28,8 +29,6 @@ const log = createLogger('useUpload');
 
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
-/** 同时上传的图片张数（交接说明 8.1：批量时同时传 3 张） */
-export const MAX_CONCURRENT_FILES = 3;
 
 export interface UploadManagerOptions {
   /** 自动复制成功后回调（单张在第一个图床传完时，多张在整批结束时） */
@@ -237,7 +236,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       // ⭐ 流水线处理：分批获取元数据 + 上传
       // 每批 50 张图片，限制同时进行的批次数量避免网络拥塞
       const batches = chunkArray(valid, METADATA_BATCH_SIZE);
-      // 一次只跑一个批次，批内同时传 MAX_CONCURRENT_FILES 张，总并发才是 3 张
+      // 一次只跑一个批次，批内同时传 UPLOAD_CONCURRENCY 张，总并发才是 3 张
       const MAX_CONCURRENT_BATCHES = 1;
       log.info(`开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
 
@@ -327,7 +326,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
           queueItems,
           config,
           enabledServices,
-          MAX_CONCURRENT_FILES,
+          UPLOAD_CONCURRENCY,
           {
             queueManager: queueManager!,
             saveHistoryItemImmediate,

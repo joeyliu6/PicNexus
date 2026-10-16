@@ -133,7 +133,7 @@ sequenceDiagram
     Note over UU: 文件校验 + 配置读取 + 网络检测
     UU->>UU: chunkArray 分批
 
-    loop 每个批次（一次一批，批内 3 张并发）
+    loop 每个批次（一次一批，批内 3 张并发；每个图床同样最多 3 张，见 core/uploadConcurrency.ts）
         UU->>UU: fetchMetadataBatch（元数据）
         UU->>UU: compressImageBatch（可选压缩）
         UU->>UU: queueManager.addFile

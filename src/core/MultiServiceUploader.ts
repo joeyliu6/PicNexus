@@ -20,11 +20,9 @@ import {
 } from '@/constants/serviceRequiredFields';
 import { createLogger } from '@/utils/logger';
 import { pickPrimaryService } from './primaryService';
+import { UPLOAD_CONCURRENCY } from './uploadConcurrency';
 
 const log = createLogger('MultiUploader');
-
-/** 每个图床的最大并发数 */
-const SERVICE_MAX_CONCURRENT = 2;
 
 /** 根据 serviceId 查找对应的配置对象（支持内置服务、custom_s3:xxx 和 webdav:xxx） */
 function getServiceConfig(serviceId: string, config: UserConfig): Record<string, unknown> | undefined {
@@ -141,7 +139,7 @@ export class MultiServiceUploader {
     validServices.forEach((serviceId) => {
       const task = async () => {
         // 获取该图床的信号量，限制并发数
-        const semaphore = getServiceSemaphore(serviceId, SERVICE_MAX_CONCURRENT);
+        const semaphore = getServiceSemaphore(serviceId, UPLOAD_CONCURRENCY);
 
         return semaphore.withPermit(async () => {
           let taskResult: SingleServiceResult;

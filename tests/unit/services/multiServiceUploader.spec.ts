@@ -3,6 +3,7 @@ import { MultiServiceUploader } from '@/core/MultiServiceUploader';
 import type { SingleServiceResult } from '@/core/MultiServiceUploader';
 import type { UserConfig, ServiceType } from '@/config/types';
 import type { UploadResult, ValidationResult } from '@/uploaders/base/types';
+import { getServiceSemaphore } from '@/utils/semaphore';
 
 // Mock UploaderFactory
 vi.mock('@/uploaders/base/UploaderFactory', () => ({
@@ -23,9 +24,9 @@ vi.mock('@/utils/logger', () => ({
 
 // Mock semaphore — 直接透传，不做并发限制
 vi.mock('@/utils/semaphore', () => ({
-  getServiceSemaphore: () => ({
+  getServiceSemaphore: vi.fn(() => ({
     withPermit: (fn: () => Promise<unknown>) => fn(),
-  }),
+  })),
 }));
 
 // Mock 结构化错误转换器（避免引入真实依赖）
@@ -150,6 +151,13 @@ describe('MultiServiceUploader', () => {
     expect(result.results[0].status).toBe('success');
     expect(result.isPartialSuccess).toBeFalsy();
     expect(result.partialFailures).toBeUndefined();
+  });
+
+  // 交接说明 8.1「同时传 3 张」：三张都传同一个图床时，不能被每个图床的上限卡成两张
+  it('lets three images upload to the same host at once', async () => {
+    mockCreate.mockReturnValue(makeMockUploader({ url: 'https://smms.app/a.png' }) as never);
+    await uploader.uploadToMultipleServices('/tmp/test.jpg', ['smms'] as ServiceType[], makeConfig());
+    expect(vi.mocked(getServiceSemaphore)).toHaveBeenCalledWith('smms', 3);
   });
 
   // ---------- 2. 多服务全部成功 ----------
