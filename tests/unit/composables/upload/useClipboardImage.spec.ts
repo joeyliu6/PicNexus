@@ -8,12 +8,14 @@ import { useClipboardImage } from '@/composables/upload/useClipboardImage';
 import { useQueueState } from '@/composables/upload/useQueueState';
 
 const toastWarnMock = vi.hoisted(() => vi.fn());
+const toastInfoMock = vi.hoisted(() => vi.fn());
 const invokeMock = getInvokeMock();
 const readTextMock = getClipboardMocks().readText;
 
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     warn: toastWarnMock,
+    info: toastInfoMock,
   }),
 }));
 
@@ -207,7 +209,8 @@ describe('useClipboardImage.pasteAndUpload', () => {
     expect(toastWarnMock).toHaveBeenCalledWith('下载失败', '图片链接下载失败: Error: 404');
   });
 
-  it('剪贴板文本不是图片 URL 时，提示粘贴失败', async () => {
+  // Patterns.dc.html 通知样例：「剪贴板里没有图片 / 复制一张图片后再按 Ctrl V」（灰色 i，不是警告）
+  it('剪贴板里既没有图片也没有图片链接时，说清怎么做', async () => {
     readTextMock.mockResolvedValue('https://example.com/readme.txt');
     setupInvokeHandler(async (cmd) => {
       if (cmd === 'clipboard_has_image') return false;
@@ -216,9 +219,7 @@ describe('useClipboardImage.pasteAndUpload', () => {
 
     await useClipboardImage().pasteAndUpload(vi.fn());
 
-    expect(toastWarnMock).toHaveBeenCalledWith(
-      '粘贴失败',
-      '剪贴板中没有图片，也没有有效的图片链接',
-    );
+    expect(toastInfoMock).toHaveBeenCalledWith('剪贴板里没有图片', '复制一张图片后再按 Ctrl V');
+    expect(toastWarnMock).not.toHaveBeenCalled();
   });
 });

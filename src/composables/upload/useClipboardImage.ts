@@ -8,6 +8,7 @@ import { useQueueState } from './useQueueState';
 import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 import { isStatusError } from '@/utils/uploadStatus';
+import { uiPlatform } from '@/utils/platform';
 
 const log = createLogger('useClipboardImage');
 
@@ -123,7 +124,8 @@ export function useClipboardImage() {
       log.debug('读取剪贴板文本失败:', error);
     }
 
-    toast.warn('粘贴失败', '剪贴板中没有图片，也没有有效的图片链接');
+    // 不算出错，说清怎么做（Patterns.dc.html 通知样例，灰色 i）
+    toast.info('剪贴板里没有图片', `复制一张图片后再按 ${uiPlatform() === 'macos' ? '⌘ V' : 'Ctrl V'}`);
   }
 
   return {
