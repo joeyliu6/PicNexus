@@ -19,6 +19,27 @@ const TIMEOUT = '请求超时，请检查网络连接';
 const JD_OK = { upload_to_jd: { urlPrefix: 'https://mock.cdn/jd/' } };
 const SINGLE = ['C:/Pictures/夏日海边.png'];
 const BATCH = Array.from({ length: 12 }, (_, i) => `C:/Pictures/截图-${String(i + 1).padStart(2, '0')}.png`);
+/** 设计稿画的是开着全局快捷键的样子（关掉时首页不再提它） */
+const HOTKEY_ON = { globalShortcut: { enabled: true, uploadClipboard: 'CommandOrControl+Shift+C', uploadFromFile: 'CommandOrControl+Shift+O' } };
+/** H21：图床很多时「上传到」带搜索、加宽、列表限高 */
+const MANY_HOSTS = {
+  availableServices: ['jd', 'r2', 'github', 'weibo', 'qiyu', 'tencent', 'aliyun', 'qiniu', 'upyun', 'smms', 'imgur', 'zhihu', 'bilibili', 'nowcoder'],
+  enabledServices: ['jd', 'r2', 'github', 'weibo'],
+  services: {
+    r2: { accountId: 'a', accessKeyId: 'k', secretAccessKey: 's', bucketName: 'b', publicDomain: 'https://img.example.com' },
+    github: { token: 't', owner: 'o', repo: 'r', branch: 'main' },
+    weibo: { cookie: 'SUB=x' },
+    tencent: { secretId: 'i', secretKey: 'k', bucket: 'b', region: 'ap-shanghai' },
+    aliyun: { accessKeyId: 'k', accessKeySecret: 's', bucket: 'b', region: 'oss-cn-hangzhou', publicDomain: 'https://oss.example.com' },
+    qiniu: { accessKey: 'k', secretKey: 's', bucket: 'b', publicDomain: 'https://qn.example.com' },
+    upyun: { operator: 'o', password: 'p', bucket: 'b', publicDomain: 'https://up.example.com', s3AccessKey: 'k', s3SecretKey: 's' },
+    smms: { token: 't' },
+    imgur: { clientId: 'c' },
+    zhihu: { cookie: 'z_c0=x' },
+    bilibili: { cookie: 'SESSDATA=x' },
+    nowcoder: { cookie: 't=x' },
+  },
+};
 
 interface HomeState {
   seed?: E2ESeed;
@@ -26,11 +47,19 @@ interface HomeState {
   act?: (page: Page) => Promise<void>;
 }
 
+/** H20：一张传到 5 个图床，「按图床复制」只露 3 个，其余收进「+2」 */
+const FIVE_HOSTS = {
+  availableServices: ['jd', 'qiyu', 'smms', 'github', 'imgur'],
+  enabledServices: ['jd', 'qiyu', 'smms', 'github', 'imgur'],
+  services: { smms: { token: 't' }, github: { token: 't', owner: 'o', repo: 'r', branch: 'main' }, imgur: { clientId: 'c' } },
+};
+const FIVE_HOSTS_OK = Object.fromEntries(['jd', 'qiyu', 'smms', 'github', 'imgur'].map((id) => [`upload_to_${id}`, { urlPrefix: `https://mock.cdn/${id}/` }]));
+
 const pick = (page: Page) => page.locator('.drop-bar__pick').click();
 const optionTrigger = (page: Page, key: string) => page.locator('.home-options__trigger').filter({ hasText: key });
 
 const STATES: Record<string, HomeState> = {
-  'H01-first-use': {},
+  'H01-first-use': { seed: { config: HOTKEY_ON } },
   'H02-no-host': {
     seed: { config: { availableServices: [], enabledServices: [] } },
   },
@@ -156,7 +185,7 @@ const STATES: Record<string, HomeState> = {
     },
   },
   'H18-hint': {
-    seed: { historyRows: OLDER, dialogOpenResult: SINGLE, invokeOverrides: JD_OK },
+    seed: { config: HOTKEY_ON, historyRows: OLDER, dialogOpenResult: SINGLE, invokeOverrides: JD_OK },
     options: { hintShown: false },
     act: async (page) => {
       await pick(page);
@@ -164,6 +193,35 @@ const STATES: Record<string, HomeState> = {
       await expect(page.locator('.focus-card__pill')).toContainText('已复制');
       await untilIdle(page);
       await freezeTime(page);
+    },
+  },
+  'H19-first-use-pick': {
+    seed: { config: HOTKEY_ON },
+    act: async (page) => {
+      await page.locator('.first-use__chips').click();
+      await expect(page.locator('.pn-popover')).toBeVisible();
+    },
+  },
+  'H20-copy-multi': {
+    seed: {
+      config: FIVE_HOSTS,
+      historyRows: OLDER,
+      dialogOpenResult: SINGLE,
+      invokeOverrides: { ...FIVE_HOSTS_OK, check_chrome_installed: { result: true } },
+    },
+    act: async (page) => {
+      await pick(page);
+      await untilVisible(page, page.getByRole('button', { name: '+2' }));
+      await untilIdle(page);
+      await page.getByRole('button', { name: '+2' }).click();
+      await expect(page.locator('.focus-card__more')).toBeVisible();
+    },
+  },
+  'H21-menu-upload-to-many': {
+    seed: { config: MANY_HOSTS, historyRows: OLDER },
+    act: async (page) => {
+      await optionTrigger(page, '上传到').click();
+      await expect(page.locator('.upload-to__search')).toBeVisible();
     },
   },
 };

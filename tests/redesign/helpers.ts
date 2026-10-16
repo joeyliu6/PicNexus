@@ -91,10 +91,16 @@ export async function freezeTime(page: Page): Promise<void> {
   await page.clock.pauseAt(now + 500);
 }
 
+/**
+ * 新界面同一台机器渲染稳定，差几十个像素就是真变了。全局那条「1% 像素」在 1400×900 上是
+ * 12,600 个像素，整列按钮换了样子（约 7,000 个）都看不出来，这里收紧到 100 个。
+ */
+const MAX_DIFF_PIXELS = 100;
+
 export async function capture(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => [...document.images].every((img) => img.complete));
-  await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide' });
+  await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixels: MAX_DIFF_PIXELS });
 }
 
 /** 一条历史记录（列名同数据库 history_items） */
