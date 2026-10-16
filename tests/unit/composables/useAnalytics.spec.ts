@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { normalizeOsInfo } from '@/utils/platform';
 import {
   getInvokeMock,
   getVersionMock,
@@ -470,7 +471,7 @@ describe('useAnalytics', () => {
     getVersionMock().mockRejectedValue(new Error('version unavailable'));
     mockNavigatorPlatform('FreeBSD');
 
-    const { normalizeOsInfo, useAnalytics } = await importFreshAnalytics();
+    const { useAnalytics } = await importFreshAnalytics();
     await expect(useAnalytics().initialize()).resolves.toBe(true);
 
     expect(getSentBatches()[0].events[0].params).toMatchObject({

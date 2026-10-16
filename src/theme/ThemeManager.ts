@@ -123,6 +123,8 @@ export class ThemeManager {
 
     root.classList.toggle('dark-theme', effective === 'dark');
     root.classList.toggle('light-theme', effective === 'light');
+    // 新界面的 --pn-* 令牌按 data-theme 切换；旧页面仍读 class，两者在重构期间并存
+    root.dataset.theme = effective;
 
     const mode = this.config.theme?.mode || 'auto';
     localStorage.setItem('picnexus-theme', mode === 'auto' ? 'auto' : `${effective}-theme`);

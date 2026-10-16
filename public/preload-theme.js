@@ -13,4 +13,5 @@
   }
 
   document.documentElement.classList.add(cls);
+  document.documentElement.setAttribute('data-theme', cls === 'dark-theme' ? 'dark' : 'light');
 })();

@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { UserConfig } from '@/config/types';
 import { configStore } from '@/store/instances';
 import { createLogger } from '@/utils/logger';
+import { readOsInfo, type OsInfo } from '@/utils/platform';
 
 const log = createLogger('Analytics');
 
@@ -19,7 +20,6 @@ export const GA_EVENTS = {
 } as const;
 
 type LifecycleEventName = typeof GA_EVENTS[keyof typeof GA_EVENTS];
-type OsInfo = 'Windows' | 'macOS' | 'Linux' | 'Unknown';
 
 interface AnalyticsEventParams {
   appVersion: string;
@@ -120,26 +120,6 @@ function normalizeAnalyticsData(stored: unknown, now: number): AnalyticsDataV2 {
   };
 }
 
-export function normalizeOsInfo(platform: string | null | undefined): OsInfo {
-  const value = (platform || '').toLowerCase();
-
-  if (value.includes('mac') || value.includes('darwin')) return 'macOS';
-  if (value.includes('win')) return 'Windows';
-  if (value.includes('linux')) return 'Linux';
-  return 'Unknown';
-}
-
-function getOsInfo(): OsInfo {
-  if (typeof navigator === 'undefined') return 'Unknown';
-
-  const nav = navigator as Navigator & {
-    userAgentData?: {
-      platform?: string;
-    };
-  };
-  return normalizeOsInfo(nav.userAgentData?.platform || nav.platform || nav.userAgent);
-}
-
 async function getAppVersion(): Promise<string> {
   if (cachedAppVersion) return cachedAppVersion;
 
@@ -160,7 +140,7 @@ async function getAppVersion(): Promise<string> {
 function createBatch(data: AnalyticsDataV2, appVersion: string): AnalyticsBatch {
   const params: AnalyticsEventParams = {
     appVersion,
-    osInfo: getOsInfo(),
+    osInfo: readOsInfo(),
     appPlatform: 'tauri_desktop',
   };
   const events: AnalyticsEvent[] = [];
@@ -217,7 +197,7 @@ async function startHeartbeat(data: AnalyticsDataV2, generation: number): Promis
     const result = await invoke<'started' | 'disabled'>('analytics_start_heartbeat', {
       clientId: data.clientId,
       appVersion,
-      osInfo: getOsInfo(),
+      osInfo: readOsInfo(),
     });
 
     // 等待期间用户可能已关闭统计，此时要把刚起来的心跳收掉

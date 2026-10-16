@@ -22,6 +22,7 @@ import { DEFAULT_CONFIG } from '@/config/types';
 import { startupFlags } from '@/store/startupFlags';
 import { purgeOrphanFieldSecrets } from '@/security/fieldSecrets';
 import { createLogger } from '@/utils/logger';
+import { uiPlatform } from '@/utils/platform';
 
 // Analytics 服务
 import { useAnalytics } from '@/composables/useAnalytics';
@@ -35,9 +36,13 @@ import './theme/dark-theme.css';
 import './theme/light-theme.css';
 import './theme/primevue-overrides.css';
 import './styles/motion.css';
+import './styles/tokens.css';
 import './styles/bottom-bar-buttons.css';
 
 const log = createLogger('Init');
+
+// 新界面按平台换窗口按钮、侧栏材质与字体（令牌见 src/styles/tokens.css）
+document.documentElement.dataset.platform = uiPlatform();
 
 // 创建 Vue 应用实例
 const app = createApp(App);
