@@ -30,7 +30,11 @@ describe('toastStore', () => {
     expect(onExpire).not.toHaveBeenCalled();
   });
 
-  it('uses 4 s for plain toasts and 6 s for undo toasts', () => {
+  it('uses 4 s for every plain toast, errors included, and 6 s for undo toasts', () => {
+    for (const kind of ['info', 'warn', 'error'] as const) pushToast({ kind, title: kind });
+    expect(toasts.map((t) => t.life)).toEqual([4000, 4000, 4000]);
+    __resetToastsForTests();
+
     pushToast({ kind: 'success', title: 'plain' });
     pushToast({ kind: 'success', title: 'undo', countdown: true });
     expect(toasts.map((t) => t.life)).toEqual([4000, 6000]);

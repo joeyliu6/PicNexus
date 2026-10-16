@@ -8,10 +8,10 @@
 
 | 通道 | API | 语义 | 是否打断 | 典型场景 |
 |------|-----|------|---------|----------|
-| `toast.success` | `useToast().success(summary, detail?)` | 操作成功的回执 | 否 / 自动消失 | 上传完成、批量复制完成、同步成功 |
-| `toast.error` | `useToast().error(summary, detail?)` | 操作失败需用户感知 | 否 / 自动消失（5s） | 网络失败、上传失败、解码失败 |
+| `toast.success` | `useToast().success(summary, detail?)` | 操作成功的回执 | 否 / 自动消失（4s） | 上传完成、批量复制完成、同步成功 |
+| `toast.error` | `useToast().error(summary, detail?)` | 操作失败需用户感知 | 否 / 自动消失（4s） | 网络失败、上传失败、解码失败 |
 | `toast.warn` | `useToast().warn(summary, detail?)` | 半阻塞警示：操作受限或前置条件未满足 | 否 / 自动消失（4s） | 「检测进行中」「扫描进行中」「同步任务进行中」 |
-| `toast.info` | `useToast().info(summary, detail?)` | 中性信息（**慎用**） | 否 / 自动消失（3s） | 仅当结果客观无好坏时用，如「无可检测的链接」 |
+| `toast.info` | `useToast().info(summary, detail?)` | 中性信息（**慎用**） | 否 / 自动消失（4s） | 仅当结果客观无好坏时用，如「无可检测的链接」 |
 | `confirm` (`useConfirm`) | `confirm(message, options)` Promise | 必须用户决策才能继续 | 是 / 阻塞 | 删除/覆盖/清空等不可逆操作 |
 | `Dialog` | `<Dialog v-model:visible>` | 信息密度高、需多步交互 | 是 / 阻塞 | 设置面板二级配置、密码恢复、URL 下载 |
 | `silent` | `useToast().silent('log'\|'error', summary, detail?)` | 仅写控制台日志，不弹通知 | 否 / 不可见 | 单条复制反馈、内部状态记录 |

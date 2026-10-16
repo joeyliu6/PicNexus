@@ -34,7 +34,8 @@ export interface ToastItem extends Readonly<Required<Pick<ToastOptions, 'kind' |
 }
 
 export const MAX_TOASTS = 3;
-const DEFAULT_LIFE: Record<ToastKind, number> = { success: 4000, info: 4000, warn: 4000, error: 5000 };
+/** 普通通知 4 秒后消失；带「撤销」的停留 6 秒（Patterns.dc.html） */
+const PLAIN_LIFE = 4000;
 export const UNDO_LIFE = 6000;
 
 interface Timer {
@@ -69,7 +70,7 @@ function expire(id: number): void {
 
 export function pushToast(options: ToastOptions): number {
   const id = nextId++;
-  const life = options.life ?? (options.countdown ? UNDO_LIFE : DEFAULT_LIFE[options.kind]);
+  const life = options.life ?? (options.countdown ? UNDO_LIFE : PLAIN_LIFE);
   items.push({
     id,
     kind: options.kind,
