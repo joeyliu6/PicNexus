@@ -75,54 +75,6 @@ body,
   box-sizing: border-box;
 }
 
-.visual-upload {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: var(--space-lg-xl);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg-xl);
-  position: relative;
-}
-
-.visual-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-xl);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.visual-section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.visual-section-head h3 {
-  margin: 0;
-  font-size: var(--text-lg);
-}
-
-.visual-section-head span {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.visual-popover {
-  position: absolute;
-  right: 54px;
-  top: 255px;
-  z-index: 10;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float);
-  padding: var(--space-xs);
-}
-
 .visual-history {
   display: flex;
   flex-direction: column;

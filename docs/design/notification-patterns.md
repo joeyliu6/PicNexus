@@ -57,10 +57,10 @@
 
 ```ts
 showConfirm({
-  header: '确认清空',
-  message: '确定要清空上传队列吗？此操作不可撤销。',
+  header: '覆盖本地数据',
+  message: '本地现有的所有记录将被删除，替换为云端数据。此操作不可撤销。',
   icon: 'pi pi-exclamation-triangle',
-  acceptLabel: '清空',
+  acceptLabel: '覆盖',
   rejectLabel: '取消',
   acceptClass: 'p-button-danger',
   accept: () => { /* ... */ }
@@ -68,7 +68,7 @@ showConfirm({
 ```
 
 模板要点：
-- header 短动词 + 名词（"确认清空"、"覆盖本地配置"）
+- header 短动词 + 名词（"覆盖本地数据"、"清空历史"）
 - message 包含「会发生什么 + 是否可逆」
 - 不可逆操作的 acceptClass 一定带 `p-button-danger`
 

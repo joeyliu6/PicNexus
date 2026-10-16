@@ -1,24 +1,12 @@
 // 全局上传队列状态管理
 
-import { ref, computed, type Ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import { isStatusError, isStatusSuccess } from '@/utils/uploadStatus';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 
 // 全局队列状态（单例）
 const queueItems: Ref<QueueItem[]> = ref([]);
-
-function hasFailedServiceProgress(
-  serviceProgress: Partial<Record<string, ServiceProgress>> | undefined
-): boolean {
-  if (!serviceProgress) return false;
-  return Object.values(serviceProgress).some(progress => isStatusError(progress?.status));
-}
-
-function canClearAsCompleted(item: QueueItem): boolean {
-  if (item.status !== 'success' && item.status !== 'error') return false;
-  return !hasFailedServiceProgress(item.serviceProgress);
-}
 
 function cleanupQueueItemTempFile(item: QueueItem | undefined): void {
   if (item?.filePath) {
@@ -221,25 +209,6 @@ export function useQueueState() {
     queueItems.value = [];
   };
 
-  /**
-   * 清空已完成且没有失败服务的队列项，保留可重试的部分失败项。
-   */
-  const clearCompletedItems = () => {
-    queueItems.value
-      .filter(canClearAsCompleted)
-      .forEach(cleanupQueueItemTempFile);
-    queueItems.value = queueItems.value.filter(
-      item => !canClearAsCompleted(item)
-    );
-  };
-
-  /**
-   * 检查是否有可被“清空已完成”清理的项。
-   */
-  const hasCompletedItems = computed(() => {
-    return queueItems.value.some(canClearAsCompleted);
-  });
-
   return {
     queueItems,
     addItem,
@@ -248,8 +217,6 @@ export function useQueueState() {
     updateItemThrottled,
     removeItem,
     clearQueue,
-    clearCompletedItems,
-    hasCompletedItems,
     clearPendingUpdatesForItem
   };
 }

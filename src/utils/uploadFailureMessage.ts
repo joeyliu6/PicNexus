@@ -9,10 +9,6 @@ function trimLeadingSeparators(value: string): string {
   return value.replace(/^[\s:：;；，,。.()（）-]+/u, '').trim();
 }
 
-function ensureTrailingPeriod(value: string): string {
-  return /[。！？.!?]$/u.test(value) ? value : `${value}。`;
-}
-
 function buildPrefixPatterns(serviceName: string, aliases: string[]): RegExp[] {
   const namedPatterns = [serviceName, ...aliases]
     .map(name => name.trim())
@@ -46,19 +42,6 @@ export function normalizeUploadFailureReason(
   }
 
   return reason;
-}
-
-export function buildUploadFailureTooltip(
-  serviceName: string,
-  error?: string,
-  aliases: string[] = []
-): string {
-  const reason = normalizeUploadFailureReason(serviceName, error, aliases);
-  if (!reason) {
-    return `${serviceName}上传失败。点击右侧重试。`;
-  }
-
-  return `${serviceName}上传失败：${ensureTrailingPeriod(reason)}点击右侧重试。`;
 }
 
 /**

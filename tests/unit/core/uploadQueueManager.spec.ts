@@ -720,8 +720,8 @@ describe('UploadQueueManager', () => {
 
     // 回归护栏：queueState.updateItem 对 serviceProgress 是深度合并，新对象里没有的键会
     // 保留旧值。所以重置必须显式传 link / error / isRetrying，否则上一轮的结果会漏进下一
-    // 轮——重试期间 ChannelCard 会拿旧 error 弹 tooltip（那个 v-tooltip 挂在卡片根节点上，
-    // 不受 status 约束），旧 link 还会被 buildLinkFields 回填进 weiboLink / weiboPid。
+    // 轮——重试期间界面会拿旧 error 当失败原因显示，旧 link 还会被 buildLinkFields
+    // 回填进 weiboLink / weiboPid。
     it('重置后服务级 link / error / isRetrying 与顶层链接字段一起被清干净', () => {
       const id = manager.addFile('/img/a.png', 'a.png', ['weibo', 'r2'])!;
       manager.updateItem(id, {
@@ -981,13 +981,6 @@ describe('UploadQueueManager', () => {
       manager.clearQueue();
 
       expect(manager.getQueueSize()).toBe(0);
-    });
-
-    it('setRetryCallback 保留接口兼容，调用不抛错', () => {
-      const callback = vi.fn();
-
-      expect(() => manager.setRetryCallback(callback)).not.toThrow();
-      expect(callback).not.toHaveBeenCalled();
     });
   });
 

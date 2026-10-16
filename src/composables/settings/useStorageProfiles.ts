@@ -53,8 +53,8 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
    * Why: 删除路径会把复合 ID 从 availableServices 摘掉，新建路径必须对称写入，否则用户
    * 建好配置、凭证也填全了，上传界面依然看不到这个图床，还得回设置页手动点亮芯片。
    *
-   * 此刻凭证还是空的，但不会漏到上传页——UploadView 的 filterVisibleServices 和
-   * MultiServiceUploader.filterConfiguredServices 都会挡住 unconfigured 状态的服务；
+   * 此刻凭证还是空的，但不会漏到上传页——首页「上传到」只列 isServiceAvailable 为真的图床，
+   * MultiServiceUploader.filterConfiguredServices 也会挡住 unconfigured 状态的服务；
    * 而 useSettingsForm 里"配置变空就移除"的 watch 要求 oldStatus[id] 为真才摘，
    * 这里是全新的键（oldStatus 为 undefined），所以不会被它反手摘掉。
    */

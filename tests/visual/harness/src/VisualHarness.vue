@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, provide, ref } from 'vue';
 import Skeleton from 'primevue/skeleton';
-import UploadDropZone from '@/components/views/upload/UploadDropZone.vue';
-import CompressPopoverMenu from '@/components/views/upload/CompressPopoverMenu.vue';
-import ServiceSelector from '@/components/views/upload/ServiceSelector.vue';
-import QueueCard from '@/components/views/upload/QueueCard.vue';
 import DashboardStrip from '@/components/views/history/DashboardStrip.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ReloadBanner from '@/components/common/ReloadBanner.vue';
@@ -23,17 +19,14 @@ import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSec
 import DataItemCard from '@/components/settings/backup-sync/DataItemCard.vue';
 import WebDAVConfigCollapsible from '@/components/settings/backup-sync/WebDAVConfigCollapsible.vue';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
-import UrlDownloadDialog from '@/components/dialogs/UrlDownloadDialog.vue';
 import WechatQrDialog from '@/components/settings/about-update/WechatQrDialog.vue';
 import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
 import PnConfirmHost from '@/components/pn/PnConfirmHost.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
-import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { CheckLinkResult, LinkCheckRow, BatchCheckProgress } from '@/types/linkCheck';
-import type { CompressionPreset, HistoryItem, ProfileSyncRecord, ServiceType, ThemeMode, WebDAVConfig } from '@/config/types';
-import { DEFAULT_CONFIG } from '@/config/types';
+import type { HistoryItem, ProfileSyncRecord, ServiceType, ThemeMode, WebDAVConfig } from '@/config/types';
 import type { ServiceHealthStatus } from '@/types/serviceHealth';
 import type { ServiceCheckSession } from '@/types/serviceCheck';
 import type { LinkFormat } from '@/utils/linkFormatter';
@@ -41,11 +34,11 @@ import type { ImageMeta } from '@/types/image-meta';
 import type { PhotoGroup } from '@/composables/timeline/types';
 import type { SkeletonLayoutResult } from '@/utils/justifiedLayout';
 
-type VisualPage = 'upload' | 'history' | 'favorites' | 'timeline' | 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings' | 'dialogs';
+type VisualPage = 'history' | 'favorites' | 'timeline' | 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings' | 'dialogs';
 type VisualState = string;
 
 const params = new URLSearchParams(window.location.search);
-const page = (params.get('page') || 'upload') as VisualPage;
+const page = (params.get('page') || 'history') as VisualPage;
 const state = (params.get('state') || 'empty') as VisualState;
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 const isDark = state === 'dark-theme' || prefersDark;
@@ -65,8 +58,6 @@ if (page === 'markdown-repair') {
 }
 
 /* ---- dialogs 页：集中覆盖不隶属于任何业务页面的独立弹窗 ---- */
-const showUrlDownloadDialog = ref(page === 'dialogs' && state.startsWith('url-download'));
-const urlDownloadBusy = computed(() => state === 'url-download-downloading');
 const showWechatQrDialog = ref(page === 'dialogs' && state === 'wechat-qr');
 const isOnboardingState = computed(() => page === 'dialogs' && state.startsWith('onboarding'));
 
@@ -89,79 +80,6 @@ const image = (seed: string) => {
   // URL-encoded 形式会被拦成空白卡片。
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
-
-const presets: CompressionPreset[] = [
-  { id: 'default', name: 'Default', quality: 80, outputFormat: 'original', maxLongSide: 0, scalePercent: 100, skipIfSmallerKB: 2048, stripExif: true },
-  { id: 'web', name: 'Web', quality: 72, outputFormat: 'webp', maxLongSide: 2200, scalePercent: 100, skipIfSmallerKB: 512, stripExif: true },
-  { id: 'archive', name: 'Archive', quality: 92, outputFormat: 'jpeg', maxLongSide: 0, scalePercent: 100, skipIfSmallerKB: 0, stripExif: false },
-];
-
-const activePreset = presets[1];
-const config = structuredClone(DEFAULT_CONFIG);
-const uploadServiceLabels: Record<string, string> = {
-  jd: '京东',
-  weibo: '微博',
-  qiyu: '七鱼',
-  zhihu: '知乎',
-  r2: 'Cloudflare R2',
-  github: 'GitHub',
-};
-const selectedUploadServices = new Set(['jd', 'weibo', 'r2']);
-const uploadHealthMap: Record<string, ServiceHealthStatus> = {
-  jd: 'verified',
-  weibo: 'pending',
-  qiyu: 'error',
-  zhihu: 'verified',
-  r2: 'verified',
-  github: 'pending',
-};
-const uploadHealthTooltipMap: Record<string, string> = {
-  jd: '连接正常',
-  weibo: '等待检测 Cookie',
-  qiyu: '内置图床暂不可用',
-  zhihu: '连接正常',
-  r2: '连接正常',
-  github: '等待检测 Token',
-};
-const uploadPublicServices = computed(() => state === 'no-services' ? [] : ['jd', 'weibo', 'qiyu', 'zhihu']);
-const uploadPrivateServices = computed(() => state === 'no-services' ? [] : ['r2', 'github']);
-const isUploadServiceSelected = (serviceId: string) => selectedUploadServices.has(serviceId);
-
-function progress(serviceId: string, status: string, pct: number, link?: string, error?: string): ServiceProgress {
-  return { serviceId, status, progress: pct, link, error };
-}
-
-function queueItem(kind: 'uploading' | 'failed' | 'success', index = 1): QueueItem {
-  const enabledServices = ['jd', 'weibo', 'r2'];
-  const suffix = `${kind}-${index}`;
-  const link = (serviceId: string) => `https://img.example/${suffix}/${serviceId}.jpg`;
-  const serviceProgress = {
-    jd: progress('jd', kind === 'uploading' ? '68%' : '完成', kind === 'uploading' ? 68 : 100, kind === 'uploading' ? undefined : link('jd')),
-    weibo: progress('weibo', kind === 'failed' ? '失败' : kind === 'uploading' ? '上传中...' : '完成', kind === 'failed' ? 0 : kind === 'uploading' ? 42 : 100, kind === 'failed' || kind === 'uploading' ? undefined : link('weibo'), kind === 'failed' ? 'HTTP 403' : undefined),
-    r2: progress('r2', kind === 'uploading' ? '等待中...' : '完成', kind === 'uploading' ? 0 : 100, kind === 'uploading' ? undefined : link('r2')),
-  };
-  return {
-    id: `queue-${suffix}`,
-    fileName: `${suffix}.jpg`,
-    filePath: `/visual/${suffix}.jpg`,
-    enabledServices,
-    serviceProgress,
-    status: kind === 'failed' ? 'error' : kind,
-    errorMessage: kind === 'failed' ? 'One target rejected the upload' : undefined,
-    primaryUrl: kind === 'uploading' ? undefined : link('jd'),
-    thumbUrl: image(suffix),
-    retryCount: kind === 'failed' ? 1 : 0,
-    maxRetries: 3,
-    isRetrying: false,
-  };
-}
-
-const uploadItems = computed(() => {
-  if (state === 'uploading') return [queueItem('uploading')];
-  if (state === 'failed') return [queueItem('failed')];
-  if (state === 'success') return [queueItem('success', 1), queueItem('success', 2)];
-  return [];
-});
 
 function result(kind: 'valid' | 'invalid' | 'timeout' | 'hotlink'): CheckLinkResult {
   if (kind === 'valid') return { link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false, response_time: 108 };
@@ -583,44 +501,14 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
   <div :class="['visual-shell', rootClass]" data-visual-root data-visual-ready="true">
     <aside class="visual-sidebar">
       <div class="visual-logo">PN</div>
-      <div class="visual-nav" :class="{ active: page === 'upload' }"><i class="pi pi-cloud-upload"></i><span>Upload</span></div>
+      <div class="visual-nav"><i class="pi pi-cloud-upload"></i><span>Upload</span></div>
       <div class="visual-nav" :class="{ active: page === 'history' || page === 'favorites' || page === 'timeline' }"><i class="pi pi-images"></i><span>History</span></div>
       <div class="visual-nav" :class="{ active: isLinkFeaturePage }"><i class="pi pi-wrench"></i><span>Links</span></div>
       <div class="visual-nav" :class="{ active: isSettingsPage }"><i class="pi pi-cog"></i><span>Settings</span></div>
     </aside>
 
     <main class="visual-main">
-      <section v-if="page === 'upload'" class="visual-page visual-upload">
-        <UploadDropZone
-          :is-dragging="state === 'uploading'"
-          :is-pasting="state === 'uploading'"
-          :is-downloading="false"
-          :compression-enabled="state !== 'empty'"
-          :active-preset="activePreset"
-          :presets="presets"
-        />
-        <ServiceSelector
-          :public-services="uploadPublicServices"
-          :private-services="uploadPrivateServices"
-          :service-labels="uploadServiceLabels"
-          :is-service-selected="isUploadServiceSelected"
-          :service-health-map="uploadHealthMap"
-          :service-health-tooltip-map="uploadHealthTooltipMap"
-        />
-        <div v-if="state === 'compression-menu'" class="visual-popover">
-          <CompressPopoverMenu :presets="presets" :active-preset="activePreset" compression-enabled />
-        </div>
-        <div class="visual-card">
-          <div class="visual-section-head">
-            <h3>Upload queue</h3>
-            <span v-if="uploadItems.length">{{ uploadItems.length }} items</span>
-          </div>
-          <EmptyState v-if="uploadItems.length === 0" icon="pi pi-inbox" title="No upload queue" description="The queue starts empty in the web visual harness." />
-          <QueueCard v-for="item in uploadItems" v-else :key="item.id" :item="item" :config="config" />
-        </div>
-      </section>
-
-      <section v-else-if="page === 'history'" class="visual-page visual-history">
+      <section v-if="page === 'history'" class="visual-page visual-history">
         <DashboardStrip v-model:view-mode="historyMode" v-model:filter="historyFilter" :total-count="state === 'empty' ? 0 : 39" :service-counts="historyServices" />
         <div v-if="state === 'empty'" class="visual-history-empty">
           <EmptyState icon="pi pi-table" title="No history records" description="Uploaded images will appear here." />
@@ -1008,11 +896,6 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
       <section v-else-if="page === 'dialogs'" class="visual-page visual-dialogs">
         <div class="visual-dialogs-backdrop">Dialog visual fixtures</div>
 
-        <UrlDownloadDialog
-          v-model:visible="showUrlDownloadDialog"
-          :is-downloading="urlDownloadBusy"
-          @confirm="() => {}"
-        />
         <WechatQrDialog v-model:visible="showWechatQrDialog" />
         <OnboardingDialog v-if="isOnboardingState" />
       </section>

@@ -108,7 +108,7 @@ function createServiceProgress(enabledServices: string[]): Record<string, Servic
  * ⚠️ 不能直接复用 createServiceProgress 的结果：queueState.updateItem 对 serviceProgress
  * 做的是深度合并（`{ ...currentProgress, ...value }`），新对象里**没有的键会保留旧值**。
  * 所以上一轮的 link / error / isRetrying 必须显式传 undefined / false 才擦得掉。
- * 否则重试期间 ChannelCard 会拿上一轮的 error 弹 tooltip，旧 link 还会被
+ * 否则重试期间界面会拿上一轮的 error 当失败原因显示，旧 link 还会被
  * buildLinkFields 回填进 weiboLink / weiboPid。
  *
  * metadata 有意不清：里面是 step / fileKey / pid，下一次进度更新就会覆盖；
@@ -552,15 +552,6 @@ export class UploadQueueManager {
 
     this.updateItem(itemId, updates);
     log.debug(`${item.fileName} - ${serviceId} 已重置为单独重试状态`);
-  }
-
-  /**
-   * 设置重试回调（保留接口兼容性）
-   */
-  setRetryCallback(_callback: (itemId: string, serviceId?: string) => void): void {
-    // 在新架构中，重试回调直接在 UploadView 中处理
-    // 这里保留方法以保持接口兼容
-    log.debug('重试回调将由 UploadView 处理');
   }
 
   /**

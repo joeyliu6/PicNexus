@@ -1,12 +1,3 @@
-export interface ConfirmCopy {
-  header: string;
-  message: string;
-  acceptLabel: string;
-  rejectLabel: string;
-  icon: string;
-  acceptClass?: string;
-}
-
 export interface EmptyStateCopy {
   icon: string;
   title: string;
@@ -78,25 +69,10 @@ export const UI_COPY = {
       icon: 'pi pi-exclamation-triangle',
       acceptClass: 'p-button-warning',
     },
-    upload: {
-      clearQueue: {
-        header: '确认清空',
-        message: '确定要清空上传队列吗？此操作不可撤销。',
-        acceptLabel: '清空',
-        rejectLabel: '取消',
-        icon: 'pi pi-exclamation-triangle',
-        acceptClass: 'p-button-danger',
-      } satisfies ConfirmCopy,
-    },
   },
 
   toast: {
     upload: {
-      inProgress: {
-        summary: '上传进行中',
-        detail: '请等待上传完成后再清空列表。',
-        life: 3000,
-      },
       success: (count: number) => ({
         summary: '已上传',
         detail: `成功上传 ${count} 个文件`,
@@ -109,10 +85,6 @@ export const UI_COPY = {
   },
 
   emptyState: {
-    uploadQueue: {
-      icon: 'pi pi-inbox',
-      title: '暂无上传队列',
-    } satisfies EmptyStateCopy,
     noData: {
       icon: 'pi pi-inbox',
       title: '暂无数据',
@@ -131,14 +103,6 @@ export const UI_COPY = {
   },
 
   dialogs: {
-    urlDownload: {
-      title: '从 URL 下载图片',
-      inputLabel: '图片 URL（每行一个）',
-      placeholder: 'https://example.com/image.jpg',
-      note: '支持 JPG、PNG、GIF、WEBP、BMP 格式，Ctrl+Enter 快捷提交',
-      confirm: '下载并上传',
-      downloading: '正在下载...',
-    },
     backupPassword: {
       title: {
         set: '设置备份密码',

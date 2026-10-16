@@ -57,12 +57,6 @@ export const CASES: DialogCase[] = [
     name: 'BackupPasswordDialog 恢复失败', page: 'backup-sync', state: 'restore-password-error',
   },
   {
-    name: 'UrlDownloadDialog 空闲', page: 'dialogs', state: 'url-download-idle',
-  },
-  {
-    name: 'UrlDownloadDialog 下载中', page: 'dialogs', state: 'url-download-downloading',
-  },
-  {
     name: 'WechatQrDialog 公众号',
     page: 'dialogs',
     state: 'wechat-qr',

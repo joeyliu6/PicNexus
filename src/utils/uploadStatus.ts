@@ -31,25 +31,3 @@ export function isStatusUploading(status: string | undefined): boolean {
          status.includes('准备') ||
          /\(\d+\/\d+\)/.test(status);
 }
-
-/**
- * 获取状态类型
- */
-export type StatusType = 'success' | 'error' | 'uploading' | 'pending';
-
-export function getStatusType(status: string | undefined): StatusType {
-  if (isStatusSuccess(status)) return 'success';
-  if (isStatusError(status)) return 'error';
-  if (isStatusUploading(status)) return 'uploading';
-  return 'pending';
-}
-
-/**
- * 获取状态标签文本
- */
-export function getStatusLabel(status: string | undefined): string {
-  if (isStatusSuccess(status)) return '已发布';
-  if (isStatusError(status)) return '失败';
-  if (isStatusUploading(status)) return '上传中...';
-  return '等待中';
-}

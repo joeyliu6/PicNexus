@@ -12,14 +12,6 @@
  *   4. 跑 `npm run test:visual -- --project=layout-chromium` 确认哨兵不报警
  */
 export const VISUAL_STATES = {
-  upload: [
-    'empty',
-    'no-services',
-    'uploading',
-    'failed',
-    'success',
-    'compression-menu',
-  ],
   history: [
     'empty',
     'populated',
@@ -117,8 +109,6 @@ export const VISUAL_STATES = {
     'dark-theme',
   ],
   dialogs: [
-    'url-download-idle',
-    'url-download-downloading',
     'wechat-qr',
     'onboarding-welcome',
     'onboarding-upload',

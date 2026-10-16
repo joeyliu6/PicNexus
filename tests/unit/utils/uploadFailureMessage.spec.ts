@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildUploadFailureTooltip,
   normalizeUploadFailureReason,
   cleanMigrateError,
   formatMigrateFailureSummary,
@@ -29,16 +28,6 @@ describe('uploadFailureMessage', () => {
     ).toBe('service error');
   });
 
-  it('builds a retry tooltip with normalized reason', () => {
-    expect(
-      buildUploadFailureTooltip(
-        '又拍云',
-        'upyun 上传失败: 又拍云图床上传失败：上传失败：service error',
-        ['upyun']
-      )
-    ).toBe('又拍云上传失败：service error。点击右侧重试。');
-  });
-
 });
 
 describe('normalizeUploadFailureReason - 额外分支', () => {
@@ -53,22 +42,6 @@ describe('normalizeUploadFailureReason - 额外分支', () => {
 
   it('不含前缀直接返回 trim 后的原文', () => {
     expect(normalizeUploadFailureReason('微博', '  纯错误  ')).toBe('纯错误');
-  });
-});
-
-describe('buildUploadFailureTooltip - 额外分支', () => {
-  it('无错误原因时显示默认提示', () => {
-    expect(buildUploadFailureTooltip('微博', '')).toBe('微博上传失败。点击右侧重试。');
-  });
-
-  it('原因已带句号则不重复补', () => {
-    expect(buildUploadFailureTooltip('微博', '微博 上传失败: cookie 过期。'))
-      .toBe('微博上传失败：cookie 过期。点击右侧重试。');
-  });
-
-  it('英文问号识别为结尾', () => {
-    expect(buildUploadFailureTooltip('微博', '微博 上传失败: why?'))
-      .toBe('微博上传失败：why?点击右侧重试。');
   });
 });
 

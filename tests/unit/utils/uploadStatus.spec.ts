@@ -3,8 +3,6 @@ import {
   isStatusSuccess,
   isStatusError,
   isStatusUploading,
-  getStatusType,
-  getStatusLabel,
 } from '@/utils/uploadStatus';
 
 describe('isStatusSuccess', () => {
@@ -82,49 +80,5 @@ describe('isStatusUploading', () => {
 
   it('成功状态返回 false', () => {
     expect(isStatusUploading('✓ 完成')).toBe(false);
-  });
-});
-
-describe('getStatusType', () => {
-  it('成功状态返回 success', () => {
-    expect(getStatusType('✓ 完成')).toBe('success');
-  });
-
-  it('错误状态返回 error', () => {
-    expect(getStatusType('✗ 失败')).toBe('error');
-  });
-
-  it('上传中状态返回 uploading', () => {
-    expect(getStatusType('上传中 50%')).toBe('uploading');
-  });
-
-  it('未知状态返回 pending', () => {
-    expect(getStatusType('等待中')).toBe('pending');
-  });
-
-  it('undefined 返回 pending', () => {
-    expect(getStatusType(undefined)).toBe('pending');
-  });
-});
-
-describe('getStatusLabel', () => {
-  it('成功状态标签为"已发布"', () => {
-    expect(getStatusLabel('✓ 完成')).toBe('已发布');
-  });
-
-  it('错误状态标签为"失败"', () => {
-    expect(getStatusLabel('✗ 失败')).toBe('失败');
-  });
-
-  it('上传中状态标签为"上传中..."', () => {
-    expect(getStatusLabel('上传中 80%')).toBe('上传中...');
-  });
-
-  it('待机状态标签为"等待中"', () => {
-    expect(getStatusLabel(undefined)).toBe('等待中');
-  });
-
-  it('等待中状态标签为"等待中"', () => {
-    expect(getStatusLabel('等待中')).toBe('等待中');
   });
 });
