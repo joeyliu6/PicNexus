@@ -47,10 +47,11 @@ interface HomeState {
   act?: (page: Page) => Promise<void>;
 }
 
-/** H20：一张传到 5 个图床，「按图床复制」只露 3 个，其余收进「+2」 */
+/** H20：一张传到 5 个图床，「按图床复制」只露 3 个，其余收进「+2」；五个模拟图床同时完成，固定复制京东的，截图才稳定 */
 const FIVE_HOSTS = {
   availableServices: ['jd', 'qiyu', 'smms', 'github', 'imgur'],
   enabledServices: ['jd', 'qiyu', 'smms', 'github', 'imgur'],
+  linkOutput: { autoCopy: true, defaultFormat: 'url', copyFromService: 'jd' },
   services: { smms: { token: 't' }, github: { token: 't', owner: 'o', repo: 'r', branch: 'main' }, imgur: { clientId: 'c' } },
 };
 const FIVE_HOSTS_OK = Object.fromEntries(['jd', 'qiyu', 'smms', 'github', 'imgur'].map((id) => [`upload_to_${id}`, { urlPrefix: `https://mock.cdn/${id}/` }]));
