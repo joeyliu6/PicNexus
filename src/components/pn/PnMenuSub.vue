@@ -18,7 +18,7 @@ withDefaults(defineProps<{
       <PnIcon name="chevronRight" :size="12" :stroke="1.8" class="pn-menu__chevron" />
     </DropdownMenuSubTrigger>
     <DropdownMenuPortal>
-      <DropdownMenuSubContent class="pn-layer pn-menu" :side-offset="4" :style="width ? { width: `${width}px` } : undefined">
+      <DropdownMenuSubContent class="pn-layer pn-menu" :side-offset="4" :collision-padding="8" :style="width ? { width: `${width}px` } : undefined">
         <slot />
       </DropdownMenuSubContent>
     </DropdownMenuPortal>

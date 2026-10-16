@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 弹出层（Controls.dc.html，以「上传到」为例）：圆角 14、内距 8、浮层阴影 e3；点外面或 Esc 关闭
+// 贴近窗口边缘时让出 8px，不贴边（与菜单一致）
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui';
 
 const open = defineModel<boolean>('open', { default: false });
@@ -31,6 +32,7 @@ withDefaults(defineProps<{
         :align="align"
         :side="side"
         :side-offset="sideOffset"
+        :collision-padding="8"
         :aria-label="label"
         :style="width ? { width: `${width}px` } : undefined"
       >
