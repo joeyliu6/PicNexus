@@ -681,6 +681,45 @@ describe('HistoryDatabase', () => {
       expect(ids).toContain('fav-race-c');
     });
 
+    // 图库的「★ 收藏」筛选走网格 / 列表的查询，同一个竞态：刚点完星标就开筛选，
+    // 查询若抢在写盘前读，刚收藏的那张就不在结果里，之后也没人再触发重查
+    it('setFavorite 在途时，带收藏筛选的图库查询等写盘完成再查', async () => {
+      const { historyDB } = await import('@/services/database');
+      await historyDB.clear();
+      await historyDB.insert(makeHistoryItem({ id: 'fav-race-e', timestamp: 1000 }));
+
+      const filter = { favoritesOnly: true };
+      const queries: Array<[string, () => Promise<unknown>]> = [
+        ['getDayStats', () => historyDB.getDayStats(filter)],
+        ['getItemsByDayRange', () => historyDB.getItemsByDayRange(0, 2000, filter)],
+        ['getListPage', () => historyDB.getListPage(filter, { key: 'time', descending: true }, 0, 100)],
+        ['getDayAspectRatiosByRange', () => historyDB.getDayAspectRatiosByRange(0, 2000, filter)],
+        ['getAllAspectRatios', () => historyDB.getAllAspectRatios(filter)],
+      ];
+      const originalSelect = MockDatabase.prototype.select;
+      try {
+        for (const [index, [name, query]] of queries.entries()) {
+          const events: string[] = [];
+          interceptFavoriteUpdate(async () => {
+            await new Promise(resolve => setTimeout(resolve, 20));
+            events.push('write');
+          });
+          MockDatabase.prototype.select = async function <T>(sql: string, params: unknown[] = []): Promise<T> {
+            events.push('read');
+            return originalSelect.call(this, sql, params) as Promise<T>;
+          };
+
+          const writePromise = historyDB.setFavorite('fav-race-e', index % 2 === 0);
+          await query();
+          await writePromise;
+
+          expect(events[0], name).toBe('write');
+        }
+      } finally {
+        MockDatabase.prototype.select = originalSelect;
+      }
+    });
+
     it('收藏写盘失败时读取不被卡死，返回写前状态', async () => {
       const { historyDB } = await import('@/services/database');
       await historyDB.clear();

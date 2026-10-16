@@ -126,6 +126,12 @@ class HistoryDatabase {
     await Promise.allSettled([...this.pendingFavoriteWrites]);
   }
 
+  /** 图库查询的连接：带「★ 收藏」筛选时先等在途收藏写入落盘（同上，读己之写） */
+  private async dbForFilter(filter: DayStatsFilter | undefined) {
+    if (filter?.favoritesOnly) await this.awaitPendingFavoriteWrites();
+    return this.connection.getDb();
+  }
+
   private constructor() {
     this.connection = new ConnectionManager(DB_PATH, async (db) => {
       await createTablesAndIndexes(db);
@@ -708,19 +714,19 @@ class HistoryDatabase {
 
   /** 按日聚合统计（时间轴首屏骨架数据，委托 TimelineQueryService） */
   async getDayStats(filter?: DayStatsFilter): Promise<DayStats[]> {
-    const db = await this.connection.getDb();
+    const db = await this.dbForFilter(filter);
     return getDayStatsQuery(db, filter);
   }
 
   /** 按时间戳闭区间拉取 ImageMeta（时间轴按需加载，委托 TimelineQueryService） */
   async getItemsByDayRange(startTs: number, endTs: number, filter?: DayStatsFilter): Promise<ImageMeta[]> {
-    const db = await this.connection.getDb();
+    const db = await this.dbForFilter(filter);
     return getItemsByDayRangeQuery(db, startTs, endTs, filter);
   }
 
   /** 图库列表视图的一页：与网格同一套筛选，可按上传时间 / 文件名 / 大小排序（委托 TimelineQueryService） */
   async getListPage(filter: DayStatsFilter | undefined, sort: GalleryListSort, offset: number, limit: number): Promise<GalleryListRow[]> {
-    const db = await this.connection.getDb();
+    const db = await this.dbForFilter(filter);
     return getListPageQuery(db, filter, sort, offset, limit);
   }
 
@@ -730,13 +736,13 @@ class HistoryDatabase {
     endTs: number,
     filter?: DayStatsFilter,
   ): Promise<AspectRatioRow[]> {
-    const db = await this.connection.getDb();
+    const db = await this.dbForFilter(filter);
     return getDayAspectRatiosByRangeQuery(db, startTs, endTs, filter);
   }
 
   /** 全量拉 aspect_ratio（v7 时间轴挂载后台预取，超阈值时 useTimelineDayPagination 会跳过） */
   async getAllAspectRatios(filter?: DayStatsFilter): Promise<AspectRatioRow[]> {
-    const db = await this.connection.getDb();
+    const db = await this.dbForFilter(filter);
     return getAllAspectRatiosQuery(db, filter);
   }
 
