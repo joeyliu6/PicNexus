@@ -29,7 +29,8 @@ const urlDialog = useUrlDialog();
 const { markCopied, isCopied } = useCopyBadgeFeedback(1500);
 
 const mac = uiPlatform() === 'macos';
-const mod = mac ? '⌘' : 'Ctrl';
+/** 写法照设计稿底栏：「Ctrl+Enter」/「⌘Enter」 */
+const mod = mac ? '⌘' : 'Ctrl+';
 const activeIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLElement | null>(null);
@@ -42,7 +43,8 @@ watch(palette.open, async (open) => {
   inputRef.value?.focus();
 });
 
-const enterLabel = computed(() => (palette.flat.value[activeIndex.value]?.run.kind === 'image' && palette.query.value.trim() ? '复制链接' : '打开'));
+/** 底栏跟着选中的那一项说 Enter 会做什么：图片复制链接（交接说明 8.1 命令面板），其余打开 */
+const activeIsImage = computed(() => palette.flat.value[activeIndex.value]?.run.kind === 'image');
 
 function historyUrl(item: HistoryItem): string | undefined {
   return item.results.find((r) => r.serviceId === item.primaryService && r.status === 'success')?.result?.url ?? item.generatedLink;
@@ -104,7 +106,6 @@ function hintOf(entry: CommandEntry): string {
   return shortcutLabel(entry.hint, mac);
 }
 
-const themeLabel = computed(() => (theme.effectiveTheme.value === 'dark' ? '切换到浅色' : '切换到深色'));
 </script>
 
 <template>
@@ -146,7 +147,7 @@ const themeLabel = computed(() => (theme.effectiveTheme.value === 'dark' ? '切�
               <span class="command-palette__text">
                 <span class="command-palette__label">
                   <template v-if="entry.match">{{ entry.match[0] }}<b class="command-palette__hit">{{ entry.match[1] }}</b>{{ entry.match[2] }}</template>
-                  <template v-else>{{ entry.run.kind === 'action' && entry.run.action === 'theme' ? themeLabel : entry.label }}</template>
+                  <template v-else>{{ entry.label }}</template>
                 </span>
                 <span v-if="entry.sub" class="command-palette__sub">{{ entry.sub }}</span>
               </span>
@@ -158,8 +159,8 @@ const themeLabel = computed(() => (theme.effectiveTheme.value === 'dark' ? '切�
 
         <div class="command-palette__foot">
           <span>↑↓ 选择</span>
-          <span>Enter {{ enterLabel }}</span>
-          <span v-if="palette.query.value.trim()">{{ mod }} Enter 在图库中定位</span>
+          <span>Enter {{ activeIsImage ? '复制链接' : '打开' }}</span>
+          <span v-if="activeIsImage">{{ mod }}Enter 在图库中定位</span>
           <div class="command-palette__spacer" />
           <span>Esc 关闭</span>
         </div>

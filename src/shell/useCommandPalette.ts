@@ -7,6 +7,7 @@ import type { HistoryItem } from '@/config/types';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { historyDB } from '@/services/database';
 import { useRecentUploads } from '@/composables/history/useRecentUploads';
+import { useThemeManager } from '@/composables/useTheme';
 import { formatRelativeTime, formatShortDateTime } from '@/utils/formatters';
 import { createLogger } from '@/utils/logger';
 import { ACTION_COMMANDS, DEFAULT_JUMPS, PAGE_COMMANDS, SETTING_COMMANDS, splitMatch, type ActionId } from './commandIndex';
@@ -45,6 +46,8 @@ const IMAGE_LIMIT = 6;
 
 export function useCommandPalette() {
   const { recent } = useRecentUploads();
+  const { effectiveTheme } = useThemeManager();
+  const actionLabel = (a: (typeof ACTION_COMMANDS)[number]) => (a.action === 'theme' && effectiveTheme.value === 'dark' ? '切换到浅色' : a.label);
 
   const runSearch = useDebounceFn(async (keyword: string) => {
     if (!keyword.trim()) {
@@ -79,8 +82,8 @@ export function useCommandPalette() {
     const matches = (label: string) => !keyword || label.toLowerCase().includes(keyword.toLowerCase());
     const pages = PAGE_COMMANDS.filter((p) => (keyword ? matches(p.label) : DEFAULT_JUMPS.includes(p.id)))
       .map<CommandEntry>((p) => ({ id: p.id, label: p.label, match: splitMatch(p.label, keyword), hint: p.shortcut, icon: p.icon, run: { kind: 'page', path: p.path } }));
-    const actions = ACTION_COMMANDS.filter((a) => matches(a.label))
-      .map<CommandEntry>((a) => ({ id: a.id, label: a.label, match: splitMatch(a.label, keyword), hint: a.shortcut, icon: a.icon, run: { kind: 'action', action: a.action } }));
+    const actions = ACTION_COMMANDS.filter((a) => matches(actionLabel(a)))
+      .map<CommandEntry>((a) => ({ id: a.id, label: actionLabel(a), match: splitMatch(actionLabel(a), keyword), hint: a.shortcut, icon: a.icon, run: { kind: 'action', action: a.action } }));
 
     if (!keyword) {
       return [

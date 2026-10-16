@@ -31,7 +31,8 @@ export const ACTION_COMMANDS: (StaticCommand & { action: ActionId })[] = [
   { id: 'action:pick', label: '选择文件上传', icon: 'file', shortcut: 'Mod O', action: 'pick' },
   { id: 'action:url', label: '从 URL 下载', icon: 'link', action: 'url' },
   { id: 'action:check', label: '开始链接检测', icon: 'health', action: 'check' },
-  { id: 'action:theme', label: '切换深浅色', icon: 'moon', action: 'theme' },
+  // 深色时写「切换到浅色」（useCommandPalette 按当前深浅色换），搜索也按显示的这句匹配
+  { id: 'action:theme', label: '切换到深色', icon: 'moon', action: 'theme' },
 ];
 
 export const SETTING_COMMANDS: (StaticCommand & { target: NavigatePayload })[] = [

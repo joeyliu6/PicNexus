@@ -2,16 +2,23 @@
 // 拖放悬停遮罩（HomeScreen.dc.html H07）：盖住主栏，侧栏保持可见（表示「还在当前页」）。
 // 夹带的非图片文件提前说明会被跳过；没有可用图床时写「先启用一个图床」，不上传。
 import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { useUploadController } from '@/composables/upload/useUploadController';
 import type { DropOverlayState } from './useGlobalUploadInput';
 
-const props = defineProps<{ state: DropOverlayState }>();
+defineProps<{ state: DropOverlayState }>();
 
 const upload = useUploadController();
 const selected = computed(() => upload.hosts.value.filter((h) => h.selected).map((h) => h.name));
 const noHost = computed(() => selected.value.length === 0);
 const compressionText = computed(() => (upload.compression.value.enabled ? upload.activePreset.value.name : '关'));
-const count = computed(() => Math.max(props.state.imageCount, 1));
+/** 「先启用一个图床」下面那句，指向此刻真能点到的地方（不在首页时先回首页） */
+const route = useRoute();
+const noHostHint = computed(() => {
+  const onHome = route.path === '/home';
+  if (upload.hosts.value.length === 0) return onHome ? '点「启用京东图床（免配置）」后再拖入' : '回到首页即可启用京东图床（免配置）';
+  return onHome ? '在「上传到」里勾选一个图床后再拖入' : '回到首页，在「上传到」里勾选一个图床';
+});
 </script>
 
 <template>
@@ -32,11 +39,11 @@ const count = computed(() => Math.max(props.state.imageCount, 1));
             <span class="drop-overlay__hill drop-overlay__hill--near" />
           </div>
         </div>
-        <span class="drop-overlay__count">{{ count }}</span>
+        <span v-if="state.imageCount > 0" class="drop-overlay__count">{{ state.imageCount }}</span>
       </div>
       <template v-if="noHost">
         <div class="drop-overlay__title">先启用一个图床</div>
-        <div class="drop-overlay__desc">在「上传到」里勾选一个图床后再拖入</div>
+        <div class="drop-overlay__desc">{{ noHostHint }}</div>
       </template>
       <template v-else-if="state.imageCount === 0">
         <div class="drop-overlay__title">没有可上传的图片</div>

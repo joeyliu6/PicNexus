@@ -89,6 +89,25 @@ describe('useGlobalUploadInput', () => {
     wrapper.unmount();
   });
 
+  // 弹窗开着时拖进来：不出遮罩、不上传，免得在对话框背后悄悄传图
+  it('ignores drags while a dialog or the command palette is open', async () => {
+    const { wrapper, overlay } = await mountInput();
+    const layer = document.createElement('div');
+    layer.className = 'pn-dialog';
+    layer.dataset.state = 'open';
+    document.body.append(layer);
+
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/a.png'] } });
+    expect(overlay().active).toBe(false);
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
+    expect(m.uploadFiles).not.toHaveBeenCalled();
+
+    layer.className = 'command-palette';
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
+    expect(m.uploadFiles).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it('leaves drops on the legacy health page to that page', async () => {
     const { wrapper, overlay } = await mountInput('/health');
     m.dragHandler!({ payload: { type: 'enter', paths: ['C:/notes.md'] } });

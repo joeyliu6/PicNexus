@@ -21,6 +21,11 @@ export interface DropOverlayState {
   skippedText: string;
 }
 
+/** 有对话框或命令面板开着：拖入、粘贴都不接，免得在弹窗背后悄悄传图 */
+function modalOpen(): boolean {
+  return !!document.querySelector('.pn-dialog[data-state="open"], .command-palette[data-state="open"]');
+}
+
 function isTextTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -48,6 +53,10 @@ export function useGlobalUploadInput() {
       const stop = await getCurrentWebview().onDragDropEvent((event) => {
         if (!handlesDrop()) return;
         const payload = event.payload;
+        if (payload.type === 'leave' || modalOpen()) {
+          reset();
+          return;
+        }
         if (payload.type === 'enter') {
           const summary = summarizeDrop(payload.paths);
           overlay.active = true;
@@ -58,8 +67,6 @@ export function useGlobalUploadInput() {
           reset();
           const canUpload = upload.hosts.value.some((h) => h.selected);
           if (canUpload && summary.images.length > 0) void upload.uploadFiles(summary.images);
-        } else if (payload.type === 'leave') {
-          reset();
         }
       });
       if (disposed) stop();
@@ -77,7 +84,7 @@ export function useGlobalUploadInput() {
   // Ctrl+V / ⌘V：不在输入框里时上传剪贴板图片（任何页面）
   useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'v' || event.shiftKey || event.altKey) return;
-    if (isTextTarget(event.target) || document.querySelector('.pn-dialog[data-state="open"]')) return;
+    if (isTextTarget(event.target) || modalOpen()) return;
     event.preventDefault();
     void upload.pasteClipboard();
   });
