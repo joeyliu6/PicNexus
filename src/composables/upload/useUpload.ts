@@ -34,8 +34,8 @@ export const MAX_CONCURRENT_FILES = 3;
 export interface UploadManagerOptions {
   /** 自动复制成功后回调（单张在第一个图床传完时，多张在整批结束时） */
   onCopied?: (result: CopyLinkResult) => void;
-  /** 返回 true 时不弹整批结束的汇总通知（首页焦点卡已经把结果写在页面上了） */
-  quietSummary?: () => boolean;
+  /** 返回 true 时上传结果已画在页面上（首页焦点卡 / 批量卡片）：不弹汇总通知，也不为单张失败弹通知 */
+  resultsOnScreen?: () => boolean;
 }
 
 export interface UploadRequestOptions {
@@ -76,7 +76,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
     summary: UploadSessionSummary,
     copy: UploadCopySummary
   ): void {
-    if (options.quietSummary?.()) return;
+    if (options.resultsOnScreen?.()) return;
     const payload = buildUploadSummaryToast(summary, copy);
     if (!payload) return;
 
@@ -336,6 +336,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
             saveHistoryItem,
             toast,
             onPrimaryReady,
+            quietFailures: options.resultsOnScreen,
           },
           undefined,
           uploadSummary

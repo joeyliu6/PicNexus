@@ -13,10 +13,9 @@ import type { QueueItem } from '@/core/UploadQueue';
 import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
 import type { UploadHost } from '@/composables/upload/useUploadController';
-import { firstFailure, hostsFailedForWholeBatch, hostViews, itemPhase, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
+import { firstFailure, hostFailureText, hostsFailedForWholeBatch, hostViews, itemPhase, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
 import { formatRelativeTime } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
-import { cleanMigrateError } from '@/utils/uploadFailureMessage';
 
 const props = defineProps<{
   session: UploadSession;
@@ -43,7 +42,7 @@ const confirmedHttpHosts = useConfirmedHttpHosts(() => props.config);
 const failedItems = computed(() => props.items.filter((item) => itemPhase(item) === 'failed'));
 const failedReason = computed(() => {
   const failure = failedItems.value[0] ? firstFailure(failedItems.value[0]) : undefined;
-  return failure ? cleanMigrateError(failure.id, failure.error ?? '') : '';
+  return failure ? hostFailureText(failure.id, failure.error, props.hosts).reason : '';
 });
 const failedNames = computed(() => failedItems.value.slice(0, 3).map((item) => item.fileName).join('、') + (failedItems.value.length > 3 ? ' 等' : ''));
 
@@ -67,7 +66,7 @@ const tiles = computed(() => props.items.map((item) => {
   const progress = Math.max(0, ...hosts.map((h) => h.progress));
   const failure = phase === 'failed' ? firstFailure(item) : undefined;
   const label = phase === 'failed'
-    ? `上传失败：${failure ? cleanMigrateError(failure.id, failure.error ?? '') : '上传失败'}`
+    ? `上传失败：${failure ? hostFailureText(failure.id, failure.error, props.hosts).reason : '上传失败'}`
     : phase === 'uploading' ? (waiting ? '等待中' : '上传中') : '已完成';
   return { item, phase, waiting, progress, title: `${item.fileName} · ${label}`, srcs: phase === 'failed' || phase === 'uploading' && !item.primaryUrl ? [] : getThumbnailCandidates(item, props.config) };
 }));

@@ -485,6 +485,53 @@ describe('processUploadQueue', () => {
     expect(queueManager.markItemComplete).toHaveBeenCalledWith('q-svg', githubUrl);
   });
 
+  describe('when every host fails', () => {
+    const combined = [
+      '所有图床上传均失败：',
+      '  - jd: 京东上传失败: 请求超时，请检查网络连接',
+      '  - webdav:nas: WebDAV 上传失败: 401 Unauthorized',
+      '',
+      '请检查网络连接和服务配置',
+    ].join('\n');
+
+    async function runAllFailed(quietFailures?: () => boolean) {
+      uploadToMultipleServicesMock.mockRejectedValueOnce(new Error(combined));
+      const queueManager = createQueueManager();
+      queueManager.seed('q-1', 'a.png', ['jd', 'webdav:nas']);
+      const toast = { showConfig: vi.fn() };
+      await processUploadQueue(
+        [{ itemId: 'q-1', filePath: 'C:/tmp/a.png', uploadFilePath: 'C:/tmp/a.png', fileName: 'a.png' }],
+        { services: { jd: {} } } as any,
+        ['jd', 'webdav:nas'],
+        1,
+        {
+          queueManager: queueManager as any,
+          saveHistoryItemImmediate: vi.fn(async () => undefined),
+          addResultToHistoryItem: vi.fn(async () => true),
+          reconcileHistoryPrimary: vi.fn(async () => true),
+          saveHistoryItem: vi.fn(async () => undefined),
+          toast: toast as any,
+          quietFailures,
+        },
+      );
+      return { queueManager, toast };
+    }
+
+    it("keeps each host's own reason instead of the combined message", async () => {
+      const { queueManager } = await runAllFailed();
+      const patch = queueManager.updateItem.mock.calls.map(([, update]) => update).find((update) => update.serviceProgress);
+      expect(patch.serviceProgress.jd.error).toBe('京东上传失败: 请求超时，请检查网络连接');
+      expect(patch.serviceProgress['webdav:nas'].error).toBe('WebDAV 上传失败: 401 Unauthorized');
+    });
+
+    it('stays quiet while the page already shows the failure', async () => {
+      const loud = await runAllFailed();
+      expect(loud.toast.showConfig).toHaveBeenCalledWith('error', expect.anything());
+      const quiet = await runAllFailed(() => true);
+      expect(quiet.toast.showConfig).not.toHaveBeenCalled();
+    });
+  });
+
   it('fails before upload when no selected service supports the file format', async () => {
     const queueManager = createQueueManager();
     queueManager.seed('q-svg', 'icon.svg', ['jd']);

@@ -73,7 +73,7 @@ function createController() {
   const queueManager = new UploadQueueManager({ onItemAdded: (itemId) => { current?.itemIds.push(itemId); } });
   const uploadManager = useUploadManager(queueManager, {
     onCopied: (result) => { if (current) current.copied = { count: result.copiedCount, format: result.format }; },
-    quietSummary: () => homeVisible(),
+    resultsOnScreen: () => homeVisible(),
   });
   const retryService = new RetryService({
     configStore,

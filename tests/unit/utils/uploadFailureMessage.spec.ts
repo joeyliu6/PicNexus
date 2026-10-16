@@ -5,6 +5,8 @@ import {
   formatMigrateFailureSummary,
   categorizeMigrateError,
   summarizeAllServicesFailed,
+  reasonsByService,
+  describeUploadFailure,
 } from '@/utils/uploadFailureMessage';
 import type { MigrateFailureDetail } from '@/types/batchMigrate';
 
@@ -98,6 +100,13 @@ describe('categorizeMigrateError', () => {
     for (const raw of cases) {
       expect(categorizeMigrateError('download', raw).category).toBe('网络中断');
     }
+  });
+
+  it('中文的网络中断与超时（Rust 侧报的多是中文）', () => {
+    expect(categorizeMigrateError('upload', '请求超时，请检查网络连接').category).toBe('请求超时');
+    expect(categorizeMigrateError('upload', '上传超时（120秒）').category).toBe('请求超时');
+    expect(categorizeMigrateError('upload', '连接被重置').category).toBe('网络中断');
+    expect(categorizeMigrateError('upload', '域名解析失败: no record').category).toBe('网络中断');
   });
 
   it('请求超时关键字', () => {
@@ -226,5 +235,41 @@ describe('categorizeMigrateError', () => {
       const crlf = ['所有图床上传均失败：', '  - upyun: 认证失败'].join('\r\n');
       expect(summarizeAllServicesFailed(crlf)).toContain('认证失败');
     });
+  });
+});
+
+describe('reasonsByService', () => {
+  it("splits the all-failed message into each host's own reason, composite ids included", () => {
+    const msg = [
+      '所有图床上传均失败：',
+      '  - jd: 京东上传失败: 请求超时',
+      '  - webdav:nas: WebDAV 错误: 路径不存在',
+      '',
+      '请检查网络连接和服务配置',
+    ].join('\n');
+    expect([...reasonsByService(msg)]).toEqual([
+      ['jd', '京东上传失败: 请求超时'],
+      ['webdav:nas', 'WebDAV 错误: 路径不存在'],
+    ]);
+  });
+});
+
+// 交接说明第 9 节：错误 = 原因 + 处理办法；设计稿的说法是「网络超时。请检查网络后重试。」
+describe('describeUploadFailure', () => {
+  it('words a timeout the way the design does', () => {
+    const timeout = { reason: '网络超时', advice: '请检查网络后重试' };
+    expect(describeUploadFailure('jd', '京东图床上传失败: 请求超时，请检查网络连接')).toEqual(timeout);
+    expect(describeUploadFailure('r2', 'operation timed out')).toEqual(timeout);
+  });
+
+  it('says the login expired for cookie hosts and the keys are wrong for the others', () => {
+    expect(describeUploadFailure('weibo', '微博上传失败: 认证失败: 401', { cookieLogin: true }).reason).toBe('登录已过期');
+    expect(describeUploadFailure('r2', 'R2 上传失败: 403 forbidden').reason).toBe('凭证无效');
+  });
+
+  it('keeps a reason it cannot classify, splitting off the advice it already carries', () => {
+    expect(describeUploadFailure('webdav:nas', 'WebDAV 错误: 路径不存在，请检查远程路径配置'))
+      .toEqual({ reason: 'WebDAV 错误: 路径不存在', advice: '请检查远程路径配置' });
+    expect(describeUploadFailure('jd', '')).toEqual({ reason: '上传失败', advice: '请稍后重试' });
   });
 });

@@ -613,12 +613,28 @@ describe('useUploadManager', () => {
     const onCopied = vi.fn();
     const queueManager = createQueueManager();
     const { useUploadManager } = await import('@/composables/upload/useUpload');
-    const { handleFilesUpload } = useUploadManager(queueManager as never, { onCopied, quietSummary: () => true });
+    const { handleFilesUpload } = useUploadManager(queueManager as never, { onCopied, resultsOnScreen: () => true });
 
     await handleFilesUpload(['C:/tmp/test.jpg']);
 
     expect(onCopied).toHaveBeenCalledWith({ ok: true, copiedCount: 1, format: 'markdown' });
     expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(toastWarnMock).not.toHaveBeenCalled();
+  });
+
+  it('does not toast a failed image while the caller shows it, and does otherwise', async () => {
+    const allFailed = new Error('所有图床上传均失败：\n  - jd: 京东上传失败: 请求超时\n\n请检查网络连接和服务配置');
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    let shown = true;
+    const { handleFilesUpload } = useUploadManager(createQueueManager() as never, { resultsOnScreen: () => shown });
+
+    uploadToMultipleServicesMock.mockRejectedValueOnce(allFailed);
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+    expect(toastShowConfigMock).not.toHaveBeenCalledWith('error', expect.anything());
+
+    shown = false;
+    uploadToMultipleServicesMock.mockRejectedValueOnce(allFailed);
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.anything());
   });
 });

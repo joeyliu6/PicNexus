@@ -21,10 +21,9 @@ import { getImageMetadata } from '@/composables/image/useImageMetadata';
 import { formatLinkWithConfig } from '@/composables/useCopyLink';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import type { UploadHost } from '@/composables/upload/useUploadController';
-import { hasLink, hostViews, itemPhase, petalStates, type UploadSession } from '@/composables/upload/uploadSessions';
+import { hasLink, hostFailureText, hostViews, itemPhase, petalStates, type UploadSession } from '@/composables/upload/uploadSessions';
 import { formatFileSize, formatRelativeTime } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
-import { cleanMigrateError } from '@/utils/uploadFailureMessage';
 import UploadToPanel from './UploadToPanel.vue';
 
 const props = defineProps<{
@@ -71,10 +70,11 @@ const copiedLink = computed(() => {
 const baseName = computed(() => props.item.fileName.replace(/\.[^.]+$/, ''));
 const thumbSrcs = computed(() => getThumbnailCandidates(props.item, props.config));
 const confirmedHttpHosts = useConfirmedHttpHosts(() => props.config);
-const reasonOf = (hostId: string, error?: string) => cleanMigrateError(hostId, error ?? '') || '上传失败';
-const allFailedReason = computed(() => {
+const reasonOf = (hostId: string, error?: string) => hostFailureText(hostId, error, props.hosts).reason;
+/** 整张失败：原因 + 处理办法（「网络超时。请检查网络后重试。」） */
+const allFailedText = computed(() => {
   const first = failedHosts.value[0];
-  return first ? reasonOf(first.id, first.error) : '上传失败';
+  return first ? hostFailureText(first.id, first.error, props.hosts) : { reason: '上传失败', advice: '请稍后重试' };
 });
 const isCookieHost = (hostId: string) => props.hosts.find((h) => h.id === hostId)?.cookieLogin ?? false;
 
@@ -153,7 +153,7 @@ function copyHost(hostId: string) {
 
       <LinkBlock v-if="copiedLink" :text="copiedLink.text" :url="copiedLink.url" :filename="baseName" />
       <div v-else-if="failedAll" class="focus-card__failed-box">
-        {{ allFailedReason }}。<span class="focus-card__muted">剪贴板内容未改变。</span>
+        {{ allFailedText.reason }}。{{ allFailedText.advice }}。<span class="focus-card__muted">剪贴板内容未改变。</span>
       </div>
       <div v-else class="focus-card__skeleton" aria-hidden="true">
         <span class="focus-card__bone focus-card__bone--long" />

@@ -18,7 +18,7 @@ const m = vi.hoisted(() => ({
   listeners: {} as Record<string, (event: { payload: unknown }) => void>,
   fresh: {} as Record<string, unknown>,
   onItemAdded: null as null | ((id: string) => void),
-  managerOptions: null as null | { onCopied?: (r: unknown) => void; quietSummary?: () => boolean },
+  managerOptions: null as null | { onCopied?: (r: unknown) => void; resultsOnScreen?: () => boolean },
   available: ['jd', 'weibo', 'webdav:nas'],
   selected: ['jd'],
 }));
@@ -117,9 +117,9 @@ describe('useUploadController', () => {
     const upload = useUploadController();
     let onHome = true;
     upload.setHomeVisible(() => onHome);
-    expect(m.managerOptions?.quietSummary?.()).toBe(true);
+    expect(m.managerOptions?.resultsOnScreen?.()).toBe(true);
     onHome = false;
-    expect(m.managerOptions?.quietSummary?.()).toBe(false);
+    expect(m.managerOptions?.resultsOnScreen?.()).toBe(false);
   });
 
   it('handles tray upload actions after init', async () => {

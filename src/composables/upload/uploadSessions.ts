@@ -3,6 +3,7 @@
 
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { PetalState } from '@/utils/petals';
+import { describeUploadFailure, type UploadFailureText } from '@/utils/uploadFailureMessage';
 import { isStatusError, isStatusSuccess, isStatusUploading } from '@/utils/uploadStatus';
 
 /** 一次上传操作（拖入 / 粘贴 / 选择文件 / 从 URL 下载各算一次） */
@@ -115,4 +116,13 @@ export function hostsFailedForWholeBatch(items: readonly QueueItem[]): string[] 
 /** 失败图床里第一条原因（焦点卡「微博上传失败：登录已过期」那一行用） */
 export function firstFailure(item: QueueItem): HostView | undefined {
   return hostViews(item).find((h) => h.state === 'failed');
+}
+
+/** 某个图床失败的说法（原因 + 处理办法）；Cookie 登录的图床把权限问题说成「登录已过期」 */
+export function hostFailureText(
+  hostId: string,
+  error: string | undefined,
+  hosts: readonly { id: string; cookieLogin: boolean }[],
+): UploadFailureText {
+  return describeUploadFailure(hostId, error ?? '', { cookieLogin: hosts.find((h) => h.id === hostId)?.cookieLogin });
 }

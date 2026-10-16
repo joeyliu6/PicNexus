@@ -13,10 +13,9 @@ import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
 import { formatLinkWithConfig } from '@/composables/useCopyLink';
 import type { UploadHost } from '@/composables/upload/useUploadController';
-import { firstFailure, hostViews, itemPhase, petalStates, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
+import { firstFailure, hostFailureText, hostViews, itemPhase, petalStates, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
 import { formatRelativeTime, formatShortDateTime } from '@/utils/formatters';
 import type { LinkFormat } from '@/utils/linkFormatter';
-import { cleanMigrateError } from '@/utils/uploadFailureMessage';
 import RecentRow from './RecentRow.vue';
 
 const props = defineProps<{
@@ -136,7 +135,7 @@ function truncated(name: string): string {
         >
           <template #second>
             <span v-if="itemPhase(row.items[0]) === 'failed'" class="recent__danger">
-              上传失败 · {{ firstFailure(row.items[0]) ? cleanMigrateError(firstFailure(row.items[0])!.id, firstFailure(row.items[0])!.error ?? '') : '上传失败' }}
+              上传失败 · {{ firstFailure(row.items[0]) ? hostFailureText(firstFailure(row.items[0])!.id, firstFailure(row.items[0])!.error, hosts).reason : '上传失败' }}
             </span>
             <span v-else class="recent__mono">{{ linkText(row.items[0]) }}</span>
           </template>
@@ -149,7 +148,7 @@ function truncated(name: string): string {
               v-else-if="itemPhase(row.items[0]) === 'partial'"
               type="button"
               class="recent__failed-host"
-              :title="failedHostOf(row.items[0]) ? `${nameOf(failedHostOf(row.items[0])!.id)}：${cleanMigrateError(failedHostOf(row.items[0])!.id, failedHostOf(row.items[0])!.error ?? '')}` : undefined"
+              :title="failedHostOf(row.items[0]) ? `${nameOf(failedHostOf(row.items[0])!.id)}：${hostFailureText(failedHostOf(row.items[0])!.id, failedHostOf(row.items[0])!.error, hosts).reason}` : undefined"
               @click="onPartialFailure(row.items[0])"
             >
               <PetalGlyph :states="petalStates(row.items[0])" :size="16" />

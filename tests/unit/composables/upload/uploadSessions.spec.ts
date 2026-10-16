@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueItem } from '@/core/UploadQueue';
 import {
-  firstFailure, hasLink, hostsFailedForWholeBatch, itemPhase, petalStates, sessionCounts,
+  firstFailure, hasLink, hostFailureText, hostsFailedForWholeBatch, itemPhase, petalStates, sessionCounts,
 } from '@/composables/upload/uploadSessions';
 
 function item(status: QueueItem['status'], hosts: Record<string, { status: string; progress?: number; link?: string; error?: string }>): QueueItem {
@@ -62,5 +62,12 @@ describe('uploadSessions', () => {
 
   it('picks the first failed host for the reason line', () => {
     expect(firstFailure(item('success', { jd: done, weibo: failed }))).toMatchObject({ id: 'weibo', error: '登录已过期' });
+  });
+
+  it('words a host failure by how that host logs in', () => {
+    const hosts = [{ id: 'weibo', cookieLogin: true }, { id: 'r2', cookieLogin: false }];
+    expect(hostFailureText('weibo', '微博上传失败: 认证失败: 401', hosts).reason).toBe('登录已过期');
+    expect(hostFailureText('r2', '403 forbidden', hosts).reason).toBe('凭证无效');
+    expect(hostFailureText('r2', undefined, hosts)).toEqual({ reason: '上传失败', advice: '请稍后重试' });
   });
 });

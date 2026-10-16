@@ -21,7 +21,7 @@ import {
 } from '@/constants/serviceFormats';
 import { AUTH_CONFIG_ERROR_CODES } from '@/types/serviceHealth';
 import { createLogger } from '@/utils/logger';
-import { summarizeAllServicesFailed } from '@/utils/uploadFailureMessage';
+import { reasonsByService, summarizeAllServicesFailed } from '@/utils/uploadFailureMessage';
 import { isStatusSuccess } from '@/utils/uploadStatus';
 import { resolveQueueStatus } from '@/services/retryStatus';
 
@@ -80,6 +80,8 @@ export interface UploadExecutorContext {
    * 固定了图床就等它，它失败了再退回最先完成的。单张上传靠它「第一个图床传完就复制，其余后台继续」。
    */
   onPrimaryReady?: (queueIndex: number, link: CopyLinkItem) => void | Promise<void>;
+  /** 返回 true 时某张图失败不弹通知（首页卡片已经把失败和原因画出来了） */
+  quietFailures?: () => boolean;
 }
 
 /**
@@ -116,6 +118,7 @@ export async function processUploadQueue(
     saveHistoryItem,
     toast,
     onPrimaryReady,
+    quietFailures,
   } = ctx;
   const pinnedCopySource = config.linkOutput?.copyFromService;
 
@@ -404,8 +407,10 @@ export async function processUploadQueue(
           failedServices.push(match[1]);
         }
 
-        // 智能错误提示 - 带图床名称
-        if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
+        // 智能错误提示 - 带图床名称（页面已经画出失败时不弹）
+        if (quietFailures?.()) {
+          // 首页焦点卡 / 批量卡片上有失败原因和下一步，不再叠一条通知
+        } else if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
           // Cookie 相关错误（通常是微博）
           const serviceName = failedServices.length > 0 ? failedServices.join('、') : '微博';
           toast.showConfig('error', TOAST_MESSAGES.auth.tokenFailed(serviceName, '登录凭证/Cookie 已过期，请前往更新'));
@@ -429,6 +434,8 @@ export async function processUploadQueue(
         const item = queueManager.getItem(itemId);
         if (item) {
           const updatedServiceProgress = { ...(item.serviceProgress || {}) };
+          // 每个图床记它自己的原因；整段汇总只在解析不出时兜底
+          const ownReasons = reasonsByService(errorMsg);
           attemptedServices.forEach(serviceId => {
             // 上传还没结束就被单独重试的图床：已成功或仍在重试的，结果归重试链路，这里不能改成失败
             const current = updatedServiceProgress[serviceId];
@@ -438,7 +445,7 @@ export async function processUploadQueue(
               serviceId,
               status: '✗ 失败',
               progress: 0,
-              error: errorMsg
+              error: ownReasons.get(serviceId) ?? errorMsg
             };
           });
           queueManager.updateItem(itemId, {

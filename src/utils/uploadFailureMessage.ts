@@ -90,18 +90,70 @@ export function formatMigrateFailureSummary(details: MigrateFailureDetail[]): st
  * @returns 形如 `dufs 本地 · 路径不存在，请检查远程路径配置`；解析不出来返回空串
  */
 export function summarizeAllServicesFailed(errorMsg: string): string {
-  // 只认「两个空格 + 短横线」这种缩进条目，避免把尾注那行也吃进来
   const details: MigrateFailureDetail[] = [];
-  for (const line of errorMsg.split(/\r?\n/u)) {
-    const match = /^\s+-\s+(\S+?):\s*(.+)$/u.exec(line);
-    if (!match) continue;
-    const [, serviceId, rawReason] = match;
-    const reason = cleanMigrateError(serviceId, rawReason.trim());
+  for (const [serviceId, rawReason] of reasonsByService(errorMsg)) {
+    const reason = cleanMigrateError(serviceId, rawReason);
     if (reason) details.push({ serviceId, message: reason });
   }
 
   // 复用迁移那套拼法，两处的失败摘要读起来是同一个调子
   return formatMigrateFailureSummary(details);
+}
+
+/**
+ * 「所有图床上传均失败」那条汇总里每个图床各自的原因（按出现顺序）
+ *
+ * 只认「缩进 + 短横线」的条目，免得把尾注那行也吃进来；复合 ID（`webdav:xxx`）里
+ * 也有冒号，所以按「冒号 + 空白」切。
+ */
+export function reasonsByService(errorMsg: string): Map<string, string> {
+  const reasons = new Map<string, string>();
+  for (const line of errorMsg.split(/\r?\n/u)) {
+    const match = /^\s+-\s+(\S+?):\s+(.+)$/u.exec(line);
+    if (match) reasons.set(match[1], match[2].trim());
+  }
+  return reasons;
+}
+
+export interface UploadFailureText {
+  /** 短原因：失败图床那一行、批量卡片、最近上传都用它 */
+  reason: string;
+  /** 处理办法：整张失败时接在原因后面 */
+  advice: string;
+}
+
+/** 交接说明第 9 节「错误 = 原因 + 处理办法」；超时的说法照设计稿（H06 / H09） */
+const UPLOAD_FAILURE_TEXT: Partial<Record<MigrateErrorCategory, UploadFailureText>> = {
+  网络中断: { reason: '网络连接中断', advice: '请检查网络后重试' },
+  请求超时: { reason: '网络超时', advice: '请检查网络后重试' },
+  文件过大: { reason: '文件超出图床大小限制', advice: '请开启压缩或换个图床' },
+  格式不支持: { reason: '图床不支持此格式', advice: '请换个图床后重试' },
+  图床服务异常: { reason: '图床服务异常', advice: '请稍后重试' },
+};
+
+/**
+ * 把一个图床的上传错误说成「原因 + 处理办法」
+ * - 认得出的归到固定说法；「权限不足」对 Cookie 登录的图床说「登录已过期」
+ * - 认不出的保留原文，原文自带的「，请……」切成处理办法
+ */
+export function describeUploadFailure(
+  serviceId: string | undefined,
+  raw: string,
+  options: { cookieLogin?: boolean } = {},
+): UploadFailureText {
+  const cleaned = cleanMigrateError(serviceId, raw).replace(/^Error:\s*/u, '');
+  const { category } = categorizeMigrateError('upload', cleaned);
+  if (category === '权限不足') {
+    return options.cookieLogin
+      ? { reason: '登录已过期', advice: '请重新登录后重试' }
+      : { reason: '凭证无效', advice: '请检查图床配置后重试' };
+  }
+  const known = UPLOAD_FAILURE_TEXT[category];
+  if (known) return known;
+  if (!cleaned) return { reason: '上传失败', advice: '请稍后重试' };
+  const [reason, ...rest] = cleaned.split(/[，。]/u);
+  const advice = rest.join('，').replace(/[，。\s]+$/u, '').trim();
+  return { reason: reason.trim(), advice: advice || '请稍后重试' };
 }
 
 /**
@@ -127,8 +179,8 @@ interface ErrorPattern {
 
 const MIGRATE_ERROR_PATTERNS: ErrorPattern[] = [
   // 下载类
-  { pattern: /end of file before message length reached|connection (?:reset|refused|closed|aborted)|network (?:is )?unreachable|socket hang up/iu, category: '网络中断' },
-  { pattern: /timed? ?out|deadline exceeded|timeout/iu, category: '请求超时' },
+  { pattern: /end of file before message length reached|connection (?:reset|refused|closed|aborted)|network (?:is )?unreachable|socket hang up|连接(?:被)?(?:重置|中断|拒绝|关闭)|网络(?:连接)?(?:中断|不可用)|域名解析失败|无法连接/iu, category: '网络中断' },
+  { pattern: /timed? ?out|deadline exceeded|timeout|超时/iu, category: '请求超时' },
   { pattern: /\b40[34]\b|not found|forbidden/iu, category: '源图片失效', scope: 'download' },
   // 上传类
   { pattern: /\b(?:413|payload too large|file too large|request entity too large)\b/iu, category: '文件过大', scope: 'upload' },
