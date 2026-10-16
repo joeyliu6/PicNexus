@@ -12,6 +12,7 @@
 | [设置页面排版](./settings-layout.md) | 设置面板标题/描述/容器/激活态/间距体系 |
 | [弹窗与通知规范](./notification-patterns.md) | 通知通道决策树、文案口径——新增 toast/confirm/banner 前必读 |
 | [产品文案规范](./product-copy.md) | 中文优先、短句优先，帮用户判断状态而不抢注意力 |
+| [界面重构](./redesign/README.md) | 已验收的设计交付包（交接说明、状态索引、令牌、设计源文件）、技术选型与实施阶段 |
 
 ---
 

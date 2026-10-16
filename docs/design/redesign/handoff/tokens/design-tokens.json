@@ -1,0 +1,293 @@
+{
+  "meta": {
+    "name": "PicNexus Design Tokens",
+    "date": "2026-10-16",
+    "source": "Claude Design 画布「PicNexus」设计系统页 Foundations + 各页面组件"
+  },
+  "color": {
+    "light": {
+      "canvas": "#FFFFFF",
+      "sidebar": "#F3F3F3",
+      "subtle": "#F5F5F5",
+      "elevated": "#FFFFFF",
+      "selected": "rgba(0,0,0,0.065)",
+      "text1": "#171717",
+      "text2": "#525252",
+      "text3": "#6B6B6B",
+      "disabled": "#A3A3A3",
+      "border": "#E5E5E5",
+      "borderStrong": "#D4D4D4",
+      "hairline": "rgba(0,0,0,0.06)",
+      "brand": "#3985ED",
+      "brandText": "#2B63D9",
+      "brandSoft": "#EAF2FD",
+      "button": "#2B63D9",
+      "ring": "#3985ED",
+      "gradA": "#2EA6F2",
+      "gradB": "#4D63F0",
+      "success": "#147A3A",
+      "successFill": "#16A34A",
+      "successSoft": "#ECF7EF",
+      "warning": "#AD4F08",
+      "warningFill": "#D97706",
+      "warningSoft": "#FEF4E6",
+      "danger": "#B91C1C",
+      "dangerFill": "#DC2626",
+      "dangerSoft": "#FDECEC",
+      "unknown": "#6B6B6B",
+      "unknownFill": "#A3A3A3",
+      "unknownSoft": "#F5F5F5",
+      "e1": "0 0 0 1px rgba(0,0,0,0.06)",
+      "e2": "0 1px 2px rgba(0,0,0,0.04), 0 16px 40px -16px rgba(43,99,217,0.18)",
+      "e3": "0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)",
+      "e4": "0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)",
+      "surface": "#F5F7FA",
+      "btnSoft": "#FFFFFF",
+      "btnSoftShadow": "0 0 0 0.5px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.08)",
+      "cellEmpty": "#E6EAF0",
+      "cellBad": "#E8890B",
+      "cellBadSoft": "#F4BF6A",
+      "cellLv1": "#CFE0F8",
+      "cellLv2": "#9DC1F3",
+      "cellLv3": "#5F9BEB",
+      "cellLv4": "#2F6FD6",
+      "illustrationBg": "#FFFFFF",
+      "paper": "#FFFFFF",
+      "paperLine": "#D3D9E3",
+      "heroBg": "linear-gradient(135deg, #EEF5FF 0%, #FFFFFF 62%)",
+      "scrim": "rgba(23,23,23,0.28)",
+      "menuSel": "#F0F0F0",
+      "rowHover": "#F5F5F5",
+      "track": "#EBEBEB",
+      "glass": "rgba(255,255,255,0.74)",
+      "tooltipBg": "#262626"
+    },
+    "dark": {
+      "canvas": "#1C1C1E",
+      "sidebar": "#151517",
+      "subtle": "#252528",
+      "elevated": "#2A2A2D",
+      "selected": "rgba(255,255,255,0.08)",
+      "text1": "#EBEBEC",
+      "text2": "#BEBEC3",
+      "text3": "#9C9CA1",
+      "disabled": "#5C5C61",
+      "border": "#2F2F33",
+      "borderStrong": "#3D3D42",
+      "hairline": "rgba(255,255,255,0.08)",
+      "brand": "#4C93F5",
+      "brandText": "#6EA8FF",
+      "brandSoft": "#1B2A42",
+      "button": "#336FDE",
+      "ring": "#4C93F5",
+      "gradA": "#46B3F5",
+      "gradB": "#6B7DF5",
+      "success": "#5BD08A",
+      "successFill": "#22C55E",
+      "successSoft": "#15291D",
+      "warning": "#F2B35C",
+      "warningFill": "#F59E0B",
+      "warningSoft": "#2E2414",
+      "danger": "#FF7A7A",
+      "dangerFill": "#EF4444",
+      "dangerSoft": "#33191A",
+      "unknown": "#9C9CA1",
+      "unknownFill": "#6B6B70",
+      "unknownSoft": "#252528",
+      "e1": "0 0 0 1px rgba(255,255,255,0.08)",
+      "e2": "0 0 0 1px rgba(255,255,255,0.06), 0 16px 40px -16px rgba(0,0,0,0.6)",
+      "e3": "0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)",
+      "e4": "0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)",
+      "surface": "#232326",
+      "btnSoft": "#36363A",
+      "btnSoftShadow": "none",
+      "cellEmpty": "#2C2C30",
+      "cellBad": "#F59E0B",
+      "cellBadSoft": "#9A7434",
+      "cellLv1": "#1E3352",
+      "cellLv2": "#27497A",
+      "cellLv3": "#3466AE",
+      "cellLv4": "#4C93F5",
+      "illustrationBg": "#2E2E32",
+      "paper": "#3A3A3E",
+      "paperLine": "#55565C",
+      "heroBg": "linear-gradient(135deg, #1B2638 0%, #1C1C1E 62%)",
+      "scrim": "rgba(0,0,0,0.55)",
+      "menuSel": "#36363A",
+      "rowHover": "#252528",
+      "track": "#2F2F33",
+      "glass": "rgba(36,36,39,0.72)",
+      "tooltipBg": "#3A3A3E"
+    },
+    "sidebarLightByPlatform": {
+      "Windows": "#F3F3F3",
+      "macOS": "#ECECEC",
+      "Linux": "#F4F4F4"
+    },
+    "sidebarDark": "#151517"
+  },
+  "font": {
+    "family": {
+      "ui": "Inter, <CJK>, 'Noto Sans SC', system-ui, sans-serif",
+      "cjk": {
+        "Windows": "'Microsoft YaHei UI'",
+        "macOS": "'PingFang SC'",
+        "Linux": "'Noto Sans CJK SC'"
+      },
+      "mono": "'JetBrains Mono', ui-monospace, monospace"
+    },
+    "scale": [
+      {
+        "name": "title",
+        "size": 20,
+        "lineHeight": 26,
+        "weight": 600,
+        "letterSpacing": "-0.012em",
+        "use": "页结论 / 设置页标题，全应用最大"
+      },
+      {
+        "name": "dialogTitle",
+        "size": 17,
+        "lineHeight": 24,
+        "weight": 600,
+        "use": "对话框标题"
+      },
+      {
+        "name": "headline",
+        "size": 15,
+        "lineHeight": 22,
+        "weight": 600,
+        "letterSpacing": "-0.01em",
+        "use": "页面标题（标题栏行）、分组标题"
+      },
+      {
+        "name": "body",
+        "size": 13,
+        "lineHeight": 20,
+        "weight": 400,
+        "use": "正文（基准字号）"
+      },
+      {
+        "name": "callout",
+        "size": 13,
+        "lineHeight": 20,
+        "weight": 500
+      },
+      {
+        "name": "footnote",
+        "size": 12,
+        "lineHeight": 16,
+        "weight": 400,
+        "use": "说明、脚注"
+      },
+      {
+        "name": "caption",
+        "size": 11,
+        "lineHeight": 14,
+        "weight": 500,
+        "use": "标注、坐标轴"
+      },
+      {
+        "name": "mono",
+        "size": 12,
+        "lineHeight": 18,
+        "weight": 400,
+        "family": "mono",
+        "use": "链接、路径"
+      }
+    ],
+    "weights": [
+      400,
+      500,
+      600
+    ]
+  },
+  "space": [
+    2,
+    4,
+    6,
+    8,
+    12,
+    16,
+    20,
+    24,
+    32,
+    56
+  ],
+  "radius": {
+    "xs": 4,
+    "sm": 6,
+    "md": 8,
+    "lg": 10,
+    "xl": 14,
+    "2xl": 18,
+    "dialog": 16,
+    "panel": 20,
+    "card": 16,
+    "calendarCell": 3.5
+  },
+  "elevation": {
+    "light": {
+      "e1": "0 0 0 1px rgba(0,0,0,0.06)",
+      "e2": "0 1px 2px rgba(0,0,0,0.04), 0 16px 40px -16px rgba(43,99,217,0.18)",
+      "e3": "0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)",
+      "e4": "0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)"
+    },
+    "dark": {
+      "e1": "0 0 0 1px rgba(255,255,255,0.08)",
+      "e2": "0 0 0 1px rgba(255,255,255,0.06), 0 16px 40px -16px rgba(0,0,0,0.6)",
+      "e3": "0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)",
+      "e4": "0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)"
+    }
+  },
+  "motion": {
+    "instant": "100ms",
+    "fast": "150ms",
+    "standard": "200ms",
+    "expressive": "250ms",
+    "easeIn": "cubic-bezier(.2,0,0,1)",
+    "easeOut": "cubic-bezier(.4,0,1,1)",
+    "exitFaster": "30%",
+    "reducedMotion": "位移改淡入，花瓣停止闪烁"
+  },
+  "size": {
+    "sidebar": 208,
+    "navRail": 56,
+    "navRailBreakpoint": 1000,
+    "logoRow": 52,
+    "titleBar": 40,
+    "pageTitleRow": 46,
+    "toolbarRow": 48,
+    "navItem": 32,
+    "searchBox": 32,
+    "button": {
+      "sm": 28,
+      "md": 30,
+      "lg": 32,
+      "dialog": 34
+    },
+    "listRow": {
+      "min": 42,
+      "max": 56
+    },
+    "statusDot": 6,
+    "iconBlock": {
+      "min": 28,
+      "max": 40
+    },
+    "dialog": {
+      "width": 520,
+      "radius": 16,
+      "padding": "24px 28px",
+      "iconBlock": 40
+    },
+    "toast": {
+      "width": 360,
+      "radius": 14,
+      "maxStack": 3
+    },
+    "detailPanel": 340,
+    "focusRing": "2px brand + 2px offset",
+    "minWindow": "800x600"
+  }
+}

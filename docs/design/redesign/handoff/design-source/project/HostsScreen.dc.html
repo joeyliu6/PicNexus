@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>图床（全部状态）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:{{W}};height:{{H}};display:flex;overflow:hidden;background:{{c.canvas}};color:{{c.text1}};font-size:13px;line-height:1.45;font-family:{{font}}">
+
+<sc-if value="{{wide}}" hint-placeholder-val="{{ true }}">
+<nav aria-label="主导航" style="width:208px;flex:none;display:flex;flex-direction:column;padding:0 10px 12px;background:{{c.sidebar}}">
+<div style="height:52px;flex:none;display:flex;align-items:center;padding-left:8px">
+<sc-if value="{{isMac}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px" aria-hidden="true"><span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span><span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span><span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span></div></sc-if>
+<sc-if value="{{notMac}}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="htLogo" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#htLogo)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg><span style="font-size:13px;font-weight:600;letter-spacing:-0.01em">PicNexus</span></div></sc-if>
+</div>
+<button style="height:32px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;margin-bottom:14px;border:0;box-shadow:inset 0 0 0 1px {{c.hairline}};background:{{c.searchBg}};border-radius:8px;color:{{c.text3}};font:inherit;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span style="flex:1;text-align:left">搜索</span><span style="font-size:11px">{{mod}}K</span></button>
+<div style="display:flex;flex-direction:column;gap:2px">
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg>快传</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg>图库</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"></path></svg>链接健康<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:{{c.warningFill}}"></span></a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;background:{{c.navSel}};color:{{c.text1}};text-decoration:none;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.brandText}}"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg>图床<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:{{c.warningFill}}"></span></a>
+</div>
+<div style="flex:1"></div>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>设置<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:{{c.brand}}"></span></a>
+</nav>
+</sc-if>
+
+<sc-if value="{{narrow}}" hint-placeholder-val="{{ false }}">
+<nav aria-label="主导航（已收起）" style="width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 0 12px;background:{{c.sidebar}}">
+<div style="height:48px;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="htLogoN" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#htLogoN)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg></div>
+<a href="#" aria-label="快传" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg></a>
+<a href="#" aria-label="图库" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg></a>
+<a href="#" aria-label="链接健康" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"></path></svg></a>
+<a href="#" aria-label="图床" style="width:36px;height:36px;border-radius:9px;background:{{c.navSel}};color:{{c.brandText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg></a>
+<div style="flex:1"></div>
+<a href="#" aria-label="设置" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></a>
+</nav>
+</sc-if>
+
+<main style="flex:1;min-width:0;position:relative;display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:1;min-height:0;display:flex">
+
+<sc-if value="{{showList}}" hint-placeholder-val="{{ true }}">
+<div role="listbox" aria-label="已连接的图床" style="width:{{listW}};flex:none;box-sizing:border-box;padding:0 12px 14px 16px;border-right:{{listBorder}};display:flex;flex-direction:column;gap:2px;overflow:hidden">
+<div style="height:40px;flex:none;display:flex;align-items:center;gap:4px;margin:6px 0 2px;padding-left:8px">
+<span style="font-size:15px;font-weight:600;letter-spacing:-0.01em">图床</span>
+<div style="flex:1"></div>
+<button aria-label="添加图床" title="添加图床" style="width:28px;height:28px;border:0;border-radius:7px;background:{{addBg}};color:{{addFg}};display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+<sc-if value="{{listOnly}}" hint-placeholder-val="{{ false }}"><sc-if value="{{isWin}}" hint-placeholder-val="{{ true }}"><div style="display:flex"><button aria-label="最小化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 12h16"></path></svg></button><button aria-label="最大化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19M5 5l14 14"></path></svg></button></div></sc-if>
+<sc-if value="{{isLinux}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;padding-right:12px"><button aria-label="最小化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button><button aria-label="最大化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div></sc-if></sc-if>
+</div>
+<sc-for list="{{connected}}" as="h" hint-placeholder-count="4">
+<div role="option" aria-selected="{{h.sel}}" style="height:50px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px 0 8px;border-radius:9px;background:{{h.bg}}">
+<span style="position:relative;width:30px;height:30px;flex:none;border-radius:8px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center;color:{{h.iconFg}}"><span style="display:flex;align-items:center;justify-content:center;width:17px;height:17px;flex:none;line-height:0"><dc-import name="HostIcon" host="{{h.name}}" size="17" hint-size="17px,17px"></dc-import></span></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35"><span style="font-weight:500;color:{{h.nameFg}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{h.name}}</span><span style="display:flex;align-items:center;gap:4px;font-size:12px;color:{{h.subFg}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><sc-if value="{{h.bad}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 9v4M12 17h.01"></path></svg></sc-if>{{h.sub}}</span></div>
+<sc-if value="{{h.hover}}" hint-placeholder-val="{{ false }}"><button style="height:24px;flex:none;padding:0 10px;border:0;border-radius:12px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.border}};color:{{c.brandText}};font:inherit;font-size:12px;font-weight:500">{{h.hoverLabel}}</button></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{showDetail}}" hint-placeholder-val="{{ true }}">
+<section aria-label="图床详情" style="flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column">
+<div style="height:40px;flex:none;display:flex;align-items:center"><sc-if value="{{showBack}}" hint-placeholder-val="{{ false }}"><button style="height:28px;display:flex;align-items:center;gap:2px;padding:0 8px 0 4px;margin-left:12px;border:0;border-radius:7px;background:transparent;color:{{c.brandText}};font:inherit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>图床</button></sc-if><div style="flex:1"></div><sc-if value="{{isWin}}" hint-placeholder-val="{{ true }}"><div style="display:flex"><button aria-label="最小化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 12h16"></path></svg></button><button aria-label="最大化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19M5 5l14 14"></path></svg></button></div></sc-if>
+<sc-if value="{{isLinux}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;padding-right:12px"><button aria-label="最小化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button><button aria-label="最大化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div></sc-if></div>
+<div style="flex:1;min-height:0;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:720px;box-sizing:border-box;padding:4px 32px 24px;display:flex;flex-direction:column;gap:18px">
+<sc-if value="{{showHost}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:18px">
+
+<div style="display:flex;align-items:center;gap:14px;padding-top:4px">
+<span style="width:48px;height:48px;flex:none;border-radius:12px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.border}};display:flex;align-items:center;justify-content:center;color:{{c.text1}}"><span style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;line-height:0"><dc-import name="HostIcon" host="{{dh.name}}" size="28" hint-size="28px,28px"></dc-import></span></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+<span style="display:flex;align-items:center;gap:10px;min-width:0"><span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{dh.name}}</span><sc-if value="{{dh.renamable}}" hint-placeholder-val="{{ false }}"><button aria-label="重命名" style="width:24px;height:24px;margin-left:-6px;border:0;border-radius:6px;background:transparent;color:{{c.text3}};display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button></sc-if><sc-if value="{{dh.showPill}}" hint-placeholder-val="{{ false }}"><span style="height:22px;flex:none;display:flex;align-items:center;gap:6px;padding:0 9px 0 8px;border-radius:11px;background:{{dh.pillBg}};color:{{dh.color}};font-size:12px;font-weight:500"><span style="width:6px;height:6px;border-radius:3px;background:{{dh.dot}}"></span>{{dh.status}}</span></sc-if></span>
+<span style="color:{{c.text2}}">{{dh.intro}}</span>
+</div>
+<sc-if value="{{dh.connected}}" hint-placeholder-val="{{ true }}"><button aria-pressed="{{dh.on}}" title="{{dh.useDesc}}" style="height:32px;flex:none;display:flex;align-items:center;gap:6px;padding:0 12px 0 10px;border:0;border-radius:8px;background:{{dh.useBg}};box-shadow:{{dh.useRing}};color:{{dh.useFg}};font:inherit;font-weight:500"><sc-if value="{{dh.on}}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>{{dh.useLabel}}</button></sc-if>
+<sc-if value="{{testIdleBtn}}" hint-placeholder-val="{{ true }}"><button style="height:32px;flex:none;display:flex;align-items:center;gap:6px;padding:0 12px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 3v6h-6"></path></svg>{{dh.testLabel}}</button></sc-if>
+<sc-if value="{{testing}}" hint-placeholder-val="{{ false }}"><button disabled style="height:32px;flex:none;display:flex;align-items:center;gap:6px;padding:0 12px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text2}};font:inherit;font-weight:500;cursor:default"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2"></circle><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="12 37.7" stroke-linecap="round" transform="rotate(-90 8 8)"></circle></svg>正在检测…</button></sc-if>
+</div>
+<sc-if value="{{testOk}}" hint-placeholder-val="{{ false }}"><div role="status" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:{{c.successSoft}};color:{{c.success}};font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>服务可用 · 180ms<span style="font-weight:400;color:{{c.text2}}">· 读取、写入、公开访问均通过</span></div></sc-if>
+<sc-if value="{{testFail}}" hint-placeholder-val="{{ false }}"><div role="alert" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:{{c.dangerSoft}};color:{{c.text1}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:{{c.danger}}"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6M9 9l6 6"></path></svg><b style="font-weight:600;color:{{c.danger}}">Secret Access Key 无效</b><span style="color:{{c.text2}}">其余各项均通过，请在 Cloudflare 后台重新复制后再试</span></div></sc-if>
+
+<sc-if value="{{dh.hasStats}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:flex-end;gap:28px;padding:16px 20px;border-radius:14px;background:{{c.subtle}}">
+<sc-for list="{{dh.stats}}" as="t" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;gap:2px;flex:none"><span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.01em;color:{{t.fg}}">{{t.v}}</span><span style="font-size:12px;line-height:16px;color:{{c.text2}}">{{t.k}}</span></div></sc-for>
+<span style="width:1px;height:44px;flex:none;background:{{c.border}}"></span>
+<div style="display:flex;flex-direction:column;gap:2px;flex:none"><span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.01em">{{dh.recent}}</span><span style="font-size:12px;line-height:16px;color:{{c.text2}}">近 14 天上传</span></div>
+<div title="每根柱子是一天，最右边是今天" style="flex:1;min-width:0;height:44px;display:flex;align-items:flex-end;gap:3px">
+<sc-for list="{{dh.bars}}" as="b" hint-placeholder-count="14"><span style="flex:1;height:{{b.h}};border-radius:2px;background:{{b.c}}"></span></sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{isJd}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:12px;box-shadow:0 0 0 1px {{c.border}}">
+<span style="font-weight:600">免配置，开箱即用</span>
+<span style="color:{{c.text2}}">无需账号。此为非官方适配的公共图床，可能随时失效，建议同时上传到自有存储（如 Cloudflare R2）作为备份。</span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding-top:6px"><button style="height:28px;padding:0 8px;margin-left:-8px;border:0;border-radius:7px;background:transparent;color:{{c.danger}};font:inherit">断开连接</button><span style="font-size:12px;color:{{c.text3}}">已传的图片和链接不受影响</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{isWeibo}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;background:{{c.warningSoft}}">
+<div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:600">登录已过期</span><span style="color:{{c.text2}}">重新登录前无法上传到微博。登录后可补传未完成的图片。</span></div>
+<button style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">重新登录</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<label style="font-size:12px;font-weight:500;color:{{c.text2}}">Cookie</label>
+<div style="display:flex;gap:8px"><div style="flex:1;height:32px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-radius:8px;box-shadow:inset 0 0 0 1px {{c.borderStrong}}"><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:{{c.text2}}">SUB=••••••••••••••••••••••••</span><button style="height:24px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{c.brandText}};font:inherit;font-size:12px">查看</button></div><button style="height:32px;padding:0 12px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit">手动粘贴</button></div>
+<span style="font-size:12px;color:{{c.text3}}">登录信息将自动填入；10月12日过期</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-weight:600">链接前缀</span><span style="font-size:12px;color:{{c.text2}}">微博启用了防盗链，外站引用需经代理才能显示</span></div>
+<div style="display:flex;flex-direction:column;border-radius:12px;box-shadow:0 0 0 1px {{c.border}};overflow:hidden">
+<sc-for list="{{prefixes}}" as="p" hint-placeholder-count="3">
+<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-top:{{p.divider}};background:{{p.bg}}">
+<span style="width:16px;height:16px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:50%;background:{{p.radioBg}};box-shadow:{{p.radioRing}};display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:{{p.dot}}"></span></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-weight:500">{{p.name}}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text2}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.tpl}}</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.preview}}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:6px"><button style="height:28px;padding:0 8px;margin-left:-8px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};font:inherit">添加模板</button><button style="height:28px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};font:inherit">恢复默认</button><div style="flex:1"></div><span style="font-size:12px;color:{{c.text3}}">可用变量 <span style="font-family:'JetBrains Mono',monospace">{url} {path} {filename}</span></span></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isGithub}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px">
+<sc-for list="{{ghFields}}" as="f" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:6px;grid-column:{{f.span}}">
+<label style="font-size:12px;font-weight:500;color:{{c.text2}}">{{f.label}}<span style="color:{{c.danger}}">{{f.req}}</span></label>
+<div style="height:32px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:8px;box-shadow:inset 0 0 0 1px {{c.borderStrong}};font-family:{{f.family}};font-size:12px;color:{{f.color}}"><span style="flex:1">{{f.value}}</span><sc-if value="{{f.hasLink}}" hint-placeholder-val="{{ false }}"><a href="#" style="font-family:inherit;font-size:12px;color:{{c.brandText}};text-decoration:none;white-space:nowrap">{{f.link}}</a></sc-if></div>
+<span style="font-size:12px;color:{{c.text3}}">{{f.help}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-weight:600">加速</span><span style="font-size:12px;color:{{c.text2}}">GitHub 原始地址在国内访问较慢，建议使用 CDN</span></div>
+<div style="display:flex;flex-direction:column;border-radius:12px;box-shadow:0 0 0 1px {{c.border}};overflow:hidden">
+<sc-for list="{{cdns}}" as="p" hint-placeholder-count="3">
+<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-top:{{p.divider}};background:{{p.bg}}">
+<span style="width:16px;height:16px;flex:none;margin-top:2px;box-sizing:border-box;border-radius:50%;background:{{p.radioBg}};box-shadow:{{p.radioRing}};display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:{{p.dot}}"></span></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-weight:500">{{p.name}}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text2}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.tpl}}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:6px"><button style="height:28px;padding:0 8px;margin-left:-8px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};font:inherit">添加 CDN</button><button style="height:28px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};font:inherit">恢复默认</button></div>
+</div>
+<div style="display:flex;align-items:center;gap:12px;padding-top:4px"><button style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">测试并连接</button><span style="font-size:12px;color:{{c.text3}}">将在仓库中写入并删除一个测试文件</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{isR2}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px">
+<sc-for list="{{r2Fields}}" as="f" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:6px;grid-column:{{f.span}}">
+<label style="font-size:12px;font-weight:500;color:{{c.text2}}">{{f.label}}</label>
+<div style="height:32px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-radius:8px;box-shadow:{{f.ring}};background:{{c.canvas}};font-family:'JetBrains Mono',monospace;font-size:12px;color:{{f.color}}">
+<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.value}}</span>
+<sc-if value="{{f.caret}}" hint-placeholder-val="{{ false }}"><span style="width:1px;height:15px;background:{{c.text1}};margin-left:-6px"></span></sc-if>
+<sc-if value="{{f.hasAction}}" hint-placeholder-val="{{ false }}"><button style="height:24px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{f.actionColor}};font-family:{{font}};font-size:12px">{{f.action}}</button></sc-if>
+</div>
+<sc-if value="{{f.hasHelp}}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:{{f.helpColor}}">{{f.help}}</span></sc-if>
+</div>
+</sc-for>
+</div>
+<button style="align-self:flex-start;height:28px;display:flex;align-items:center;gap:4px;padding:0 8px;margin-left:-8px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};font:inherit">高级选项<span style="color:{{c.text3}}">· 自定义路径、地域</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+<div style="display:flex;align-items:center;gap:16px;padding:14px 16px;border-radius:12px;box-shadow:0 0 0 1px {{c.border}}">
+<div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">使用第三方服务加速缩略图</span><span style="color:{{c.text2}}">图库缩略图由 wsrv.nl 生成，加载更快、更省流量；图片地址会发送至该服务。</span></div>
+<span style="width:36px;height:20px;border-radius:10px;background:{{c.trackOff}};position:relative;display:block;flex:none"><span style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isNas}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px">
+<sc-for list="{{nasFields}}" as="f" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:6px;grid-column:{{f.span}}">
+<label style="font-size:12px;font-weight:500;color:{{c.text2}}">{{f.label}}</label>
+<div style="height:32px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-radius:8px;box-shadow:inset 0 0 0 1px {{c.borderStrong}};font-family:'JetBrains Mono',monospace;font-size:12px"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.value}}</span><sc-if value="{{f.http}}" hint-placeholder-val="{{ false }}"><span title="明文 HTTP，仅对此地址生效" style="height:20px;display:flex;align-items:center;padding:0 6px;margin-right:4px;border-radius:5px;background:{{c.warningSoft}};color:{{c.warning}};font-family:{{font}};font-size:11px;font-weight:500">HTTP · 已允许</span></sc-if><sc-if value="{{f.secret}}" hint-placeholder-val="{{ false }}"><button style="height:24px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{c.brandText}};font-family:{{font}};font-size:12px">查看</button></sc-if></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding-top:6px"><button style="height:28px;padding:0 8px;margin-left:-8px;border:0;border-radius:7px;background:transparent;color:{{c.danger}};font:inherit">删除这份 WebDAV</button><span style="font-size:12px;color:{{c.text3}}">可添加多个 WebDAV，如 NAS 与坚果云</span></div>
+</div>
+</sc-if>
+
+</div>
+</sc-if>
+<sc-if value="{{addMenu}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:flex-start;gap:12px;padding-top:2px">
+<div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.012em">添加图床</span><span style="color:{{c.text2}}">选一个开始连接，完成后会出现在左侧清单</span></div>
+<button aria-label="关闭" style="width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<label style="flex:1;height:34px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:9px;box-shadow:inset 0 0 0 1px {{c.borderStrong}};color:{{c.text3}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span>搜索图床名称</span></label>
+<div role="radiogroup" aria-label="接入方式" style="display:inline-flex;padding:2px;gap:2px;border-radius:9px;background:{{c.subtle}}">
+<sc-for list="{{catFilters}}" as="f" hint-placeholder-count="5"><span role="radio" aria-checked="{{f.on}}" style="height:28px;padding:0 10px;border-radius:7px;display:flex;align-items:center;font-size:12px;background:{{f.bg}};box-shadow:{{f.shadow}};color:{{f.fg}};font-weight:{{f.weight}}">{{f.name}}</span></sc-for>
+</div>
+</div>
+<sc-for list="{{catalog}}" as="g" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-weight:600">{{g.title}}</span><span style="font-size:12px;color:{{c.text3}}">{{g.note}}</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+<sc-for list="{{g.items}}" as="h" hint-placeholder-count="3">
+<button style="position:relative;height:72px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 14px 0 12px;border:0;border-radius:12px;background:{{h.bg}};box-shadow:{{h.ring}};color:{{c.text1}};font:inherit;text-align:left">
+<span style="width:36px;height:36px;flex:none;border-radius:10px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center;color:{{c.text1}}"><span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;line-height:0"><dc-import name="HostIcon" host="{{h.id}}" size="20" hint-size="20px,20px"></dc-import></span></span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{h.name}}</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{h.sub}}</span></span>
+<sc-if value="{{h.hover}}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;color:{{c.brandText}};white-space:nowrap">连接 ›</span></sc-if>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-radius:12px;box-shadow:inset 0 0 0 1px {{c.border}};font-size:12px;color:{{c.text2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:{{c.text3}}"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg><span>没找到想要的？多数对象存储都支持 S3 协议，可以用「S3 兼容存储」接入。</span></div>
+</div>
+</sc-if>
+</div>
+</div>
+</section>
+</sc-if>
+
+</div>
+</main>
+
+<sc-if value="{{showDialog}}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:10;background:{{c.scrim}};display:flex;align-items:center;justify-content:center">
+<div role="alertdialog" aria-label="{{dlg.title}}" style="width:520px;box-sizing:border-box;padding:24px 28px;border-radius:16px;background:{{c.elevated}};box-shadow:{{c.e4}};display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:14px"><span style="width:40px;height:40px;flex:none;border-radius:11px;background:{{c.warningSoft}};color:{{c.warning}};display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 9v4M12 17h.01"></path></svg></span><span style="font-size:17px;line-height:24px;font-weight:600">{{dlg.title}}</span></div>
+<span style="color:{{c.text2}};line-height:1.6">{{dlg.body}}</span>
+<sc-if value="{{dlg.hasCode}}" hint-placeholder-val="{{ false }}"><span style="padding:8px 10px;border-radius:8px;background:{{c.subtle}};font-family:'JetBrains Mono',monospace;font-size:12px">{{dlg.code}}</span></sc-if>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">取消</button>
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">{{dlg.ok}}</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"host":{"editor":"enum","options":["jd","weibo","github","r2","nas"],"default":"jd"},"test":{"editor":"enum","options":["idle","testing","ok","fail"],"default":"idle"},"secret":{"editor":"enum","options":["masked","revealed","editing"],"default":"masked"},"dialog":{"editor":"enum","options":["none","risk","http"],"default":"none"},"addMenu":{"editor":"boolean","default":false},"narrow":{"editor":"enum","options":["no","list","detail"],"default":"no"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const host = this.props.host ?? 'jd';
+    const test = this.props.test ?? 'idle';
+    const secret = this.props.secret ?? 'masked';
+    const dialog = this.props.dialog ?? 'none';
+    const narrowMode = this.props.narrow ?? 'no';
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const narrow = narrowMode !== 'no';
+    const sideLight = { Windows: '#F3F3F3', macOS: '#ECECEC', Linux: '#F4F4F4' };
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      canvas: '#1C1C1E', sidebar: '#151517', subtle: '#252528', elevated: '#2A2A2D', trackOff: '#4A4A4F',
+      text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', navText: '#C4C4C6',
+      border: '#2F2F33', borderStrong: '#3D3D42', hairline: 'rgba(255,255,255,0.08)', searchBg: 'rgba(255,255,255,0.04)', navSel: 'rgba(255,255,255,0.08)', checkBorder: '#5C5C61', sidebarList: '#1C1C1E',
+      brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE', gradA: '#46B3F5', gradB: '#6B7DF5', ringSoft: 'rgba(76,147,245,0.30)',
+      success: '#5BD08A', successFill: '#22C55E', successSoft: '#15291D', warning: '#F2B35C', warningFill: '#F59E0B', warningSoft: '#2E2414', danger: '#FF7A7A', dangerFill: '#EF4444', dangerSoft: '#33191A', unknownFill: '#6B6B70',
+      secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)', menuSel: '#36363A', scrim: 'rgba(0,0,0,0.5)', chipOn: 'rgba(76,147,245,0.16)',
+      e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)', e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+    } : {
+      canvas: '#FFFFFF', sidebar: sideLight[platform] || '#F3F3F3', subtle: '#F5F5F5', elevated: '#FFFFFF', trackOff: '#D4D4D4',
+      text1: '#171717', text2: '#525252', text3: '#6B6B6B', navText: '#404040',
+      border: '#E5E5E5', borderStrong: '#D4D4D4', hairline: 'rgba(0,0,0,0.06)', searchBg: 'rgba(255,255,255,0.75)', navSel: 'rgba(0,0,0,0.065)', checkBorder: '#A3A3A3', sidebarList: '#FFFFFF',
+      brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9', gradA: '#2EA6F2', gradB: '#4D63F0', ringSoft: 'rgba(57,133,237,0.22)',
+      success: '#147A3A', successFill: '#16A34A', successSoft: '#ECF7EF', warning: '#AD4F08', warningFill: '#D97706', warningSoft: '#FEF4E6', danger: '#B91C1C', dangerFill: '#DC2626', dangerSoft: '#FDECEC', unknownFill: '#A3A3A3',
+      secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4', menuSel: '#F0F0F0', scrim: 'rgba(23,23,23,0.22)', chipOn: '#EAF2FD',
+      e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)', e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+    };
+    const ST = { ok: [c.success, c.successFill], bad: [c.warning, c.warningFill], off: [c.text3, c.unknownFill] };
+    const connectedRaw = [
+      ['weibo', '微', '10.5px', '微博', 'bad', '登录失效', true, '3'],
+      ['jd', '京', '10.5px', '京东', 'ok', '', true, '1'],
+      ['r2', 'R2', '9px', 'Cloudflare R2', 'ok', test === 'testing' && host === 'r2' ? '检测中…' : (test === 'fail' && host === 'r2' ? '凭证无效' : ''), true, '2'],
+      ['nas', '家', '10.5px', '家里 NAS', 'ok', '', false, '']
+    ];
+    const connected = connectedRaw.map((h) => {
+      const sel = h[0] === host && narrowMode !== 'list';
+      const k = h[0] === 'r2' && test === 'fail' && host === 'r2' ? 'bad' : h[4];
+      const types = { jd: '公共图床', r2: '对象存储', weibo: '公共图床', nas: 'WebDAV' };
+      const bad = k === 'bad';
+      return { mark: h[1], fs: h[2], name: h[3], status: h[5], bad, sub: bad ? h[5] : (h[6] ? types[h[0]] : '已停用'), subFg: bad ? c.warning : c.text3, nameFg: h[6] ? c.text1 : c.text3, iconFg: h[6] ? c.text1 : c.text3, hover: h[0] === 'nas' && host === 'jd' && narrowMode === 'no', hoverLabel: h[6] ? '停用' : '启用', stTip: bad ? h[5] : '正常', color: ST[k][0], dot: ST[k][1], ringBg: sel ? (dark ? '#2A2A2E' : '#EFEFEF') : c.sidebarList, inCombo: h[6], order: h[7], sel, bg: sel ? c.navSel : ((h[0] === 'nas' && host === 'jd' && narrowMode === 'no') ? (dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)') : 'transparent') };
+    });
+    const gi = (mark, name, id) => ({ mark, name, fs: mark.length > 1 ? '8px' : '10px', sel: id === host && narrowMode !== 'list', bg: id === host && narrowMode !== 'list' ? c.navSel : 'transparent', fg: id === host ? c.text1 : c.text2, chev: narrow });
+    const groups = [
+      { title: '未连接 · 免配置', items: [gi('七', '七鱼', 'qiyu')] },
+      { title: 'Cookie 登录', items: [gi('知', '知乎'), gi('牛', '牛客'), gi('纳', '纳米'), gi('B', 'B站'), gi('超', '超星')] },
+      { title: 'Token', items: [gi('S', 'SM.MS'), gi('G', 'GitHub', 'github'), gi('I', 'Imgur')] },
+      { title: '对象存储', items: [gi('腾', '腾讯云'), gi('阿', '阿里云'), gi('七', '七牛云'), gi('又', '又拍云')] },
+      { title: '自定义 S3', items: [gi('M', '公司 MinIO')] }
+    ];
+    const D = {
+      jd: { mark: '京', fs: '15px', name: '京东', intro: '公共图床 · 免配置', st: 'ok', status: '正常', testLabel: '检测可用性', on: true },
+      weibo: { mark: '微', fs: '15px', name: '微博', intro: '公共图床 · Cookie 登录', st: 'bad', status: '登录失效', testLabel: '检测可用性', on: true },
+      github: { mark: 'G', fs: '16px', name: 'GitHub', intro: '使用自有仓库 · Token', st: 'off', status: '未连接', testLabel: '测试连接', on: false },
+      r2: { mark: 'R2', fs: '13px', name: 'Cloudflare R2', intro: '对象存储 · S3 兼容', st: 'ok', status: '正常', testLabel: '测试连接', on: true },
+      nas: { mark: '家', fs: '15px', name: '家里 NAS', intro: 'WebDAV · 自定义名称', st: 'ok', status: '正常', testLabel: '测试连接', on: false, renamable: true }
+    };
+    const dr = D[host];
+    let st = dr.st, status = dr.status;
+    if (host === 'r2' && test === 'fail') { st = 'bad'; status = '凭证无效'; }
+    if (host === 'r2' && test === 'testing') { status = '正在检测…'; }
+    if (host === 'r2' && test === 'ok') { status = '正常 · 180ms'; }
+    const pillBgMap = { ok: dark ? 'rgba(34,197,94,0.14)' : '#ECF7EF', bad: dark ? 'rgba(245,158,11,0.16)' : '#FEF4E6', off: c.subtle };
+    const dh = Object.assign({ renamable: false }, dr, { status, color: ST[st][0], dot: ST[st][1], pillBg: pillBgMap[st], connected: host !== 'github',
+      useDesc: dr.on ? '上传图片时会同时传一份到' + dr.name + '；点击停用' : '启用后，上传图片时也会传一份到' + dr.name,
+      useLabel: dr.on ? '已启用' : '启用', showPill: st !== 'ok' || test === 'ok', useBg: dr.on ? c.brandSoft : c.button, useFg: dr.on ? c.brandText : '#FFFFFF', useRing: 'none',
+      switchBg: dr.on ? c.brand : c.trackOff, knob: dr.on ? '18px' : '2px' });
+    const radio = (sel) => ({ radioBg: sel ? c.brand : 'transparent', radioRing: sel ? 'none' : 'inset 0 0 0 1px ' + c.checkBorder, dot: sel ? '#FFFFFF' : 'transparent', bg: sel ? c.brandSoft : 'transparent' });
+    const prefixes = [
+      Object.assign({ name: '不加前缀', tpl: '{url}', preview: '效果：https://wx3.sinaimg.cn/large/006a8Y…n2a.jpg', divider: 'none' }, radio(false)),
+      Object.assign({ name: '图片代理（默认）', tpl: 'https://images.weserv.nl/?url={url}', preview: '效果：https://images.weserv.nl/?url=wx3.sinaimg.cn/large/006a8Y…n2a.jpg', divider: '1px solid ' + c.border }, radio(true)),
+      Object.assign({ name: '我的反代', tpl: 'https://img-proxy.lumen-notes.dev/{path}', preview: '效果：https://img-proxy.lumen-notes.dev/large/006a8Y…n2a.jpg', divider: '1px solid ' + c.border }, radio(false))
+    ];
+    const cdns = [
+      Object.assign({ name: 'jsDelivr（默认）', tpl: 'https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/{path}', divider: 'none' }, radio(true)),
+      Object.assign({ name: 'Statically', tpl: 'https://cdn.statically.io/gh/{owner}/{repo}/{branch}/{path}', divider: '1px solid ' + c.border }, radio(false)),
+      Object.assign({ name: '原始地址', tpl: 'https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}', divider: '1px solid ' + c.border }, radio(false))
+    ];
+    const mono = "'JetBrains Mono',monospace";
+    const ghFields = [
+      { label: 'Token', req: ' *', value: 'ghp_••••••••••••••••••••••', help: '需要 repo 权限', hasLink: true, link: '在 GitHub 生成', span: '1 / span 2', family: mono, color: c.text1 },
+      { label: '仓库', req: ' *', value: 'lumen/picnexus-images', help: '格式：用户名/仓库名', hasLink: false, link: '', span: 'auto', family: mono, color: c.text1 },
+      { label: '分支', req: '', value: 'main', help: '留空用默认分支', hasLink: false, link: '', span: 'auto', family: mono, color: c.text1 },
+      { label: '存储路径', req: '', value: 'images/{yyyy}/{mm}/', help: '可用 {yyyy} {mm} {dd} {filename}', hasLink: false, link: '', span: '1 / span 2', family: mono, color: c.text1 }
+    ];
+    const failRing = 'inset 0 0 0 1px ' + c.dangerFill;
+    const focusRing = 'inset 0 0 0 1px ' + c.brand + ', 0 0 0 3px ' + c.ringSoft;
+    const normalRing = 'inset 0 0 0 1px ' + c.borderStrong;
+    let secretField = { label: 'Secret Access Key', value: '••••••••••••••••••••••••••••••••', ring: normalRing, color: c.text1, hasAction: true, action: '查看', actionColor: c.brandText, caret: false, hasHelp: false, help: '', helpColor: c.text3, span: '1 / span 2' };
+    if (secret === 'revealed') secretField = Object.assign(secretField, { value: '8f2c41e0b97d4a5e9c13f7a06b2d88e4c5f1a3d7', action: '隐藏', hasHelp: true, help: '30 秒后自动隐藏', helpColor: c.text3 });
+    if (secret === 'editing') secretField = Object.assign(secretField, { value: '', ring: focusRing, caret: true, action: '取消', actionColor: c.text2, hasHelp: true, help: '粘贴新的 Secret Access Key，失焦后自动保存并测试', helpColor: c.text3 });
+    if (test === 'fail') secretField = Object.assign(secretField, { ring: failRing, hasHelp: true, help: 'Cloudflare 拒绝了签名', helpColor: c.danger });
+    const r2Fields = [
+      { label: 'Account ID', value: '3b9d1c7a0e5f42b8a6c1d9e7f0a2b4c6', ring: normalRing, color: c.text1, hasAction: false, caret: false, hasHelp: false, span: 'auto' },
+      { label: 'Access Key ID', value: 'a41f9c0e2b7d…e83c', ring: normalRing, color: c.text1, hasAction: false, caret: false, hasHelp: false, span: 'auto' },
+      secretField,
+      { label: '存储桶', value: 'picnexus-images', ring: normalRing, color: c.text1, hasAction: false, caret: false, hasHelp: false, span: 'auto' },
+      { label: '公开访问域名', value: 'https://img.lumen-notes.dev', ring: normalRing, color: c.text1, hasAction: false, caret: false, hasHelp: false, span: 'auto' }
+    ];
+    const nasFields = [
+      { label: '服务器 URL', value: 'http://192.168.1.20:5005/dav', http: true, secret: false, span: '1 / span 2' },
+      { label: '用户名', value: 'picnexus', http: false, secret: false, span: 'auto' },
+      { label: '密码', value: '••••••••••', http: false, secret: true, span: 'auto' },
+      { label: '远程路径', value: '/picnexus', http: false, secret: false, span: 'auto' },
+      { label: '公开访问地址', value: 'http://nas.lumen.home:5005/picnexus', http: true, secret: false, span: 'auto' }
+    ];
+    const DLG = {
+      risk: { title: '启用公共图床？', body: '此类图床为非官方的第三方平台适配，可能违反平台规则或随时失效，相关风险由你自行承担。是否继续？', ok: '我已了解并继续', hasCode: false, code: '' },
+      http: { title: '允许通过 HTTP 访问此地址？', body: 'HTTP 不加密，图片与凭证将以明文传输。此设置仅对以下地址生效，适用于局域网环境。', ok: '允许 HTTP', hasCode: true, code: 'http://nas.lumen.home:5005' }
+    };
+    const statsMap = {
+      jd: [['11,920', '张传到这里', c.text1], ['9,804', '张最先完成', c.text1], ['3', '张失效 ›', c.danger]],
+      r2: [['6,750', '张传到这里', c.text1], ['2,031', '张最先完成', c.text1], ['0', '张失效', c.text1]],
+      weibo: [['4,211', '张传到这里', c.text1], ['85', '张最先完成', c.text1], ['18', '张失效 ›', c.danger]],
+      nas: [['860', '张传到这里', c.text1], ['0', '张最先完成', c.text1], ['0', '张失效', c.text1]]
+    };
+    const barSeeds = { jd: [6, 9, 4, 12, 8, 3, 0, 7, 11, 5, 9, 14, 6, 10], r2: [6, 9, 4, 12, 8, 3, 0, 7, 11, 5, 9, 14, 6, 10], weibo: [6, 9, 4, 12, 8, 3, 0, 7, 11, 5, 0, 0, 0, 0], nas: [0, 0, 2, 0, 0, 1, 0, 0, 3, 0, 0, 0, 1, 0] };
+    const seed = barSeeds[host] || [];
+    const maxB = Math.max.apply(null, seed.concat([1]));
+    dh.hasStats = !!statsMap[host];
+    dh.recent = String(seed.reduce((a, b) => a + b, 0));
+    dh.stats = (statsMap[host] || []).map((t) => ({ v: t[0], k: t[1], fg: t[2] }));
+    dh.bars = seed.map((v, i) => ({ h: Math.max(3, Math.round(44 * v / maxB)) + 'px', c: v === 0 ? c.border : (i === seed.length - 1 ? c.brand : (dark ? 'rgba(76,147,245,0.45)' : 'rgba(57,133,237,0.38)')) }));
+    const cat = (id, name, sub, hover) => ({ id, name, sub, hover: !!hover, bg: hover ? c.brandSoft : c.subtle, ring: hover ? 'inset 0 0 0 1.5px ' + c.brand : 'none' });
+    const catalog = [
+      { title: '免配置', note: '公共图床，无需账号', items: [cat('qiyu', '七鱼', '开箱即用', true)] },
+      { title: '登录后使用', note: '在应用内登录，自动获取凭证', items: [cat('zhihu', '知乎', '登录账号'), cat('bilibili', 'B站', '登录账号'), cat('nowcoder', '牛客', '登录账号'), cat('nami', '纳米', '登录账号'), cat('chaoxing', '超星', '登录账号')] },
+      { title: '填写 Token', note: '在对应网站生成后粘贴', items: [cat('github', 'GitHub', '用自己的仓库存图'), cat('smms', 'SM.MS', '需要 API Token'), cat('imgur', 'Imgur', '需要 Client ID')] },
+      { title: '对象存储', note: '自己的存储空间，最稳', items: [cat('tencent', '腾讯云 COS', 'SecretId 与 SecretKey'), cat('aliyun', '阿里云 OSS', 'AccessKey'), cat('qiniu', '七牛云', 'AccessKey 与空间名'), cat('upyun', '又拍云', '操作员账号')] },
+      { title: '自建', note: '可以添加多个', items: [cat('s3', 'S3 兼容存储', 'MinIO、B2、Wasabi 等'), cat('webdav', 'WebDAV', 'NAS、坚果云等')] }
+    ];
+    const catFilters = ['全部', '免配置', '登录', 'Token', '对象存储', '自建'].map((n, i) => ({ name: n, on: String(i === 0), bg: i === 0 ? c.canvas : 'transparent', shadow: i === 0 ? '0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.06)' : 'none', fg: i === 0 ? c.text1 : c.text2, weight: i === 0 ? 500 : 400 }));
+    return {
+      catalog, catFilters, listOnly: narrowMode === 'list', addFg: this.props.addMenu ? c.brandText : c.text2,
+      c,
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif",
+      isMac: mac, notMac: !mac, isWin: platform === 'Windows', isLinux: platform === 'Linux', mod: mac ? '⌘' : 'Ctrl+',
+      W: narrow ? '800px' : '1400px', H: narrow ? '600px' : '900px',
+      wide: !narrow, narrow,
+      showBack: narrowMode === 'detail', showTitle: narrowMode !== 'detail',
+      showHeader: narrowMode !== 'detail', hdrSize: narrow ? '15px' : '20px',
+      addMenu: !!this.props.addMenu, addBg: this.props.addMenu ? c.brandSoft : 'transparent', showHost: !this.props.addMenu,
+      combo: [{ name: '京东', warn: false }, { name: 'Cloudflare R2', warn: false }, { name: '微博', warn: true }],
+      bodyTop: narrowMode === 'detail' ? '0px' : '14px',
+      showList: narrowMode !== 'detail', listW: narrowMode === 'list' ? '100%' : '260px', listBorder: narrowMode === 'list' ? 'none' : '1px solid ' + c.border,
+      connected, groups,
+      showDetail: narrowMode !== 'list', dh,
+      testIdleBtn: test !== 'testing', testing: test === 'testing', testOk: test === 'ok', testFail: test === 'fail',
+      isJd: host === 'jd', isWeibo: host === 'weibo', isGithub: host === 'github', isR2: host === 'r2', isNas: host === 'nas',
+      prefixes, cdns, ghFields, r2Fields, nasFields,
+      showDialog: dialog !== 'none', dlg: DLG[dialog] || DLG.risk
+    };
+  }
+}
+</script>
+</body>
+</html>

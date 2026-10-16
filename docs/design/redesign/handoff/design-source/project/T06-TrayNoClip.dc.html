@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>托盘 · 剪贴板里没有图片</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:560px;height:600px">
+<dc-import name="TrayWindow" state="noClip" theme="{{theme}}" platform="{{platform}}" hint-size="560px,600px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":560,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'light', platform: this.props.platform ?? 'Windows' };
+  }
+}
+</script>
+</body>
+</html>

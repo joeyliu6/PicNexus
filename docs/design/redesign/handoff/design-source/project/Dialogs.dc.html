@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>备份密码与还原弹窗</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:1400px;height:900px;display:flex;overflow:hidden;background:{{c.canvas}};color:{{c.text1}};font-size:13px;line-height:1.45;font-family:{{font}}">
+<div style="width:208px;flex:none;background:{{c.sidebar}}"></div>
+<div style="flex:1;display:flex;flex-direction:column;padding:120px 0 0 260px;gap:14px;opacity:0.6">
+<span style="height:16px;width:240px;border-radius:4px;background:{{c.subtle}}"></span>
+<span style="height:44px;width:680px;border-radius:12px;background:{{c.subtle}}"></span>
+<span style="height:44px;width:680px;border-radius:12px;background:{{c.subtle}}"></span>
+</div>
+<div style="position:absolute;inset:0;background:{{c.scrim}};display:flex;align-items:center;justify-content:center">
+<div role="dialog" aria-label="{{d.title}}" style="width:520px;box-sizing:border-box;padding:24px 28px;border-radius:16px;background:{{c.elevated}};box-shadow:{{c.e4}};display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:40px;flex:none;border-radius:10px;background:{{d.iconBg}};color:{{d.iconFg}};display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+<div style="display:flex;flex-direction:column"><span style="font-size:17px;line-height:24px;font-weight:600">{{d.title}}</span><span style="font-size:12px;color:{{c.text3}}">{{d.eyebrow}}</span></div>
+</div>
+<span style="color:{{c.text2}}">{{d.body}}</span>
+<sc-for list="{{d.fields}}" as="f" hint-placeholder-count="2">
+<div style="display:flex;flex-direction:column;gap:6px">
+<label style="font-size:12px;font-weight:500;color:{{c.text2}}">{{f.label}}</label>
+<div style="height:34px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-radius:8px;box-shadow:{{f.ring}};background:{{c.field}}"><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.08em;color:{{f.color}}">{{f.value}}</span><button aria-label="显示密码" style="width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:{{c.text3}};display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div>
+<sc-if value="{{f.hasMsg}}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:5px;font-size:12px;color:{{f.msgColor}}">{{f.msg}}</span></sc-if>
+</div>
+</sc-for>
+<sc-if value="{{d.strength}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;background:{{c.subtle}}">
+<div style="display:flex;gap:4px"><span style="flex:1;height:4px;border-radius:2px;background:{{c.warningFill}}"></span><span style="flex:1;height:4px;border-radius:2px;background:{{c.warningFill}}"></span><span style="flex:1;height:4px;border-radius:2px;background:{{c.track}}"></span><span style="flex:1;height:4px;border-radius:2px;background:{{c.track}}"></span></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;font-size:12px">
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="4"><span style="display:flex;align-items:center;gap:6px;color:{{r.color}}"><span style="font-weight:600;width:12px">{{r.mark}}</span>{{r.text}}</span></sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{d.hasNote}}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:{{c.text3}}">{{d.note}}</span></sc-if>
+<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+<sc-if value="{{d.hasLeft}}" hint-placeholder-val="{{ false }}"><button style="height:32px;padding:0 6px;margin-left:-6px;border:0;border-radius:8px;background:transparent;color:{{c.text2}};font:inherit">{{d.left}}</button></sc-if>
+<div style="flex:1"></div>
+<sc-if value="{{d.hasCancel}}" hint-placeholder-val="{{ true }}"><button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">取消</button></sc-if>
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{d.okBg}};color:#FFFFFF;font:inherit;font-weight:500;opacity:{{d.okOp}}">{{d.ok}}</button>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"kind":{"editor":"enum","options":["restore","restoreWrong","pwSet","pwChange","pwOff"],"default":"restore"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const kind = this.props.kind ?? 'restore';
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      canvas: '#1C1C1E', sidebar: '#151517', subtle: '#252528', elevated: '#2A2A2D', field: '#202023', track: '#3A3A3E', text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1',
+      borderStrong: '#3D3D42', brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE', dangerBtn: '#C42B2B', ringSoft: 'rgba(76,147,245,0.30)',
+      success: '#5BD08A', warningFill: '#F59E0B', danger: '#FF7A7A', dangerFill: '#EF4444', dangerSoft: '#33191A',
+      secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)', scrim: 'rgba(0,0,0,0.55)',
+      e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+    } : {
+      canvas: '#FFFFFF', sidebar: '#F3F3F3', subtle: '#F5F5F5', elevated: '#FFFFFF', field: '#FFFFFF', track: '#E5E5E5', text1: '#171717', text2: '#525252', text3: '#6B6B6B',
+      borderStrong: '#D4D4D4', brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9', dangerBtn: '#B91C1C', ringSoft: 'rgba(57,133,237,0.22)',
+      success: '#147A3A', warningFill: '#D97706', danger: '#B91C1C', dangerFill: '#DC2626', dangerSoft: '#FDECEC',
+      secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4', scrim: 'rgba(23,23,23,0.28)',
+      e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+    };
+    const ring = 'inset 0 0 0 1px ' + c.borderStrong;
+    const focus = 'inset 0 0 0 1px ' + c.brand + ', 0 0 0 3px ' + c.ringSoft;
+    const bad = 'inset 0 0 0 1px ' + c.dangerFill;
+    const fld = (label, value, o) => Object.assign({ label, value, ring, color: c.text1, hasMsg: false, msg: '', msgColor: c.text3 }, o || {});
+    const D = {
+      restore: { title: '还原备份配置', eyebrow: '在新设备上首次启动', body: '配置文件已使用备份密码加密。输入密码以还原全部图床账号与设置。',
+        fields: [fld('备份密码', '••••••••••', { ring: focus })], ok: '确认恢复', okBg: c.button, hasLeft: true, left: '跳过，使用默认配置', hasCancel: false },
+      restoreWrong: { title: '还原备份配置', eyebrow: '在新设备上首次启动', body: '配置文件已使用备份密码加密。输入密码以还原全部图床账号与设置。',
+        fields: [fld('备份密码', '••••••••', { ring: bad, hasMsg: true, msg: '密码不正确，剩余尝试次数：2', msgColor: c.danger })], ok: '确认恢复', okBg: c.button, hasLeft: true, left: '跳过，使用默认配置', hasCancel: false },
+      pwSet: { title: '设置备份密码', eyebrow: '设置 › 备份与同步', body: '设置后，导出的配置将加密；在新设备上还原时需输入此密码。',
+        fields: [fld('新密码', '••••••••••', { ring: focus }), fld('确认密码', '')], strength: true, ok: '设置', okBg: c.button, okOp: 0.45,
+        hasNote: true, note: '密码遗失后将无法还原加密备份，PicNexus 无法找回。' },
+      pwChange: { title: '修改备份密码', eyebrow: '设置 › 备份与同步', body: '此后的导出使用新密码加密；此前导出的文件仍需旧密码还原。',
+        fields: [fld('当前密码', '••••••••••'), fld('新密码', '••••••••••••', { ring: focus }), fld('确认密码', '••••••••••••', { hasMsg: true, msg: '✓ 两次输入一致', msgColor: c.success })], ok: '修改', okBg: c.button },
+      pwOff: { title: '关闭备份密码？', eyebrow: '设置 › 备份与同步', body: '关闭后，新导出的文件不再加密，图床密钥将以明文保存。此前的加密备份仍需原密码还原。',
+        fields: [fld('当前密码', '••••••••••', { ring: focus })], ok: '关闭密码', okBg: c.dangerBtn, iconBg: c.dangerSoft, iconFg: c.danger }
+    };
+    const d = Object.assign({ strength: false, hasNote: false, note: '', hasLeft: false, left: '', hasCancel: true, okOp: 1, iconBg: c.brandSoft, iconFg: c.brandText }, D[kind] || D.restore);
+    const rules = [['✓', '至少 8 位', true], ['✓', '包含数字', true], ['·', '大小写字母', false], ['·', '特殊符号', false]].map((r) => ({ mark: r[0], text: r[1], color: r[2] ? c.success : c.text3 }));
+    return { c, d, rules, font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif" };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>设置（全部分组与状态）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:{{W}};height:{{H}};display:flex;overflow:hidden;background:{{c.canvas}};color:{{c.text1}};font-size:13px;line-height:1.45;font-family:{{font}}">
+
+<sc-if value="{{navFull}}" hint-placeholder-val="{{ true }}">
+<nav aria-label="主导航" style="width:208px;flex:none;display:flex;flex-direction:column;padding:0 10px 12px;background:{{c.sidebar}}">
+<div style="height:52px;flex:none;display:flex;align-items:center;padding-left:8px">
+<sc-if value="{{isMac}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px" aria-hidden="true"><span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span><span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span><span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span></div></sc-if>
+<sc-if value="{{notMac}}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="stLogo" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#stLogo)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg><span style="font-size:13px;font-weight:600;letter-spacing:-0.01em">PicNexus</span></div></sc-if>
+</div>
+<button style="height:32px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;margin-bottom:14px;border:0;box-shadow:inset 0 0 0 1px {{c.hairline}};background:{{c.searchBg}};border-radius:8px;color:{{c.text3}};font:inherit;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span style="flex:1;text-align:left">搜索</span><span style="font-size:11px">{{mod}}K</span></button>
+<div style="display:flex;flex-direction:column;gap:2px">
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg>快传</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg>图库</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"></path></svg>链接健康<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:{{c.warningFill}}"></span></a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg>图床</a>
+</div>
+<div style="flex:1"></div>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;background:{{c.navSel}};color:{{c.text1}};text-decoration:none;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.brandText}}"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>设置</a>
+</nav>
+</sc-if>
+<sc-if value="{{navRail}}" hint-placeholder-val="{{ false }}">
+<nav aria-label="主导航（已收起）" style="width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 0 12px;background:{{c.sidebar}}">
+<div style="height:52px;flex:none;display:flex;align-items:center;justify-content:center">
+<svg width="20" height="20" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="railS" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#railS)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+<a href="#" aria-label="搜索" title="搜索  {{mod}}K" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center;margin-bottom:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></a>
+<a href="#" aria-label="快传" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg></a>
+<a href="#" aria-label="图库" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg></a>
+<a href="#" aria-label="链接健康" style="position:relative;width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"></path></svg><span style="position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:{{c.warningFill}}"></span></a>
+<a href="#" aria-label="图床" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg></a>
+<div style="flex:1"></div>
+<a href="#" aria-label="设置" style="position:relative;width:36px;height:36px;border-radius:9px;background:{{c.navSel}};color:{{c.brandText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg><span style="position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:{{c.brand}}"></span></a>
+<button aria-label="展开侧栏" style="width:36px;height:36px;border:0;border-radius:9px;background:transparent;color:{{c.text3}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg></button>
+</nav>
+</sc-if>
+
+<div style="width:{{subNavW}};flex:none;box-sizing:border-box;padding:0 12px 12px;border-right:1px solid {{c.border}};display:flex;flex-direction:column;gap:2px">
+<div style="height:40px;flex:none;display:flex;align-items:center;margin:6px 0 2px;padding-left:8px"><span style="font-size:15px;font-weight:600;letter-spacing:-0.01em">设置</span></div>
+<sc-for list="{{groupsNav}}" as="g" hint-placeholder-count="7">
+<a href="#" style="height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;background:{{g.bg}};color:{{g.fg}};font-weight:{{g.weight}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:{{g.iconFg}}"><path d="{{g.icon}}"></path></svg>{{g.name}}<sc-if value="{{g.dot}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:{{c.brand}}"></span></sc-if></a>
+</sc-for>
+</div>
+
+<main style="flex:1;min-width:0;position:relative;display:flex;flex-direction:column;overflow:hidden">
+<div style="height:40px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+<sc-if value="{{isWin}}" hint-placeholder-val="{{ true }}"><div style="display:flex"><button aria-label="最小化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 12h16"></path></svg></button><button aria-label="最大化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19M5 5l14 14"></path></svg></button></div></sc-if>
+<sc-if value="{{isLinux}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;padding-right:12px"><button aria-label="最小化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button><button aria-label="最大化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div></sc-if>
+</div>
+
+
+<div style="flex:1;min-height:0;overflow:hidden;padding:{{contentPad}}">
+<div style="width:100%;max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;flex-direction:column;gap:2px;padding-top:4px"><h1 style="margin:0;font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.012em">{{groupTitle}}</h1><span style="color:{{c.text3}}">{{groupSub}}</span></div>
+<sc-if value="{{banner}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="display:flex;align-items:center;gap:12px;padding:10px 10px 10px 14px;border-radius:12px;background:{{c.brandSoft}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.brandText}}"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z"></path><path d="M12 11v6M9 14l3 3 3-3"></path></svg>
+<span style="flex:1"><b style="font-weight:600">云端配置已下载</b>，刷新后生效。</span>
+<button style="height:30px;padding:0 14px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">刷新</button>
+</div>
+</sc-if>
+
+
+<sc-if value="{{gGeneral}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:26px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">外观</span>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="3">
+<div role="radio" aria-checked="{{t.sel}}" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+<div style="width:100%;height:96px;box-sizing:border-box;border-radius:12px;overflow:hidden;display:flex;box-shadow:{{t.ring}}">
+<div style="width:30%;background:{{t.side}}"></div><div style="flex:1;background:{{t.main}};padding:14px 12px;display:flex;flex-direction:column;gap:7px"><span style="height:8px;width:60%;border-radius:2px;background:{{t.line}}"></span><span style="height:28px;border-radius:5px;background:{{t.card}}"></span><span style="height:6px;width:40%;border-radius:2px;background:{{t.line}}"></span></div>
+</div>
+<span style="font-weight:{{t.weight}}">{{t.name}}</span>
+</div>
+</sc-for>
+</div>
+<div style="margin-top:4px;border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;align-items:center;gap:16px;padding:12px 16px">
+<div style="display:flex;gap:6px" aria-hidden="true">
+<span style="position:relative;width:64px;height:42px;border-radius:7px;overflow:hidden;background:radial-gradient(60% 70% at 85% 25%, rgba(46,166,242,0.16), transparent 70%), #FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,0.08)"><svg width="22" height="22" viewBox="-4 -4 136 136" style="position:absolute;right:5px;top:6px"><g fill="#2EA6F2" opacity="0.18"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g><g fill="none" stroke="#4D63F0" stroke-width="5" opacity="0.35"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg></span>
+<span style="position:relative;width:64px;height:42px;border-radius:7px;overflow:hidden;background:#1C1C1E;box-shadow:0 0 0 1px rgba(255,255,255,0.08)"><span style="position:absolute;left:-20%;top:45%;width:90%;height:60%;border-radius:50%;background:radial-gradient(closest-side, rgba(46,166,242,0.55), transparent);filter:blur(6px)"></span><span style="position:absolute;left:35%;top:55%;width:80%;height:50%;border-radius:50%;background:radial-gradient(closest-side, rgba(124,92,246,0.5), transparent);filter:blur(6px)"></span></span>
+</div>
+<div style="flex:1;display:flex;flex-direction:column"><span>首页背景装饰</span><span style="font-size:12px;color:{{c.text3}}">浅色为花瓣，深色为极光；只在快传页显示</span></div>
+<span role="switch" aria-checked="true" style="width:36px;height:20px;border-radius:10px;background:{{c.brand}};position:relative;display:block"><span style="position:absolute;left:18px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">启动</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{startup}}" as="r" hint-placeholder-count="3">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:{{r.divider}}">
+<div style="flex:1;display:flex;flex-direction:column"><span>{{r.name}}</span><span style="font-size:12px;color:{{c.text3}}">{{r.desc}}</span></div>
+<sc-if value="{{r.saved}}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:4px;font-size:12px;color:{{c.success}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>已保存</span></sc-if>
+<span role="switch" aria-checked="{{r.on}}" style="width:36px;height:20px;flex:none;border-radius:10px;background:{{r.track}};position:relative;display:block"><span style="position:absolute;left:{{r.knob}};top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span>
+</div>
+</sc-for>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">关闭窗口后 PicNexus 仍在托盘运行，全局快捷键和后台检测照常可用。</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{gUpload}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:26px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">链接格式</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px"><div style="flex:1;display:flex;flex-direction:column"><span>默认复制为</span><span style="font-size:12px;color:{{c.text3}}">用于首页、托盘与命令面板</span></div>
+<div style="display:inline-flex;padding:2px;gap:2px;border-radius:9px;background:{{c.track}}"><sc-for list="{{fmtSeg}}" as="s" hint-placeholder-count="5"><span style="height:26px;padding:0 10px;border-radius:7px;display:flex;align-items:center;font-size:12px;background:{{s.bg}};box-shadow:{{s.shadow}};color:{{s.fg}};font-weight:{{s.weight}}">{{s.name}}</span></sc-for></div></div>
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid {{c.border}}">
+<span style="flex:none">自定义模板</span>
+<span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&lt;figure&gt;&lt;img src="{url}" alt="{filename}"&gt;&lt;/figure&gt;</span>
+<button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500">编辑…</button>
+</div>
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid {{c.border}}"><div style="flex:1;display:flex;flex-direction:column"><span>自动复制链接</span><span style="font-size:12px;color:{{c.text3}}">首个图床完成即复制；批量上传结束后统一复制</span></div><span role="switch" aria-checked="true" style="width:36px;height:20px;border-radius:10px;background:{{c.brand}};position:relative;display:block"><span style="position:absolute;left:18px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span></div><div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid {{c.border}}"><div style="flex:1;display:flex;flex-direction:column"><span>自动上传剪贴板</span><span style="font-size:12px;color:{{c.text3}}">检测到剪贴板新图片时自动上传</span></div><span role="switch" aria-checked="false" style="width:36px;height:20px;border-radius:10px;background:{{c.trackOff}};position:relative;display:block"><span style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span></div>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">复制格式对首页、托盘、命令面板和编辑器上传都生效。</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;padding-left:4px"><span style="font-size:12px;font-weight:600;color:{{c.text2}}">图片压缩</span><div style="flex:1"></div><span style="display:flex;align-items:center;gap:8px;font-size:12px;color:{{c.text2}}">上传前压缩<span role="switch" aria-checked="true" style="width:36px;height:20px;border-radius:10px;background:{{c.brand}};position:relative;display:block"><span style="position:absolute;left:18px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span></span></div>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{presets}}" as="p" hint-placeholder-count="3">
+<div style="min-height:48px;display:flex;align-items:center;gap:12px;padding:8px 10px 8px 16px;border-top:{{p.divider}}">
+<span style="width:16px;height:16px;flex:none;box-sizing:border-box;border-radius:50%;background:{{p.radioBg}};box-shadow:{{p.radioRing}};display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:{{p.dot}}"></span></span>
+<div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:500">{{p.name}}</span><span style="font-size:12px;color:{{c.text3}}">{{p.desc}}</span></div>
+<button style="height:26px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{c.text2}};font:inherit;font-size:12px">编辑</button>
+</div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid {{c.border}}"><button style="height:28px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:{{c.text2}};font:inherit">＋ 新建方案</button><span style="font-size:12px;color:{{c.text3}}">最多 5 个</span><div style="flex:1"></div><button style="height:28px;padding:0 10px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit">压缩预览…</button></div>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">只压缩上传出去的副本，本机原图不会改动。</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{gShortcut}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:26px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">全局快捷键</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px"><div style="flex:1;display:flex;flex-direction:column"><span>启用全局快捷键</span><span style="font-size:12px;color:{{c.text3}}">关闭后，以下快捷键在其他程序中不再生效</span></div><span role="switch" aria-checked="true" style="width:36px;height:20px;border-radius:10px;background:{{c.brand}};position:relative;display:block"><span style="position:absolute;left:18px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span></div>
+<sc-for list="{{hotkeys}}" as="h" hint-placeholder-count="2">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid {{c.border}}">
+<div style="flex:1;display:flex;flex-direction:column"><span>{{h.name}}</span><sc-if value="{{h.hasMsg}}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:{{h.msgColor}}">{{h.msg}}</span></sc-if></div>
+<button style="min-width:150px;height:30px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:4px;padding:0 10px;border:0;border-radius:8px;background:{{h.bg}};box-shadow:{{h.ring}};color:{{h.fg}};font-family:{{h.family}};font-size:12px">{{h.keys}}</button>
+</div>
+</sc-for>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">点击组合键可重新录制；与其他软件冲突时将立即提示。</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">应用内快捷键</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">
+<sc-for list="{{appKeys}}" as="k" hint-placeholder-count="10">
+<div style="height:44px;display:flex;align-items:center;padding:0 16px;border-top:{{k.divider}};border-left:{{k.left}}"><span style="flex:1">{{k.name}}</span><span style="height:22px;display:flex;align-items:center;padding:0 7px;border-radius:6px;background:{{c.subtle}};box-shadow:inset 0 -1px 0 {{c.border}};color:{{c.text2}};font-family:'JetBrains Mono',monospace;font-size:11px">{{k.keys}}</span></div>
+</sc-for>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">应用内快捷键仅在 PicNexus 窗口中生效，不可修改。</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{gEditor}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">接入方式</span>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{editors}}" as="e" hint-placeholder-count="3">
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="min-height:60px;display:flex;align-items:center;gap:12px;padding:10px 16px">
+<span style="width:32px;height:32px;flex:none;border-radius:8px;background:{{c.subtle}};box-shadow:0 0 0 1px {{c.hairline}};font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;color:{{c.text2}}">{{e.mark}}</span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:600">{{e.name}}</span><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{e.statusColor}}"><span style="width:6px;height:6px;border-radius:50%;background:{{e.dot}}"></span>{{e.status}}</span></div>
+<button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500">{{e.action}}</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px 14px;border-top:1px solid {{c.border}}">
+<span style="font-size:12px;color:{{c.text2}}">{{e.label}}</span>
+<div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;border-radius:8px;background:{{c.subtle}}"><span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{e.code}}</span><button aria-label="复制" style="height:26px;flex:none;display:flex;align-items:center;gap:5px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{c.text2}};font:inherit;font-size:12px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>复制</button></div>
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{c.text3}}">上传到<button style="height:24px;display:flex;align-items:center;gap:4px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:{{c.text1}};font:inherit;font-size:12px">{{e.hosts}}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><path d="m6 9 6 6 6-6"></path></svg></button></div>
+</div>
+</div>
+</sc-for>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">从编辑器上传的图片同样记入图库，链接格式跟随「上传与链接」。</span>
+</div>
+</sc-if>
+
+<sc-if value="{{gBackup}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:24px">
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">云同步</span>
+<div style="position:relative;border-radius:14px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:14px;padding:16px">
+<span style="width:36px;height:36px;flex:none;border-radius:10px;background:{{c.brandSoft}};display:flex;align-items:center;justify-content:center;color:{{c.brandText}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z"></path></svg></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:600">坚果云 · WebDAV</span><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{bk.color}}"><span style="width:6px;height:6px;border-radius:50%;background:{{bk.dot}}"></span>{{bk.text}}</span></div>
+<button style="height:30px;display:flex;align-items:center;gap:6px;padding:0 14px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{bk.btnFg}};font:inherit;font-weight:500"><sc-if value="{{bk.spin}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2"></circle><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="12 37.7" stroke-linecap="round" transform="rotate(-90 8 8)"></circle></svg></sc-if>{{bk.label}}</button>
+<button aria-label="更多" style="width:30px;height:30px;border:0;border-radius:8px;background:{{bk.moreBg}};color:{{c.text2}};display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg></button>
+</div>
+<sc-for list="{{bk.items}}" as="r" hint-placeholder-count="2">
+<div style="min-height:48px;display:flex;align-items:center;gap:12px;padding:8px 16px 8px 66px;border-top:1px solid {{c.border}}">
+<div style="flex:1;display:flex;flex-direction:column"><span>{{r.name}}</span><span style="font-size:12px;color:{{c.text3}}">{{r.desc}}</span></div>
+<span role="checkbox" aria-checked="true" style="display:flex;color:{{c.brandText}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+</div>
+</sc-for>
+<sc-if value="{{bk.menu}}" hint-placeholder-val="{{ false }}">
+<div role="menu" style="position:absolute;right:16px;top:54px;z-index:5;width:260px;box-sizing:border-box;padding:4px;border-radius:10px;background:{{c.elevated}};box-shadow:{{c.e3}};display:flex;flex-direction:column">
+<div role="menuitem" style="display:flex;flex-direction:column;padding:6px 8px;border-radius:6px"><span>用本机覆盖云端…</span><span style="font-size:12px;color:{{c.text3}}">云端以这台电脑为准</span></div>
+<div role="menuitem" style="display:flex;flex-direction:column;padding:6px 8px;border-radius:6px;background:{{c.menuSel}}"><span>用云端覆盖本机…</span><span style="font-size:12px;color:{{c.text3}}">这台电脑以云端为准</span></div>
+<div style="height:1px;margin:4px 6px;background:{{c.border}}"></div>
+<div role="menuitem" style="display:flex;flex-direction:column;padding:6px 8px;border-radius:6px"><span>更换同步方式…</span><span style="font-size:12px;color:{{c.text3}}">WebDAV、S3、本地文件夹</span></div>
+</div>
+</sc-if>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">开启后两台电脑会自动合并改动；只想以某一边为准时，用「⋯」里的覆盖操作。</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">备份密码</span>
+<div style="border-radius:14px;box-shadow:0 0 0 1px {{c.border}};display:flex;align-items:center;gap:14px;padding:14px 16px">
+<span style="width:36px;height:36px;flex:none;border-radius:10px;background:{{c.subtle}};display:flex;align-items:center;justify-content:center;color:{{c.text2}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+<div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:500">{{pwTitle}}</span><span style="font-size:12px;color:{{c.text3}}">{{pwDesc}}</span></div>
+<sc-for list="{{pwBtns}}" as="b" hint-placeholder-count="2"><button style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{b.fg}};font:inherit">{{b.label}}</button></sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">手动备份</span>
+<div style="border-radius:14px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column;overflow:hidden">
+<div style="min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;background:{{bk.exportBg}}"><span style="flex:1">导出配置…</span><span style="font-size:12px;color:{{c.text3}}">图床账号与偏好</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><path d="m9 6 6 6-6 6"></path></svg></div>
+<div style="min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;border-top:1px solid {{c.border}}"><span style="flex:1">导出上传记录…</span><span style="font-size:12px;color:{{c.text3}}">12,483 条</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><path d="m9 6 6 6-6 6"></path></svg></div>
+<div style="min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;border-top:1px solid {{c.border}}"><span style="flex:1">从文件导入…</span><span style="font-size:12px;color:{{c.text3}}">配置或记录</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><path d="m9 6 6 6-6 6"></path></svg></div>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">导出文件包含所有图床密钥；设置了备份密码时会自动加密。</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">最近操作</span>
+<div style="border-radius:14px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{history}}" as="h" hint-placeholder-count="3"><div style="height:40px;display:flex;align-items:center;gap:10px;padding:0 16px;border-top:{{h.divider}}"><span style="width:6px;height:6px;border-radius:50%;background:{{h.dot}}"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{h.what}}</span><span style="font-size:12px;color:{{c.text3}}">{{h.when}}</span></div></sc-for>
+</div>
+</div>
+
+</div>
+</sc-if>
+
+<sc-if value="{{gPrivacy}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:26px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">隐私</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px"><div style="flex:1;min-width:0;display:flex;flex-direction:column"><span>匿名使用统计</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">仅统计功能使用次数，用于改进产品</span></div><span role="switch" aria-checked="false" style="width:36px;height:20px;flex:none;border-radius:10px;background:{{c.trackOff}};position:relative;display:block"><span style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span></div>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">PicNexus 不设账号。图片、链接与密钥仅保存在本机、你的图床和你的云同步服务中。</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">存储</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px"><div style="flex:1;min-width:0;display:flex;flex-direction:column"><span>数据位置</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'JetBrains Mono',monospace">C:\Users\david\AppData\Roaming\PicNexus</span></span></div><button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500">打开</button></div>
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid {{c.border}}"><div style="flex:1;min-width:0;display:flex;flex-direction:column"><span>应用缓存</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">缩略图与临时文件，共 86 MB</span></div><button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500">清理</button></div>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">清理缓存不影响上传记录，缩略图将在需要时重新下载。</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">重置</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px"><div style="flex:1;min-width:0;display:flex;flex-direction:column"><span>清空全部记录</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">删除本机 12,483 条记录；图床上的文件不受影响</span></div><button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.danger}};font:inherit;font-size:12px;font-weight:500">清空…</button></div>
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:1px solid {{c.border}}"><div style="flex:1;min-width:0;display:flex;flex-direction:column"><span>恢复默认设置</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">偏好恢复默认值；保留图床账号与记录</span></div><button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.danger}};font:inherit;font-size:12px;font-weight:500">恢复…</button></div>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">以上操作无法撤销，建议先在「备份与同步」中导出配置。</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{gAbout}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="display:flex;align-items:center;gap:16px">
+<svg width="56" height="56" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="stAbout" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#stAbout)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<div style="display:flex;flex-direction:column"><span style="font-size:15px;line-height:22px;font-weight:600">PicNexus</span><span style="color:{{c.text2}}">版本 1.1.2 · 一张图，多个图床同时备份</span></div>
+</div>
+<div style="padding:16px;border-radius:12px 12px 0 0;box-shadow:0 0 0 1px {{c.border}};background:{{up.bg}};display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<sc-if value="{{up.spin}}" hint-placeholder-val="{{ false }}"><svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="{{c.track}}" stroke-width="2"></circle><circle cx="8" cy="8" r="6" fill="none" stroke="{{c.brand}}" stroke-width="2" stroke-dasharray="12 37.7" stroke-linecap="round" transform="rotate(-90 8 8)"></circle></svg></sc-if>
+<div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:600;color:{{up.titleColor}}">{{up.title}}</span><span style="font-size:12px;color:{{c.text2}}">{{up.sub}}</span></div>
+<sc-for list="{{up.btns}}" as="b" hint-placeholder-count="1"><button style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{b.bg}};box-shadow:{{b.ring}};color:{{b.fg}};font:inherit;font-weight:500">{{b.label}}</button></sc-for>
+</div>
+<sc-if value="{{up.bar}}" hint-placeholder-val="{{ false }}"><div style="height:4px;border-radius:2px;background:{{c.track}};overflow:hidden"><div style="width:{{up.pct}};height:100%;border-radius:2px;background:{{c.brand}}"></div></div></sc-if>
+<sc-if value="{{up.notes}}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:{{c.text2}}"><span>· 图库支持按健康状态筛选</span><span>· 补充备份支持仅处理副本已失效的图片</span><span>· 修复 macOS 托盘图标偶尔不显示的问题</span></div></sc-if>
+</div>
+<div style="border-radius:0 0 12px 12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column;margin-top:-22px">
+<div style="min-height:48px;display:flex;align-items:center;gap:16px;padding:10px 16px"><div style="flex:1;display:flex;flex-direction:column"><span>自动更新</span><span style="font-size:12px;color:{{c.text3}}">在后台下载新版本，下次启动时安装</span></div><span role="switch" aria-checked="true" style="width:36px;height:20px;flex:none;border-radius:10px;background:{{c.brand}};position:relative;display:block"><span style="position:absolute;left:18px;top:2px;width:16px;height:16px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.25)"></span></span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:{{c.text2}};padding-left:4px">帮助与反馈</span>
+<div style="border-radius:12px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{aboutLinks}}" as="l" hint-placeholder-count="6"><a href="#" style="height:44px;display:flex;align-items:center;gap:16px;padding:0 16px;border-top:{{l.divider}};color:{{c.text1}};text-decoration:none"><span style="flex:1">{{l.name}}</span><span style="font-size:12px;color:{{c.text3}}">{{l.hint}}</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><path d="{{l.icon}}"></path></svg></a></sc-for>
+</div>
+<span style="padding:0 4px;font-size:12px;line-height:18px;color:{{c.text3}}">PicNexus 是开源软件，遵循 MIT 许可证。</span>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</main>
+
+<sc-if value="{{showDialog}}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:10;background:{{c.scrim}};display:flex;align-items:center;justify-content:center">
+<div role="alertdialog" aria-label="{{dlg.title}}" style="width:520px;box-sizing:border-box;padding:24px 28px;border-radius:16px;background:{{c.elevated}};box-shadow:{{c.e4}};display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:14px"><span style="width:40px;height:40px;flex:none;border-radius:11px;background:{{c.warningSoft}};color:{{c.warning}};display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 9v4M12 17h.01"></path></svg></span><span style="font-size:17px;line-height:24px;font-weight:600">{{dlg.title}}</span></div>
+<span style="color:{{c.text2}};line-height:1.6">{{dlg.body}}</span>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">{{dlg.cancel}}</button>
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{dlg.okBg}};color:#FFFFFF;font:inherit;font-weight:500">{{dlg.ok}}</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"group":{"editor":"enum","options":["general","upload","shortcut","editor","backup","privacy","about"],"default":"general"},"state":{"editor":"enum","options":["default","recording","conflict","exportWarn","syncing","syncOk","syncFail","overwriteLocal","refreshBanner","upChecking","upLatest","upFound","upDownloading","upInstalling","upInstalled","upFailed"],"default":"default"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"size":{"editor":"enum","options":["large","small"],"default":"large"},"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const small = this.props.size === 'small';
+    const group = this.props.group ?? 'general';
+    const state = this.props.state ?? 'default';
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const sideLight = { Windows: '#F3F3F3', macOS: '#ECECEC', Linux: '#F4F4F4' };
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      canvas: '#1C1C1E', sidebar: '#151517', subtle: '#252528', elevated: '#2A2A2D', track: '#2F2F33', trackOff: '#4A4A4F',
+      text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', navText: '#C4C4C6',
+      border: '#2F2F33', borderStrong: '#3D3D42', hairline: 'rgba(255,255,255,0.08)', searchBg: 'rgba(255,255,255,0.04)', navSel: 'rgba(255,255,255,0.08)', checkBorder: '#5C5C61',
+      brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE', dangerBtn: '#C42B2B', gradA: '#46B3F5', gradB: '#6B7DF5', ringSoft: 'rgba(76,147,245,0.30)',
+      success: '#5BD08A', successFill: '#22C55E', successSoft: '#15291D', warning: '#F2B35C', warningFill: '#F59E0B', warningSoft: '#2E2414', danger: '#FF7A7A', dangerFill: '#EF4444', dangerSoft: '#33191A', unknownFill: '#6B6B70',
+      segOn: '#48484D', segShadow: '0 1px 2px rgba(0,0,0,0.4)', secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)', menuSel: '#36363A', scrim: 'rgba(0,0,0,0.5)',
+      e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)', e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+    } : {
+      canvas: '#FFFFFF', sidebar: sideLight[platform] || '#F3F3F3', subtle: '#F5F5F5', elevated: '#FFFFFF', track: '#EBEBEB', trackOff: '#D4D4D4',
+      text1: '#171717', text2: '#525252', text3: '#6B6B6B', navText: '#404040',
+      border: '#E5E5E5', borderStrong: '#D4D4D4', hairline: 'rgba(0,0,0,0.06)', searchBg: 'rgba(255,255,255,0.75)', navSel: 'rgba(0,0,0,0.065)', checkBorder: '#A3A3A3',
+      brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9', dangerBtn: '#B91C1C', gradA: '#2EA6F2', gradB: '#4D63F0', ringSoft: 'rgba(57,133,237,0.22)',
+      success: '#147A3A', successFill: '#16A34A', successSoft: '#ECF7EF', warning: '#AD4F08', warningFill: '#D97706', warningSoft: '#FEF4E6', danger: '#B91C1C', dangerFill: '#DC2626', dangerSoft: '#FDECEC', unknownFill: '#A3A3A3',
+      segOn: '#FFFFFF', segShadow: '0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.06)', secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4', menuSel: '#F0F0F0', scrim: 'rgba(23,23,23,0.22)',
+      e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)', e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+    };
+    const groupSubs = { general: '外观与启动方式', upload: '链接格式、自动复制与压缩', shortcut: '全局快捷键与应用内快捷键', editor: '在 Typora、Obsidian 和命令行里直接上传', backup: '在新设备上恢复全部配置与记录', privacy: '统计、缓存与重置', about: '版本、更新与反馈' };
+    const names = { general: '通用', upload: '上传与链接', shortcut: '快捷键', editor: '编辑器与命令行', backup: '备份与同步', privacy: '数据与隐私', about: '关于' };
+    const icons = { general: 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4', upload: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7', shortcut: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10', editor: 'M4 5h16v14H4zM8 10l3 2-3 2M13 15h3', backup: 'M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z', privacy: 'M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z', about: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 8h.01' };
+    const groupsNav = Object.keys(names).map((k) => ({ name: names[k], icon: icons[k], iconFg: k === group ? c.brandText : c.text3, bg: k === group ? c.navSel : 'transparent', fg: k === group ? c.text1 : c.text2, weight: k === group ? 500 : 400, dot: k === 'about' }));
+    const sw = (on) => ({ on, track: on ? c.brand : c.trackOff, knob: on ? '18px' : '2px' });
+    const themes = [['浅色', '#F3F3F3', '#FFFFFF', '#E5E5E5', '#F5F5F5'], ['深色', '#151517', '#1C1C1E', '#3D3D42', '#2A2A2D'], ['跟随系统', '#F3F3F3', 'linear-gradient(90deg,#FFFFFF 50%,#1C1C1E 50%)', '#A3A3A3', 'linear-gradient(90deg,#F5F5F5 50%,#2A2A2D 50%)']].map((t, i) => ({ name: t[0], side: t[1], main: t[2], line: t[3], card: t[4], sel: i === 2, weight: i === 2 ? 600 : 400, ring: i === 2 ? '0 0 0 2px ' + c.canvas + ', 0 0 0 4px ' + c.brand : '0 0 0 1px ' + c.border }));
+    const startup = [
+      Object.assign({ name: '开机自动启动', desc: '登录系统后在托盘中运行', divider: 'none', saved: false }, sw(true)),
+      Object.assign({ name: '静默启动', desc: '启动时不弹出主窗口', divider: '1px solid ' + c.border, saved: true }, sw(true)),
+      Object.assign({ name: '关闭窗口时最小化到托盘', desc: '关闭窗口后不退出应用', divider: '1px solid ' + c.border, saved: false }, sw(true))
+    ];
+    const fmtSeg = ['URL', 'Markdown', 'HTML', 'BBCode', '自定义'].map((n, i) => ({ name: n, bg: i === 1 ? c.segOn : 'transparent', shadow: i === 1 ? c.segShadow : 'none', fg: i === 1 ? c.text1 : c.text2, weight: i === 1 ? 500 : 400 }));
+    const radio = (sel) => ({ radioBg: sel ? c.brand : 'transparent', radioRing: sel ? 'none' : 'inset 0 0 0 1px ' + c.checkBorder, dot: sel ? '#FFFFFF' : 'transparent' });
+    const presets = [['Web', 'WebP · 质量 80 · 长边 2560 · 小于 100 KB 不压缩 · 去除 EXIF', true], ['高清', 'JPEG · 质量 92 · 不缩放', false], ['原图', '不压缩，仅去除 EXIF 位置信息', false]].map((p, i) => Object.assign({ name: p[0], desc: p[1], divider: i === 0 ? 'none' : '1px solid ' + c.border }, radio(p[2])));
+    const kmod = mac ? '⇧⌘' : 'Ctrl+Shift+';
+    const hk = (name, keys, mode) => {
+      const base = { name, keys, bg: c.secondaryBg, ring: c.secondaryRing, fg: c.text1, family: "'JetBrains Mono',monospace", hasMsg: false, msg: '', msgColor: c.text3 };
+      if (mode === 'rec') return Object.assign(base, { keys: '按下新的组合键…', bg: c.brandSoft, ring: 'inset 0 0 0 1px ' + c.brand + ', 0 0 0 3px ' + c.ringSoft, fg: c.brandText, family: 'inherit', hasMsg: true, msg: 'Esc 取消 · Backspace 清除', msgColor: c.text3 });
+      if (mode === 'conflict') return Object.assign(base, { keys: kmod + 'S', ring: 'inset 0 0 0 1px ' + c.dangerFill, hasMsg: true, msg: '该组合键已被「截图工具」占用，请更换', msgColor: c.danger });
+      return base;
+    };
+    const hotkeys = [hk('上传剪贴板图片', kmod + 'C', state === 'recording' ? 'rec' : (state === 'conflict' ? 'conflict' : '')), hk('选择文件上传', kmod + 'O', '')];
+    const m = mac ? '⌘' : 'Ctrl+';
+    const ak = [['命令面板', m + 'K'], ['粘贴上传', m + 'V'], ['选择文件', m + 'O'], ['搜索图库', m + 'F'], ['快传 / 图库 / 健康 / 图床', m + '1–4'], ['设置', m + ','], ['收起侧栏', m + '\\'], ['全选', m + 'A'], ['大图查看', '空格'], ['关闭浮层', 'Esc']];
+    const appKeys = ak.map((k, i) => ({ name: k[0], keys: k[1], divider: i < 2 ? 'none' : '1px solid ' + c.border, left: i % 2 === 1 ? '1px solid ' + c.border : 'none' }));
+    const editors = [
+      { mark: 'Ty', name: 'Typora', status: '尚未配置', statusColor: c.text3, dot: c.unknownFill, action: '打开 Typora', label: '在 Typora › 偏好设置 › 图像 › 上传服务 中选择「Custom Command」，填入：', code: '"C:\\Program Files\\PicNexus\\picnexus.exe" --typora', hosts: '跟随首页设置' },
+      { mark: 'Ob', name: 'Obsidian', status: '已连接 · 端口 36677', statusColor: c.text2, dot: c.successFill, action: '测试连接', label: '安装 Image Auto Upload 插件，在插件设置中填入：', code: 'http://127.0.0.1:36677/upload', hosts: '京东、Cloudflare R2' },
+      { mark: '>_', name: '命令行 CLI', status: '已加入 PATH', statusColor: c.text2, dot: c.successFill, action: '从 PATH 移除', label: '在终端中使用，例如：', code: 'picnexus --service r2 ./a.png', hosts: '跟随首页设置' }
+    ];
+    const pwSet = state !== 'exportWarn';
+    const pwBtns = pwSet ? [{ label: '修改', fg: c.text1 }, { label: '关闭', fg: c.danger }] : [{ label: '设置密码', fg: c.text1 }];
+    const syncSt = {
+      default: ['已同步 · 2 小时前', c.text2, c.successFill, '同步', c.text1, false],
+      syncing: ['正在同步…', c.brandText, c.brand, '同步中', c.text2, true],
+      syncOk: ['已同步 · 上传 3 条 · 下载 5 条', c.success, c.successFill, '同步', c.text1, false],
+      syncFail: ['同步失败：坚果云拒绝访问，应用密码可能已失效', c.danger, c.dangerFill, '重试', c.text1, false],
+      overwriteLocal: ['已同步 · 2 小时前', c.text2, c.successFill, '同步', c.text1, false],
+      exportWarn: ['已同步 · 2 小时前', c.text2, c.successFill, '同步', c.text1, false]
+    };
+    const ss = syncSt[state] || syncSt.default;
+    const dataRows = [
+      { name: '配置', desc: '图床账号、上传组合和偏好', status: ss[0], stColor: ss[1], stDot: ss[2], syncLabel: ss[3], syncFg: ss[4], spinning: ss[5], menu: state === 'overwriteLocal', moreBg: state === 'overwriteLocal' ? c.navSel : 'transparent', exportBg: state === 'exportWarn' ? c.navSel : 'transparent', divider: 'none' },
+      { name: '上传记录', desc: '12,483 条记录与收藏', status: '已同步 · 2 小时前', stColor: c.text2, stDot: c.successFill, syncLabel: '同步', syncFg: c.text1, spinning: false, menu: false, moreBg: 'transparent', exportBg: 'transparent', divider: '1px solid ' + c.border }
+    ];
+    const history = [['同步配置 · 上传 3 条 · 下载 5 条', '2 小时前', c.successFill], ['导出上传记录到 D:\\Backup\\picnexus-records.json', '10月9日', c.unknownFill], ['修改备份密码', '9月20日', c.unknownFill]].map((h, i) => ({ what: h[0], when: h[1], dot: h[2], divider: i === 0 ? 'none' : '1px solid ' + c.border }));
+    const P = { bg: c.button, ring: 'none', fg: '#FFFFFF' };
+    const S = { bg: c.secondaryBg, ring: c.secondaryRing, fg: c.text1 };
+    const UP = {
+      upChecking: { spin: true, title: '正在检查更新…', sub: '', btns: [], bar: false },
+      upLatest: { title: '已是最新版本', sub: '上次检查：3 分钟前', btns: [Object.assign({ label: '检查更新' }, S)] },
+      upFound: { title: '发现新版本 1.2.0', sub: '18 MB · 安装过程中应用将自动重启', btns: [Object.assign({ label: '立即更新' }, P)], notes: true, bg: c.brandSoft },
+      upDownloading: { title: '正在下载 1.2.0 · 11 / 18 MB', sub: '下载期间可继续使用', btns: [Object.assign({ label: '取消' }, S)], bar: true, pct: '61%' },
+      upInstalling: { spin: true, title: '正在安装…', sub: '安装完成后应用将自动重启', btns: [] },
+      upInstalled: { title: '1.2.0 已安装', sub: '重启后生效；进行中的上传会先完成', btns: [Object.assign({ label: '重启完成更新' }, P)], bg: c.successSoft },
+      upFailed: { title: '更新失败：下载被中断', sub: '无法连接 GitHub，请稍后重试或前往发布页手动下载', titleColor: c.danger, btns: [Object.assign({ label: '手动下载' }, S), Object.assign({ label: '重试' }, P)], bg: c.dangerSoft }
+    };
+    const upr = UP[state] || UP.upFound;
+    const up = Object.assign({ spin: false, bar: false, pct: '0%', notes: false, bg: c.subtle, titleColor: c.text1, sub: '' }, upr);
+    const aboutLinks = [['GitHub 仓库', '源码和版本发布', 'M7 17 17 7M8 7h9v9'], ['问题反馈', '', 'M7 17 17 7M8 7h9v9'], ['更新日志', '', 'M7 17 17 7M8 7h9v9'], ['公众号', '关注开发进度', 'm9 18 6-6-6-6'], ['重新查看新手引导', '', 'm9 18 6-6-6-6'], ['打开日志目录', '用于排查问题', 'M7 17 17 7M8 7h9v9']].map((l, i) => ({ name: l[0], hint: l[1], icon: l[2], divider: i === 0 ? 'none' : '1px solid ' + c.border }));
+    const DLG = {
+      exportWarn: { title: '先设置备份密码？', body: '导出文件包含所有图床密钥与 Token。设置密码后文件将加密保存。', cancel: '直接导出', ok: '先设置密码', okBg: c.button },
+      overwriteLocal: { title: '覆盖本地配置？', body: '将以坚果云上的配置替换本机全部图床账号、上传组合与偏好，当前本地配置会丢失且无法撤销。上传记录不受影响。', cancel: '取消', ok: '覆盖本地', okBg: c.dangerBtn }
+    };
+    const bk = {
+      text: ss[0], color: ss[1], dot: ss[2], label: ss[3], btnFg: ss[4], spin: ss[5],
+      menu: state === 'overwriteLocal', moreBg: state === 'overwriteLocal' ? c.navSel : 'transparent', exportBg: state === 'exportWarn' ? c.navSel : 'transparent',
+      items: [{ name: '配置', desc: '图床账号、上传设置与偏好' }, { name: '上传记录', desc: '12,483 条记录与收藏' }]
+    };
+    return {
+      groupSub: groupSubs[group] || '',
+      bk,
+      W: small ? '800px' : '1400px', H: small ? '600px' : '900px', navFull: !small, navRail: small, subNavW: small ? '176px' : '220px', contentPad: small ? '8px 24px 24px' : '8px 40px 40px',
+      c,
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif",
+      isMac: mac, notMac: !mac, isWin: platform === 'Windows', isLinux: platform === 'Linux', mod: mac ? '⌘' : 'Ctrl+',
+      groupsNav, groupTitle: names[group],
+      gGeneral: group === 'general', gUpload: group === 'upload', gShortcut: group === 'shortcut', gEditor: group === 'editor', gBackup: group === 'backup', gPrivacy: group === 'privacy', gAbout: group === 'about',
+      themes, startup, fmtSeg, tplVars: ['{url}', '{filename}', '{width}', '{height}'], presets, hotkeys, appKeys, editors,
+      pwTitle: pwSet ? '已设置' : '未设置', pwDesc: pwSet ? '导出的配置将加密，在新设备上还原时需要此密码' : '导出的配置为明文，包含所有图床密钥', pwBtns,
+      dataRows, history, up, aboutLinks,
+      banner: state === 'refreshBanner',
+      showDialog: state === 'exportWarn' || state === 'overwriteLocal', dlg: DLG[state] || DLG.exportWarn
+    };
+  }
+}
+</script>
+</body>
+</html>

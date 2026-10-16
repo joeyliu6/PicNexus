@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>设计系统 · 基础</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:1400px;min-height:1480px;box-sizing:border-box;padding:48px 56px 56px;background:{{c.canvas}};color:{{c.text1}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans CJK SC','Noto Sans SC',system-ui,sans-serif;font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:40px">
+
+<header style="display:flex;align-items:flex-end;gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:{{c.text2}}">
+<svg width="16" height="16" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="fdLogo" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#fdLogo)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+PicNexus 设计系统</div>
+<h1 style="margin:0;font-size:28px;line-height:34px;font-weight:600;letter-spacing:-0.015em">基础 · {{themeLabel}}</h1>
+</div>
+<div style="flex:1"></div>
+<span style="font-size:12px;color:{{c.text3}}">令牌名与 shadcn-vue 变量一一对应，括号里是 CSS 变量</span>
+</header>
+
+<section aria-label="原则" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:24px;padding-bottom:32px;border-bottom:1px solid {{c.border}}">
+<sc-for list="{{principles}}" as="p" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.brandText}}">{{p.no}}</span>
+<span style="font-size:14px;font-weight:600">{{p.title}}</span>
+<span style="font-size:12.5px;color:{{c.text2}};text-wrap:pretty">{{p.body}}</span>
+</div>
+</sc-for>
+</section>
+
+<section aria-label="颜色" style="display:flex;flex-direction:column;gap:20px">
+<h2 style="margin:0;font-size:17px;line-height:24px;font-weight:600;letter-spacing:-0.01em">颜色</h2>
+<div style="display:grid;grid-template-columns:520px minmax(0,1fr);gap:48px">
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="margin:0;font-size:13px;font-weight:600;color:{{c.text2}}">背景层级</h3>
+<div style="position:relative;height:300px;border-radius:14px;overflow:hidden;background:{{c.sidebar}};box-shadow:{{c.e1}}">
+<span style="position:absolute;left:16px;top:14px;font-size:12px;color:{{c.text2}}">侧栏 sidebar · {{c.sidebar}}</span>
+<div style="position:absolute;left:150px;top:44px;right:0;bottom:0;border-top-left-radius:12px;background:{{c.canvas}};box-shadow:{{c.e1}}">
+<span style="position:absolute;left:16px;top:14px;font-size:12px;color:{{c.text2}}">内容 background · {{c.canvas}}</span>
+<div style="position:absolute;left:16px;top:48px;width:250px;height:44px;border-radius:10px;background:{{c.subtle}};display:flex;align-items:center;padding:0 12px;box-sizing:border-box;font-size:12px;color:{{c.text2}}">悬停 / 代码块 muted · {{c.subtle}}</div>
+<div style="position:absolute;left:16px;top:100px;width:250px;height:44px;border-radius:10px;background:{{c.selected}};display:flex;align-items:center;padding:0 12px;box-sizing:border-box;font-size:12px;color:{{c.text2}}">选中 accent · 半透明叠加</div>
+<div style="position:absolute;left:150px;top:168px;width:200px;padding:12px;box-sizing:border-box;border-radius:12px;background:{{c.elevated}};box-shadow:{{c.e3}};display:flex;flex-direction:column;gap:4px">
+<span style="font-size:12px;font-weight:600">浮层 popover</span>
+<span style="font-size:12px;color:{{c.text2}}">{{c.elevated}} + 阴影 e3</span>
+</div>
+</div>
+</div>
+<p style="margin:0;font-size:12px;color:{{c.text3}}">{{layerNote}}</p>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="margin:0;font-size:13px;font-weight:600;color:{{c.text2}}">文字层级（对比度按内容背景算）</h3>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+<sc-for list="{{texts}}" as="t" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:12px;box-shadow:{{c.e1}}">
+<span style="font-size:20px;font-weight:600;color:{{t.hex}}">Aa 已复制</span>
+<span style="font-size:12.5px;font-weight:500">{{t.name}}</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}}">{{t.token}} · {{t.hex}}</span>
+<span style="font-size:11.5px;color:{{t.badgeColor}}">{{t.ratio}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="margin:0;font-size:13px;font-weight:600;color:{{c.text2}}">品牌</h3>
+<sc-for list="{{brand}}" as="s" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:40px;height:40px;flex:none;border-radius:10px;background:{{s.fill}};box-shadow:inset 0 0 0 1px {{c.hairline}}"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<span style="font-size:13px;font-weight:500">{{s.name}}</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}}">{{s.token}} · {{s.label}}</span>
+</div>
+<span style="font-size:12px;color:{{c.text2}};text-align:right;max-width:150px">{{s.use}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="margin:0;font-size:13px;font-weight:600;color:{{c.text2}}">边框</h3>
+<sc-for list="{{borders}}" as="s" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:40px;height:40px;flex:none;box-sizing:border-box;border-radius:10px;border:{{s.css}}"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<span style="font-size:13px;font-weight:500">{{s.name}}</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}}">{{s.token}} · {{s.label}}</span>
+</div>
+<span style="font-size:12px;color:{{c.text2}};text-align:right;max-width:150px">{{s.use}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h3 style="margin:0;font-size:13px;font-weight:600;color:{{c.text2}}">状态（全界面统一，颜色之外必有图标或文字）</h3>
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px">
+<sc-for list="{{states}}" as="s" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:12px;box-shadow:{{c.e1}}">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="height:24px;display:inline-flex;align-items:center;gap:5px;padding:0 10px 0 8px;border-radius:12px;background:{{s.soft}};color:{{s.text}};font-size:12.5px;font-weight:500">
+<sc-if value="{{s.isOk}}" hint-placeholder-val="{{ false }}"><svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+<sc-if value="{{s.isWarn}}" hint-placeholder-val="{{ false }}"><svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 9v4M12 17h.01"></path></svg></sc-if>
+<sc-if value="{{s.isBad}}" hint-placeholder-val="{{ false }}"><svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></sc-if>
+<sc-if value="{{s.isUnknown}}" hint-placeholder-val="{{ false }}"><svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="stroke-dasharray:3 3"><circle cx="12" cy="12" r="8"></circle></svg></sc-if>
+<sc-if value="{{s.isBusy}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.2"></circle><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="20 37.7" stroke-linecap="round" transform="rotate(-90 8 8)"></circle></svg></sc-if>
+{{s.label}}</span>
+</div>
+<div style="display:flex;gap:6px">
+<span title="图形填充（花瓣、圆点）" style="width:22px;height:22px;border-radius:6px;background:{{s.fill}}"></span>
+<span title="文字" style="width:22px;height:22px;border-radius:6px;background:{{s.text}}"></span>
+<span title="浅底" style="width:22px;height:22px;border-radius:6px;background:{{s.soft}};box-shadow:inset 0 0 0 1px {{c.hairline}}"></span>
+</div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}};line-height:1.6">{{s.hexes}}</span>
+<span style="font-size:11.5px;color:{{c.text2}}">{{s.usage}}</span>
+<span style="font-size:11.5px;color:{{c.successText}}">{{s.ratio}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section aria-label="字体" style="display:grid;grid-template-columns:320px minmax(0,1fr);gap:48px;padding-top:32px;border-top:1px solid {{c.border}}">
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:17px;line-height:24px;font-weight:600;letter-spacing:-0.01em">字体</h2>
+<p style="margin:0;font-size:12.5px;color:{{c.text2}};text-wrap:pretty">西文和数字：Inter（开启等宽数字 tnum）。中文：跟随系统——Windows 用 Microsoft YaHei UI，macOS 用 PingFang SC，Linux 用 Noto Sans CJK SC。链接、快捷键、路径：JetBrains Mono。</p>
+<p style="margin:0;font-size:12.5px;color:{{c.text2}};text-wrap:pretty">只用 400 / 500 / 600 三个字重。17px 以上字距收紧 −1%～−1.5%。</p>
+</div>
+<div style="display:flex;flex-direction:column">
+<sc-for list="{{type}}" as="t" hint-placeholder-count="9">
+<div style="display:grid;grid-template-columns:150px minmax(0,1fr) 200px;align-items:baseline;gap:20px;padding:10px 0;border-bottom:1px solid {{c.border}}">
+<span style="font-size:12.5px;font-weight:500;color:{{c.text2}}">{{t.name}}</span>
+<span style="font-family:{{t.family}};font-size:{{t.size}};line-height:{{t.lh}};font-weight:{{t.weight}};letter-spacing:{{t.ls}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{t.sample}}</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}};text-align:right">{{t.spec}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="间距、圆角、层级、动效" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:40px;padding-top:32px;border-top:1px solid {{c.border}}">
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:17px;line-height:24px;font-weight:600;letter-spacing:-0.01em">间距</h2>
+<span style="font-size:12px;color:{{c.text2}}">4 的倍数（2 只用于图标与文字之间）</span>
+<sc-for list="{{spacing}}" as="s" hint-placeholder-count="10">
+<div style="display:flex;align-items:center;gap:12px;height:18px">
+<span style="width:28px;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}};text-align:right">{{s.v}}</span>
+<span style="height:8px;width:{{s.w}};border-radius:2px;background:{{c.brand}}"></span>
+<span style="font-size:11.5px;color:{{c.text2}};white-space:nowrap">{{s.use}}</span>
+</div>
+</sc-for>
+<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:12px;color:{{c.text2}}">
+<span>控件高度 28 / 32 / 36</span>
+<span>标题栏 40 · 侧栏 208（收起 56）</span>
+<span>首页内容栏 800 · 列表行 58</span>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:17px;line-height:24px;font-weight:600;letter-spacing:-0.01em">圆角</h2>
+<span style="font-size:12px;color:{{c.text2}}">同心：内圆角 = 外圆角 − 内边距</span>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+<sc-for list="{{radii}}" as="r" hint-placeholder-count="6">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="height:56px;border-radius:{{r.v}};background:{{c.subtle}};box-shadow:inset 0 0 0 1px {{c.borderStrong}}"></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}}">{{r.v}}</span>
+<span style="font-size:11.5px;color:{{c.text2}}">{{r.use}}</span>
+</div>
+</sc-for>
+</div>
+<div style="margin-top:4px;padding:18px;border-radius:18px;background:{{c.subtle}};display:flex">
+<div style="flex:1;height:44px;border-radius:0;background:transparent;display:flex">
+<div style="flex:1;border-radius:4px;background:{{c.elevated}};box-shadow:{{c.e1}};display:flex;align-items:center;justify-content:center;font-size:11.5px;color:{{c.text2}}">外 18 − 内距 14 = 内 4</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:17px;line-height:24px;font-weight:600;letter-spacing:-0.01em">层级</h2>
+<span style="font-size:12px;color:{{c.text2}}">{{elevNote}}</span>
+<sc-for list="{{elev}}" as="e" hint-placeholder-count="4">
+<div style="height:52px;padding:0 14px;border-radius:12px;background:{{e.bg}};box-shadow:{{e.shadow}};display:flex;align-items:center;justify-content:space-between">
+<span style="font-size:12.5px;font-weight:500">{{e.name}}</span>
+<span style="font-size:11.5px;color:{{c.text2}}">{{e.use}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:17px;line-height:24px;font-weight:600;letter-spacing:-0.01em">动效</h2>
+<span style="font-size:12px;color:{{c.text2}}">动效只解释「东西从哪来、到哪去」</span>
+<sc-for list="{{motion}}" as="m" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px solid {{c.border}}">
+<div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:12.5px;font-weight:500">{{m.name}}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.brandText}}">{{m.v}}</span></div>
+<span style="font-size:11.5px;color:{{c.text2}}">{{m.use}}</span>
+</div>
+</sc-for>
+</div>
+
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1400,"height":1480}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const theme = this.props.theme === 'dark' ? 'dark' : 'light';
+    const T = {
+      light: {
+        canvas: '#FFFFFF', sidebar: '#F3F3F3', subtle: '#F5F5F5', elevated: '#FFFFFF', selected: 'rgba(0,0,0,0.065)',
+        text1: '#171717', text2: '#525252', text3: '#6B6B6B', disabled: '#A3A3A3',
+        border: '#E5E5E5', borderStrong: '#D4D4D4', hairline: 'rgba(0,0,0,0.06)',
+        brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9', ring: '#3985ED',
+        gradA: '#2EA6F2', gradB: '#4D63F0',
+        success: '#147A3A', successFill: '#16A34A', successSoft: '#ECF7EF',
+        warning: '#AD4F08', warningFill: '#D97706', warningSoft: '#FEF4E6',
+        danger: '#B91C1C', dangerFill: '#DC2626', dangerSoft: '#FDECEC',
+        unknown: '#6B6B6B', unknownFill: '#A3A3A3', unknownSoft: '#F5F5F5',
+        e1: '0 0 0 1px rgba(0,0,0,0.06)',
+        e2: '0 1px 2px rgba(0,0,0,0.04), 0 16px 40px -16px rgba(43,99,217,0.18)',
+        e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)',
+        e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+      },
+      dark: {
+        canvas: '#1C1C1E', sidebar: '#151517', subtle: '#252528', elevated: '#2A2A2D', selected: 'rgba(255,255,255,0.08)',
+        text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', disabled: '#5C5C61',
+        border: '#2F2F33', borderStrong: '#3D3D42', hairline: 'rgba(255,255,255,0.08)',
+        brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE', ring: '#4C93F5',
+        gradA: '#46B3F5', gradB: '#6B7DF5',
+        success: '#5BD08A', successFill: '#22C55E', successSoft: '#15291D',
+        warning: '#F2B35C', warningFill: '#F59E0B', warningSoft: '#2E2414',
+        danger: '#FF7A7A', dangerFill: '#EF4444', dangerSoft: '#33191A',
+        unknown: '#9C9CA1', unknownFill: '#6B6B70', unknownSoft: '#252528',
+        e1: '0 0 0 1px rgba(255,255,255,0.08)',
+        e2: '0 0 0 1px rgba(255,255,255,0.06), 0 16px 40px -16px rgba(0,0,0,0.6)',
+        e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)',
+        e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+      }
+    };
+    const c = T[theme];
+    const lum = (hex) => {
+      const h = hex.replace('#', '');
+      const v = [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)));
+      return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const fmt = (r) => r.toFixed(1) + ':1';
+    const textItem = (name, token, hex, large) => {
+      const r = ratio(hex, c.canvas);
+      const pass = r >= 4.5;
+      return { name, token, hex, ratio: fmt(r) + (token === 'disabled' ? ' · 仅用于禁用态' : (pass ? ' · AA 通过' : ' · 未达 AA')), badgeColor: token === 'disabled' ? c.text3 : (pass ? c.success : c.danger) };
+    };
+    const stateItem = (label, text, fill, soft, usage, kind) => ({
+      label, text, fill, soft, usage,
+      hexes: fill + ' · ' + text + ' · ' + soft,
+      ratio: '文字对比 ' + fmt(ratio(text, c.canvas)) + ' / 浅底上 ' + fmt(ratio(text, soft)),
+      isOk: kind === 'ok', isWarn: kind === 'warn', isBad: kind === 'bad', isUnknown: kind === 'unknown', isBusy: kind === 'busy'
+    });
+    return {
+      c,
+      themeLabel: theme === 'dark' ? '深色' : '浅色',
+      layerNote: theme === 'dark' ? '深色里越靠前的层越亮：侧栏最暗，内容其次，浮层最亮；阴影几乎看不见，靠明度和一圈细描边分层。' : '浅色里层级靠留白和极淡的灰，不画框；侧栏在 Windows 上是 Mica、macOS 上是毛玻璃、Linux 上是这里的纯色。',
+      elevNote: theme === 'dark' ? '深色模式：越高的层越亮 + 一圈 8–10% 白描边' : '只有浮起来的东西才有阴影',
+      principles: [
+        { no: '01', title: '内容是主角', body: '界面只用灰阶退到后面；图片和链接才是页面上最显眼的东西。' },
+        { no: '02', title: '一种颜色一种意思', body: '蓝 = 品牌与进行中；绿 = 成功；琥珀 = 受限；红 = 失败；灰 = 还没检测。不拿颜色做装饰。' },
+        { no: '03', title: '层级靠明度和留白', body: '少画线、少套框。需要分组时先拉开间距，再考虑底色，最后才用描边。' },
+        { no: '04', title: '同心圆角', body: '嵌套的形状圆角一起变：内圆角 = 外圆角 − 内边距，看起来才是一体的。' },
+        { no: '05', title: '状态双编码', body: '颜色之外一定还有形状或文字；动效只用来解释因果，可以整体关掉。' }
+      ],
+      texts: [
+        textItem('主要文字', 'foreground', c.text1),
+        textItem('次要文字', 'secondary', c.text2),
+        textItem('辅助文字', 'muted-foreground', c.text3),
+        textItem('禁用', 'disabled', c.disabled)
+      ],
+      brand: [
+        { name: '品牌蓝', token: 'brand', label: c.brand, fill: c.brand, use: '花瓣、进度、焦点环、图标' },
+        { name: '蓝色文字', token: 'brand-foreground', label: c.brandText + ' · ' + fmt(ratio(c.brandText, c.canvas)), fill: c.brandText, use: '链接里的网址、蓝色文字' },
+        { name: '主按钮', token: 'primary', label: c.button + ' · 白字 ' + fmt(ratio('#FFFFFF', c.button)), fill: c.button, use: '每页最多一个主按钮' },
+        { name: '品牌浅底', token: 'accent', label: c.brandSoft, fill: c.brandSoft, use: '选中行、拖放悬停' },
+        { name: '图标渐变', token: 'brand-gradient', label: c.gradA + ' → ' + c.gradB, fill: 'linear-gradient(135deg,' + c.gradA + ',' + c.gradB + ')', use: '只用于图标和总进度条' }
+      ],
+      borders: [
+        { name: '描边', token: 'border', label: c.border, css: '1px solid ' + c.border, use: '分隔线、卡片描边' },
+        { name: '强描边', token: 'input', label: c.borderStrong, css: '1px solid ' + c.borderStrong, use: '输入框、投放区虚线' },
+        { name: '焦点环', token: 'ring', label: '2px ' + c.ring + ' · 外扩 2px', css: '2px solid ' + c.ring, use: '键盘聚焦（' + fmt(ratio(c.ring, c.canvas)) + '）' }
+      ],
+      states: [
+        stateItem('正常', c.success, c.successFill, c.successSoft, '成功 · 已上传 · 已复制', 'ok'),
+        stateItem('可能受限', c.warning, c.warningFill, c.warningSoft, '受限 · 部分失败 · 需注意', 'warn'),
+        stateItem('失效', c.danger, c.dangerFill, c.dangerSoft, '失败 · 危险操作', 'bad'),
+        stateItem('还没检测', c.unknown, c.unknownFill, c.unknownSoft, '未知 · 等待中', 'unknown'),
+        stateItem('上传中', c.brandText, c.brand, c.brandSoft, '进行中（用品牌蓝）', 'busy')
+      ],
+      successText: c.success,
+      type: [
+        { name: '页标题 · 结论 Title', sample: '21 张图片失效', size: '20px', lh: '26px', weight: 600, ls: '-0.01em', family: 'inherit', spec: '20 / 26 · 600 · 全应用最大字号' },
+        
+        { name: '区块标题 Headline', sample: '截图_2026-10-15_142233.png', size: '15px', lh: '22px', weight: 600, ls: '-0.005em', family: 'inherit', spec: '15 / 22 · 600' },
+        { name: '强调 Callout', sample: '拖入图片，或按 Ctrl+V 粘贴', size: '13px', lh: '20px', weight: 500, ls: '0', family: 'inherit', spec: '13 / 20 · 500' },
+        { name: '正文 Body', sample: '传到微博的图片会失败，其他图床不受影响。', size: '13px', lh: '20px', weight: 400, ls: '0', family: 'inherit', spec: '13 / 20 · 400' },
+        { name: '正文强调', sample: '最近上传', size: '13px', lh: '20px', weight: 600, ls: '0', family: 'inherit', spec: '13 / 20 · 600' },
+        { name: '说明 Footnote', sample: '2 分钟前 · 4032 × 3024 · 2.8 MB → 640 KB', size: '12px', lh: '16px', weight: 400, ls: '0', family: 'inherit', spec: '12 / 16 · 400' },
+        { name: '等宽 Mono', sample: '![IMG_4821](https://img30.360buyimg.com/pop/jfs/t1/251093/…webp)', size: '12px', lh: '18px', weight: 400, ls: '0', family: "'JetBrains Mono',ui-monospace,monospace", spec: 'Mono 12 / 18 · 400' },
+        { name: '标注 Caption', sample: 'Ctrl+K · 12,483 张', size: '11px', lh: '14px', weight: 500, ls: '0', family: 'inherit', spec: '11 / 14 · 500' }
+      ],
+      spacing: [
+        { v: '2', w: '2px', use: '图标 ↔ 文字（紧）' },
+        { v: '4', w: '4px', use: '同组元素' },
+        { v: '6', w: '6px', use: '图标 ↔ 文字' },
+        { v: '8', w: '8px', use: '按钮之间' },
+        { v: '12', w: '12px', use: '行内分组' },
+        { v: '16', w: '16px', use: '卡片内边距' },
+        { v: '20', w: '20px', use: '焦点卡内边距' },
+        { v: '24', w: '24px', use: '区块之间' },
+        { v: '32', w: '32px', use: '大区块之间' },
+        { v: '56', w: '56px', use: '页面边距' }
+      ],
+      radii: [
+        { v: '4px', use: '快捷键、小标签' },
+        { v: '6px', use: '小按钮、菜单项' },
+        { v: '8px', use: '按钮、输入框、导航项' },
+        { v: '10px', use: '列表行、缩略图' },
+        { v: '14px', use: '投放区、弹出层' },
+        { v: '18px', use: '焦点卡、对话框' }
+      ],
+      elev: [
+        { name: 'e1 贴面', use: '缩略图、表格行', bg: c.canvas, shadow: c.e1 },
+        { name: 'e2 卡片', use: '焦点卡（带一点品牌蓝）', bg: c.elevated, shadow: c.e2 },
+        { name: 'e3 浮层', use: '菜单、气泡、下拉', bg: c.elevated, shadow: c.e3 },
+        { name: 'e4 对话', use: '对话框、抽屉、命令面板', bg: c.elevated, shadow: c.e4 }
+      ],
+      motion: [
+        { name: '即时', v: '100ms', use: '悬停、按下的底色变化' },
+        { name: '快', v: '150ms', use: '复制 → 已复制、开关、勾选' },
+        { name: '标准', v: '200ms', use: '菜单、下拉、气泡的出现' },
+        { name: '舒展', v: '250ms', use: '抽屉、对话框、灯箱展开' },
+        { name: '缓动', v: 'cubic-bezier(.2,0,0,1)', use: '进场减速；退场用 (.4,0,1,1) 且快 30%。系统开「减少动态效果」时，位移改成淡入，花瓣停止闪烁。' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>应用图标与品牌色</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:1400px;height:820px;box-sizing:border-box;padding:44px 56px;background:#ffffff;color:#171717;font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',system-ui,sans-serif;font-size:13px;line-height:1.45;display:flex;flex-direction:column;gap:28px">
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">应用图标</h1>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+
+<figure style="margin:0;display:flex;flex-direction:column;gap:10px">
+<div style="height:240px;border-radius:16px;background:#f5f5f5;display:flex;align-items:center;justify-content:center">
+<img src="/_blob/04feae27e70be3c40afb4e22919f8058" alt="现在的应用图标" style="width:128px;height:128px">
+</div>
+<figcaption style="font-size:12.5px;color:#525252"><b style="color:#171717;font-weight:600">现状</b> · 每瓣各自渐变</figcaption>
+</figure>
+
+<figure style="margin:0;display:flex;flex-direction:column;gap:10px">
+<div style="height:240px;border-radius:16px;background:#f5f5f5;display:flex;align-items:center;justify-content:center">
+<svg width="150" height="150" viewBox="-4 -4 136 136" role="img" aria-label="精修后的图标"><defs><linearGradient id="gA" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2EA6F2"></stop><stop offset="1" stop-color="#4D63F0"></stop></linearGradient></defs><g fill="url(#gA)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+<figcaption style="font-size:12.5px;color:#525252"><b style="color:#171717;font-weight:600">精修</b> · 整枚一条对角渐变，四瓣圆角统一，中心留缝</figcaption>
+</figure>
+
+<figure style="margin:0;display:flex;flex-direction:column;gap:10px">
+<div style="height:240px;border-radius:16px;background:#e9ebef;display:flex;align-items:center;justify-content:center">
+<div style="width:156px;height:156px;border-radius:36px;background:#ffffff;box-shadow:0 1px 1px rgba(0,0,0,0.06),0 10px 24px -8px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center">
+<svg width="104" height="104" viewBox="-4 -4 136 136" role="img" aria-label="macOS 图标"><defs><linearGradient id="gB" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2EA6F2"></stop><stop offset="1" stop-color="#4D63F0"></stop></linearGradient></defs><g fill="url(#gB)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+</div>
+<figcaption style="font-size:12.5px;color:#525252"><b style="color:#171717;font-weight:600">macOS</b> · 放进白色圆角方块，和系统图标网格对齐</figcaption>
+</figure>
+
+<figure style="margin:0;display:flex;flex-direction:column;gap:10px">
+<div style="height:240px;border-radius:16px;background:#eef1f6;display:flex;align-items:center;justify-content:center">
+<svg width="128" height="128" viewBox="-4 -4 136 136" role="img" aria-label="Windows 与 Linux 图标"><defs><linearGradient id="gC" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2EA6F2"></stop><stop offset="1" stop-color="#4D63F0"></stop></linearGradient></defs><g fill="url(#gC)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+<figcaption style="font-size:12.5px;color:#525252"><b style="color:#171717;font-weight:600">Windows / Linux</b> · 不加底板，透明背景</figcaption>
+</figure>
+
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:16px">
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<h2 style="margin:0;font-size:14px;font-weight:600">小尺寸</h2>
+<div style="height:150px;border-radius:16px;overflow:hidden;display:grid;grid-template-rows:1fr 1fr">
+<div style="background:#f5f5f5;display:flex;align-items:center;justify-content:center;gap:22px">
+<svg width="48" height="48" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="gS" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2EA6F2"></stop><stop offset="1" stop-color="#4D63F0"></stop></linearGradient></defs><g fill="url(#gS)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="32" height="32" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="url(#gS)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="24" height="24" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="url(#gS)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="16" height="16" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="url(#gS)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+<div style="background:#1c1c1e;display:flex;align-items:center;justify-content:center;gap:22px">
+<svg width="48" height="48" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="gD" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#46B3F5"></stop><stop offset="1" stop-color="#6B7DF5"></stop></linearGradient></defs><g fill="url(#gD)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="32" height="32" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="url(#gD)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="24" height="24" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="url(#gD)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="16" height="16" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="url(#gD)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+</div>
+<p style="margin:0;font-size:12px;color:#525252">48 · 32 · 24 · 16 px；深色背景用提亮一档的渐变</p>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<h2 style="margin:0;font-size:14px;font-weight:600">托盘 / 菜单栏（单色）</h2>
+<div style="height:150px;border-radius:16px;overflow:hidden;display:grid;grid-template-rows:1fr 1fr">
+<div style="background:#e9e9eb;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;justify-items:center">
+<svg width="18" height="18" viewBox="-4 -4 136 136" role="img" aria-label="空闲"><g fill="#171717"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="18" height="18" viewBox="-4 -4 136 136" role="img" aria-label="上传中"><g fill="#171717"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path opacity="0.3" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path opacity="0.3" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<span style="position:relative;width:18px;height:18px"><svg width="18" height="18" viewBox="-4 -4 136 136" role="img" aria-label="有失败"><g fill="#171717"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg><span style="position:absolute;right:-3px;top:-3px;width:8px;height:8px;box-sizing:border-box;border-radius:50%;background:#dc2626;border:1.5px solid #e9e9eb"></span></span>
+</div>
+<div style="background:#202020;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;justify-items:center">
+<svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="#ffffff"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="#ffffff"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path opacity="0.3" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path opacity="0.3" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+<span style="position:relative;width:18px;height:18px"><svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="#ffffff"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg><span style="position:absolute;right:-3px;top:-3px;width:8px;height:8px;box-sizing:border-box;border-radius:50%;background:#ef4444;border:1.5px solid #202020"></span></span>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));font-size:12px;color:#525252;text-align:center"><span>空闲</span><span>上传中（花瓣逐个点亮）</span><span>有失败</span></div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<h2 style="margin:0;font-size:14px;font-weight:600">花瓣 = 图床：上传状态和备份份数</h2>
+<div style="height:150px;box-sizing:border-box;border-radius:16px;background:#f5f5f5;padding:0 18px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center;justify-items:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="34" height="34" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="#3985ED" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="#3985ED" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="#3985ED" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="#e5e5e5" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg><span style="font-size:12px;color:#404040">3 份都好</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="34" height="34" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="#3985ED" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="#3985ED" opacity="0.4" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="#cfcfcf" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="#e5e5e5" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg><span style="font-size:12px;color:#404040">上传中</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="34" height="34" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="#3985ED" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="#3985ED" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="#dc2626" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="#e5e5e5" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg><span style="font-size:12px;color:#404040">一份失败</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="34" height="34" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="#d97706" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="#3985ED" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="#e5e5e5" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="#e5e5e5" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg><span style="font-size:12px;color:#404040">有一份受限</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="34" height="34" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="#dc2626" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="#e5e5e5" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="#e5e5e5" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="#e5e5e5" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg><span style="font-size:12px;color:#404040">仅 1 份且已失效</span></div>
+</div>
+<p style="margin:0;font-size:12px;color:#525252">一瓣一个图床；颜色之外，旁边总有文字说明</p>
+</section>
+
+</div>
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<h2 style="margin:0;font-size:14px;font-weight:600">品牌色</h2>
+<div style="display:grid;grid-template-columns:2fr repeat(7,minmax(0,1fr));gap:10px">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:linear-gradient(135deg,#2EA6F2,#4D63F0)"></div><span style="font-size:12px;color:#404040">图标渐变 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#2EA6F2 → #4D63F0</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:#3985ED"></div><span style="font-size:12px;color:#404040">品牌蓝 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#3985ED</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:#2B63D9"></div><span style="font-size:12px;color:#404040">蓝色文字 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#2B63D9</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:#147A3A"></div><span style="font-size:12px;color:#404040">成功 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#147A3A</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:#AD4F08"></div><span style="font-size:12px;color:#404040">受限 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#AD4F08</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:#B91C1C"></div><span style="font-size:12px;color:#404040">失败 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#B91C1C</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:10px;background:#171717"></div><span style="font-size:12px;color:#404040">正文 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#171717</span></span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="height:44px;box-sizing:border-box;border-radius:10px;background:#F3F3F3;border:1px solid #e5e5e5"></div><span style="font-size:12px;color:#404040">侧栏 <span style="font-family:'JetBrains Mono',monospace;color:#6B6B6B">#F3F3F3</span></span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

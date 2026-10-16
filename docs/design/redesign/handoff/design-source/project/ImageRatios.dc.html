@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>不同比例图片的显示规则</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:1400px;height:860px;box-sizing:border-box;padding:40px;background:{{c.canvas}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',sans-serif;font-size:13px;line-height:1.45;color:{{c.text1}};display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;line-height:26px;font-weight:600">不同比例图片的显示规则</span><span style="color:{{c.text2}}">图库按「等高行」排列，保留原比例；只有极端比例才裁切，并用角标说明。预览框统一「完整显示 + 主色模糊衬底」，不裁不拉伸。</span></div>
+
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+
+<section style="display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center;gap:6px">
+<div style="width:100px;height:75px;border-radius:6px;background:linear-gradient(160deg,#9FC4E8,#DCEAF8)"></div>
+<div style="width:133px;height:75px;border-radius:6px;background:linear-gradient(160deg,#C9B8E8,#EEE7F8)"></div>
+<div style="width:56px;height:75px;border-radius:6px;background:linear-gradient(160deg,#A8D5B5,#E2F2E7)"></div>
+</div>
+<span style="font-weight:600">常规比例 · 等高排列</span>
+<span style="font-size:12px;color:{{c.text2}}">一行内高度相同、宽度按比例；行高 150（窄窗口 120），每行铺满容器宽度。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:84px;height:210px;border-radius:6px;overflow:hidden;background:#FFFFFF;box-shadow:0 0 0 1px {{c.hairline}}">
+<div style="position:absolute;left:10%;right:10%;top:6%;height:5%;background:#D5DBE5"></div>
+<div style="position:absolute;left:10%;right:30%;top:14%;height:3%;background:#E3E7EE"></div>
+<div style="position:absolute;left:10%;right:10%;top:22%;height:18%;border-radius:3px;background:#E8EEF8"></div>
+<div style="position:absolute;left:10%;right:20%;top:45%;height:3%;background:#E3E7EE"></div>
+<div style="position:absolute;left:10%;right:10%;top:52%;height:18%;border-radius:3px;background:#EEF4EE"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:34%;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(0,0,0,0.28))"></div>
+<span style="position:absolute;left:6px;bottom:6px;height:18px;display:flex;align-items:center;padding:0 6px;border-radius:5px;background:rgba(23,23,23,0.72);color:#FFFFFF;font-size:11px;font-weight:500">长图 1:5.6</span>
+</div>
+</div>
+<span style="font-weight:600">超长图（滚动截图）</span>
+<span style="font-size:12px;color:{{c.text2}}">高宽比超过 2.5 时裁成 1:2.5，从顶部显示，底部渐隐并标「长图」；大图查看时可上下滚动看全。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:280px;height:70px;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#F6C28B 0%,#F9E1C2 55%,#7E9BB8 56%,#5B7896 100%)">
+<span style="position:absolute;left:58%;top:22%;width:14px;height:14px;border-radius:50%;background:#FFF2D4"></span>
+<span style="position:absolute;right:6px;bottom:6px;height:18px;display:flex;align-items:center;padding:0 6px;border-radius:5px;background:rgba(23,23,23,0.72);color:#FFFFFF;font-size:11px;font-weight:500">全景 6:1</span>
+</div>
+</div>
+<span style="font-weight:600">超宽图（全景、横幅）</span>
+<span style="font-size:12px;color:{{c.text2}}">宽高比超过 4 时居中裁成 4:1，最多占满一行；角标写出实际比例。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:150px;height:150px;border-radius:6px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center">
+<div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#2EA6F2,#4D63F0)"></div>
+<span style="position:absolute;right:6px;bottom:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}}">48 × 48</span>
+</div>
+</div>
+<span style="font-weight:600">小图（图标、表情）</span>
+<span style="font-size:12px;color:{{c.text2}}">短边小于 120 时不放大，按原尺寸居中在方形格里，避免模糊；右下角标出原尺寸。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:150px;height:150px;border-radius:6px;overflow:hidden;background-color:{{c.checkA}};background-image:linear-gradient(45deg,{{c.checkB}} 25%,transparent 25%,transparent 75%,{{c.checkB}} 75%),linear-gradient(45deg,{{c.checkB}} 25%,transparent 25%,transparent 75%,{{c.checkB}} 75%);background-size:16px 16px;background-position:0 0,8px 8px;display:flex;align-items:center;justify-content:center">
+<svg width="96" height="96" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="#4D63F0"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+</div>
+<span style="font-weight:600">透明背景（PNG、SVG、WebP）</span>
+<span style="font-size:12px;color:{{c.text2}}">透明区域显示浅色棋盘格，一眼看出哪里是透明的；深色模式下棋盘格同步变暗。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:170px;height:128px;border-radius:6px;overflow:hidden;background:linear-gradient(135deg,#F7A4B8,#FBD3C1)">
+<span style="position:absolute;left:30%;top:28%;width:40%;height:44%;border-radius:50%;background:rgba(255,255,255,0.55)"></span>
+<span style="position:absolute;left:6px;top:6px;height:18px;display:flex;align-items:center;padding:0 6px;border-radius:5px;background:rgba(23,23,23,0.72);color:#FFFFFF;font-size:11px;font-weight:600">GIF</span>
+</div>
+</div>
+<span style="font-weight:600">动图（GIF、动态 WebP）</span>
+<span style="font-size:12px;color:{{c.text2}}">默认显示第一帧并标「GIF」，鼠标停留时才播放，避免满屏闪动。</span>
+</section>
+
+<section style="grid-column:span 2;display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:220px;display:flex;align-items:center;justify-content:center;gap:20px">
+<div style="position:relative;width:288px;height:162px;border-radius:10px;overflow:hidden;background:#C9D9C2">
+<div style="position:absolute;inset:-20px;background:linear-gradient(135deg,#A9C79E,#DDE9D6);filter:blur(18px);opacity:0.9"></div>
+<div style="position:absolute;left:50%;top:0;bottom:0;width:122px;transform:translateX(-50%);background:linear-gradient(180deg,#7DB07A,#CFE3C8);box-shadow:0 0 0 1px rgba(0,0,0,0.06)"></div>
+</div>
+<div style="position:relative;width:288px;height:162px;border-radius:10px;overflow:hidden;background:#2B3440">
+<div style="position:absolute;inset:-20px;background:linear-gradient(90deg,#3B4656,#56677C);filter:blur(18px);opacity:0.9"></div>
+<div style="position:absolute;left:0;right:0;top:50%;height:72px;transform:translateY(-50%);background:linear-gradient(90deg,#435266,#8BA3BF)"></div>
+</div>
+</div>
+<span style="font-weight:600">预览框（首页卡片、详情面板、托盘通知）</span>
+<span style="font-size:12px;color:{{c.text2}}">框的尺寸固定（如 288 × 162），图片完整显示不裁切；空白处用图片自身的模糊放大版填充，竖图、横图都不会出现突兀的白边或黑边。</span>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1400,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.theme === 'dark';
+    const c = dark
+      ? { canvas: '#1C1C1E', subtle: '#252528', text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', hairline: 'rgba(255,255,255,0.10)', checkA: '#2A2A2D', checkB: '#333337' }
+      : { canvas: '#FFFFFF', subtle: '#F5F5F5', text1: '#171717', text2: '#525252', text3: '#6B6B6B', hairline: 'rgba(0,0,0,0.08)', checkA: '#FFFFFF', checkB: '#EDEDED' };
+    return { c };
+  }
+}
+</script>
+</body>
+</html>

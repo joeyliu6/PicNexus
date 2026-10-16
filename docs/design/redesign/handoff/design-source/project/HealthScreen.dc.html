@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>链接健康（全部状态）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:{{W}};height:{{H}};display:flex;overflow:hidden;background:{{c.canvas}};color:{{c.text1}};font-size:13px;line-height:1.45;font-family:{{font}}">
+
+<sc-if value="{{navFull}}" hint-placeholder-val="{{ true }}">
+<nav aria-label="主导航" style="width:208px;flex:none;display:flex;flex-direction:column;padding:0 10px 12px;background:{{c.sidebar}}">
+<div style="height:52px;flex:none;display:flex;align-items:center;padding-left:8px">
+<sc-if value="{{isMac}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px" aria-hidden="true"><span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span><span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span><span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span></div></sc-if>
+<sc-if value="{{notMac}}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="lhLogo" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#lhLogo)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg><span style="font-size:13px;font-weight:600;letter-spacing:-0.01em">PicNexus</span></div></sc-if>
+</div>
+<button style="height:32px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;margin-bottom:14px;border:0;box-shadow:inset 0 0 0 1px {{c.hairline}};background:{{c.searchBg}};border-radius:8px;color:{{c.text3}};font:inherit;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span style="flex:1;text-align:left">搜索</span><span style="font-size:11px">{{mod}}K</span></button>
+<div style="display:flex;flex-direction:column;gap:2px">
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg>快传</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg>图库</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;background:{{c.navSel}};color:{{c.text1}};text-decoration:none;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.brandText}}"><path d="M22 12h-4l-3 8L9 4l-3 8H2"></path></svg>链接健康</a>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg>图床</a>
+</div>
+<div style="flex:1"></div>
+<a href="#" style="height:32px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:8px;color:{{c.navText}};text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>设置<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:{{c.brand}}"></span></a>
+</nav>
+</sc-if>
+<sc-if value="{{navRail}}" hint-placeholder-val="{{ false }}">
+<nav aria-label="主导航（已收起）" style="width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 0 12px;background:{{c.sidebar}}">
+<div style="height:52px;flex:none;display:flex;align-items:center;justify-content:center">
+<svg width="20" height="20" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="railL" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><g fill="url(#railL)"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg>
+</div>
+<a href="#" aria-label="搜索" title="搜索  {{mod}}K" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center;margin-bottom:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></a>
+<a href="#" aria-label="快传" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg></a>
+<a href="#" aria-label="图库" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg></a>
+<a href="#" aria-label="链接健康" style="position:relative;width:36px;height:36px;border-radius:9px;background:{{c.navSel}};color:{{c.brandText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"></path></svg><span style="position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:{{c.warningFill}}"></span></a>
+<a href="#" aria-label="图床" style="width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg></a>
+<div style="flex:1"></div>
+<a href="#" aria-label="设置" style="position:relative;width:36px;height:36px;border-radius:9px;color:{{c.navText}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg><span style="position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:{{c.brand}}"></span></a>
+<button aria-label="展开侧栏" style="width:36px;height:36px;border:0;border-radius:9px;background:transparent;color:{{c.text3}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg></button>
+</nav>
+</sc-if>
+
+<main style="flex:1;min-width:0;position:relative;display:flex;flex-direction:column;overflow:hidden">
+<div style="height:46px;flex:none;display:flex;align-items:flex-start;padding-left:24px">
+<h1 style="height:40px;margin:6px 0 0;display:flex;align-items:center;font-size:15px;font-weight:600;letter-spacing:-0.01em">链接健康</h1>
+<div style="flex:1"></div>
+<sc-if value="{{isWin}}" hint-placeholder-val="{{ true }}"><div style="display:flex"><button aria-label="最小化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 12h16"></path></svg></button><button aria-label="最大化" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19M5 5l14 14"></path></svg></button></div></sc-if>
+<sc-if value="{{isLinux}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;padding-right:12px"><button aria-label="最小化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button><button aria-label="最大化" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button><button aria-label="隐藏到托盘" title="隐藏到托盘" style="width:24px;height:24px;border:0;border-radius:50%;background:{{c.subtle}};color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div></sc-if>
+</div>
+
+<div style="flex:1;min-height:0;overflow:hidden;padding:0 {{padX}} 24px;display:flex;flex-direction:column;gap:24px">
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="position:relative;height:40px;display:flex;align-items:center;gap:10px">
+<sc-if value="{{sb.dot}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width:7px;height:7px;flex:none;border-radius:50%;background:{{c.warningFill}}"></span></sc-if>
+<sc-if value="{{sb.spin}}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" style="flex:none;color:{{c.brandText}}"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.22" stroke-width="2"></circle><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="10 37.7" stroke-linecap="round" transform="rotate(-90 8 8)"></circle></svg></sc-if>
+<sc-if value="{{sb.pause}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true" style="flex:none;color:{{c.text2}}"><path d="M9 5v14M15 5v14"></path></svg></sc-if>
+<span style="flex:none;font-weight:600;white-space:nowrap">{{sb.title}}</span>
+<span style="min-width:0;color:{{c.text2}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{sb.sub}}</span>
+<sc-if value="{{sb.bar}}" hint-placeholder-val="{{ false }}"><div role="progressbar" aria-label="进度" style="width:120px;height:4px;flex:none;border-radius:2px;background:{{c.track}};overflow:hidden"><div style="width:{{sb.pct}};height:100%;border-radius:2px;background:{{sb.barColor}}"></div></div></sc-if>
+<div style="flex:1"></div>
+<sc-for list="{{sb.btns}}" as="b" hint-placeholder-count="2"><button style="height:30px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{b.bg}};box-shadow:{{b.ring}};color:{{b.fg}};font:inherit;font-weight:500;white-space:nowrap">{{b.label}}</button></sc-for>
+<sc-if value="{{sb.more}}" hint-placeholder-val="{{ true }}"><button aria-label="更多" aria-haspopup="menu" style="width:30px;height:30px;flex:none;border:0;border-radius:7px;background:{{sb.moreBg}};color:{{c.text2}};display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg></button></sc-if>
+<sc-if value="{{cardMenu}}" hint-placeholder-val="{{ false }}">
+<div role="menu" style="position:absolute;right:0;top:38px;z-index:8;width:280px;box-sizing:border-box;padding:4px;border-radius:10px;background:{{c.elevated}};box-shadow:{{c.e3}};display:flex;flex-direction:column">
+<div role="menuitem" style="height:32px;display:flex;align-items:center;padding:0 8px;border-radius:6px;background:{{c.menuSel}}">仅重新检测 21 张失效图片</div>
+<div role="menuitem" style="height:32px;display:flex;align-items:center;padding:0 8px;border-radius:6px">导出结果（CSV）</div>
+<div role="menuitem" style="height:32px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px"><span style="flex:1">自动检测</span><span style="font-size:12px;color:{{c.text3}}">每 7 天</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.text3}}"><path d="m9 6 6 6-6 6"></path></svg></div>
+<div style="height:1px;margin:4px 6px;background:{{c.border}}"></div>
+<div role="menuitem" style="display:flex;flex-direction:column;padding:6px 8px;border-radius:6px"><span style="color:{{c.danger}}">清理找不回的图片…</span><span style="font-size:12px;color:{{c.text3}}">只含「图片已不存在」的 4 张，不含超时与拒绝访问</span></div>
+</div>
+</sc-if>
+</div>
+
+<section aria-label="上传日历" style="display:flex;flex-direction:column;gap:14px;padding:{{calPad}};border-radius:20px;background:{{c.surface}}">
+<div style="display:flex;align-items:center;gap:4px">
+<div role="radiogroup" aria-label="年份" style="display:flex;align-items:center;gap:2px">
+<sc-for list="{{yearPills}}" as="y" hint-placeholder-count="7"><button role="radio" aria-checked="{{y.sel}}" style="height:28px;display:flex;align-items:center;gap:5px;padding:0 {{pillPad}};border:0;border-radius:14px;background:{{y.bg}};box-shadow:{{y.shadow}};color:{{y.fg}};font:inherit;font-weight:{{y.weight}};font-variant-numeric:tabular-nums;white-space:nowrap">{{y.label}}<sc-if value="{{y.hasBad}}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:{{c.warning}}">{{y.bad}}</span></sc-if><sc-if value="{{y.caret}}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></sc-if></button></sc-for>
+</div>
+<div style="flex:1"></div>
+<sc-if value="{{showYearSummary}}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;color:{{c.text3}};font-variant-numeric:tabular-nums;white-space:nowrap">{{yearSummary}}</span></sc-if>
+</div>
+<div role="img" aria-label="{{gridLabel}}" style="display:flex;flex-direction:column;gap:6px">
+<div aria-hidden="true" style="position:relative;height:14px;margin-left:{{wdW}}">
+<sc-for list="{{months}}" as="m" hint-placeholder-count="12"><span style="position:absolute;left:{{m.left}};top:0;font-size:11px;line-height:14px;color:{{c.text3}};white-space:nowrap">{{m.label}}</span></sc-for>
+</div>
+<div style="display:flex">
+<div aria-hidden="true" style="width:{{wdW}};flex:none;display:flex;flex-direction:column;gap:{{gap}}">
+<sc-for list="{{weekdays}}" as="w" hint-placeholder-count="7"><span style="height:{{cell}};font-size:10px;line-height:{{cell}};color:{{c.text3}}">{{w}}</span></sc-for>
+</div>
+<div style="display:flex;gap:{{gap}}">
+<sc-for list="{{weeks}}" as="wk" hint-placeholder-count="53">
+<div style="display:flex;flex-direction:column;gap:{{gap}}">
+<sc-for list="{{wk.days}}" as="d" hint-placeholder-count="7"><span style="width:{{cell}};height:{{cell}};border-radius:{{cellR}};background:{{d.bg}};box-shadow:{{d.ring}}"></span></sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</section>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+<sc-for list="{{cards}}" as="k" hint-placeholder-count="3">
+<section aria-label="{{k.title}}" style="display:flex;flex-direction:{{cardDir}};align-items:{{cardAlign}};gap:{{cardGap}};padding:14px;border-radius:16px;background:{{c.surface}}">
+<sc-if value="{{showIl}}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{k.ilDoc}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="position:relative;width:60px;height:52px;flex:none;border-radius:12px;background:{{c.ilBg}};overflow:hidden"><span style="position:absolute;left:15px;top:7px;width:30px;height:38px;border-radius:4px;background:{{c.paper}};box-shadow:0 1px 2px rgba(0,0,0,0.14), 0 0 0 0.5px rgba(0,0,0,0.08)"></span><span style="position:absolute;left:19px;top:12px;width:16px;height:2px;border-radius:1px;background:{{c.paperLine}}"></span><span style="position:absolute;left:19px;top:17px;width:22px;height:2px;border-radius:1px;background:{{c.paperLine}}"></span><span style="position:absolute;left:19px;top:23px;width:22px;height:13px;border-radius:2px;background:linear-gradient(135deg,{{c.gradA}},{{c.gradB}})"></span><span style="position:absolute;left:19px;top:39px;width:14px;height:2px;border-radius:1px;background:{{c.paperLine}}"></span><span style="position:absolute;right:7px;bottom:6px;width:17px;height:17px;border-radius:50%;background:{{c.paper}};box-shadow:0 1px 3px rgba(0,0,0,0.22);display:flex;align-items:center;justify-content:center;color:{{c.brand}}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.3M20 4v5h-5M20 12a8 8 0 0 1-14 5.3M4 20v-5h5"></path></svg></span></span></sc-if>
+<sc-if value="{{k.ilBak}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:relative;width:60px;height:52px;flex:none;border-radius:12px;background:{{c.ilBg}};display:flex;align-items:center;justify-content:center"><svg width="34" height="34" viewBox="-4 -4 136 136"><defs><linearGradient id="{{pid}}g" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{c.gradA}}"></stop><stop offset="1" stop-color="{{c.gradB}}"></stop></linearGradient></defs><path fill="url(#{{pid}}g)" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="url(#{{pid}}g)" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="none" stroke="{{c.borderStrong}}" stroke-width="5" stroke-dasharray="9 7" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="none" stroke="{{c.borderStrong}}" stroke-width="5" stroke-dasharray="9 7" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg><span style="position:absolute;right:7px;bottom:6px;width:17px;height:17px;border-radius:50%;background:{{c.paper}};box-shadow:0 1px 3px rgba(0,0,0,0.22);display:flex;align-items:center;justify-content:center;color:{{c.brand}}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></span></span></sc-if>
+<sc-if value="{{k.ilLost}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:relative;width:60px;height:52px;flex:none;border-radius:12px;background:{{c.ilBg}};overflow:hidden"><span style="position:absolute;left:13px;top:12px;width:34px;height:28px;border-radius:5px;background:{{c.paper}};box-shadow:0 1px 2px rgba(0,0,0,0.14), 0 0 0 0.5px rgba(0,0,0,0.08);overflow:hidden"><span style="position:absolute;left:-4px;bottom:0;width:26px;height:14px;border-radius:50% 50% 0 0;background:{{c.paperLine}}"></span><span style="position:absolute;left:14px;bottom:0;width:26px;height:10px;border-radius:50% 50% 0 0;background:{{c.paperLine}};opacity:0.7"></span><span style="position:absolute;right:6px;top:5px;width:6px;height:6px;border-radius:50%;background:{{c.paperLine}}"></span></span><span style="position:absolute;left:10px;top:25px;width:40px;height:2px;border-radius:1px;background:{{c.warningFill}};transform:rotate(-35deg)"></span></span></sc-if>
+<sc-if value="{{k.ilAuto}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:relative;width:60px;height:52px;flex:none;border-radius:12px;background:{{c.ilBg}};display:flex;align-items:center;justify-content:center"><svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="{{c.paper}}" stroke="{{c.paperLine}}" stroke-width="1"></circle><path d="M16 5v2M16 25v2M5 16h2M25 16h2" stroke="{{c.paperLine}}" stroke-width="1.6" stroke-linecap="round"></path><path d="M16 16V9.5M16 16l4.5 3" stroke="{{c.brand}}" stroke-width="2" stroke-linecap="round"></path><circle cx="16" cy="16" r="1.6" fill="{{c.brand}}"></circle></svg></span></sc-if>
+</sc-if>
+<div style="flex:1;align-self:stretch;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px"><span style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="font-weight:600;white-space:nowrap">{{k.title}}</span><span style="font-size:12px;font-weight:600;color:{{k.numColor}};font-variant-numeric:tabular-nums;white-space:nowrap">{{k.num}}</span></span><span style="font-size:12px;line-height:18px;color:{{c.text3}}">{{k.desc}}</span><sc-if value="{{k.bar}}" hint-placeholder-val="{{ false }}"><div role="progressbar" aria-label="备份进度" style="height:4px;margin-top:6px;border-radius:2px;background:{{c.track}};overflow:hidden"><div style="width:{{k.pct}};height:100%;border-radius:2px;background:{{c.brand}}"></div></div></sc-if></div>
+<sc-if value="{{k.hasBtn}}" hint-placeholder-val="{{ true }}"><button style="align-self:{{btnAlign}};height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.btnSoft}};box-shadow:{{c.btnSoftShadow}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500;white-space:nowrap">{{k.btn}}</button></sc-if>
+</section>
+</sc-for>
+</div>
+
+<sc-if value="{{showList}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="position:relative;display:flex;align-items:center;gap:8px;padding:0 4px 8px 12px">
+<span style="font-size:15px;font-weight:600;letter-spacing:-0.01em;white-space:nowrap">{{listTitle}}</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap">{{listCount}}</span>
+<sc-if value="{{hasChip}}" hint-placeholder-val="{{ false }}"><span style="height:24px;display:flex;align-items:center;gap:4px;margin-left:4px;padding:0 4px 0 10px;border-radius:12px;background:{{c.brandSoft}};color:{{c.brandText}};font-size:12px;font-weight:500;white-space:nowrap">{{chip}}<button aria-label="移除这个筛选" style="width:18px;height:18px;padding:0;border:0;border-radius:9px;background:transparent;color:{{c.brandText}};display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></span></sc-if>
+<div style="flex:1"></div>
+<sc-if value="{{showFilters}}" hint-placeholder-val="{{ true }}"><sc-for list="{{filters}}" as="f" hint-placeholder-count="3"><button aria-haspopup="listbox" style="height:28px;flex:none;display:flex;align-items:center;gap:5px;padding:0 8px 0 10px;border:0;border-radius:7px;background:{{f.bg}};color:{{c.text1}};font:inherit;font-size:12px;white-space:nowrap"><span style="color:{{c.text3}}">{{f.label}}</span>{{f.value}}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><path d="m6 9 6 6 6-6"></path></svg></button></sc-for></sc-if>
+<sc-if value="{{showYearMenu}}" hint-placeholder-val="{{ false }}">
+<div role="listbox" aria-label="年份" style="position:absolute;right:0;top:34px;z-index:6;width:200px;box-sizing:border-box;padding:4px;border-radius:10px;background:{{c.elevated}};box-shadow:{{c.e3}};display:flex;flex-direction:column">
+<sc-for list="{{yearMenu}}" as="m" hint-placeholder-count="5"><div role="option" aria-selected="{{m.sel}}" style="height:32px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;background:{{m.bg}}"><span style="width:14px;flex:none;display:flex;color:{{c.brandText}}"><sc-if value="{{m.check}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span><span style="flex:1">{{m.label}}</span><span style="font-size:12px;color:{{c.text3}};font-variant-numeric:tabular-nums">{{m.n}}</span></div></sc-for>
+<div style="height:1px;margin:4px 6px;background:{{c.border}}"></div>
+<div role="option" aria-selected="false" style="height:32px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px"><span style="width:14px;flex:none"></span><span style="flex:1">与上方日历同步</span></div>
+</div>
+</sc-if>
+</div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+<div style="display:flex;flex-direction:column">
+<div style="height:30px;display:flex;align-items:center;gap:8px;padding:0 12px"><span style="font-size:12px;font-weight:600;color:{{c.text2}}">{{g.title}}</span><span style="font-size:12px;color:{{c.text3}}">{{g.count}}</span><div style="flex:1"></div><sc-if value="{{g.hasRest}}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;font-weight:500;color:{{c.brandText}}">{{g.rest}}</span></sc-if></div>
+<sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+<div style="position:relative;min-height:56px;display:flex;align-items:center;gap:14px;padding:8px 6px 8px 12px;border-radius:12px;background:{{r.bg}}">
+<div style="position:relative;width:40px;height:40px;flex:none;border-radius:8px;overflow:hidden;background:{{r.t0}};box-shadow:inset 0 0 0 1px {{c.hairline}}"><div style="position:absolute;left:16%;top:30%;width:52%;height:12%;background:{{r.t1}}"></div><div style="position:absolute;left:16%;top:54%;width:68%;height:12%;background:{{r.t2}}"></div></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.name}}</span><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden"><span style="color:{{c.warning}}">{{r.reason}}</span>· {{r.backup}}</span></div>
+<sc-if value="{{wideRows}}" hint-placeholder-val="{{ true }}"><span style="width:96px;flex:none;font-size:12px;color:{{c.text3}};white-space:nowrap;font-variant-numeric:tabular-nums">{{r.date}}</span><span style="width:96px;flex:none;font-size:12px;color:{{c.text3}};white-space:nowrap">{{r.docs}}</span></sc-if>
+<div style="width:96px;flex:none;display:flex;justify-content:flex-end">
+<sc-if value="{{r.hasBtn}}" hint-placeholder-val="{{ true }}"><button style="height:28px;flex:none;padding:0 12px;border:0;border-radius:7px;background:{{c.btnSoft}};box-shadow:{{c.btnSoftShadow}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500;white-space:nowrap">{{r.btn}}</button></sc-if>
+<sc-if value="{{r.hasNote}}" hint-placeholder-val="{{ false }}"><span style="height:28px;display:flex;align-items:center;font-size:12px;color:{{r.noteColor}};white-space:nowrap">{{r.note}}</span></sc-if>
+</div>
+<button aria-label="更多" style="width:28px;height:28px;flex:none;border:0;border-radius:7px;background:{{r.moreBg}};color:{{c.text2}};display:flex;align-items:center;justify-content:center;opacity:{{r.moreOp}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg></button>
+<sc-if value="{{r.hasDivider}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="position:absolute;left:66px;right:12px;bottom:0;height:1px;background:{{c.border}}"></span></sc-if>
+<sc-if value="{{r.menu}}" hint-placeholder-val="{{ false }}">
+<div role="menu" style="position:absolute;right:6px;top:50px;z-index:5;width:250px;box-sizing:border-box;padding:4px;border-radius:10px;background:{{c.elevated}};box-shadow:{{c.e3}};display:flex;flex-direction:column">
+<div role="menuitem" style="height:32px;display:flex;align-items:center;padding:0 8px;border-radius:6px;background:{{c.menuSel}}">重新检测这张</div>
+<div role="menuitem" style="height:32px;display:flex;align-items:center;padding:0 8px;border-radius:6px">重新上传原图…</div>
+<div role="menuitem" style="height:32px;display:flex;align-items:center;padding:0 8px;border-radius:6px">在图库中查看</div>
+<div role="menuitem" style="height:32px;display:flex;align-items:center;padding:0 8px;border-radius:6px">在浏览器打开</div>
+<div style="height:1px;margin:4px 6px;background:{{c.border}}"></div>
+<div role="menuitem" style="display:flex;flex-direction:column;padding:6px 8px;border-radius:6px"><span style="color:{{c.danger}}">移除失效链接…</span><span style="font-size:12px;color:{{c.text3}}">执行前将提示文档中可能仍有引用</span></div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+</div>
+
+<sc-if value="{{hasToasts}}" hint-placeholder-val="{{ false }}">
+<div aria-live="polite" style="position:absolute;right:20px;bottom:20px;z-index:30;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{toasts}}" as="t" hint-placeholder-count="1">
+<div role="status" style="position:relative;width:360px;box-sizing:border-box;display:flex;align-items:flex-start;gap:10px;padding:12px 12px 12px 14px;border-radius:14px;background:{{c.elevated}};box-shadow:{{c.e3}};overflow:hidden">
+<span aria-hidden="true" style="width:18px;height:18px;flex:none;margin-top:1px;border-radius:50%;background:{{t.fill}};color:#FFFFFF;display:flex;align-items:center;justify-content:center"><sc-if value="{{t.ok}}" hint-placeholder-val="{{ true }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if><sc-if value="{{t.bad}}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></sc-if></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-weight:600">{{t.title}}</span><span style="font-size:12px;color:{{c.text2}}">{{t.desc}}</span></div>
+<button style="height:28px;flex:none;padding:0 10px;border:0;border-radius:7px;background:{{c.subtle}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500">{{t.action}}</button>
+<sc-if value="{{t.countdown}}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:0;bottom:0;height:2px;width:62%;background:{{c.brand}}"></span></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</main>
+
+<sc-if value="{{showDialog}}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:40;background:{{scrim}};display:flex;align-items:center;justify-content:center">
+<div role="dialog" aria-label="补充备份" style="width:520px;box-sizing:border-box;padding:24px 28px;border-radius:16px;background:{{c.elevated}};box-shadow:{{e4}};display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:40px;flex:none;border-radius:10px;background:{{c.brandSoft}};color:{{c.brandText}};display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg></span>
+<div style="display:flex;flex-direction:column"><span style="font-size:17px;line-height:24px;font-weight:600">补充备份</span><span style="font-size:12px;color:{{c.text3}}">1,206 张图片仅有 1 份</span></div>
+</div>
+<span style="color:{{c.text2}}">将这些图片复制到另一个图床。仅复制，不删除或修改原图；目标图床上已有的图片自动跳过。</span>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;font-weight:500;color:{{c.text2}}">复制到</span>
+<div role="radiogroup" aria-label="复制到" style="border-radius:10px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{targets}}" as="t" hint-placeholder-count="4">
+<button role="radio" aria-checked="{{t.sel}}" aria-disabled="{{t.disabled}}" style="min-height:44px;display:flex;align-items:center;gap:12px;padding:6px 12px;border:0;border-top:{{t.divider}};background:transparent;color:{{c.text1}};font:inherit;text-align:left;opacity:{{t.op}}">
+<span style="width:28px;height:28px;flex:none;border-radius:7px;background:{{c.subtle}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center"><span style="display:flex;align-items:center;justify-content:center;width:18px;height:18px;flex:none;line-height:0"><dc-import name="HostIcon" host="{{t.host}}" size="18" hint-size="18px,18px"></dc-import></span></span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:500">{{t.name}}</span><span style="font-size:12px;color:{{t.subColor}}">{{t.sub}}</span></span>
+<span style="width:18px;height:18px;flex:none;box-sizing:border-box;border-radius:50%;background:{{t.radioBg}};box-shadow:{{t.radioRing}};display:flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:{{t.dot}}"></span></span>
+</button>
+</sc-for>
+</div>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">预计 18 分钟，在后台进行；进度显示在本页和传输中心。</span>
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px">
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">取消</button>
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">开始备份</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+
+<sc-if value="{{showRepair}}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:40;background:{{scrim}};display:flex;align-items:center;justify-content:center">
+<div role="dialog" aria-label="文档修复" style="width:520px;box-sizing:border-box;padding:24px 28px;border-radius:16px;background:{{c.elevated}};box-shadow:{{e4}};display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:40px;flex:none;border-radius:10px;background:{{c.brandSoft}};color:{{c.brandText}};display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>
+<div style="display:flex;flex-direction:column"><span style="font-size:17px;line-height:24px;font-weight:600">文档修复</span><span style="font-size:12px;color:{{c.text3}}">将 Markdown 文档中失效的图片替换为备份</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;font-weight:500;color:{{c.text2}}">文档文件夹</span>
+<div style="border-radius:10px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{folders}}" as="f" hint-placeholder-count="2">
+<div style="height:40px;display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;border-top:{{f.divider}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:{{c.text3}}"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path></svg><span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.path}}</span><span style="font-size:12px;color:{{c.text3}}">{{f.meta}}</span><button aria-label="移除这个文件夹" style="width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:{{c.text3}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div>
+</sc-for>
+<button style="height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;border:0;border-top:1px solid {{c.border}};border-radius:0 0 10px 10px;background:transparent;color:{{c.brandText}};font:inherit;font-weight:500;text-align:left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>添加文件夹…</button>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:12px;font-weight:500;color:{{c.text2}}">需要修复的文档</span><span style="font-size:12px;color:{{c.text3}}">3 个文档 · 5 处失效</span></div>
+<div style="border-radius:10px;box-shadow:0 0 0 1px {{c.border}};display:flex;flex-direction:column">
+<sc-for list="{{rdocs}}" as="d" hint-placeholder-count="3">
+<div style="min-height:44px;display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;border-top:{{d.divider}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:{{c.text3}}"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"></path><path d="M14 3v6h6"></path></svg><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{d.name}}</span><span style="font-size:12px;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{d.detail}}</span></span><button aria-label="用编辑器打开" title="用编辑器打开" style="width:28px;height:28px;flex:none;border:0;border-radius:7px;background:transparent;color:{{c.text2}};display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></button></div>
+</sc-for>
+</div>
+</div>
+<span style="font-size:12px;line-height:18px;color:{{c.text3}}">修改前自动备份原文件，可撤销。无可用备份的 1 处保持原样。</span>
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px">
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">取消</button>
+<button style="height:34px;padding:0 16px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">修复 4 处</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["neverChecked","checking","paused","problems","rowMenu","cardMenu","yearFilter","dayFilter","retryStill","fixing","fixed","fixPartial","allGood","repairDialog","backupDialog","backupRunning","backupDone","backupNoTarget"],"default":"problems"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"size":{"editor":"enum","options":["large","small"],"default":"large"},"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const small = this.props.size === 'small';
+    const state = this.props.state ?? 'problems';
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const sideLight = { Windows: '#F3F3F3', macOS: '#ECECEC', Linux: '#F4F4F4' };
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      canvas: '#1C1C1E', sidebar: '#151517', heroBg: 'linear-gradient(135deg, #1B2638 0%, #1C1C1E 62%)', ringTrack: '#2F2F33', subtle: '#252528', elevated: '#2A2A2D', track: '#2F2F33', trackOff: '#4A4A4F',
+      text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', navText: '#C4C4C6',
+      border: '#2F2F33', borderStrong: '#3D3D42', hairline: 'rgba(255,255,255,0.08)', searchBg: 'rgba(255,255,255,0.04)', navSel: 'rgba(255,255,255,0.08)', rowHover: '#252528', checkBorder: '#5C5C61',
+      brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE', gradA: '#46B3F5', gradB: '#6B7DF5',
+      success: '#5BD08A', successFill: '#22C55E', successSoft: '#15291D', warning: '#F2B35C', warningFill: '#F59E0B', warningSoft: '#2E2414', warningSoftDot: '#8A6A35', danger: '#FF7A7A', dangerFill: '#EF4444', dangerSoft: '#33191A', unknownFill: '#6B6B70',
+      segOn: '#48484D', segShadow: '0 1px 2px rgba(0,0,0,0.4)', secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)', menuSel: '#36363A',
+      e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)'
+    } : {
+      canvas: '#FFFFFF', sidebar: sideLight[platform] || '#F3F3F3', heroBg: 'linear-gradient(135deg, #EEF5FF 0%, #FFFFFF 62%)', ringTrack: '#E8EDF4', subtle: '#F5F5F5', elevated: '#FFFFFF', track: '#EBEBEB', trackOff: '#D4D4D4',
+      text1: '#171717', text2: '#525252', text3: '#6B6B6B', navText: '#404040',
+      border: '#E5E5E5', borderStrong: '#D4D4D4', hairline: 'rgba(0,0,0,0.06)', searchBg: 'rgba(255,255,255,0.75)', navSel: 'rgba(0,0,0,0.065)', rowHover: '#F5F5F5', checkBorder: '#A3A3A3',
+      brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9', gradA: '#2EA6F2', gradB: '#4D63F0',
+      success: '#147A3A', successFill: '#16A34A', successSoft: '#ECF7EF', warning: '#AD4F08', warningFill: '#D97706', warningSoft: '#FEF4E6', warningSoftDot: '#F3C98B', danger: '#B91C1C', dangerFill: '#DC2626', dangerSoft: '#FDECEC', unknownFill: '#A3A3A3',
+      segOn: '#FFFFFF', segShadow: '0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.06)', secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4', menuSel: '#F0F0F0',
+      e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)'
+    };
+    Object.assign(c, dark
+      ? { surface: '#232326', btnSoft: '#36363A', btnSoftShadow: 'none', cellEmpty: '#2C2C30', cellBad: '#F59E0B', cellBadSoft: '#9A7434', lv: ['#1E3352', '#27497A', '#3466AE', '#4C93F5'], ilBg: '#2E2E32', paper: '#3A3A3E', paperLine: '#55565C' }
+      : { surface: '#F5F7FA', btnSoft: '#FFFFFF', btnSoftShadow: '0 0 0 0.5px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.08)', cellEmpty: '#E6EAF0', cellBad: '#E8890B', cellBadSoft: '#F4BF6A', lv: ['#CFE0F8', '#9DC1F3', '#5F9BEB', '#2F6FD6'], ilBg: '#FFFFFF', paper: '#FFFFFF', paperLine: '#D3D9E3' });
+    const scrim = dark ? 'rgba(0,0,0,0.55)' : 'rgba(23,23,23,0.28)';
+    const e4 = dark ? '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)' : '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)';
+    const primary = { bg: c.button, ring: 'none', fg: '#FFFFFF' };
+    const soft = { bg: c.btnSoft, ring: c.btnSoftShadow, fg: c.text1 };
+    const B = (label, k) => Object.assign({ label }, k === 'p' ? primary : soft);
+    const pid = 'lh' + (dark ? 'd' : 'l') + state;
+
+    // 状态分组
+    const never = state === 'neverChecked';
+    const busy = state === 'checking' || state === 'paused';
+    const problem = ['problems', 'rowMenu', 'cardMenu', 'retryStill', 'yearFilter', 'dayFilter', 'repairDialog'].includes(state);
+    const fixing = state === 'fixing';
+    const after = state === 'fixed' || state === 'fixPartial';
+    const good = !never && !busy && !problem && !fixing && !after;
+    const hasBad = problem || fixing || after || busy;
+
+    // 状态栏：与图库工具栏同级。左边一句状态，右边操作
+    const SB = {
+      never: { title: '尚未检测', sub: '共 12,483 张图片 · 只读操作，约需 15 分钟', btns: [B('开始检测', 'p')] },
+      checking: { spin: true, title: '正在检测', sub: '1,024 / 3,500 · 等待微博响应 · 已发现 3 张失效', bar: true, pct: '29%', btns: [B('暂停')], more: false },
+      paused: { pause: true, title: '检测已暂停', sub: '1,024 / 3,500 · 已发现 3 张失效 · 继续后将从中断处检测', bar: true, pct: '29%', barColor: c.unknownFill, btns: [B('取消'), B('继续', 'p')], more: false },
+      problem: { dot: true, title: '21 张图片失效', sub: '集中在 2020–2023 年上传到微博的图片 · 15 张可用备份修复 · 另有 13 张可能受限', btns: [B('重新检测'), B('修复 15 张', 'p')] },
+      fixing: { spin: true, title: '正在修复', sub: '9 / 15 · 同时更新 3 个文档中的旧链接', bar: true, pct: '60%', btns: [], more: false },
+      after: { dot: true, title: '6 张图片失效', sub: '均无可用备份 · 15 张已修复', btns: [B('重新检测')] },
+      good: { title: '全部正常', sub: '12,483 张图片均可访问 · 上次检测：3 天前', btns: [B('重新检测')] }
+    };
+    const sb = Object.assign({ dot: false, spin: false, pause: false, bar: false, pct: '0%', barColor: c.brand, more: true }, SB[never ? 'never' : busy ? state : problem ? 'problem' : fixing ? 'fixing' : after ? 'after' : 'good'], { moreBg: state === 'cardMenu' ? c.navSel : 'transparent' });
+
+    // 上传日历：一次看一年，一格一天；颜色深浅 = 当天上传量，琥珀色 = 当天上传的图里有失效
+    let seed = 20261016;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const YU = { 2026: '1,604', 2025: '2,318', 2024: '2,106', 2023: '1,987', 2022: '1,842', 2021: '1,393', 2020: '889', 2019: '344' };
+    const YB = (problem || fixing) ? { 2023: 4, 2022: 6, 2021: 5, 2020: 6 } : busy ? { 2023: 3 } : after ? { 2022: 1, 2021: 1, 2020: 4 } : {};
+    // 默认选中最近一个有失效图片的年份；没有问题时选中今年
+    const selYear = (problem || fixing || busy) ? 2023 : after ? 2022 : 2026;
+    const JAN1 = { 2022: 5, 2023: 6, 2026: 3 };
+    const BADDAYS = {
+      2023: (problem || fixing) ? { 51: 1, 142: 2, 228: 1 } : busy ? { 51: 1, 142: 2 } : {},
+      2022: after ? { 247: 1 } : {}
+    };
+    const shown = [2026, 2025, 2024, 2023, 2022, 2021];
+    const earlierBad = (YB[2020] || 0) + (YB[2019] || 0);
+    const pill = (label, o) => Object.assign({ label, sel: 'false', bg: 'transparent', shadow: 'none', fg: c.text2, weight: 400, hasBad: false, bad: '', caret: false }, o || {});
+    const yearPills = shown.map((y) => pill(String(y), Object.assign(
+      y === selYear ? { sel: 'true', bg: c.btnSoft, shadow: c.btnSoftShadow, fg: c.text1, weight: 600 } : {},
+      YB[y] ? { hasBad: true, bad: String(YB[y]) } : {}
+    ))).concat([pill('更早', Object.assign({ caret: true }, earlierBad ? { hasBad: true, bad: String(earlierBad) } : {}))]);
+    const jan1 = JAN1[selYear];
+    const lastDay = selYear === 2026 ? 288 : 364;
+    const badDays = BADDAYS[selYear] || {};
+    const pickedDay = state === 'dayFilter' ? 142 : -1;
+    const weeks = [];
+    for (let w = 0; w < 53; w++) {
+      const days = [];
+      for (let r = 0; r < 7; r++) {
+        const doy = w * 7 + r - jan1;
+        let bg = 'transparent', ring = 'none';
+        if (doy >= 0 && doy <= lastDay) {
+          const x = rnd();
+          bg = x < 0.34 ? c.cellEmpty : c.lv[Math.min(3, Math.floor((x - 0.34) / 0.165))];
+          const nb = badDays[doy];
+          if (nb) bg = nb >= 2 ? c.cellBad : c.cellBadSoft;
+          if (doy === pickedDay) ring = '0 0 0 2px ' + c.surface + ', 0 0 0 3.5px ' + c.text1;
+        }
+        days.push({ bg, ring });
+      }
+      weeks.push({ days });
+    }
+    const cellPx = small ? 9 : 13, gapPx = small ? 2 : 3;
+    const mStart = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    const months = mStart.map((d, i) => ({ label: small && i % 2 ? '' : (i + 1) + '月', left: (Math.floor((d + jan1) / 7) * (cellPx + gapPx)) + 'px' }));
+    const weekdays = ['一', '', '三', '', '五', '', ''];
+    const yb = YB[selYear] || 0;
+    const yearSummary = selYear + ' 年上传 ' + YU[selYear] + ' 张' + (yb ? ' · ' + yb + ' 张失效' : '');
+
+    // 工具卡：小插画 + 标题 + 数量 + 一句说明 + 一个按钮
+    const card = (k, title, num, desc, btn, o) => Object.assign({ k, title, num, desc, btn, hasBtn: !!btn, numColor: c.text2, bar: false, pct: '0%', ilDoc: k === 'doc', ilBak: k === 'bak', ilLost: k === 'lost', ilAuto: k === 'auto' }, o || {});
+    let docCard = card('doc', '文档修复', '3 个文档', '4 处失效图片可替换为备份', '修复文档…');
+    if (never) docCard = card('doc', '文档修复', '', '添加文档文件夹，失效图片可在文档中一键替换', '添加文件夹…');
+    if (fixing) docCard = card('doc', '文档修复', '3 个文档', '正在更新，修改前已自动备份原文件', '');
+    if (after) docCard = card('doc', '文档修复', '3 个文档已更新', '共替换 7 处旧链接，可撤销', '查看…');
+    if (good) docCard = card('doc', '文档修复', '97 个文档', '均无失效图片 · D:\\Notes 等 2 个文件夹', '管理文件夹…');
+    let bakCard = card('bak', '补充备份', '1,206 张', '仅保存在 1 个图床，图床失效后无法恢复', '补充备份…');
+    if (state === 'backupRunning') bakCard = card('bak', '补充备份', '96 / 1,206', '正在复制到 Cloudflare R2 · 剩余约 18 分钟', '暂停', { bar: true, pct: '8%' });
+    if (state === 'backupDone') bakCard = card('bak', '补充备份', '已完成', '每张图片至少保存在 2 个图床', '');
+    if (state === 'backupNoTarget') bakCard = card('bak', '补充备份', '1,206 张', '需要另一个图床，当前只有 1 个可用图床', '添加图床');
+    const thirdCard = (good || never)
+      ? card('auto', '自动检测', never ? '' : '每 7 天', never ? '每 7 天在后台检测，发现失效时在侧栏提示' : '下次检测：10月19日', never ? '开启' : '更改')
+      : card('lost', '找不回的图片', busy ? '1 张' : '6 张', '所有副本均已失效，可重新上传原图', '查看', { numColor: c.warning });
+    const cards = [docCard, bakCard, thirdCard];
+
+    // 全部失效图片：不受日历年份影响；可按原因 / 图床 / 年份筛选
+    const T = { photo: ['#c3d0da', '#8e9d86', '#5f6d55'], book: ['#e9e2d6', '#6b4f3a', '#bfb3a2'], diagram: ['#fbfbfa', '#8ea4cf', '#d4a373'], chart: ['#ffffff', '#a9bce6', '#5f7fd6'], cover: ['#2b3440', '#ffffff', '#9fc4e8'] };
+    const er = (name, kind, reason, backup, date, docs, btn, o) => { const t = T[kind]; return Object.assign({ name, reason, backup, date, docs, btn, hasBtn: !!btn, hasNote: false, note: '', noteColor: c.text3, t0: t[0], t1: t[1], t2: t[2], bg: 'transparent', moreBg: 'transparent', moreOp: 1, menu: false }, o || {}); };
+    const note = (text, color) => ({ hasBtn: false, hasNote: true, note: text, noteColor: color || c.text3 });
+    let A = [
+      er('2022-读书笔记-配图.jpg', 'book', '微博：图片已不存在', '京东有备份', '2022年9月5日', '用于 2 个文档', '改用京东'),
+      er('tokio-调度.png', 'diagram', '微博：图片已不存在', 'Cloudflare R2 有备份', '2023年5月22日', '用于 1 个文档', '改用 R2'),
+      er('年度数据.png', 'chart', '京东：拒绝访问', 'Cloudflare R2 有备份', '2021年12月30日', '用于 1 个文档', '改用 R2')
+    ];
+    if (fixing) A = [Object.assign(A[0], note('已改用京东'), { moreOp: 0 }), Object.assign(A[1], note('正在修复…', c.brandText), { moreOp: 0 }), Object.assign(A[2], note('等待中'), { moreOp: 0 })];
+    const B1 = er('Kafka-分区示意.png', 'diagram', 'Cloudflare R2：连接超时', '无备份', '2020年6月3日', '用于 1 个文档', '重试', state === 'retryStill' ? note('仍然失效', c.warning) : {});
+    const B2 = er('旧博客-封面.jpg', 'cover', '微博：图片已不存在', '无备份', '2020年11月18日', '未被文档引用', '', state === 'rowMenu' ? { menu: true, bg: c.rowHover, moreBg: c.navSel } : {});
+    const D1 = er('tokio-调度.png', 'diagram', '微博：图片已不存在', 'Cloudflare R2 有备份', '2023年5月22日', '用于 1 个文档', '改用 R2');
+    const D2 = er('tokio-任务模型.png', 'diagram', '微博：图片已不存在', '京东有备份', '2023年5月22日', '用于 1 个文档', '改用京东');
+    const grp = (title, count, rows, rest) => ({ title, count, rows, rest: rest || '', hasRest: !!rest });
+    let groups = [];
+    if (state === 'dayFilter') groups = [grp('可改用备份', '2 张', [D1, D2])];
+    else if (problem || fixing) groups = [grp('可改用备份', '15 张', A, fixing ? '' : '显示其余 12 张'), grp('无可用备份', '6 张', [B1, B2], '显示其余 4 张')];
+    else if (busy) groups = [grp('可改用备份', '2 张', [A[0], A[1]]), grp('无可用备份', '1 张', [B1])];
+    else if (after) groups = [grp('无可用备份', '6 张', [B1, B2], '显示其余 4 张')];
+    groups = groups.map((g) => Object.assign({}, g, { rows: g.rows.map((r, i, a) => Object.assign({}, r, { hasDivider: i < a.length - 1 })) }));
+    const listTitle = busy ? '已发现的失效图片' : '全部失效图片';
+    const listCount = state === 'dayFilter' ? '2 张' : busy ? '3 张' : after ? '6 张' : '21 张';
+    const filters = [['原因', '全部'], ['图床', '全部'], ['年份', '全部']].map((f, i) => ({ label: f[0], value: f[1], bg: state === 'yearFilter' && i === 2 ? c.navSel : c.surface }));
+    const yearMenu = [['全部年份', '21'], ['2023 年', '4'], ['2022 年', '6'], ['2021 年', '5'], ['2020 年', '6']].map((m, i) => ({ label: m[0], n: m[1], sel: String(i === 0), check: i === 0, bg: i === 0 ? c.menuSel : 'transparent' }));
+
+    // 通知
+    const okT = (title, desc) => ({ ok: true, bad: false, fill: c.successFill, title, desc, action: '撤销', countdown: true });
+    const badT = (title, desc, action) => ({ ok: false, bad: true, fill: c.dangerFill, title, desc, action, countdown: false });
+    let toasts = [];
+    if (state === 'fixed') toasts = [okT('已修复 15 张图片', '已更新 3 个文档中的 7 处旧链接')];
+    if (state === 'fixPartial') toasts = [okT('已修复 15 张图片', '已更新 2 个文档中的 6 处旧链接'), badT('1 个文档未能更新', 'README.md 被其他程序占用，请关闭后重试', '重试')];
+
+    // 弹窗数据
+    const targets = [
+      { host: 'r2', name: 'Cloudflare R2', sub: '已有 6,540 张', sel: true },
+      { host: 'jd', name: '京东', sub: '已有 11,920 张', sel: false },
+      { host: 'webdav', name: '家里 NAS', sub: '已有 860 张', sel: false },
+      { host: 'weibo', name: '微博', sub: '登录已过期，暂不可选', sel: false, disabled: true }
+    ].map((t, i) => Object.assign(t, {
+      divider: i === 0 ? 'none' : '1px solid ' + c.border, disabled: String(!!t.disabled), sel: String(t.sel),
+      radioBg: t.sel ? c.brand : 'transparent', radioRing: t.sel ? 'none' : 'inset 0 0 0 1.5px ' + c.borderStrong, dot: t.sel ? '#FFFFFF' : 'transparent',
+      op: t.disabled ? 0.55 : 1, subColor: t.disabled ? c.warning : c.text3
+    }));
+    const folders = [{ path: 'D:\\Notes', meta: '94 个文档' }, { path: 'D:\\Code\\toy-project', meta: '3 个文档' }].map((f, i) => Object.assign(f, { divider: i === 0 ? 'none' : '1px solid ' + c.border }));
+    const rdocs = [
+      { name: '2025-年终总结.md', detail: 'D:\\Notes\\blog · 2 处失效，均可替换' },
+      { name: 'Rust 异步踩坑记.md', detail: 'D:\\Notes\\rust · 2 处失效，1 处可替换' },
+      { name: 'README.md', detail: 'D:\\Code\\toy-project · 1 处失效，可替换' }
+    ].map((d, i) => Object.assign(d, { divider: i === 0 ? 'none' : '1px solid ' + c.border }));
+
+    return {
+      W: small ? '800px' : '1400px', H: small ? '600px' : '900px', navFull: !small, navRail: small,
+      c, scrim, e4, pid, padX: '24px',
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif",
+      isMac: mac, notMac: !mac, isWin: platform === 'Windows', isLinux: platform === 'Linux', mod: mac ? '⌘' : 'Ctrl+',
+      sb, cardMenu: state === 'cardMenu',
+      calPad: small ? '14px 16px 16px' : '18px 24px 22px', pillPad: small ? '8px' : '11px',
+      yearPills, yearSummary, showYearSummary: !small, months, weekdays, weeks,
+      cell: cellPx + 'px', gap: gapPx + 'px', cellR: small ? '2.5px' : '3.5px', wdW: small ? '20px' : '28px',
+      gridLabel: selYear + ' 年按天的上传量' + (yb ? '，琥珀色为当天上传的图片中有失效' : ''),
+      cards, showIl: !small, cardDir: small ? 'column' : 'row', cardAlign: small ? 'stretch' : 'center', cardGap: small ? '10px' : '14px', btnAlign: small ? 'flex-start' : 'center',
+      showList: groups.length > 0, listTitle, listCount, groups, wideRows: !small,
+      hasChip: state === 'dayFilter', chip: '2023年5月22日', showFilters: !busy && !small,
+      filters, yearMenu, showYearMenu: state === 'yearFilter',
+      toasts, hasToasts: toasts.length > 0,
+      showDialog: state === 'backupDialog', targets,
+      showRepair: state === 'repairDialog', folders, rdocs
+    };
+  }
+}
+</script>
+</body>
+</html>

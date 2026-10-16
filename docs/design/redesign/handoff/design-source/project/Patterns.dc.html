@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>设计系统 · 反馈与业务组件</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:1400px;min-height:1940px;box-sizing:border-box;padding:48px 56px 56px;background:{{c.canvas}};color:{{c.text1}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans CJK SC','Noto Sans SC',system-ui,sans-serif;font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:40px">
+
+<header style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;color:{{c.text2}}">PicNexus 设计系统</span>
+<h1 style="margin:0;font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.015em">反馈与业务组件 · {{themeLabel}}</h1>
+</header>
+
+<section aria-label="通知" style="display:grid;grid-template-columns:400px minmax(0,1fr);gap:48px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-0.01em">通知 <span style="font-size:12px;font-weight:400;color:{{c.text3}}">Sonner</span></h2>
+<sc-for list="{{toasts}}" as="t" hint-placeholder-count="5">
+<div role="status" style="position:relative;width:380px;box-sizing:border-box;display:flex;align-items:flex-start;gap:10px;padding:12px 12px 12px 14px;border-radius:14px;background:{{c.elevated}};box-shadow:{{c.e3}};overflow:hidden">
+<span style="width:18px;height:18px;flex:none;margin-top:1px;border-radius:50%;background:{{t.fill}};color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700" aria-hidden="true">{{t.glyph}}</span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+<span style="font-weight:600">{{t.title}}</span>
+<span style="font-size:12px;color:{{c.text2}}">{{t.desc}}</span>
+</div>
+<sc-if value="{{t.hasAction}}" hint-placeholder-val="{{ false }}"><button style="height:28px;flex:none;padding:0 10px;border:0;border-radius:7px;background:{{c.subtle}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500;cursor:default">{{t.action}}</button></sc-if>
+<sc-if value="{{t.countdown}}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:0;bottom:0;height:2px;width:62%;background:{{c.brand}}"></span></sc-if>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;padding-top:36px">
+<span style="font-weight:600">规则</span>
+<sc-for list="{{toastRules}}" as="r" hint-placeholder-count="5">
+<div style="display:flex;gap:10px"><span style="width:4px;height:4px;flex:none;margin-top:9px;border-radius:50%;background:{{c.text3}}"></span><span style="color:{{c.text2}}">{{r}}</span></div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="对话框与抽屉" style="display:grid;grid-template-columns:460px 380px minmax(0,1fr);gap:48px;padding-top:32px;border-top:1px solid {{c.border}}">
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-0.01em">确认框 <span style="font-size:12px;font-weight:400;color:{{c.text3}}">AlertDialog</span></h2>
+<div style="position:relative;height:280px;border-radius:18px;background:{{c.scrim}};display:flex;align-items:center;justify-content:center">
+<div role="alertdialog" aria-label="确认清空" style="width:400px;box-sizing:border-box;padding:24px;border-radius:18px;background:{{c.elevated}};box-shadow:{{c.e4}};display:flex;flex-direction:column;gap:10px">
+<span style="font-size:15px;line-height:22px;font-weight:600">清空全部记录？</span>
+<span style="color:{{c.text2}}">会删除 PicNexus 里的 12,483 条上传记录。图床上的文件不受影响。这一步不能撤销。</span>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+<button style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500;cursor:default">取消</button>
+<button style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.dangerBtn}};color:#FFFFFF;font:inherit;font-weight:500;cursor:default">清空</button>
+</div>
+</div>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">标题 = 动词 + 对象；正文写「会发生什么 + 能否撤销」。默认焦点在「取消」，回车不会误触危险按钮。能撤销的操作不弹确认框。</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-0.01em">侧边抽屉 <span style="font-size:12px;font-weight:400;color:{{c.text3}}">Sheet · 传输中心</span></h2>
+<div style="height:280px;box-sizing:border-box;border-radius:14px 0 0 14px;background:{{c.elevated}};box-shadow:{{c.e4}};padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center"><span style="font-size:15px;font-weight:600">传输</span><div style="flex:1"></div><span style="font-size:12px;color:{{c.text3}}">Esc 关闭</span></div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between"><span style="font-weight:500">上传 · 30 张</span><span style="font-size:12px;color:{{c.text2}}">17 / 30</span></div>
+<div style="height:4px;border-radius:2px;background:{{c.track}};overflow:hidden"><div style="width:57%;height:100%;border-radius:2px;background:{{c.brand}}"></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between"><span style="font-weight:500">链接检测</span><span style="font-size:12px;color:{{c.text2}}">1,024 / 3,500 个链接</span></div>
+<div style="height:4px;border-radius:2px;background:{{c.track}};overflow:hidden"><div style="width:29%;height:100%;border-radius:2px;background:{{c.brand}}"></div></div>
+<div style="display:flex;align-items:center;gap:6px"><span style="flex:1;font-size:12px;color:{{c.text2}}">预计还要 3 分钟</span><button style="height:26px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{c.text1}};font:inherit;font-size:12px;cursor:default">暂停</button><button style="height:26px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:{{c.text1}};font:inherit;font-size:12px;cursor:default">取消</button></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:4px;padding-top:12px;border-top:1px solid {{c.border}}">
+<span style="font-size:12px;color:{{c.text3}}">已完成</span>
+<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{c.text2}}"><span style="color:{{c.success}}">✓</span>补充备份到 Cloudflare R2 · 210 张</span>
+</div>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">宽 360，盖在内容上方，不挤压布局；从标题栏的传输图标展开。</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-0.01em">骨架屏 <span style="font-size:12px;font-weight:400;color:{{c.text3}}">Skeleton</span></h2>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="height:12px;width:120px;border-radius:4px;background:{{c.skeleton}}"></span>
+<div style="display:flex;gap:6px"><span style="height:72px;flex:16;border-radius:8px;background:{{c.skeleton}}"></span><span style="height:72px;flex:9;border-radius:8px;background:{{c.skeleton}}"></span><span style="height:72px;flex:12;border-radius:8px;background:{{c.skeleton}}"></span></div>
+<div style="display:flex;gap:6px"><span style="height:72px;flex:10;border-radius:8px;background:{{c.skeleton}}"></span><span style="height:72px;flex:18;border-radius:8px;background:{{c.skeleton}}"></span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;padding-top:8px">
+<div style="display:flex;align-items:center;gap:12px"><span style="width:44px;height:44px;border-radius:8px;background:{{c.skeleton}}"></span><div style="flex:1;display:flex;flex-direction:column;gap:6px"><span style="height:10px;width:60%;border-radius:4px;background:{{c.skeleton}}"></span><span style="height:10px;width:85%;border-radius:4px;background:{{c.skeleton}}"></span></div></div>
+<div style="display:flex;align-items:center;gap:12px"><span style="width:44px;height:44px;border-radius:8px;background:{{c.skeleton}}"></span><div style="flex:1;display:flex;flex-direction:column;gap:6px"><span style="height:10px;width:45%;border-radius:4px;background:{{c.skeleton}}"></span><span style="height:10px;width:80%;border-radius:4px;background:{{c.skeleton}}"></span></div></div>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">形状和真实内容一致；超过 1 秒的操作才给进度。不知道进度时说「正在做什么」，不放假进度条。</span>
+</div>
+
+</section>
+
+<section aria-label="空状态" style="display:flex;flex-direction:column;gap:12px;padding-top:32px;border-top:1px solid {{c.border}}">
+<h2 style="margin:0;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-0.01em">空状态</h2>
+<div style="display:grid;grid-template-columns:1.3fr 0.8fr 1.3fr 1.3fr;gap:16px">
+<div style="height:220px;border-radius:14px;box-shadow:{{c.e1}};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 20px;text-align:center">
+<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.text3}}"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg>
+<span style="font-size:15px;font-weight:600;margin-top:4px">还没有上传过图片</span>
+<span style="font-size:12px;color:{{c.text2}}">把图片拖进窗口，或按 Ctrl V 粘贴</span>
+<button style="margin-top:6px;height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500;cursor:default">上传第一张</button>
+</div>
+<div style="height:220px;border-radius:14px;box-shadow:{{c.e1}};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 16px;text-align:center">
+<span style="font-weight:500">还没有收藏</span>
+<span style="font-size:12px;color:{{c.text2}}">在图片上点 ☆ 就能收藏</span>
+</div>
+<div style="height:220px;box-sizing:border-box;border-radius:14px;border:1.5px dashed {{c.borderStrong}};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 20px;text-align:center">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.text3}}"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"></path><path d="M14 3v6h6"></path></svg>
+<span style="font-weight:500">把 Markdown 文件或文件夹拖到这里</span>
+<span style="font-size:12px;color:{{c.text2}}">查找文档中失效的图片，并替换为其他图床上的备份</span>
+</div>
+<div style="height:220px;box-sizing:border-box;border-radius:14px;border:1.5px dashed {{c.brand}};background:{{c.brandSoft}};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 20px;text-align:center">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:{{c.brandText}}"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>
+<span style="font-weight:600;color:{{c.brandText}}">松开开始检查文档</span>
+<span style="font-size:12px;color:{{c.text2}}">拖入悬停：虚线变蓝、底色变浅蓝</span>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1.3fr 0.8fr 2.6fr;gap:16px;font-size:12px;color:{{c.text3}}"><span>页面级：图标 + 一句标题 + 下一步 + 可选按钮</span><span>紧凑级：侧栏、小列表</span><span>交互式投放区：静止 / 拖入悬停</span></div>
+</section>
+
+<section aria-label="业务组件" style="display:flex;flex-direction:column;gap:20px;padding-top:32px;border-top:1px solid {{c.border}}">
+<h2 style="margin:0;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-0.01em">业务组件</h2>
+
+<div style="display:grid;grid-template-columns:420px minmax(0,1fr);gap:48px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-weight:600">花瓣 <span style="font-weight:400;font-size:12px;color:{{c.text3}}">PetalGlyph · 一瓣 = 一个图床</span></span>
+<div style="display:flex;align-items:flex-end;gap:22px">
+<sc-for list="{{petalSizes}}" as="s" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<svg width="{{s.px}}" height="{{s.px}}" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="{{c.brand}}" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="{{c.brand}}" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="{{c.dangerFill}}" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="{{c.petalEmpty}}" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{c.text3}}">{{s.label}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">
+<sc-for list="{{petalStates}}" as="p" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;border-radius:10px;background:{{c.subtle}}">
+<span style="width:14px;height:14px;border-radius:4px;background:{{p.fill}};opacity:{{p.op}}"></span>
+<span style="font-size:11px;color:{{c.text2}}">{{p.name}}</span>
+</div>
+</sc-for>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">最少 12px。空槽用极淡的灰保留轮廓；图床多于 4 个时只画前 4 个，旁边写「+2」。</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-weight:600">图床标识 <span style="font-weight:400;font-size:12px;color:{{c.text3}}">HostMark · logo 一律单色，状态在右侧用文字</span></span>
+<div style="display:flex;flex-direction:column;border-radius:12px;box-shadow:{{c.e1}};overflow:hidden">
+<sc-for list="{{hostRows}}" as="h" hint-placeholder-count="4">
+<div style="height:44px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:{{h.divider}}">
+<span style="width:22px;height:22px;border-radius:6px;background:{{c.subtle}};box-shadow:{{c.e1}};font-size:{{h.fs}};font-weight:600;display:flex;align-items:center;justify-content:center;color:{{c.text2}}">{{h.mark}}</span>
+<span style="font-weight:500">{{h.name}}</span>
+<sc-if value="{{h.primary}}" hint-placeholder-val="{{ false }}"><span style="height:18px;display:flex;align-items:center;padding:0 6px;border-radius:5px;background:{{c.subtle}};font-size:11px;font-weight:500;color:{{c.text2}}">复制时使用</span></sc-if>
+<div style="flex:1"></div>
+<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{h.color}}"><span style="width:7px;height:7px;border-radius:50%;background:{{h.dot}}"></span>{{h.status}}</span>
+<span style="width:84px;text-align:right;font-size:12px;color:{{c.text3}}">{{h.when}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-weight:600">缩略图卡 <span style="font-weight:400;font-size:12px;color:{{c.text3}}">ThumbCard · 等高行、宽度按原比例，不裁掉截图内容</span></span>
+<div style="display:flex;gap:10px;align-items:flex-start">
+
+<div style="display:flex;flex-direction:column;gap:6px;width:216px">
+<div style="position:relative;height:120px;border-radius:10px;overflow:hidden;background:#FFFFFF;box-shadow:{{c.e1}}">
+<div style="position:absolute;left:8%;top:20%;width:32%;height:10%;border-radius:2px;background:#9fb4e0"></div>
+<div style="position:absolute;left:26%;top:40%;width:44%;height:10%;border-radius:2px;background:#c9a8e3"></div>
+<div style="position:absolute;left:44%;top:60%;width:46%;height:10%;border-radius:2px;background:#9fd0b2"></div>
+<div style="position:absolute;left:8%;top:80%;width:84%;height:1px;background:#c9c9c9"></div>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">默认：只有图，没有任何角标</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px;width:213px">
+<div style="position:relative;height:120px;border-radius:10px;overflow:hidden;background:#eef1f5;box-shadow:{{c.e1}}">
+<div style="position:absolute;left:0;top:0;right:0;height:12%;background:#dde2ea"></div>
+<div style="position:absolute;left:0;top:12%;bottom:0;width:22%;background:#e4e8ee"></div>
+<div style="position:absolute;left:30%;top:24%;width:40%;height:8%;background:#c4ccd9"></div>
+<div style="position:absolute;left:30%;top:40%;width:62%;height:24%;border-radius:3px;background:#fff"></div>
+<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.28),rgba(0,0,0,0) 40%,rgba(0,0,0,0) 60%,rgba(0,0,0,0.32))"></div>
+<span style="position:absolute;left:8px;top:8px;width:18px;height:18px;box-sizing:border-box;border-radius:5px;border:1.5px solid #FFFFFF;background:rgba(0,0,0,0.15)"></span>
+<span style="position:absolute;right:8px;top:6px;color:#FFFFFF;font-size:16px;line-height:1">☆</span>
+<span style="position:absolute;left:8px;bottom:8px;display:flex"><svg width="16" height="16" viewBox="-4 -4 136 136" aria-hidden="true"><path fill="#FFFFFF" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="#FFFFFF" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="rgba(255,255,255,0.35)" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="rgba(255,255,255,0.35)" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg></span>
+<span style="position:absolute;right:8px;bottom:8px;height:24px;display:flex;align-items:center;padding:0 8px;border-radius:7px;background:rgba(255,255,255,0.92);color:#171717;font-size:12px;font-weight:500">复制</span>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">悬停：选择框 · 收藏 · 花瓣 · 复制</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px;width:160px">
+<div style="position:relative;height:120px;border-radius:10px;overflow:hidden;background:#1f2230;box-shadow:0 0 0 2px {{c.canvas}},0 0 0 4px {{c.brand}}">
+<div style="position:absolute;left:12%;top:20%;width:34%;height:6%;background:#7aa2f7"></div>
+<div style="position:absolute;left:20%;top:34%;width:52%;height:6%;background:#9ece6a"></div>
+<div style="position:absolute;left:20%;top:48%;width:40%;height:6%;background:#c0caf5;opacity:0.6"></div>
+<div style="position:absolute;left:20%;top:62%;width:58%;height:6%;background:#e0af68"></div>
+<span style="position:absolute;left:8px;top:8px;width:18px;height:18px;border-radius:5px;background:{{c.brand}};color:#FFFFFF;display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">已选中</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px;width:228px">
+<div style="position:relative;height:120px;border-radius:10px;overflow:hidden;background:#c3d0da;box-shadow:{{c.e1}}">
+<div style="position:absolute;left:64%;top:16%;width:12%;aspect-ratio:1;border-radius:50%;background:#f3e6c6"></div>
+<div style="position:absolute;left:-10%;bottom:22%;width:70%;height:34%;border-radius:50% 50% 0 0;background:#8e9d86"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:24%;background:#5f6d55"></div>
+<span style="position:absolute;left:8px;bottom:8px;height:22px;display:flex;align-items:center;gap:4px;padding:0 8px;border-radius:6px;background:#B91C1C;color:#FFFFFF;font-size:11px;font-weight:500">✕ 失效</span>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">失效（常驻）</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px;width:160px">
+<div style="position:relative;height:120px;border-radius:10px;overflow:hidden;background:#ffffff;box-shadow:{{c.e1}}">
+<div style="position:absolute;left:0;right:0;top:0;height:18%;background:#e6ebf3"></div>
+<div style="position:absolute;left:0;right:0;top:44%;height:1px;background:#e5e7eb"></div>
+<div style="position:absolute;left:0;right:0;top:66%;height:1px;background:#e5e7eb"></div>
+<div style="position:absolute;left:36%;top:0;bottom:0;width:1px;background:#e5e7eb"></div>
+<span style="position:absolute;left:8px;bottom:8px;height:22px;display:flex;align-items:center;gap:4px;padding:0 8px;border-radius:6px;background:#AD4F08;color:#FFFFFF;font-size:11px;font-weight:500">! 可能受限</span>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">可能受限（常驻）</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px;width:120px">
+<div style="position:relative;height:120px;border-radius:10px;overflow:hidden;background:#fbf7ef;box-shadow:{{c.e1}}">
+<div style="position:absolute;left:30%;top:28%;width:40%;height:40%;border-radius:50%;border:2px solid #d4a373;box-sizing:border-box"></div>
+<span style="position:absolute;left:8px;bottom:8px;height:22px;display:flex;align-items:center;padding:0 8px;border-radius:6px;background:rgba(23,23,23,0.72);color:#FFFFFF;font-size:11px;font-weight:500">仅 1 份</span>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">没有备份</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px;width:150px">
+<div style="height:120px;border-radius:10px;background:{{c.subtle}};box-shadow:{{c.e1}};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:{{c.text3}}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="m3 3 18 18"></path></svg>
+<span style="font-size:12px">图片加载失败</span>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">已换遍备份仍失败</span>
+</div>
+
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:48px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-weight:600">链接块 <span style="font-weight:400;font-size:12px;color:{{c.text3}}">LinkField · 按格式语法分色，网址用蓝色文字</span></span>
+<div style="padding:10px 14px;border-radius:10px;background:{{c.subtle}};font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:1.6;word-break:break-all"><span style="color:{{c.text3}}">![</span>截图_2026-10-15_142233<span style="color:{{c.text3}}">](</span><span style="color:{{c.brandText}}">https://img30.360buyimg.com/pop/jfs/t1/245187/3/20517/88012/671f3e5aF8c2b1d4e/9a6c2f1e0b7d4e33.png</span><span style="color:{{c.text3}}">)</span></div>
+<div style="padding:10px 14px;border-radius:10px;background:{{c.subtle}};font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:1.6;word-break:break-all"><span style="color:{{c.text3}}">&lt;img src="</span><span style="color:{{c.brandText}}">https://img30.360buyimg.com/pop/jfs/t1/245187/…/9a6c2f1e0b7d4e33.png</span><span style="color:{{c.text3}}">" alt="</span>截图_2026-10-15_142233<span style="color:{{c.text3}}">"&gt;</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-weight:600">复制按钮 <span style="font-weight:400;font-size:12px;color:{{c.text3}}">原地变化，不弹通知</span></span>
+<div style="display:flex;align-items:center;gap:12px">
+<button style="height:28px;display:flex;align-items:center;gap:5px;padding:0 10px;border:0;border-radius:7px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-size:12px;cursor:default"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>复制</button>
+<span style="color:{{c.text3}}">→</span>
+<button style="height:28px;display:flex;align-items:center;gap:5px;padding:0 10px;border:0;border-radius:7px;background:{{c.successSoft}};color:{{c.success}};font:inherit;font-size:12px;font-weight:500;cursor:default"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>已复制</button>
+<span style="font-size:12px;color:{{c.text3}}">1.5 秒后复原</span>
+</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{c.text2}}">快捷键写法
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:0 6px;border-radius:5px;box-shadow:inset 0 0 0 1px {{c.borderStrong}};color:{{c.text1}}">Ctrl</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:0 6px;border-radius:5px;box-shadow:inset 0 0 0 1px {{c.borderStrong}};color:{{c.text1}}">K</span>
+<span style="color:{{c.text3}}">macOS 显示 ⌘ K</span>
+</div>
+</div>
+</div>
+
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1400,"height":1940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.theme === 'dark';
+    const c = dark ? {
+      canvas: '#1C1C1E', subtle: '#252528', elevated: '#2A2A2D', track: '#36363A', skeleton: '#2A2A2D', scrim: 'rgba(0,0,0,0.45)',
+      text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1',
+      border: '#2F2F33', borderStrong: '#3D3D42',
+      brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE',
+      success: '#5BD08A', successFill: '#22C55E', successSoft: '#15291D',
+      warning: '#F2B35C', warningFill: '#F59E0B',
+      danger: '#FF7A7A', dangerFill: '#EF4444', dangerBtn: '#C42B2B',
+      unknownFill: '#6B6B70', petalEmpty: '#36363A',
+      secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)',
+      e1: '0 0 0 1px rgba(255,255,255,0.08)',
+      e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)',
+      e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+    } : {
+      canvas: '#FFFFFF', subtle: '#F5F5F5', elevated: '#FFFFFF', track: '#EEEEEE', skeleton: '#F0F0F0', scrim: 'rgba(23,23,23,0.18)',
+      text1: '#171717', text2: '#525252', text3: '#6B6B6B',
+      border: '#E5E5E5', borderStrong: '#D4D4D4',
+      brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9',
+      success: '#147A3A', successFill: '#16A34A', successSoft: '#ECF7EF',
+      warning: '#AD4F08', warningFill: '#D97706',
+      danger: '#B91C1C', dangerFill: '#DC2626', dangerBtn: '#B91C1C',
+      unknownFill: '#A3A3A3', petalEmpty: '#EDEDED',
+      secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4',
+      e1: '0 0 0 1px rgba(0,0,0,0.06)',
+      e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)',
+      e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+    };
+    const div = '1px solid ' + c.border;
+    return {
+      c,
+      themeLabel: dark ? '深色' : '浅色',
+      toasts: [
+        { title: '已改用备份：3 张', desc: '复制的链接将来自京东', fill: c.successFill, glyph: '✓', hasAction: true, action: '撤销', countdown: true },
+        { title: '已复制 12 张', desc: 'Markdown 格式，每行一个', fill: c.successFill, glyph: '✓', hasAction: false, action: '', countdown: false },
+        { title: '上传失败', desc: '微博：登录已过期。到图床页重新登录后再试', fill: c.dangerFill, glyph: '✕', hasAction: true, action: '去登录', countdown: false },
+        { title: '检测进行中', desc: '等当前检测完成后再开始新的', fill: c.warningFill, glyph: '!', hasAction: false, action: '', countdown: false },
+        { title: '剪贴板里没有图片', desc: '复制一张图片后再按 Ctrl V', fill: c.unknownFill, glyph: 'i', hasAction: false, action: '', countdown: false }
+      ],
+      toastRules: [
+        '右下角，同时最多叠 3 条，新的在下面。',
+        '普通通知 4 秒后消失；带「撤销」的停留 6 秒，底部细线倒计时，鼠标悬停时暂停。',
+        '界面本身已经表达了结果（列表清空、进度条在动、按钮变「已复制」）就不再弹通知。',
+        '失败一定写「原因 + 下一步」，并给一个能直接去做下一步的按钮。',
+        '批量操作才报数量；单条复制只在按钮上原地显示「已复制」。'
+      ],
+      petalSizes: [{ px: 12, label: '12' }, { px: 16, label: '16' }, { px: 20, label: '20' }, { px: 28, label: '28' }],
+      petalStates: [
+        { name: '正常', fill: c.brand, op: 1 },
+        { name: '上传中', fill: c.brand, op: 0.4 },
+        { name: '受限', fill: c.warningFill, op: 1 },
+        { name: '失败', fill: c.dangerFill, op: 1 },
+        { name: '还没检测', fill: c.unknownFill, op: 1 }
+      ],
+      hostRows: [
+        { mark: 'R2', fs: '8.5px', name: 'Cloudflare R2', primary: true, status: '正常 · 240ms', color: c.success, dot: c.successFill, when: '3 天前', divider: 'none' },
+        { mark: '京', fs: '10.5px', name: '京东', primary: false, status: '正常 · 110ms', color: c.success, dot: c.successFill, when: '3 天前', divider: div },
+        { mark: '微', fs: '10.5px', name: '微博', primary: false, status: '失效 · 图片已不存在', color: c.danger, dot: c.dangerFill, when: '3 天前', divider: div },
+        { mark: '家', fs: '10.5px', name: '家里 NAS', primary: false, status: '还没检测', color: c.text2, dot: c.unknownFill, when: '—', divider: div }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

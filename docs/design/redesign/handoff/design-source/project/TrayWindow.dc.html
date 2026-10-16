@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>托盘菜单</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:560px;height:600px;overflow:hidden;background:{{c.wall}};font-family:{{font}};font-size:13px;line-height:1.4;color:{{c.text1}}">
+
+<sc-if value="{{isWin}}" hint-placeholder-val="{{ true }}">
+<div aria-hidden="true" style="position:absolute;left:0;right:0;bottom:0;height:48px;background:{{c.bar}};display:flex;align-items:center;justify-content:flex-end;gap:4px;padding-right:10px;box-shadow:0 -1px 0 {{c.barLine}}">
+<span style="width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:{{c.barIcon}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg></span>
+<span style="width:32px;height:32px;border-radius:6px;background:{{c.barHover}};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="{{c.barIconStrong}}"><path opacity="{{ic.p1}}" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path opacity="{{ic.p2}}" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path opacity="{{ic.p3}}" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path opacity="{{ic.p4}}" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg></span>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:{{c.barIcon}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg></span>
+<span style="display:flex;flex-direction:column;align-items:flex-end;font-size:11px;line-height:1.3;color:{{c.barText}};padding:0 4px">14:26<span>2026/10/15</span></span>
+</div>
+</sc-if>
+<sc-if value="{{isMac}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position:absolute;left:0;right:0;top:0;height:28px;background:{{c.bar}};display:flex;align-items:center;justify-content:flex-end;gap:14px;padding-right:14px;font-size:12px;color:{{c.barText}}">
+<span style="width:28px;height:22px;border-radius:5px;background:{{c.barHover}};display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="{{c.barIconStrong}}"><path opacity="{{ic.p1}}" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path opacity="{{ic.p2}}" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path opacity="{{ic.p3}}" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path opacity="{{ic.p4}}" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg></span>
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg>
+<span>10月15日 周四 14:26</span>
+</div>
+</sc-if>
+<sc-if value="{{isLinux}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position:absolute;left:0;right:0;top:0;height:30px;background:#1b1b1d;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding-right:12px;font-size:12px;color:#f2f2f2">
+<span style="width:28px;height:22px;border-radius:11px;background:rgba(255,255,255,0.16);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="-4 -4 136 136" aria-hidden="true"><g fill="#FFFFFF"><path opacity="{{ic.p1}}" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path opacity="{{ic.p2}}" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path opacity="{{ic.p3}}" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path opacity="{{ic.p4}}" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></g></svg></span>
+<span>10月15日 14:26</span>
+</div>
+</sc-if>
+
+<div role="menu" aria-label="PicNexus" style="position:absolute;right:{{m.right}}px;top:{{m.top}}px;width:{{m.w}}px;box-sizing:border-box;padding:{{m.pad}}px;border-radius:{{m.r}}px;background:{{c.menu}};box-shadow:{{c.menuShadow}};backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);display:flex;flex-direction:column">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+<sc-if value="{{r.isSep}}" hint-placeholder-val="{{ false }}"><div role="separator" style="height:1px;flex:none;margin:{{m.sepGap}}px {{m.sepX}}px;background:{{c.sep}}"></div></sc-if>
+<sc-if value="{{r.isStatus}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="height:{{m.statusH}}px;box-sizing:border-box;flex:none;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:0 {{m.padX}}px">
+<div style="display:flex;align-items:center;gap:8px;min-width:0">
+<svg width="14" height="14" viewBox="-4 -4 136 136" aria-hidden="true" style="flex:none"><path fill="{{c.brand}}" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"></path><path fill="{{c.brand}}" opacity="0.45" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"></path><path fill="{{c.petalWait}}" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"></path><path fill="{{c.petalWait}}" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"></path></svg>
+<span style="font-weight:500;white-space:nowrap">正在上传</span>
+<span style="flex:1;min-width:0;color:{{c.text3}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Rust-async-生命周期示意.png</span>
+<span style="color:{{c.text3}};font-size:12px;white-space:nowrap">1 / 3</span>
+</div>
+<div style="height:3px;margin-left:22px;border-radius:2px;background:{{c.track}};overflow:hidden"><div style="width:38%;height:100%;background:{{c.brand}}"></div></div>
+</div>
+</sc-if>
+<sc-if value="{{r.isItem}}" hint-placeholder-val="{{ true }}">
+<div role="{{r.role}}" aria-checked="{{r.ariaChecked}}" aria-disabled="{{r.disabled}}" aria-haspopup="{{r.sub}}" style="height:{{m.itemH}}px;flex:none;display:flex;align-items:center;gap:8px;padding:0 {{m.padX}}px;border-radius:{{m.itemR}}px;background:{{r.bg}};color:{{r.fg}}">
+<span style="width:14px;flex:none;display:flex;align-items:center;justify-content:center"><sc-if value="{{r.check}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{r.weight}}">{{r.label}}</span>
+<sc-if value="{{r.dot}}" hint-placeholder-val="{{ false }}"><span title="有图床需要处理" style="width:6px;height:6px;flex:none;border-radius:50%;background:{{c.warnFill}}"></span></sc-if>
+<span style="flex:none;white-space:nowrap;color:{{r.detailFg}};font-size:{{r.detailSize}};font-family:{{r.detailFont}}">{{r.detail}}</span>
+<span style="flex:none;white-space:nowrap;color:{{r.keyFg}};font-size:12px;letter-spacing:{{m.keySpacing}}">{{r.key}}</span>
+<sc-if value="{{r.sub}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:{{r.detailFg}}"><path d="m9 6 6 6-6 6"></path></svg></sc-if>
+</div>
+</sc-if>
+</sc-for>
+</div>
+
+<sc-if value="{{hasSub}}" hint-placeholder-val="{{ false }}">
+<div role="menu" aria-label="{{subLabel}}" style="position:absolute;right:{{subRight}}px;top:{{subTop}}px;width:{{m.subW}}px;box-sizing:border-box;padding:{{m.pad}}px;border-radius:{{m.r}}px;background:{{c.menu}};box-shadow:{{c.menuShadow}};backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);display:flex;flex-direction:column">
+<sc-for list="{{sub}}" as="r" hint-placeholder-count="6">
+<sc-if value="{{r.isSep}}" hint-placeholder-val="{{ false }}"><div role="separator" style="height:1px;flex:none;margin:{{m.sepGap}}px {{m.sepX}}px;background:{{c.sep}}"></div></sc-if>
+<sc-if value="{{r.isItem}}" hint-placeholder-val="{{ true }}">
+<div role="{{r.role}}" aria-checked="{{r.ariaChecked}}" style="height:{{m.itemH}}px;flex:none;display:flex;align-items:center;gap:8px;padding:0 {{m.padX}}px;border-radius:{{m.itemR}}px;background:{{r.bg}};color:{{r.fg}}">
+<span style="width:14px;flex:none;display:flex;align-items:center;justify-content:center"><sc-if value="{{r.check}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.label}}</span>
+<span style="flex:none;white-space:nowrap;color:{{r.detailFg}};font-size:{{r.detailSize}};font-family:{{r.detailFont}}">{{r.detail}}</span>
+</div>
+</sc-if>
+</sc-for>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["menu","uploading","noClip","hosts","format","paused"],"default":"menu"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":560,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const state = this.props.state ?? 'menu';
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const win = platform === 'Windows';
+    const linux = platform === 'Linux';
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+
+    // 每个平台用自己的菜单尺寸：Windows 11 行高 32、macOS 行高 24、GNOME 行高 32
+    const m = win ? { w: 268, subW: 244, itemH: 32, pad: 4, r: 8, itemR: 4, padX: 10, sepGap: 4, sepX: 0, statusH: 50, right: 12, keySpacing: '0' }
+      : mac ? { w: 264, subW: 248, itemH: 24, pad: 5, r: 10, itemR: 5, padX: 9, sepGap: 5, sepX: 9, statusH: 46, right: 8, keySpacing: '0.08em' }
+      : { w: 272, subW: 248, itemH: 32, pad: 6, r: 12, itemR: 6, padX: 10, sepGap: 5, sepX: 4, statusH: 50, right: 8, keySpacing: '0' };
+
+    const menuBg = win ? (dark ? '#2C2C2C' : '#F9F9F9') : mac ? (dark ? 'rgba(40,40,43,0.88)' : 'rgba(243,243,243,0.88)') : (dark ? '#303034' : '#FFFFFF');
+    const menuShadow = mac
+      ? (dark ? '0 0 0 0.5px rgba(255,255,255,0.16), 0 12px 32px rgba(0,0,0,0.5)' : '0 0 0 0.5px rgba(0,0,0,0.18), 0 12px 32px rgba(0,0,0,0.20)')
+      : (dark ? '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.45)' : '0 0 0 1px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.14)');
+    const c = dark ? {
+      wall: '#2a3140', bar: 'rgba(32,32,34,0.92)', barLine: 'rgba(255,255,255,0.06)', barHover: 'rgba(255,255,255,0.10)', barIcon: '#C4C4C6', barIconStrong: '#FFFFFF', barText: '#EBEBEC',
+      menu: menuBg, menuShadow, sep: 'rgba(255,255,255,0.09)', hover: 'rgba(255,255,255,0.07)', accent: '#336FDE',
+      text1: '#EBEBEC', text3: '#9C9CA1', disabled: '#6B6B70', warnText: '#F2B35C', warnFill: '#F59E0B',
+      brand: '#4C93F5', petalWait: '#5C5C61', track: 'rgba(255,255,255,0.10)'
+    } : {
+      wall: '#dfe5ec', bar: 'rgba(243,243,243,0.92)', barLine: 'rgba(0,0,0,0.06)', barHover: 'rgba(0,0,0,0.08)', barIcon: '#404040', barIconStrong: '#171717', barText: '#171717',
+      menu: menuBg, menuShadow, sep: 'rgba(0,0,0,0.08)', hover: 'rgba(0,0,0,0.055)', accent: '#2B63D9',
+      text1: '#171717', text3: '#6B6B6B', disabled: '#A3A3A3', warnText: '#AD4F08', warnFill: '#D97706',
+      brand: '#3985ED', petalWait: '#D4D4D4', track: 'rgba(0,0,0,0.08)'
+    };
+
+    const key = (k) => mac ? ('⇧⌘' + k) : ('Ctrl+Shift+' + k);
+    const paused = state === 'paused';
+    const mono = "'JetBrains Mono', monospace";
+
+    // 统一成菜单行：hl = 鼠标停在这一行（macOS 用强调色整行高亮，Windows / Linux 用浅灰）
+    const item = (o) => {
+      const hl = !!o.hl, onAccent = hl && mac;
+      const fg = o.disabled ? c.disabled : (onAccent ? '#FFFFFF' : c.text1);
+      const soft = o.disabled ? c.disabled : (onAccent ? 'rgba(255,255,255,0.82)' : (o.warn ? c.warnText : c.text3));
+      return {
+        isItem: true, isSep: false, isStatus: false,
+        label: o.label, detail: o.detail || '', key: o.key || '',
+        check: !!o.check, sub: !!o.sub, dot: !!o.dot && !onAccent, disabled: !!o.disabled,
+        role: o.role || 'menuitem', ariaChecked: String(!!o.check),
+        bg: hl ? (mac ? c.accent : c.hover) : 'transparent', fg,
+        detailFg: soft, keyFg: o.disabled ? c.disabled : (onAccent ? 'rgba(255,255,255,0.82)' : c.text3),
+        detailSize: o.mono ? '11px' : '12px', detailFont: o.mono ? mono : 'inherit',
+        weight: o.bold ? 600 : 400, id: o.id || ''
+      };
+    };
+    const sep = { isSep: true, isItem: false, isStatus: false };
+    const status = { isStatus: true, isSep: false, isItem: false };
+
+    const rows = [];
+    if (state === 'uploading') rows.push(status, sep);
+    rows.push(
+      item({ label: '上传剪贴板图片', key: paused ? '' : key('C'), disabled: state === 'noClip', detail: state === 'noClip' ? '剪贴板无图片' : '' }),
+      item({ label: '选择文件上传…', key: paused ? '' : key('O') }),
+      sep,
+      item({ id: 'hosts', label: '上传到', detail: '3 个图床', sub: true, dot: true, hl: state === 'hosts' }),
+      item({ id: 'format', label: '复制为', detail: 'Markdown', sub: true, hl: state === 'format' }),
+      item({ label: '压缩', detail: 'Web', sub: true }),
+      sep,
+      item({ label: '自动复制链接', check: true, role: 'menuitemcheckbox' }),
+      item({ label: '自动上传剪贴板', check: false, role: 'menuitemcheckbox' }),
+      item({ label: '全局快捷键', check: !paused, role: 'menuitemcheckbox', hl: paused }),
+      sep,
+      item({ label: '打开 PicNexus', bold: win }),
+      item({ label: '设置…', key: mac ? '⌘,' : '' }),
+      item({ label: '退出 PicNexus', key: mac ? '⌘Q' : '' })
+    );
+
+    // 菜单高度与子菜单对齐位置
+    const sepH = 1 + m.sepGap * 2;
+    const h = (r) => r.isSep ? sepH : (r.isStatus ? m.statusH : m.itemH);
+    let off = 0, anchor = 0;
+    rows.forEach((r) => { if (r.id && r.id === state) anchor = off; off += h(r); });
+    const menuH = off + m.pad * 2;
+    const top = win ? (600 - 56 - menuH) : (mac ? 31 : 36);
+
+    let sub = [], subLabel = '';
+    if (state === 'hosts') {
+      subLabel = '上传到';
+      sub = [
+        item({ label: '京东', check: true, role: 'menuitemcheckbox' }),
+        item({ label: 'Cloudflare R2', check: true, role: 'menuitemcheckbox' }),
+        item({ label: '微博', detail: '登录失效', warn: true, check: true, role: 'menuitemcheckbox', hl: true }),
+        item({ label: '家里 NAS', check: false, role: 'menuitemcheckbox' }),
+        sep,
+        item({ label: '管理图床…' })
+      ];
+    } else if (state === 'format') {
+      subLabel = '复制为';
+      sub = [
+        item({ label: 'URL', detail: 'https://…', mono: true, check: false, role: 'menuitemradio' }),
+        item({ label: 'Markdown', detail: '![](…)', mono: true, check: true, role: 'menuitemradio' }),
+        item({ label: 'HTML', detail: '<img src="…">', mono: true, check: false, role: 'menuitemradio' }),
+        item({ label: 'BBCode', detail: '[img]…[/img]', mono: true, check: false, role: 'menuitemradio' }),
+        sep,
+        item({ label: '自定义格式…' })
+      ];
+    }
+
+    // 托盘图标：单色模板图；上传中按图床进度点亮花瓣，暂停时整体变淡
+    const ic = state === 'uploading' ? { p1: 1, p2: 0.55, p3: 0.3, p4: 0.3 }
+      : paused ? { p1: 0.35, p2: 0.35, p3: 0.35, p4: 0.35 } : { p1: 1, p2: 1, p3: 1, p4: 1 };
+
+    return {
+      c, rows, sub, subLabel, ic,
+      hasSub: sub.length > 0,
+      subRight: m.right + m.w - 4,
+      subTop: top + anchor,
+      isWin: win, isMac: mac, isLinux: linux,
+      m: Object.assign({}, m, { top }),
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif"
+    };
+  }
+}
+</script>
+</body>
+</html>

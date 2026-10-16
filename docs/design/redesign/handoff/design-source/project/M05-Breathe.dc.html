@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>呼吸光晕</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes br{0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1.08)} }.br{animation:br 3.6s ease-in-out infinite}@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)} }.fl{animation:fl 3.6s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.mo,.mo *{animation:none !important} }
+</style>
+</helmet>
+<div class="mo" style="position:relative;width:360px;height:420px;overflow:hidden;background:{{bg}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',sans-serif;color:{{fg}}">
+<div style="position:absolute;left:0;right:0;top:0;height:330px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center"><span class="br" style="position:absolute;inset:-10px;border-radius:50%;background:radial-gradient(circle,{{glow}},transparent 62%)"></span><svg class="fl" width="120" height="120" viewBox="-4 -4 136 136" style="overflow:visible" aria-hidden="true"><defs><linearGradient id="mg5" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{gA}}"></stop><stop offset="1" stop-color="{{gB}}"></stop></linearGradient></defs><path class="" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" fill="url(#mg5)" style="transform-origin:64px 64px"></path><path class="" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" fill="url(#mg5)" style="transform-origin:64px 64px"></path><path class="" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" fill="url(#mg5)" style="transform-origin:64px 64px"></path><path class="" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" fill="url(#mg5)" style="transform-origin:64px 64px"></path></svg></div>
+</div>
+<div style="position:absolute;left:24px;right:24px;bottom:20px;display:flex;flex-direction:column;gap:4px">
+<span style="font-size:15px;line-height:22px;font-weight:600">⑤ 呼吸光晕</span>
+<span style="font-size:12px;line-height:18px;color:{{sub}}">后台任务进行中（补充备份、批量上传）。光晕慢速呼吸，周期 3.6 秒，不抢注意力；任务结束后淡出。</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":360,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.theme ?? 'dark') === 'dark';
+    return {
+      bg: dark ? 'radial-gradient(240px 200px at 50% 40%, #172133, #0D0F14 70%)' : 'radial-gradient(240px 200px at 50% 40%, #EEF5FE, #FFFFFF 70%)',
+      fg: dark ? '#EBEBEC' : '#171717', sub: dark ? '#9C9CA1' : '#6B6B6B',
+      gA: dark ? '#46B3F5' : '#2EA6F2', gB: dark ? '#6B7DF5' : '#4D63F0', dim: dark ? '#2A2F3A' : '#E3E7EE', glow: dark ? 'rgba(76,147,245,0.55)' : 'rgba(57,133,237,0.35)'
+    };
+  }
+}
+</script>
+</body>
+</html>

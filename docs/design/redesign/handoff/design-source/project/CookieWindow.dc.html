@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Cookie 登录窗口 · 准备页</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:520px;height:600px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;border-radius:{{radius}};background:{{c.canvas}};color:{{c.text1}};font-size:13px;line-height:1.45;font-family:{{font}};box-shadow:0 0 0 1px {{c.hairline}}">
+<div style="height:40px;flex:none;display:flex;align-items:center;padding-left:14px;background:{{c.sidebar}}">
+<sc-if value="{{isMac}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px;margin-right:14px" aria-hidden="true"><span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span><span style="width:12px;height:12px;border-radius:50%;background:#d4d4d4"></span><span style="width:12px;height:12px;border-radius:50%;background:#d4d4d4"></span></div></sc-if>
+<span style="font-size:12px;font-weight:500">微博登录</span>
+<div style="flex:1"></div>
+<sc-if value="{{notMac}}" hint-placeholder-val="{{ true }}"><button aria-label="关闭" style="width:46px;height:40px;border:0;background:transparent;color:{{c.text1}};display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19M5 5l14 14"></path></svg></button></sc-if>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:0 48px;text-align:center">
+<span style="width:56px;height:56px;border-radius:14px;background:{{c.subtle}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center;color:{{c.text2}}"><span style="display:flex;align-items:center;justify-content:center;width:37px;height:37px;flex:none;line-height:0"><dc-import name="HostIcon" host="weibo" size="37" hint-size="37px,37px"></dc-import></span></span>
+<span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.012em;margin-top:6px">登录微博</span>
+<span style="color:{{c.text2}}">将在此窗口打开微博官方登录页，登录成功后自动关闭。</span>
+<div style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:10px 12px;border-radius:10px;background:{{c.subtle}};text-align:left;font-size:12px;color:{{c.text2}}">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:1px;color:{{c.success}}"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+<span>仅读取上传所需的 Cookie，不保存账号与密码。</span>
+</div>
+<div style="display:flex;gap:8px;margin-top:14px">
+<button style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">取消</button>
+<button style="height:32px;padding:0 16px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">开始登录</button>
+</div>
+</div>
+<div style="height:44px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:{{c.text3}};border-top:1px solid {{c.border}}">此处将显示微博官方登录页</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":520,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      canvas: '#1C1C1E', sidebar: '#151517', subtle: '#252528', text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', border: '#2F2F33', hairline: 'rgba(255,255,255,0.08)',
+      button: '#336FDE', success: '#5BD08A', secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)'
+    } : {
+      canvas: '#FFFFFF', sidebar: '#F3F3F3', subtle: '#F5F5F5', text1: '#171717', text2: '#525252', text3: '#6B6B6B', border: '#E5E5E5', hairline: 'rgba(0,0,0,0.08)',
+      button: '#2B63D9', success: '#147A3A', secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4'
+    };
+    return {
+      c, isMac: mac, notMac: !mac, radius: mac ? '12px' : (platform === 'Windows' ? '8px' : '10px'),
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif"
+    };
+  }
+}
+</script>
+</body>
+</html>

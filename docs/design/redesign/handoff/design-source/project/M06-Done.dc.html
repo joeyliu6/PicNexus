@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>完成绽放</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes rt{0%{transform:rotate(-45deg) scale(.6);opacity:0}35%{transform:rotate(8deg) scale(1.06);opacity:1}50%,85%{transform:rotate(0) scale(1);opacity:1}100%{opacity:0} }.rt{animation:rt 2.6s cubic-bezier(.2,0,0,1) infinite;transform-origin:center}@keyframes rp{0%,25%{transform:scale(.5);opacity:0}35%{opacity:.9}80%,100%{transform:scale(1.7);opacity:0} }.rp{animation:rp 2.6s ease-out infinite}@keyframes ck{0%,40%{stroke-dashoffset:30;opacity:0}45%{opacity:1}60%,85%{stroke-dashoffset:0;opacity:1}100%{opacity:0} }.ck{stroke-dasharray:30;animation:ck 2.6s ease-out infinite}
+@media (prefers-reduced-motion: reduce){.mo,.mo *{animation:none !important} }
+</style>
+</helmet>
+<div class="mo" style="position:relative;width:360px;height:420px;overflow:hidden;background:{{bg}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',sans-serif;color:{{fg}}">
+<div style="position:absolute;left:0;right:0;top:0;height:330px;display:flex;align-items:center;justify-content:center">
+<div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center"><span class="rp" style="position:absolute;inset:0;border-radius:50%;border:2px solid {{gA}}"></span><div class="rt" style="display:flex"><svg class="" width="120" height="120" viewBox="-4 -4 136 136" style="overflow:visible" aria-hidden="true"><defs><linearGradient id="mg6" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{gA}}"></stop><stop offset="1" stop-color="{{gB}}"></stop></linearGradient></defs><path class="" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" fill="url(#mg6)" style="transform-origin:64px 64px"></path><path class="" d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" fill="url(#mg6)" style="transform-origin:64px 64px"></path><path class="" d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" fill="url(#mg6)" style="transform-origin:64px 64px"></path><path class="" d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" fill="url(#mg6)" style="transform-origin:64px 64px"></path></svg></div><svg width="34" height="34" viewBox="0 0 24 24" style="position:absolute;right:6px;bottom:6px" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#22C55E"></circle><path class="ck" d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+</div>
+<div style="position:absolute;left:24px;right:24px;bottom:20px;display:flex;flex-direction:column;gap:4px">
+<span style="font-size:15px;line-height:22px;font-weight:600">⑥ 完成绽放 · 已复制</span>
+<span style="font-size:12px;line-height:18px;color:{{sub}}">链接已复制。花瓣带一点回弹旋入，一圈涟漪扩散，绿色对勾画出。0.6 秒内完成，比文字提示更早被看到。</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":360,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.theme ?? 'dark') === 'dark';
+    return {
+      bg: dark ? 'radial-gradient(240px 200px at 50% 40%, #172133, #0D0F14 70%)' : 'radial-gradient(240px 200px at 50% 40%, #EEF5FE, #FFFFFF 70%)',
+      fg: dark ? '#EBEBEC' : '#171717', sub: dark ? '#9C9CA1' : '#6B6B6B',
+      gA: dark ? '#46B3F5' : '#2EA6F2', gB: dark ? '#6B7DF5' : '#4D63F0', dim: dark ? '#2A2F3A' : '#E3E7EE', glow: dark ? 'rgba(76,147,245,0.55)' : 'rgba(57,133,237,0.35)'
+    };
+  }
+}
+</script>
+</body>
+</html>

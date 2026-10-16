@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>流光描边</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes tr{to{stroke-dashoffset:-560} }.tr{stroke-dasharray:90 470;animation:tr 2.4s linear infinite}.tr2{stroke-dasharray:90 470;animation:tr 2.4s linear -1.2s infinite}
+@media (prefers-reduced-motion: reduce){.mo,.mo *{animation:none !important} }
+</style>
+</helmet>
+<div class="mo" style="position:relative;width:360px;height:420px;overflow:hidden;background:{{bg}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',sans-serif;color:{{fg}}">
+<div style="position:absolute;left:0;right:0;top:0;height:330px;display:flex;align-items:center;justify-content:center">
+<svg width="140" height="140" viewBox="-4 -4 136 136" aria-hidden="true"><defs><linearGradient id="mg2" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{{gA}}"></stop><stop offset="1" stop-color="{{gB}}"></stop></linearGradient></defs><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" fill="none" stroke="{{dim}}" stroke-width="3"></path><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" fill="none" stroke="{{dim}}" stroke-width="3"></path><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" fill="none" stroke="{{dim}}" stroke-width="3"></path><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" fill="none" stroke="{{dim}}" stroke-width="3"></path><path class="tr" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" fill="none" stroke="url(#mg2)" stroke-width="4" stroke-linecap="round" style="filter:drop-shadow(0 0 6px {{glow}})"></path><path class="tr2" d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" fill="none" stroke="url(#mg2)" stroke-width="4" stroke-linecap="round" style="filter:drop-shadow(0 0 6px {{glow}})"></path></svg>
+</div>
+<div style="position:absolute;left:24px;right:24px;bottom:20px;display:flex;flex-direction:column;gap:4px">
+<span style="font-size:15px;line-height:22px;font-weight:600">② 流光描边</span>
+<span style="font-size:12px;line-height:18px;color:{{sub}}">链接检测进行中 / 同步中。一段发光线沿花瓣轮廓循环流动，表示「在跑，不需要你操作」。</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":360,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.theme ?? 'dark') === 'dark';
+    return {
+      bg: dark ? 'radial-gradient(240px 200px at 50% 40%, #172133, #0D0F14 70%)' : 'radial-gradient(240px 200px at 50% 40%, #EEF5FE, #FFFFFF 70%)',
+      fg: dark ? '#EBEBEC' : '#171717', sub: dark ? '#9C9CA1' : '#6B6B6B',
+      gA: dark ? '#46B3F5' : '#2EA6F2', gB: dark ? '#6B7DF5' : '#4D63F0', dim: dark ? '#2A2F3A' : '#E3E7EE', glow: dark ? 'rgba(76,147,245,0.55)' : 'rgba(57,133,237,0.35)'
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>通知 · 在真实页面里叠放</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:1400px;height:900px">
+<dc-import name="HomeScreen" state="justCopied" theme="{{theme}}" platform="{{platform}}" hint-size="1400px,900px"></dc-import>
+<div aria-live="polite" style="position:absolute;right:20px;bottom:20px;z-index:30;display:flex;flex-direction:column;gap:8px;font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',system-ui,sans-serif;font-size:13px;line-height:1.45;color:{{c.text1}}">
+<sc-for list="{{toasts}}" as="t" hint-placeholder-count="3">
+<div role="status" style="position:relative;width:360px;box-sizing:border-box;display:flex;align-items:flex-start;gap:10px;padding:12px 12px 12px 14px;border-radius:14px;background:{{c.elevated}};box-shadow:{{c.e3}};overflow:hidden;opacity:{{t.op}}">
+<span style="width:18px;height:18px;flex:none;margin-top:1px;border-radius:50%;background:{{t.fill}};color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700" aria-hidden="true">{{t.glyph}}</span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-weight:600">{{t.title}}</span><span style="font-size:12.5px;color:{{c.text2}}">{{t.desc}}</span></div>
+<sc-if value="{{t.hasAction}}" hint-placeholder-val="{{ false }}"><button style="height:28px;flex:none;padding:0 10px;border:0;border-radius:7px;background:{{c.subtle}};color:{{c.text1}};font:inherit;font-size:12.5px;font-weight:500">{{t.action}}</button></sc-if>
+<sc-if value="{{t.countdown}}" hint-placeholder-val="{{ false }}"><span style="position:absolute;left:0;bottom:0;height:2px;width:62%;background:{{c.brand}}"></span></sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.theme === 'dark';
+    const c = dark ? { elevated: '#2A2A2D', subtle: '#36363A', text1: '#EBEBEC', text2: '#BEBEC3', brand: '#4C93F5', ok: '#22C55E', bad: '#EF4444', warn: '#F59E0B', e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)' }
+      : { elevated: '#FFFFFF', subtle: '#F5F5F5', text1: '#171717', text2: '#525252', brand: '#3985ED', ok: '#16A34A', bad: '#DC2626', warn: '#D97706', e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)' };
+    return {
+      theme: this.props.theme ?? 'light', platform: this.props.platform ?? 'Windows', c,
+      toasts: [
+        { title: '检测进行中', desc: '请等待当前检测完成', fill: c.warn, glyph: '!', hasAction: false, action: '', countdown: false, op: 0.92 },
+        { title: '上传失败', desc: '微博登录已过期，请在图床页重新登录', fill: c.bad, glyph: '✕', hasAction: true, action: '去登录', countdown: false, op: 1 },
+        { title: '已改用备份：3 张', desc: '复制的链接将来自京东', fill: c.ok, glyph: '✓', hasAction: true, action: '撤销', countdown: true, op: 1 }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

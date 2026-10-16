@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>加载状态规则</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes lrShimmer{0%{opacity:.55}50%{opacity:1}100%{opacity:.55} }
+.lrSk{animation:lrShimmer 1.4s ease-in-out infinite}
+@keyframes lrFade{0%,30%{opacity:0}60%,100%{opacity:1} }
+.lrFade{animation:lrFade 3s ease-out infinite}
+@keyframes lrSpin{to{transform:rotate(360deg)} }
+.lrSpin{animation:lrSpin .9s linear infinite;transform-origin:50% 50%}
+@keyframes lrBar{0%{width:8%}100%{width:92%} }
+.lrBar{animation:lrBar 2.6s cubic-bezier(.2,0,0,1) infinite}
+@media (prefers-reduced-motion: reduce){.lrSk,.lrFade,.lrSpin,.lrBar{animation:none} }
+</style>
+</helmet>
+<div style="width:1400px;height:660px;box-sizing:border-box;padding:40px;background:{{c.canvas}};font-family:Inter,'Microsoft YaHei UI','PingFang SC','Noto Sans SC',sans-serif;font-size:13px;line-height:1.45;color:{{c.text1}};display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;line-height:26px;font-weight:600">加载状态：大多数时候不需要骨架屏</span><span style="color:{{c.text2}}">记录都存在本机，切页和刷新几乎是瞬间完成。真正慢的只有两样：从图床拉缩略图、联网操作。所以按「什么在等」来决定怎么显示。</span></div>
+
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+
+<section style="display:flex;flex-direction:column;gap:12px;padding:18px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:170px;border-radius:10px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;overflow:hidden">
+<div style="width:26%;background:{{c.side}}"></div>
+<div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:8px"><span style="height:8px;width:40%;border-radius:2px;background:{{c.line}}"></span><div style="display:flex;gap:4px;height:40px"><span style="flex:3;border-radius:4px;background:#9FC4E8"></span><span style="flex:2;border-radius:4px;background:#C9B8E8"></span><span style="flex:2;border-radius:4px;background:#A8D5B5"></span></div><div style="display:flex;gap:4px;height:40px"><span style="flex:2;border-radius:4px;background:#F2C9A0"></span><span style="flex:4;border-radius:4px;background:#BFD3E6"></span></div></div>
+</div>
+<span style="font-weight:600">① 切换页面、刷新</span>
+<span style="font-size:12px;color:{{c.text2}}">直接显示内容，不放任何加载动画；回到某页时保留上次的滚动位置和选中项。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:12px;padding:18px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:170px;border-radius:10px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;overflow:hidden">
+<div style="width:26%;background:{{c.side}}"></div>
+<div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:8px"><span class="lrSk" style="height:8px;width:40%;border-radius:2px;background:{{c.sk}}"></span><div style="display:flex;gap:4px;height:40px"><span class="lrSk" style="flex:3;border-radius:4px;background:{{c.sk}}"></span><span class="lrSk" style="flex:2;border-radius:4px;background:{{c.sk}}"></span><span class="lrSk" style="flex:2;border-radius:4px;background:{{c.sk}}"></span></div><div style="display:flex;gap:4px;height:40px"><span class="lrSk" style="flex:2;border-radius:4px;background:{{c.sk}}"></span><span class="lrSk" style="flex:4;border-radius:4px;background:{{c.sk}}"></span></div></div>
+</div>
+<span style="font-weight:600">② 冷启动、超大图库</span>
+<span style="font-size:12px;color:{{c.text2}}">只有超过 300 毫秒还没读完才出现骨架屏，形状和真实布局一致；300 毫秒内完成就什么都不显示，避免一闪而过。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:12px;padding:18px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:170px;display:flex;align-items:center;justify-content:center;gap:8px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="width:72px;height:72px;border-radius:6px;background:#8FB5D9"></span><span style="font-size:11px;color:{{c.text3}}">主色占位</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;background:#8FB5D9"><span class="lrFade" style="position:absolute;inset:0;background:linear-gradient(180deg,#7DB8F2,#D6E9FB)"><span style="position:absolute;right:16%;top:16%;width:12px;height:12px;border-radius:50%;background:#FFD66E"></span><span style="position:absolute;left:-12%;width:80%;bottom:0;height:58%;background:#5BAE7E;clip-path:polygon(0 100%,48% 8%,100% 100%)"></span></span></span><span style="font-size:11px;color:{{c.text3}}">淡入 150ms</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="width:72px;height:72px;border-radius:6px;background:{{c.canvas}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center;color:{{c.text3}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="m3 16 5-5 4 4M14 13l2-2 5 5M4 4l16 16"></path></svg></span><span style="font-size:11px;color:{{c.text3}}">加载失败</span></div>
+</div>
+<span style="font-weight:600">③ 缩略图</span>
+<span style="font-size:12px;color:{{c.text2}}">上传时记下图片主色，加载前用主色块占位，画面不会跳；拉到后淡入。失败显示断图标，悬停可「换个图床加载」。</span>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:12px;padding:18px;border-radius:14px;background:{{c.subtle}}">
+<div style="height:170px;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:0 6px">
+<button style="align-self:flex-start;height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;border:0;border-radius:8px;background:{{c.canvas}};box-shadow:inset 0 0 0 1px {{c.borderStrong}};color:{{c.text2}};font:inherit;font-size:12px"><svg class="lrSpin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg>测试中…</button>
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;color:{{c.text2}}">正在检测 · 1,024 / 3,500</span><span style="height:4px;border-radius:2px;background:{{c.track}};overflow:hidden;display:block"><span class="lrBar" style="display:block;height:100%;border-radius:2px;background:{{c.brand}}"></span></span></div>
+<span style="font-size:12px;color:{{c.text3}}">按钮内转圈 · 行内进度条 · 花瓣动效</span>
+</div>
+<span style="font-weight:600">④ 联网操作</span>
+<span style="font-size:12px;color:{{c.text2}}">在发起操作的位置就地反馈，其他地方照常可用；不盖整页遮罩，不弹「请稍候」。</span>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1400,"height":660}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.theme === 'dark';
+    const c = dark
+      ? { canvas: '#1C1C1E', subtle: '#252528', side: '#151517', line: '#3D3D42', sk: '#2F2F33', track: '#2F2F33', text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', borderStrong: '#3D3D42', hairline: 'rgba(255,255,255,0.10)', brand: '#4C93F5' }
+      : { canvas: '#FFFFFF', subtle: '#F5F5F5', side: '#F3F3F3', line: '#E5E5E5', sk: '#ECECEC', track: '#E5E5E5', text1: '#171717', text2: '#525252', text3: '#6B6B6B', borderStrong: '#D4D4D4', hairline: 'rgba(0,0,0,0.08)', brand: '#3985ED' };
+    return { c };
+  }
+}
+</script>
+</body>
+</html>

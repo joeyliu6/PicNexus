@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>核心流程原型</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width:1400px;height:980px;display:flex;flex-direction:column;overflow:hidden;background:{{c.guideBg}};font-family:{{font}};font-size:13px;line-height:1.45;color:{{c.text1}}">
+
+<div tabIndex="0" onKeyDown="{{onKey}}" onDragEnter="{{onDragEnter}}" onDragOver="{{onDragOver}}" onDrop="{{onDrop}}" style="position:relative;width:1400px;height:900px;flex:none;overflow:hidden;outline:none">
+
+<sc-if value="{{showGallery}}" hint-placeholder-val="{{ true }}">
+<dc-import name="GalleryScreen" state="grid" theme="{{theme}}" platform="{{platform}}" hint-size="1400px,900px"></dc-import>
+</sc-if>
+
+<sc-if value="{{isDragging}}" hint-placeholder-val="{{ false }}">
+<div onDragLeave="{{onDragLeave}}" style="position:absolute;inset:0;z-index:20;background:{{c.dropScrim}};display:flex;align-items:center;justify-content:center">
+<div style="position:absolute;inset:12px;border-radius:16px;border:2px dashed {{c.brand}};pointer-events:none"></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 40px;border-radius:18px;background:{{c.elevated}};box-shadow:{{c.e4}};pointer-events:none">
+<div aria-hidden="true" style="position:relative;width:150px;height:110px"><div style="position:absolute;left:16px;top:18px;width:96px;height:74px;box-sizing:border-box;padding:4px;border-radius:8px;background:#FFFFFF;transform:rotate(-10deg);box-shadow:{{c.e3}}"><div style="position:relative;width:100%;height:100%;border-radius:4px;overflow:hidden;background:linear-gradient(180deg,#F5A97F,#FAD9B5)"><span style="position:absolute;right:16%;top:16%;width:13px;height:13px;border-radius:50%;background:#FFF4DA"></span><span style="position:absolute;left:-12%;width:80%;bottom:0;height:62%;background:#9C7BC0;clip-path:polygon(0 100%,48% 8%,100% 100%)"></span><span style="position:absolute;left:34%;width:80%;bottom:0;height:46%;background:#6E58A0;clip-path:polygon(0 100%,50% 0,100% 100%)"></span></div></div><div style="position:absolute;left:42px;top:8px;width:96px;height:74px;box-sizing:border-box;padding:4px;border-radius:8px;background:#FFFFFF;transform:rotate(6deg);box-shadow:{{c.e3}}"><div style="position:relative;width:100%;height:100%;border-radius:4px;overflow:hidden;background:linear-gradient(180deg,#7DB8F2,#D6E9FB)"><span style="position:absolute;right:16%;top:16%;width:13px;height:13px;border-radius:50%;background:#FFD66E"></span><span style="position:absolute;left:-12%;width:80%;bottom:0;height:62%;background:#5BAE7E;clip-path:polygon(0 100%,48% 8%,100% 100%)"></span><span style="position:absolute;left:34%;width:80%;bottom:0;height:46%;background:#2F8A5C;clip-path:polygon(0 100%,50% 0,100% 100%)"></span></div></div></div>
+<span style="font-size:15px;font-weight:600">松开即上传</span>
+<span style="color:{{c.text2}}">上传到 京东、Cloudflare R2、微博 · 完成后自动复制 Markdown 链接</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showUploading}}" hint-placeholder-val="{{ false }}">
+<dc-import name="HomeScreen" state="uploading" theme="{{theme}}" platform="{{platform}}" hint-size="1400px,900px"></dc-import>
+</sc-if>
+
+<sc-if value="{{showCopied}}" hint-placeholder-val="{{ false }}">
+<dc-import name="HomeScreen" state="justCopied" on-search="{{openPalette}}" theme="{{theme}}" platform="{{platform}}" hint-size="1400px,900px"></dc-import>
+</sc-if>
+
+<sc-if value="{{isPalette}}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:20">
+<button aria-label="关闭搜索" onClick="{{closePalette}}" style="position:absolute;inset:0;border:0;padding:0;background:{{c.scrim}};cursor:default"></button>
+<div role="dialog" aria-label="搜索" style="position:absolute;left:50%;top:120px;transform:translateX(-50%);width:600px;box-sizing:border-box;border-radius:16px;background:{{c.elevated}};box-shadow:{{c.e4}};overflow:hidden">
+<div style="height:56px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid {{c.border}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="color:{{c.text3}}"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="font-size:15px">读书笔记</span><span style="width:1.5px;height:20px;margin-left:-10px;background:{{c.brand}}"></span>
+<div style="flex:1"></div>
+<span style="font-size:12px;color:{{c.text3}}">Esc 关闭</span>
+</div>
+<div style="padding:8px;display:flex;flex-direction:column;gap:2px">
+<span style="padding:4px 10px;font-size:11px;font-weight:500;color:{{c.text3}}">图片</span>
+<button onClick="{{openResult}}" style="height:52px;display:flex;align-items:center;gap:12px;padding:0 10px;border:0;border-radius:10px;background:{{c.selBg}};color:{{c.text1}};font:inherit;text-align:left">
+<span style="position:relative;width:30px;height:40px;flex:none;border-radius:4px;overflow:hidden;background:#e9e2d6;box-shadow:0 0 0 1px {{c.hairline}}"><span style="position:absolute;left:18%;top:18%;width:56%;height:8%;background:#6b4f3a"></span><span style="position:absolute;left:18%;top:34%;width:64%;height:5%;background:#bfb3a2"></span><span style="position:absolute;left:18%;top:46%;width:50%;height:5%;background:#bfb3a2"></span></span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:500">2024-<b style="font-weight:600;color:{{c.brandText}}">读书笔记</b>-配图.jpg</span><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{c.danger}}"><span style="width:6px;height:6px;border-radius:50%;background:{{c.dangerFill}}"></span>微博链接已失效 · 京东备份可用</span></span>
+<span style="font-size:12px;color:{{c.text3}}">Enter 打开</span>
+</button>
+<button onClick="{{openResult}}" style="height:52px;display:flex;align-items:center;gap:12px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:{{c.text1}};font:inherit;text-align:left">
+<span style="position:relative;width:30px;height:40px;flex:none;border-radius:4px;overflow:hidden;background:#f4efe6;box-shadow:0 0 0 1px {{c.hairline}}"><span style="position:absolute;left:18%;top:22%;width:60%;height:30%;background:#d4a373"></span></span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:500">2024-<b style="font-weight:600;color:{{c.brandText}}">读书笔记</b>-封面.png</span><span style="font-size:12px;color:{{c.text3}}">2024年8月2日 · 京东</span></span>
+</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showDetail}}" hint-placeholder-val="{{ false }}">
+<dc-import name="GalleryScreen" state="{{galleryState}}" on-use-backup="{{useBackup}}" theme="{{theme}}" platform="{{platform}}" hint-size="1400px,900px"></dc-import>
+</sc-if>
+
+<sc-if value="{{isFixed}}" hint-placeholder-val="{{ false }}">
+<div role="status" aria-live="polite" style="position:absolute;right:20px;bottom:20px;z-index:20;width:360px;box-sizing:border-box;display:flex;align-items:flex-start;gap:10px;padding:12px 12px 12px 14px;border-radius:14px;background:{{c.elevated}};box-shadow:{{c.e3}};overflow:hidden">
+<span aria-hidden="true" style="width:18px;height:18px;flex:none;margin-top:1px;border-radius:50%;background:{{c.successFill}};color:#FFFFFF;display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-weight:600">已改用京东备份</span><span style="font-size:12px;color:{{c.text2}}">复制的链接将来自京东</span></span>
+<button onClick="{{undo}}" style="height:28px;flex:none;padding:0 10px;border:0;border-radius:7px;background:{{c.subtle}};color:{{c.text1}};font:inherit;font-size:12px;font-weight:500">撤销</button>
+<span style="position:absolute;left:0;bottom:0;height:2px;width:62%;background:{{c.brand}}"></span>
+</div>
+</sc-if>
+
+</div>
+
+<div style="height:80px;flex:none;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 24px;border-top:1px solid {{c.border}}">
+<span style="height:24px;display:flex;align-items:center;padding:0 9px;border-radius:12px;background:{{c.brandSoft}};color:{{c.brandText}};font-size:12px;font-weight:600;white-space:nowrap">原型 {{stepNo}} / 5</span>
+<span style="font-weight:500">{{hint}}</span>
+<sc-if value="{{showChip}}" hint-placeholder-val="{{ true }}">
+<button draggable="true" onDragStart="{{onDragStart}}" onDragEnd="{{onDragEnd}}" onClick="{{quickDrop}}" title="拖进上面的窗口，或直接点一下" style="height:48px;display:flex;align-items:center;gap:10px;padding:0 14px 0 6px;border:0;border-radius:10px;background:{{c.elevated}};box-shadow:{{c.e3}};color:{{c.text1}};font:inherit;cursor:grab">
+<span style="position:relative;width:52px;height:36px;border-radius:6px;overflow:hidden;background:#eef1f5;box-shadow:0 0 0 1px {{c.hairline}}"><span style="position:absolute;left:0;top:0;right:0;height:16%;background:#dde2ea"></span><span style="position:absolute;left:0;top:16%;bottom:0;width:22%;background:#e4e8ee"></span><span style="position:absolute;left:30%;top:34%;width:60%;height:30%;border-radius:2px;background:#ffffff"></span></span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:12px">截图_2026-10-15_142233.png</span>
+</button>
+</sc-if>
+<div style="flex:1"></div>
+<button onClick="{{restart}}" style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">重新开始</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;},&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Windows&quot;,&quot;macOS&quot;,&quot;Linux&quot;],&quot;default&quot;:&quot;Windows&quot;},&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:980}}">
+class Component extends DCLogic {
+  componentWillUnmount() { clearTimeout(this.timer); }
+  go(step) {
+    clearTimeout(this.timer);
+    this.setState({ step });
+    if (step === 'uploading') this.timer = setTimeout(() => this.setState({ step: 'copied' }), 1600);
+  }
+  renderVals() {
+    const step = (this.state && this.state.step) || 'gallery';
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      guideBg: '#151517', elevated: '#2A2A2D', subtle: '#36363A', text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1', border: '#2F2F33', hairline: 'rgba(255,255,255,0.10)',
+      brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', danger: '#FF7A7A', dangerFill: '#EF4444', successFill: '#22C55E', selBg: 'rgba(255,255,255,0.07)',
+      scrim: 'rgba(0,0,0,0.5)', dropScrim: 'rgba(28,28,30,0.72)', secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)',
+      e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)', e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+    } : {
+      guideBg: '#F5F5F5', elevated: '#FFFFFF', subtle: '#F5F5F5', text1: '#171717', text2: '#525252', text3: '#6B6B6B', border: '#E5E5E5', hairline: 'rgba(0,0,0,0.08)',
+      brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', danger: '#B91C1C', dangerFill: '#DC2626', successFill: '#16A34A', selBg: 'rgba(0,0,0,0.05)',
+      scrim: 'rgba(23,23,23,0.22)', dropScrim: 'rgba(255,255,255,0.78)', secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4',
+      e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)', e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+    };
+    const k = mac ? '⌘K' : 'Ctrl+K';
+    const H = {
+      gallery: [1, '把这张截图拖进上面的窗口（任意页面都可以拖），或直接点它'],
+      dragging: [1, '松开鼠标即可上传'],
+      uploading: [2, '正在上传，首个图床完成即自动复制链接'],
+      copied: [3, '链接已复制。接下来找一张旧图：点左侧「搜索」或按 ' + k],
+      palette: [3, '点第一条结果，或按 Enter 打开'],
+      broken: [4, '这张图的微博链接已失效。点右侧「改用京东」'],
+      fixed: [5, '已改用京东的链接。可以点通知里的「撤销」，或重新开始']
+    };
+    const stop = (e) => { if (e && e.preventDefault) e.preventDefault(); };
+    return {
+      c, theme: this.props.theme ?? 'light', platform,
+      stepNo: H[step][0], hint: H[step][1],
+      showGallery: step === 'gallery' || step === 'dragging', isDragging: step === 'dragging',
+      showUploading: step === 'uploading', showCopied: step === 'copied' || step === 'palette', isPalette: step === 'palette',
+      showDetail: step === 'broken' || step === 'fixed', galleryState: step === 'fixed' ? 'detailFixed' : 'detailBroken', isFixed: step === 'fixed',
+      showChip: step === 'gallery' || step === 'dragging',
+      onDragStart: (e) => { if (e && e.dataTransfer) { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', 'screenshot'); } },
+      onDragEnd: () => { if ((this.state && this.state.step) === 'dragging') this.go('gallery'); },
+      onDragEnter: (e) => { stop(e); if (step === 'gallery') this.go('dragging'); },
+      onDragOver: (e) => { stop(e); if (e && e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; },
+      onDragLeave: (e) => { if (e && e.currentTarget && e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return; if (e && e.relatedTarget) this.go('gallery'); },
+      onDrop: (e) => { stop(e); if (step === 'gallery' || step === 'dragging') this.go('uploading'); },
+      quickDrop: () => this.go('uploading'),
+      openPalette: (e) => { stop(e); this.go('palette'); },
+      closePalette: () => this.go('copied'),
+      openResult: () => this.go('broken'),
+      useBackup: () => this.go('fixed'),
+      undo: () => this.go('broken'),
+      restart: () => this.go('gallery'),
+      onKey: (e) => {
+        const key = (e && e.key || '').toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && key === 'k' && (step === 'copied' || step === 'palette')) { stop(e); this.go('palette'); }
+        else if (key === 'escape' && step === 'palette') this.go('copied');
+        else if (key === 'enter' && step === 'palette') { stop(e); this.go('broken'); }
+      },
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif"
+    };
+  }
+}
+</script>
+</body>
+</html>

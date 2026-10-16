@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>新手引导</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position:relative;width:1400px;height:900px;display:flex;overflow:hidden;background:{{c.canvas}};color:{{c.text1}};font-size:13px;line-height:1.45;font-family:{{font}}">
+<div style="width:208px;flex:none;background:{{c.sidebar}}"></div>
+<div style="flex:1"></div>
+<div style="position:absolute;inset:0;background:{{c.scrim}};display:flex;align-items:center;justify-content:center">
+<div role="dialog" aria-label="新手引导" style="width:640px;height:580px;box-sizing:border-box;border-radius:16px;background:{{c.elevated}};box-shadow:{{c.e4}};display:flex;flex-direction:column;overflow:hidden">
+
+<sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+<div style="position:relative;isolation:isolate;flex:1;display:flex;flex-direction:column;align-items:center;padding:40px 56px 0;text-align:center">
+<sc-if value="{{s1}}" hint-placeholder-val="{{ false }}"><div aria-hidden="true" style="position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden"><dc-import name="BgDecor" theme="{{themeName}}" fade="0px" hint-size="100%,100%"></dc-import></div></sc-if>
+
+<div aria-hidden="true" style="position:relative;width:420px;height:220px">
+<div style="position:absolute;left:24px;top:70px;width:120px;height:80px;border-radius:10px;overflow:hidden;background:#eef1f5;box-shadow:{{c.e3}}"><div style="position:absolute;left:0;top:0;right:0;height:14%;background:#dde2ea"></div><div style="position:absolute;left:0;top:14%;bottom:0;width:22%;background:#e4e8ee"></div><div style="position:absolute;left:30%;top:30%;width:60%;height:26%;border-radius:3px;background:#fff"></div><div style="position:absolute;left:30%;top:64%;width:40%;height:18%;border-radius:3px;background:#dbe3f6"></div></div>
+<div style="position:absolute;left:150px;top:108px;width:100px;height:2px;background:{{c.borderStrong}};transform:rotate(-24deg);transform-origin:left center"></div>
+<div style="position:absolute;left:150px;top:110px;width:100px;height:2px;background:{{c.borderStrong}}"></div>
+<div style="position:absolute;left:150px;top:112px;width:100px;height:2px;background:{{c.borderStrong}};transform:rotate(24deg);transform-origin:left center"></div>
+<div style="position:absolute;left:258px;top:42px;width:150px;height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:10px;background:{{c.warningSoft}};box-shadow:inset 0 0 0 1px {{c.warningFill}}"><span style="width:22px;height:22px;border-radius:6px;background:{{c.elevated}};display:flex;align-items:center;justify-content:center;color:{{c.text2}}"><span style="display:flex;align-items:center;justify-content:center;width:15px;height:15px;flex:none;line-height:0"><dc-import name="HostIcon" host="weibo" size="15" hint-size="15px,15px"></dc-import></span></span><span style="flex:1;text-align:left;font-size:12px">微博</span><span style="font-size:12px;color:{{c.danger}}">失效</span></div>
+<div style="position:absolute;left:258px;top:90px;width:150px;height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:10px;background:{{c.brandSoft}};box-shadow:inset 0 0 0 2px {{c.brand}}"><span style="width:22px;height:22px;border-radius:6px;background:{{c.elevated}};display:flex;align-items:center;justify-content:center;color:{{c.text2}}"><span style="display:flex;align-items:center;justify-content:center;width:15px;height:15px;flex:none;line-height:0"><dc-import name="HostIcon" host="jd" size="15" hint-size="15px,15px"></dc-import></span></span><span style="flex:1;text-align:left;font-size:12px;font-weight:500">京东</span><span style="font-size:12px;color:{{c.brandText}};font-weight:500">改用此副本</span></div>
+<div style="position:absolute;left:258px;top:138px;width:150px;height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:10px;background:{{c.subtle}}"><span style="width:22px;height:22px;border-radius:6px;background:{{c.elevated}};display:flex;align-items:center;justify-content:center;color:{{c.text2}}"><span style="display:flex;align-items:center;justify-content:center;width:15px;height:15px;flex:none;line-height:0"><dc-import name="HostIcon" host="r2" size="15" hint-size="15px,15px"></dc-import></span></span><span style="flex:1;text-align:left;font-size:12px">Cloudflare R2</span><span style="font-size:12px;color:{{c.success}}">正常</span></div>
+</div>
+<span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.015em;margin-top:18px">一张图，多个图床同时备份</span>
+<span style="max-width:460px;margin-top:10px;color:{{c.text2}}">上传时同时保存到多个图床，并自动复制链接。某个图床失效时，可切换到备份链接，并修复文档中的旧链接。</span>
+</div>
+</sc-if>
+
+<sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:40px 56px 0;gap:18px">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.015em">选择图床</span><span style="color:{{c.text2}}">以下图床无需账号，勾选即可使用。建议全部勾选，互为备份。</span></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+<sc-for list="{{starters}}" as="h" hint-placeholder-count="2">
+<div role="checkbox" aria-checked="{{h.on}}" style="height:88px;box-sizing:border-box;display:flex;align-items:center;gap:14px;padding:0 18px;border-radius:14px;background:{{h.bg}};box-shadow:{{h.ring}}">
+<span style="width:36px;height:36px;border-radius:9px;background:{{c.elevated}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center;color:{{c.text2}}"><span style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;line-height:0"><dc-import name="HostIcon" host="{{h.name}}" size="24" hint-size="24px,24px"></dc-import></span></span>
+<div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:600">{{h.name}}</span><span style="font-size:12px;color:{{c.text2}}">{{h.desc}}</span></div>
+<span style="width:20px;height:20px;box-sizing:border-box;border-radius:6px;background:{{h.boxBg}};box-shadow:{{h.boxRing}};color:#FFFFFF;display:flex;align-items:center;justify-content:center"><sc-if value="{{h.on}}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+</div>
+</sc-for>
+</div>
+<span style="font-size:12px;color:{{c.text3}}">勾选即表示你已了解：这类图床是非官方接入，可能违反平台规则或随时失效，风险由你自行承担。</span>
+<div style="margin-top:auto;margin-bottom:8px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;background:{{c.subtle}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:{{c.text3}}"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg><span style="color:{{c.text2}}">微博、GitHub、Cloudflare R2、WebDAV 等 16 种图床，可稍后在「图床」页添加。</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:40px 56px 0;gap:18px">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:20px;line-height:26px;font-weight:600;letter-spacing:-0.015em">上传方式</span><span style="color:{{c.text2}}">上传完成后自动复制链接，可直接粘贴到编辑器。</span></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+<sc-for list="{{ways}}" as="w" hint-placeholder-count="4">
+<div style="display:flex;gap:12px;padding:14px 16px;border-radius:14px;background:{{c.subtle}}">
+<span style="width:32px;height:32px;flex:none;border-radius:8px;background:{{c.elevated}};box-shadow:0 0 0 1px {{c.hairline}};display:flex;align-items:center;justify-content:center;color:{{c.brandText}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{w.icon}}"></path></svg></span>
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">{{w.title}}</span><span style="font-size:12px;color:{{c.text2}}">{{w.body}}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;box-shadow:0 0 0 1px {{c.border}}">
+<div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:600">默认链接格式</span><span style="font-size:12px;color:{{c.text2}}">Markdown 适用于博客与笔记，URL 仅包含地址。可在设置中修改</span></div>
+<div style="display:inline-flex;padding:2px;gap:2px;border-radius:9px;background:{{c.track}}"><span style="height:28px;padding:0 12px;border-radius:7px;display:flex;align-items:center;font-size:12px;color:{{c.text2}}">URL</span><span style="height:28px;padding:0 12px;border-radius:7px;display:flex;align-items:center;font-size:12px;font-weight:500;background:{{c.segOn}};box-shadow:{{c.segShadow}}">Markdown</span></div>
+</div>
+</div>
+</sc-if>
+
+<div style="height:72px;flex:none;display:flex;align-items:center;gap:10px;padding:0 24px">
+<button style="height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:{{c.text2}};font:inherit">跳过</button>
+<div style="flex:1;display:flex;justify-content:center;gap:6px"><sc-for list="{{dots}}" as="d" hint-placeholder-count="3"><span style="width:{{d.w}};height:6px;border-radius:3px;background:{{d.bg}}"></span></sc-for></div>
+<sc-if value="{{hasBack}}" hint-placeholder-val="{{ false }}"><button style="height:32px;padding:0 14px;border:0;border-radius:8px;background:{{c.secondaryBg}};box-shadow:{{c.secondaryRing}};color:{{c.text1}};font:inherit;font-weight:500">上一步</button></sc-if>
+<button style="height:32px;padding:0 16px;border:0;border-radius:8px;background:{{c.button}};color:#FFFFFF;font:inherit;font-weight:500">{{nextLabel}}</button>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"step":{"editor":"enum","options":["1","2","3"],"default":"1"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"platform":{"editor":"enum","options":["Windows","macOS","Linux"],"default":"Windows"},"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const step = String(this.props.step ?? '1');
+    const dark = this.props.theme === 'dark';
+    const platform = this.props.platform ?? 'Windows';
+    const mac = platform === 'macOS';
+    const cjk = { Windows: "'Microsoft YaHei UI'", macOS: "'PingFang SC'", Linux: "'Noto Sans CJK SC'" };
+    const c = dark ? {
+      canvas: '#1C1C1E', sidebar: '#151517', subtle: '#252528', elevated: '#2A2A2D', track: '#2F2F33', text1: '#EBEBEC', text2: '#BEBEC3', text3: '#9C9CA1',
+      border: '#34343A', borderStrong: '#45454A', hairline: 'rgba(255,255,255,0.10)', brand: '#4C93F5', brandText: '#6EA8FF', brandSoft: '#1B2A42', button: '#336FDE',
+      success: '#5BD08A', danger: '#FF7A7A', dangerFill: '#EF4444', dangerSoft: '#33191A', warningSoft: '#2E2414', warningFill: '#F59E0B', checkBorder: '#5C5C61', segOn: '#48484D', segShadow: '0 1px 2px rgba(0,0,0,0.4)',
+      secondaryBg: '#2A2A2D', secondaryRing: 'inset 0 0 0 1px rgba(255,255,255,0.12)', scrim: 'rgba(0,0,0,0.55)',
+      e3: '0 0 0 1px rgba(255,255,255,0.10), 0 12px 32px -8px rgba(0,0,0,0.6)', e4: '0 0 0 1px rgba(255,255,255,0.10), 0 24px 64px -12px rgba(0,0,0,0.7)'
+    } : {
+      canvas: '#FFFFFF', sidebar: '#F3F3F3', subtle: '#F5F5F5', elevated: '#FFFFFF', track: '#EBEBEB', text1: '#171717', text2: '#525252', text3: '#6B6B6B',
+      border: '#E5E5E5', borderStrong: '#D4D4D4', hairline: 'rgba(0,0,0,0.06)', brand: '#3985ED', brandText: '#2B63D9', brandSoft: '#EAF2FD', button: '#2B63D9',
+      success: '#147A3A', danger: '#B91C1C', dangerFill: '#DC2626', dangerSoft: '#FDECEC', warningSoft: '#FEF4E6', warningFill: '#D97706', checkBorder: '#A3A3A3', segOn: '#FFFFFF', segShadow: '0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.06)',
+      secondaryBg: '#FFFFFF', secondaryRing: 'inset 0 0 0 1px #D4D4D4', scrim: 'rgba(23,23,23,0.28)',
+      e3: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px -6px rgba(0,0,0,0.16)', e4: '0 0 0 1px rgba(0,0,0,0.06), 0 24px 64px -12px rgba(0,0,0,0.30)'
+    };
+    const m = mac ? '⌘' : 'Ctrl+';
+    const starters = [['京', '京东', '免配置 · 国内速度快', true], ['七', '七鱼', '免配置 · Token 自动获取', false]].map((s) => ({ mark: s[0], name: s[1], desc: s[2], on: s[3], bg: s[3] ? c.brandSoft : c.subtle, ring: s[3] ? 'inset 0 0 0 2px ' + c.brand : 'none', boxBg: s[3] ? c.brand : c.elevated, boxRing: s[3] ? 'none' : 'inset 0 0 0 1px ' + c.checkBorder }));
+    const later = [['Cookie 登录', '微博、知乎、B站、牛客…'], ['Token', 'GitHub、SM.MS、Imgur'], ['对象存储', 'Cloudflare R2、腾讯云、阿里云…'], ['自己的存储', '自定义 S3、WebDAV（家里 NAS）']].map((l, i) => ({ kind: l[0], names: l[1], divider: i === 0 ? 'none' : '1px solid ' + c.border }));
+    const ways = [
+      { title: '拖入窗口', body: '任意页面均可', icon: 'M12 4v12M7 11l5 5 5-5M5 20h14' },
+      { title: '按 ' + m + 'V 粘贴', body: '粘贴截图或已复制的图片', icon: 'M9 3h6v4H9zM16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2' },
+      { title: '在任意程序中按 ' + (mac ? '⇧⌘C' : 'Ctrl+Shift+C'), body: '无需打开窗口，上传剪贴板中的图片', icon: 'M4 7h16v10H4zM8 11h.01M12 11h.01M16 11h.01M8 14h8' },
+      { title: (mac ? '菜单栏' : '托盘') + '菜单', body: '上传、切换图床与链接格式', icon: 'M3 17h18M7 13l5-6 5 6' }
+    ];
+    const dots = ['1', '2', '3'].map((s) => ({ w: s === step ? '18px' : '6px', bg: s === step ? c.text1 : c.borderStrong }));
+    return {
+      themeName: this.props.theme ?? 'light',
+      c, s1: step === '1', s2: step === '2', s3: step === '3', starters, later, ways, dots,
+      hasBack: step !== '1', nextLabel: step === '3' ? '开始使用' : '下一步',
+      font: "Inter, " + (cjk[platform] || cjk.Windows) + ", 'Noto Sans SC', system-ui, sans-serif"
+    };
+  }
+}
+</script>
+</body>
+</html>
