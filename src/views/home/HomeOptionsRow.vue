@@ -37,7 +37,11 @@ const OFF = '__off__';
 
 const selectedNames = computed(() => props.hosts.filter((h) => h.selected).map((h) => h.name));
 const uploadToLabel = computed(() => (selectedNames.value.length ? selectedNames.value.join('、') : '未选择'));
-const hasWarning = computed(() => props.hosts.some((h) => h.selected && h.warning));
+/** 勾选的图床里有暂时传不上的：图标旁的悬停说明和读屏都说清是哪个、为什么（说法同「上传到」浮层） */
+const warningText = computed(() => props.hosts
+  .filter((h) => h.selected && h.warning)
+  .map((h) => `${h.name}${h.cookieLogin ? h.warning : `：${h.warning}`}，暂时传不上`)
+  .join('；'));
 
 const formatOptions = (['url', 'markdown', 'html', 'bbcode', 'custom'] as const).map((value) => ({ value, label: FORMAT_NAMES[value] }));
 const formatModel = computed({ get: () => props.format, set: (value: LinkFormat) => emit('setFormat', value) });
@@ -57,10 +61,10 @@ const compressionLabel = computed(() => (props.compression.enabled ? props.activ
   <div class="home-options">
     <PnPopover align="start" label="上传到">
       <template #trigger>
-        <button type="button" class="home-options__trigger" aria-haspopup="dialog">
+        <button type="button" class="home-options__trigger" aria-haspopup="dialog" :title="warningText || undefined">
           <span class="home-options__key">上传到</span>
           <span class="home-options__value">{{ uploadToLabel }}</span>
-          <PnIcon v-if="hasWarning" name="warning" :size="13" :stroke="1.8" class="home-options__warn" />
+          <PnIcon v-if="warningText" name="warning" :size="13" :stroke="1.8" class="home-options__warn" />
           <PnIcon name="chevronDown" :size="13" :stroke="1.8" class="home-options__key" />
         </button>
       </template>

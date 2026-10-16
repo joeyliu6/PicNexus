@@ -213,8 +213,9 @@
   --pn-space-recent-status-gap: 7px;
   --pn-border-dashed: 1.5px;
   --pn-radius-kbd: 5px;
-  --pn-size-upload-to-panel: 360px;
-  --pn-size-upload-to-panel-wide: 420px;
+  /* 设计稿浮层外框 360 / 420；PnPopover 自带两侧 8px 内边距，面板本身减去 16 */
+  --pn-size-upload-to-panel: 344px;
+  --pn-size-upload-to-panel-wide: 404px;
   --pn-size-upload-to-scroll: 176px;
   --pn-size-fast-hint: 300px;
   --pn-space-fast-hint-top: 80px;

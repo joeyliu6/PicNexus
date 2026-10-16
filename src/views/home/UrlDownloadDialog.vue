@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnDialog from '@/components/pn/PnDialog.vue';
 import { useUrlDownload } from '@/composables/upload/useUrlDownload';
+import { uiPlatform } from '@/utils/platform';
 
 const open = defineModel<boolean>('open', { default: false });
 
@@ -21,6 +22,8 @@ const input = ref('');
 watch(open, (value) => { if (value) input.value = ''; });
 
 const count = computed(() => parseUrls(input.value).length);
+/** 写法照命令面板（⌘ 2 / Ctrl 2）；macOS 上按的是 ⌘ */
+const submitKeys = uiPlatform() === 'macos' ? '⌘ Enter' : 'Ctrl Enter';
 const target = computed(() => (props.hostNames.length ? `下载后上传到${props.hostNames.join('、')}` : '下载后上传'));
 
 function submit() {
@@ -40,17 +43,19 @@ function onKeydown(event: KeyboardEvent) {
   <PnDialog v-model:open="open" title="从 URL 下载" :eyebrow="target" icon="link">
     <label class="url-dialog__field">
       <span class="url-dialog__label">图片地址（每行一个）</span>
-      <textarea
-        v-model="input"
-        class="url-dialog__input"
-        spellcheck="false"
-        placeholder="https://example.com/image.jpg"
-        @keydown="onKeydown"
-      />
+      <span class="url-dialog__box">
+        <textarea
+          v-model="input"
+          class="url-dialog__input"
+          spellcheck="false"
+          placeholder="https://example.com/image.jpg"
+          @keydown="onKeydown"
+        />
+      </span>
     </label>
     <span class="url-dialog__note">支持 JPG、PNG、GIF、WEBP、BMP<template v-if="count"> · 已识别 {{ count }} 个地址</template></span>
     <template #footer-left>
-      <span class="url-dialog__note"><span class="url-dialog__mono">Ctrl Enter</span> 提交 · <span class="url-dialog__mono">Esc</span> 关闭</span>
+      <span class="url-dialog__note"><span class="url-dialog__mono">{{ submitKeys }}</span> 提交 · <span class="url-dialog__mono">Esc</span> 关闭</span>
     </template>
     <template #footer>
       <PnButton variant="secondary" size="dialog" @click="open = false">取消</PnButton>
@@ -70,24 +75,33 @@ function onKeydown(event: KeyboardEvent) {
   color: var(--pn-text2);
 }
 
-.url-dialog__input {
+/* 边框和焦点框画在外层：旧主题对 textarea:focus 的重置（box-shadow: none）够不着这里，和 PnInput 同一做法 */
+.url-dialog__box {
+  display: flex;
   height: var(--pn-size-url-input);
+  border-radius: var(--pn-radius-md);
+  background: var(--pn-field);
+  box-shadow: inset 0 0 0 1px var(--pn-border-strong);
+}
+
+.url-dialog__box:focus-within {
+  box-shadow: inset 0 0 0 1px var(--pn-brand), 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft);
+}
+
+.url-dialog__input {
+  flex: 1;
+  min-width: 0;
   box-sizing: border-box;
   padding: var(--pn-space-8) var(--pn-space-sidebar-x);
   resize: none;
   border: 0;
-  border-radius: var(--pn-radius-md);
+  border-radius: inherit;
   outline: none;
-  background: var(--pn-field);
-  box-shadow: inset 0 0 0 1px var(--pn-border-strong);
+  background: transparent;
   color: var(--pn-text1);
   font-family: var(--pn-font-mono);
   font-size: var(--pn-text-mono);
   line-height: 1.7;
-}
-
-.url-dialog__input:focus {
-  box-shadow: inset 0 0 0 1px var(--pn-brand), 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft);
 }
 
 .url-dialog__note { font-size: var(--pn-text-footnote); color: var(--pn-text3); }

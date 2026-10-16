@@ -112,7 +112,8 @@ function onChip(hostId: string) {
 
     <div v-if="oneOff" class="upload-to__foot">
       <div class="upload-to__spacer" />
-      <PnButton variant="primary" size="sm" :disabled="localPicks.length === 0" @click="emit('uploadOneOff', [...localPicks])">上传这一张</PnButton>
+      <!-- 失败卡片上的「重试」已经是主按钮，这里用次按钮（每页最多一个主按钮） -->
+      <PnButton variant="secondary" size="sm" :disabled="localPicks.length === 0" @click="emit('uploadOneOff', [...localPicks])">上传这一张</PnButton>
     </div>
     <div v-else class="upload-to__foot">
       <span class="upload-to__muted">复制</span>
