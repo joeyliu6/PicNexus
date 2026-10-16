@@ -220,6 +220,119 @@ describe('processUploadQueue', () => {
     expect(queueManager.markItemComplete).toHaveBeenCalledWith('q-primary', 'https://img.example/jd.jpg');
   });
 
+  it('copies the link of the first host to finish, not the first one in config order', async () => {
+    // 有状态的队列：updateItem 真的写进去，pickPrimaryFromQueue 才看得到各图床的完成情况
+    const queueManager = createQueueManager();
+    queueManager.seed('q-first', 'first.jpg', ['jd', 'upyun']);
+    queueManager.updateItem.mockImplementation((id: string, update: any) => {
+      const item = queueManager.getItem(id);
+      Object.assign(item, { ...update, serviceProgress: { ...item.serviceProgress, ...(update.serviceProgress ?? {}) } });
+    });
+
+    uploadToMultipleServicesMock.mockImplementationOnce(async (
+      _filePath: string,
+      _services: string[],
+      _config: unknown,
+      _onProgress?: unknown,
+      onServiceResult?: (result: unknown) => Promise<void> | void,
+    ) => {
+      await onServiceResult?.({
+        serviceId: 'upyun',
+        status: 'success',
+        result: { serviceId: 'upyun', fileKey: 'upyun-key', url: 'https://img.example/upyun.jpg' },
+      });
+      await new Promise(resolve => setTimeout(resolve, 5));
+      await onServiceResult?.({
+        serviceId: 'jd',
+        status: 'success',
+        result: { serviceId: 'jd', fileKey: 'jd-key', url: 'https://img.example/jd.jpg' },
+      });
+      return { primaryService: 'upyun', primaryUrl: 'https://img.example/upyun.jpg', results: [] };
+    });
+
+    const links = await processUploadQueue(
+      [{ itemId: 'q-first', filePath: 'C:/tmp/first.jpg', uploadFilePath: 'C:/tmp/first.jpg', fileName: 'first.jpg' }],
+      { services: { jd: {}, upyun: {} } } as any,
+      ['jd', 'upyun'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+    );
+
+    expect(links[0]).toMatchObject({ serviceId: 'upyun', url: 'https://img.example/upyun.jpg' });
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('q-first', 'https://img.example/upyun.jpg');
+  });
+
+  describe('onPrimaryReady', () => {
+    function statefulQueue(id: string, services: string[]) {
+      const queueManager = createQueueManager();
+      queueManager.seed(id, `${id}.jpg`, services);
+      queueManager.updateItem.mockImplementation((itemId: string, update: any) => {
+        const item = queueManager.getItem(itemId);
+        Object.assign(item, { ...update, serviceProgress: { ...item.serviceProgress, ...(update.serviceProgress ?? {}) } });
+      });
+      return queueManager;
+    }
+
+    function ctxFor(queueManager: ReturnType<typeof createQueueManager>, onPrimaryReady: (i: number, link: CopyLinkItem) => void) {
+      return {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+        onPrimaryReady,
+      };
+    }
+
+    const success = (serviceId: string) => ({ serviceId, status: 'success', result: { serviceId, fileKey: `${serviceId}-k`, url: `https://img.example/${serviceId}.jpg` } });
+
+    it('waits for the pinned host instead of announcing the first one to finish', async () => {
+      const queueManager = statefulQueue('q-pin', ['jd', 'upyun']);
+      const announced: string[] = [];
+      uploadToMultipleServicesMock.mockImplementationOnce(async (_f: string, _s: string[], _c: unknown, _p: unknown, onServiceResult?: (r: unknown) => Promise<void> | void) => {
+        await onServiceResult?.(success('jd'));
+        expect(announced).toEqual([]);
+        await onServiceResult?.(success('upyun'));
+        return { primaryService: 'upyun', primaryUrl: 'https://img.example/upyun.jpg', results: [] };
+      });
+
+      await processUploadQueue(
+        [{ itemId: 'q-pin', filePath: 'C:/tmp/q-pin.jpg', uploadFilePath: 'C:/tmp/q-pin.jpg', fileName: 'q-pin.jpg' }],
+        { services: { jd: {}, upyun: {} }, linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: true, copyFromService: 'upyun' } } as any,
+        ['jd', 'upyun'], 1, ctxFor(queueManager, (_i, link) => { announced.push(link.serviceId!); }),
+      );
+
+      expect(announced).toEqual(['upyun']);
+    });
+
+    it('falls back to the first finished host as soon as the pinned one fails', async () => {
+      const queueManager = statefulQueue('q-fallback', ['jd', 'upyun']);
+      const announced: string[] = [];
+      uploadToMultipleServicesMock.mockImplementationOnce(async (_f: string, _s: string[], _c: unknown, _p: unknown, onServiceResult?: (r: unknown) => Promise<void> | void) => {
+        await onServiceResult?.(success('jd'));
+        await onServiceResult?.({ serviceId: 'upyun', status: 'failed', error: '超时' });
+        expect(announced).toEqual(['jd']);
+        return { primaryService: 'jd', primaryUrl: 'https://img.example/jd.jpg', results: [] };
+      });
+
+      await processUploadQueue(
+        [{ itemId: 'q-fallback', filePath: 'C:/tmp/q-fallback.jpg', uploadFilePath: 'C:/tmp/q-fallback.jpg', fileName: 'q-fallback.jpg' }],
+        { services: { jd: {}, upyun: {} }, linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: true, copyFromService: 'upyun' } } as any,
+        ['jd', 'upyun'], 1, ctxFor(queueManager, (_i, link) => { announced.push(link.serviceId!); }),
+      );
+
+      expect(announced).toEqual(['jd']);
+    });
+  });
+
   it('keeps weibo queue links raw and lets copy/thumb helpers apply the default template once', async () => {
     const queueManager = createQueueManager();
     queueManager.seed('q-weibo', 'weibo.jpg', ['weibo']);

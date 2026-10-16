@@ -19,6 +19,7 @@ import {
   getRequiredFields,
 } from '@/constants/serviceRequiredFields';
 import { createLogger } from '@/utils/logger';
+import { pickPrimaryService } from './primaryService';
 
 const log = createLogger('MultiUploader');
 
@@ -51,7 +52,7 @@ export interface SingleServiceResult {
  * 多图床上传结果
  */
 export interface MultiUploadResult {
-  /** 主力图床（第一个成功的） */
+  /** 「复制时使用」的图床：固定的那个，否则最先完成的 */
   primaryService: string;
 
   /** 所有图床的上传结果 */
@@ -134,6 +135,8 @@ export class MultiServiceUploader {
     // 创建所有上传任务
     // 将 TCL 和其他服务分开处理
     const uploadTasks: (() => Promise<SingleServiceResult>)[] = [];
+    /** 按完成先后记录结果，用来选「最先完成的」 */
+    const completionOrder: SingleServiceResult[] = [];
 
     validServices.forEach((serviceId) => {
       const task = async () => {
@@ -228,6 +231,8 @@ export class MultiServiceUploader {
             };
           }
 
+          completionOrder.push(taskResult);
+
           // 关键：任务完成后立即通知回调，实现实时 UI 更新
           if (onServiceResult) {
             await onServiceResult(taskResult);
@@ -244,8 +249,10 @@ export class MultiServiceUploader {
     // 启动所有任务
     const uploadResults = await Promise.all(uploadTasks.map(task => task()));
 
-    // 4. 确定主力图床（第一个成功的）
-    const primaryResult = uploadResults.find(r => r.status === 'success');
+    // 4. 确定「复制时使用」的图床：固定的那个，否则最先完成的
+    const successes = completionOrder.filter(r => r.status === 'success' && r.result);
+    const primaryId = pickPrimaryService(successes.map(r => r.serviceId), safeConfig.linkOutput?.copyFromService);
+    const primaryResult = successes.find(r => r.serviceId === primaryId);
     const failedResults = uploadResults.filter(r => r.status === 'failed');
 
     if (!primaryResult || !primaryResult.result) {

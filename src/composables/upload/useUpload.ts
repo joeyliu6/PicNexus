@@ -28,6 +28,8 @@ const log = createLogger('useUpload');
 
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
+/** 同时上传的图片张数（交接说明 8.1：批量时同时传 3 张） */
+export const MAX_CONCURRENT_FILES = 3;
 
 /**
  * 上传管理 Composable
@@ -222,7 +224,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // ⭐ 流水线处理：分批获取元数据 + 上传
       // 每批 50 张图片，限制同时进行的批次数量避免网络拥塞
       const batches = chunkArray(valid, METADATA_BATCH_SIZE);
-      const MAX_CONCURRENT_BATCHES = 2;  // 最多同时处理 2 个批次
+      // 一次只跑一个批次，批内同时传 MAX_CONCURRENT_FILES 张，总并发才是 3 张
+      const MAX_CONCURRENT_BATCHES = 1;
       log.info(`开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
 
       // 收集成功上传的链接（用于自动复制）
@@ -236,6 +239,15 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         partialFailedServices: [],
         duplicatesSkipped: 0,
       };
+
+      const autoCopyEnabled = config.linkOutput?.autoCopy !== false;
+      // 单张：「复制时使用」的链接一确定就复制，其余图床在后台继续；多张：整批结束后一次复制（交接说明规则 4.9）
+      let earlyCopyResult: CopyLinkResult | null = null;
+      const onPrimaryReady = autoCopyEnabled && valid.length === 1
+        ? async (_queueIndex: number, link: CopyLinkItem) => {
+          earlyCopyResult = await copyLinks([link], { showSuccessToast: false, showErrorToast: false });
+        }
+        : undefined;
 
       const compressionConfig = config.imageCompression ?? DEFAULT_CONFIG.imageCompression!;
       compressionEnabled = compressionConfig.enabled;
@@ -300,7 +312,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           queueItems,
           config,
           enabledServices,
-          5,
+          MAX_CONCURRENT_FILES,
           {
             queueManager: queueManager!,
             saveHistoryItemImmediate,
@@ -308,6 +320,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             reconcileHistoryPrimary,
             saveHistoryItem,
             toast,
+            onPrimaryReady,
           },
           undefined,
           uploadSummary
@@ -355,10 +368,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         )
       );
 
-      // 自动复制链接到剪贴板（使用统一 useCopyLink）
-      const autoCopyEnabled = config.linkOutput?.autoCopy !== false;
-      let copyResult: CopyLinkResult | null = null;
-      if (autoCopyEnabled && collectedLinks.length > 0) {
+      // 自动复制链接到剪贴板（使用统一 useCopyLink）；单张已在第一时间复制过
+      let copyResult: CopyLinkResult | null = earlyCopyResult;
+      if (autoCopyEnabled && collectedLinks.length > 0 && !copyResult) {
         copyResult = await copyLinks(collectedLinks, {
           showSuccessToast: false,
           showErrorToast: false,

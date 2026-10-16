@@ -4,6 +4,7 @@
 import type { UserConfig, ServiceType } from '@/config/types';
 import type { SingleServiceResult, MultiUploadResult } from '@/core/MultiServiceUploader';
 import { MultiServiceUploader } from '@/core/MultiServiceUploader';
+import { pickPrimaryService } from '@/core/primaryService';
 import type { UploadQueueManager} from '@/core/UploadQueue';
 import { type QueueItem, type ServiceProgress } from '@/core/UploadQueue';
 import type { CopyLinkItem } from '@/composables/useCopyLink';
@@ -27,20 +28,22 @@ import { resolveQueueStatus } from '@/services/retryStatus';
 const log = createLogger('UploadExecutor');
 
 /**
- * 按配置顺序（enabledServices）取队列项里第一个已成功且有链接的图床。
- * 与 MultiServiceUploader 选主图床的规则一致，只是把上传中途单独重试成功的图床也算进来；
+ * 选「复制时使用」的图床：固定的那个，否则最先完成的（按 succeededAt），不按配置顺序。
+ * 与 MultiServiceUploader 的规则一致，只是把上传中途单独重试成功的图床也算进来；
  * 队列项缺失时退回本次上传的结果。
  */
 function pickPrimaryFromQueue(
   item: QueueItem | undefined,
-  result: MultiUploadResult
+  result: MultiUploadResult,
+  pinned: string | undefined
 ): { serviceId: string; url: string } {
-  for (const serviceId of item?.enabledServices ?? []) {
-    const progress = item?.serviceProgress[serviceId];
-    if (isStatusSuccess(progress?.status) && progress?.link) {
-      return { serviceId, url: progress.link };
-    }
-  }
+  const successes = (item?.enabledServices ?? [])
+    .map(serviceId => item?.serviceProgress[serviceId])
+    .filter((progress): progress is ServiceProgress => !!progress && isStatusSuccess(progress.status) && !!progress.link)
+    .sort((a, b) => (a.succeededAt ?? Number.POSITIVE_INFINITY) - (b.succeededAt ?? Number.POSITIVE_INFINITY));
+  const primaryId = pickPrimaryService(successes.map(progress => progress.serviceId), pinned);
+  const hit = successes.find(progress => progress.serviceId === primaryId);
+  if (hit?.link) return { serviceId: hit.serviceId, url: hit.link };
   return { serviceId: result.primaryService, url: result.primaryUrl };
 }
 
@@ -72,6 +75,11 @@ export interface UploadExecutorContext {
   ) => Promise<string | undefined>;
   /** toast 实例（由门面在 setup 阶段注入，避免在异步函数中调用 useToast） */
   toast: ReturnType<typeof useToast>;
+  /**
+   * 某个文件「复制时使用」的链接一确定就回调（每个文件最多一次）：没固定图床时是最先完成的那个；
+   * 固定了图床就等它，它失败了再退回最先完成的。单张上传靠它「第一个图床传完就复制，其余后台继续」。
+   */
+  onPrimaryReady?: (queueIndex: number, link: CopyLinkItem) => void | Promise<void>;
 }
 
 /**
@@ -107,7 +115,9 @@ export async function processUploadQueue(
     reconcileHistoryPrimary,
     saveHistoryItem,
     toast,
+    onPrimaryReady,
   } = ctx;
+  const pinnedCopySource = config.linkOutput?.copyFromService;
 
   if (!queueManager) {
     log.error('上传队列管理器未初始化');
@@ -128,6 +138,26 @@ export async function processUploadQueue(
 
     return async () => {
       let attemptedServices = [...enabledServices];
+      let primaryAnnounced = false;
+      /** 固定的图床这次也在上传之列时，要等它（它失败了再退回最先完成的） */
+      let waitForPinned = false;
+
+      const announcePrimary = async (serviceId: string, url: string) => {
+        if (primaryAnnounced || !onPrimaryReady) return;
+        primaryAnnounced = true;
+        try {
+          await onPrimaryReady(queueIndex, { url, fileName, serviceId: serviceId as ServiceType });
+        } catch (announceError) {
+          log.warn(`${fileName} 复制链接回调失败:`, announceError);
+        }
+      };
+
+      const earliestSuccess = (): ServiceProgress | undefined => {
+        const item = queueManager.getItem(itemId);
+        return Object.values(item?.serviceProgress ?? {})
+          .filter((progress): progress is ServiceProgress => !!progress && isStatusSuccess(progress.status) && !!progress.link)
+          .sort((a, b) => (a.succeededAt ?? Number.POSITIVE_INFINITY) - (b.succeededAt ?? Number.POSITIVE_INFINITY))[0];
+      };
 
       try {
         // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
@@ -202,6 +232,7 @@ export async function processUploadQueue(
               status: '✓ 完成',
               progress: 100,
               link,
+              succeededAt: Date.now(),
               metadata: {
                 ...item.serviceProgress?.[serviceId]?.metadata,
                 ...serviceResult.result.metadata,
@@ -234,6 +265,16 @@ export async function processUploadQueue(
           queueManager.updateItem(itemId, {
             serviceProgress: serviceUpdate
           });
+
+          if (serviceResult.status === 'success' && serviceResult.result) {
+            if (!waitForPinned || serviceId === pinnedCopySource) {
+              await announcePrimary(serviceId, serviceResult.result.url);
+            }
+          } else if (serviceResult.status === 'failed' && serviceId === pinnedCopySource) {
+            waitForPinned = false;
+            const fallback = earliestSuccess();
+            if (fallback?.link) await announcePrimary(fallback.serviceId, fallback.link);
+          }
         };
 
         const uploadExt = getFileExtension(uploadFilePath);
@@ -263,6 +304,7 @@ export async function processUploadQueue(
         if (supportedServices.length === 0) {
           throw new Error(`已选图床不支持 .${uploadExt || 'unknown'} 格式`);
         }
+        waitForPinned = !!pinnedCopySource && supportedServices.includes(pinnedCopySource);
 
         // 使用多图床上传编排器（uploadFilePath 可能是压缩后的临时文件）
         const result = await multiServiceUploader.uploadToMultipleServices(
@@ -299,8 +341,8 @@ export async function processUploadQueue(
           }
         }
 
-        // 主图床按配置顺序取；上传中途被单独重试成功的图床不在 result 里，但要算进来
-        const primary = pickPrimaryFromQueue(queueManager.getItem(itemId), result);
+        // 固定的图床，否则最先完成的；上传中途被单独重试成功的图床不在 result 里，但要算进来
+        const primary = pickPrimaryFromQueue(queueManager.getItem(itemId), result, config.linkOutput?.copyFromService);
 
         if (historyCreated && primary.url) {
           try {
@@ -331,6 +373,8 @@ export async function processUploadQueue(
             ([serviceName, count]) => ({ serviceName, count })
           );
         }
+
+        if (primary.url) await announcePrimary(primary.serviceId, primary.url);
 
         // 收集主力图床链接（用于自动复制，serviceId 用于统一前缀处理）
         if (primary.url) {

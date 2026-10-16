@@ -177,6 +177,51 @@ describe('MultiServiceUploader', () => {
     expect(result.isPartialSuccess).toBeFalsy();
   });
 
+  // ---------- 2b. 复制「最先完成的」（交接说明规则 4.1：不排序、不设主链接） ----------
+
+  /** 上传在 delayMs 后完成的 mock 上传器（用真实计时器制造完成先后） */
+  function makeDelayedUploader(url: string, delayMs: number, fail = false) {
+    const mock = makeMockUploader({ url });
+    mock.upload = vi.fn(() => new Promise((resolve, reject) => {
+      setTimeout(() => (fail ? reject(new Error('超时')) : resolve({ serviceId: 'mock', fileKey: 'k', url, size: 1 })), delayMs);
+    }));
+    return mock;
+  }
+
+  it('primary is the first service to finish, not the first in config order', async () => {
+    const smmsMock = makeDelayedUploader('https://smms.app/slow.png', 30);
+    const githubMock = makeDelayedUploader('https://github.com/fast.png', 1);
+    mockCreate.mockImplementation((serviceId: string) => (serviceId === 'smms' ? smmsMock : githubMock) as never);
+
+    const result = await uploader.uploadToMultipleServices('/tmp/test.jpg', ['smms', 'github'] as ServiceType[], makeConfig());
+
+    expect(result.primaryService).toBe('github');
+    expect(result.primaryUrl).toBe('https://github.com/fast.png');
+  });
+
+  it('uses the pinned copy source when it succeeds, even if it finished later', async () => {
+    const smmsMock = makeDelayedUploader('https://smms.app/slow.png', 30);
+    const githubMock = makeDelayedUploader('https://github.com/fast.png', 1);
+    mockCreate.mockImplementation((serviceId: string) => (serviceId === 'smms' ? smmsMock : githubMock) as never);
+    const config = { ...makeConfig(), linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: true, copyFromService: 'smms' } } as UserConfig;
+
+    // 固定的 smms 既不是最先完成、也不在配置顺序第一位
+    const result = await uploader.uploadToMultipleServices('/tmp/test.jpg', ['github', 'smms'] as ServiceType[], config);
+
+    expect(result.primaryService).toBe('smms');
+  });
+
+  it('falls back to the first finished service when the pinned one fails', async () => {
+    const smmsMock = makeDelayedUploader('https://smms.app/x.png', 1, true);
+    const githubMock = makeDelayedUploader('https://github.com/ok.png', 10);
+    mockCreate.mockImplementation((serviceId: string) => (serviceId === 'smms' ? smmsMock : githubMock) as never);
+    const config = { ...makeConfig(), linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: true, copyFromService: 'smms' } } as UserConfig;
+
+    const result = await uploader.uploadToMultipleServices('/tmp/test.jpg', ['smms', 'github'] as ServiceType[], config);
+
+    expect(result.primaryService).toBe('github');
+  });
+
   // ---------- 3. 全部失败抛出错误 ----------
 
   it('所有服务都失败时抛出包含失败详情的错误', async () => {

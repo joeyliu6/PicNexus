@@ -149,6 +149,11 @@ export interface LinkOutputConfig {
   customTemplate: string;
   /** 上传完成后是否自动复制到剪贴板 */
   autoCopy: boolean;
+  /**
+   * 复制哪个图床的链接：不设（或该图床这次没传上）= 最先完成的那个。
+   * 勾选的图床同时上传、不排序；这里是「上传到」面板底部「复制 最先完成的链接 ▾」的固定项。
+   */
+  copyFromService?: string;
 }
 
 /**

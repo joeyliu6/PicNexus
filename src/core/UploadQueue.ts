@@ -21,6 +21,8 @@ export interface ServiceProgress {
   error?: string;    // 错误信息
   metadata?: Record<string, unknown>;  // 额外元数据（如微博 PID）
   isRetrying?: boolean; // 是否正在重试中
+  /** 上传成功的时刻（含单独重试成功），用来选「最先完成的」链接 */
+  succeededAt?: number;
 }
 
 /**

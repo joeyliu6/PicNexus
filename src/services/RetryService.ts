@@ -153,7 +153,7 @@ export class RetryService {
       );
 
       // 处理成功
-      await this.handleSingleServiceSuccess(itemId, serviceId, item, result);
+      await this.handleSingleServiceSuccess(itemId, serviceId, item, result, config.linkOutput?.copyFromService);
 
       if (!silentToast) {
         this.options.toast.success('修复成功', `${getServiceDisplayName(serviceId, config)} 已补充上传成功`);
@@ -298,7 +298,8 @@ export class RetryService {
     itemId: string,
     serviceId: string,
     item: QueueItem,
-    result: UploadResult
+    result: UploadResult,
+    pinnedCopySource: string | undefined
   ): Promise<void> {
     const currentItem = this.options.queueManager.getItem(itemId) ?? item;
     const link = result.url;
@@ -312,6 +313,7 @@ export class RetryService {
       link: link,
       isRetrying: false,
       error: undefined,
+      succeededAt: Date.now(),
       ...(metadata ? { metadata } : {}),
     };
 
@@ -328,8 +330,8 @@ export class RetryService {
       status: nextStatus
     });
 
-    // 如果这是主力图床或尚无主力图床，设置它
-    const shouldPromotePrimary = !currentItem.primaryUrl || serviceId === currentItem.enabledServices[0];
+    // 「复制时使用」：还没有可复制的链接，或这正是用户固定的图床，才改用它；不按配置顺序抢位置
+    const shouldPromotePrimary = !currentItem.primaryUrl || serviceId === pinnedCopySource;
     if (shouldPromotePrimary) {
       this.options.queueManager.updateItem(itemId, { primaryUrl: link, thumbUrl: link });
     }

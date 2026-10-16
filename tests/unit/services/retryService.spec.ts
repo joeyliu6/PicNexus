@@ -354,7 +354,7 @@ describe('RetryService', () => {
     expect(toast.success).toHaveBeenCalledTimes(1);
   });
 
-  it('syncs history primary fields when a single-service retry promotes the queue primary link', async () => {
+  it('promotes a retried host to the copy source when the user pinned it', async () => {
     const queueManager = createQueueManager([
       createItem({
         historyId: 'history-promote',
@@ -383,14 +383,44 @@ describe('RetryService', () => {
     });
 
     const service = new RetryService(makeOptions({ queueManager }));
+    const pinnedConfig = { ...DEFAULT_CONFIG, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, copyFromService: 'weibo' } };
 
-    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+    await service.retrySingleService('item-1', 'weibo', pinnedConfig);
 
     expect(queueManager.items.get('item-1')?.primaryUrl).toBe('https://img.example.com/demo.png');
     expect(historyUpdateMock).toHaveBeenCalledWith('history-promote', expect.objectContaining({
       primaryService: 'weibo',
       generatedLink: 'https://img.example.com/demo.png',
       results: expect.any(Array),
+    }));
+  });
+
+  it('keeps the link that was already copied when a retried host is merely first in config order', async () => {
+    const queueManager = createQueueManager([
+      createItem({
+        historyId: 'history-keep',
+        primaryUrl: 'https://img.example.com/r2-old.png',
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: { serviceId: 'weibo', progress: 0, status: '失败' },
+          r2: { serviceId: 'r2', progress: 100, status: '完成', link: 'https://img.example.com/r2-old.png' },
+        },
+      }),
+    ]);
+    historyGetByIdMock.mockResolvedValue({
+      id: 'history-keep',
+      primaryService: 'r2',
+      generatedLink: 'https://img.example.com/r2-old.png',
+      results: [],
+    });
+
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(queueManager.items.get('item-1')?.primaryUrl).toBe('https://img.example.com/r2-old.png');
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-keep', expect.not.objectContaining({
+      primaryService: expect.anything(),
     }));
   });
 

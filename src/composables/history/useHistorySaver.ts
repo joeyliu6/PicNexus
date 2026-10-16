@@ -302,7 +302,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
     });
   }
 
-  /** 所有图床完成后，以配置顺序选出的最终主服务修正实时创建的历史记录。 */
+  /** 所有图床完成后，用最终选定的「复制时使用」图床（固定的那个，否则最先完成的）收口实时创建的历史记录。 */
   async function reconcileHistoryPrimary(
     historyId: string,
     primaryService: string,

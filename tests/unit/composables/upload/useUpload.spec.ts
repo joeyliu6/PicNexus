@@ -257,6 +257,37 @@ describe('useUploadManager', () => {
     expect(addResultToHistoryItemMock).not.toHaveBeenCalled();
   });
 
+  it('copies a single upload as soon as the first host finishes, while the others keep going', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
+      linkOutput: { ...DEFAULT_CONFIG.linkOutput!, autoCopy: true },
+    });
+    let copiesBeforeSecondHost = -1;
+    uploadToMultipleServicesMock.mockImplementationOnce(async (
+      _filePath: string,
+      _services: string[],
+      _config: unknown,
+      _onProgress?: unknown,
+      onServiceResult?: (result: any) => void | Promise<void>,
+    ) => {
+      await onServiceResult?.({ serviceId: 'jd', status: 'success', result: { serviceId: 'jd', fileKey: 'k', url: 'https://example.com/jd.jpg' } });
+      copiesBeforeSecondHost = copyLinksMock.mock.calls.length;
+      await onServiceResult?.({ serviceId: 'upyun', status: 'success', result: { serviceId: 'upyun', fileKey: 'k2', url: 'https://example.com/upyun.jpg' } });
+      return { primaryService: 'jd', primaryUrl: 'https://example.com/jd.jpg', results: [] };
+    });
+    const queueManager = createQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(copiesBeforeSecondHost).toBe(1);
+    expect(copyLinksMock).toHaveBeenCalledTimes(1);
+    expect(copyLinksMock.mock.calls[0][0]).toEqual([expect.objectContaining({ url: 'https://example.com/jd.jpg', serviceId: 'jd' })]);
+  });
+
   it('切换图床后立刻上传使用当前界面选择快照', async () => {
     selectedServicesRef.value = ['jd'];
     availableServicesRef.value = ['jd', 'upyun'];
@@ -536,5 +567,27 @@ describe('useUploadManager', () => {
     expect(copiedItems.map((item: { fileName: string }) => item.fileName)).toEqual(
       filePaths.map(filePath => filePath.split(/[\\/]/).pop())
     );
+  });
+
+  it('uploads at most three images at a time', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    uploadToMultipleServicesMock.mockImplementation(async (filePath: string, _s: string[], _c: unknown, _p: unknown, onServiceResult?: (r: any) => void | Promise<void>) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      const success = { serviceId: 'jd', status: 'success' as const, result: { serviceId: 'jd', fileKey: 'k', url: `https://example.com/${filePath}` } };
+      await onServiceResult?.(success);
+      inFlight -= 1;
+      return { primaryService: 'jd', primaryUrl: success.result.url, results: [success] };
+    });
+
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(Array.from({ length: 8 }, (_, index) => `C:/tmp/batch-${index}.jpg`));
+
+    expect(peak).toBe(3);
   });
 });
