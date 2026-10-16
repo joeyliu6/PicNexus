@@ -590,4 +590,35 @@ describe('useUploadManager', () => {
 
     expect(peak).toBe(3);
   });
+
+  it('uploads one file to other hosts without touching the 上传到 selection', async () => {
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/again.jpg'], { services: ['jd'] });
+
+    expect(queueManager.addFile).toHaveBeenCalledWith('C:/tmp/again.jpg', 'again.jpg', ['jd']);
+    expect(selectedServicesRef.value).toEqual(['jd', 'upyun']);
+  });
+
+  it('reports the copy and stays quiet when the caller shows the result itself', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
+      linkOutput: { ...DEFAULT_CONFIG.linkOutput!, autoCopy: true },
+    });
+    copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 1, format: 'markdown' });
+    const onCopied = vi.fn();
+    const queueManager = createQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never, { onCopied, quietSummary: () => true });
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(onCopied).toHaveBeenCalledWith({ ok: true, copiedCount: 1, format: 'markdown' });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(toastWarnMock).not.toHaveBeenCalled();
+  });
 });

@@ -31,10 +31,22 @@ const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
 /** 同时上传的图片张数（交接说明 8.1：批量时同时传 3 张） */
 export const MAX_CONCURRENT_FILES = 3;
 
+export interface UploadManagerOptions {
+  /** 自动复制成功后回调（单张在第一个图床传完时，多张在整批结束时） */
+  onCopied?: (result: CopyLinkResult) => void;
+  /** 返回 true 时不弹整批结束的汇总通知（首页焦点卡已经把结果写在页面上了） */
+  quietSummary?: () => boolean;
+}
+
+export interface UploadRequestOptions {
+  /** 只对这一次上传使用这些图床（首页「换个图床」），不改「上传到」的勾选 */
+  services?: string[];
+}
+
 /**
  * 上传管理 Composable
  */
-export function useUploadManager(queueManager?: UploadQueueManager) {
+export function useUploadManager(queueManager?: UploadQueueManager, options: UploadManagerOptions = {}) {
   const toast = useToast();
   const { copyLinks } = useCopyLink();
 
@@ -64,6 +76,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     summary: UploadSessionSummary,
     copy: UploadCopySummary
   ): void {
+    if (options.quietSummary?.()) return;
     const payload = buildUploadSummaryToast(summary, copy);
     if (!payload) return;
 
@@ -80,7 +93,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
    * 处理文件上传
    * @param filePaths 文件路径列表
    */
-  async function handleFilesUpload(filePaths: string[]): Promise<void> {
+  async function handleFilesUpload(filePaths: string[], request: UploadRequestOptions = {}): Promise<void> {
     // 防止重入：上传期间不接受新上传
     if (isUploading.value) {
       toast.showConfig('warn', { summary: '请稍候', detail: '当前有上传任务进行中，请等待完成后再试' });
@@ -150,7 +163,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       }
 
       // 上传必须使用当前界面选择快照，避免防抖保存尚未落盘时读到旧配置。
-      const selectedServicesSnapshot = [...selectedServices.value];
+      const selectedServicesSnapshot = [...(request.services ?? selectedServices.value)];
       const blockedRiskServices = config.publicServiceRiskAccepted
         ? []
         : selectedServicesSnapshot.filter(isPublicRiskService);
@@ -245,7 +258,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       let earlyCopyResult: CopyLinkResult | null = null;
       const onPrimaryReady = autoCopyEnabled && valid.length === 1
         ? async (_queueIndex: number, link: CopyLinkItem) => {
-          earlyCopyResult = await copyLinks([link], { showSuccessToast: false, showErrorToast: false });
+          const result = await copyLinks([link], { showSuccessToast: false, showErrorToast: false });
+          earlyCopyResult = result;
+          if (result.ok) options.onCopied?.(result);
         }
         : undefined;
 
@@ -375,6 +390,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           showSuccessToast: false,
           showErrorToast: false,
         });
+        if (copyResult.ok) options.onCopied?.(copyResult);
       }
 
       showUploadSessionSummary(uploadSummary, {
