@@ -3,6 +3,7 @@
 // 整批结束前不动剪贴板，结束后一次复制全部成功的链接（每行一个、按拖入顺序）。
 // 某个图床整批失败只报一行；「重试这 N 张」只重传失败的；点任意一块 = 复制那一张。
 import { computed, ref } from 'vue';
+import CopyButton from '@/components/biz/CopyButton.vue';
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
@@ -12,8 +13,10 @@ import type { UserConfig } from '@/config/types';
 import type { QueueItem } from '@/core/UploadQueue';
 import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
+import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import type { CopyLinkResult } from '@/composables/useCopyLink';
 import type { UploadHost } from '@/composables/upload/useUploadController';
-import { firstFailure, hostFailureText, hostsFailedForWholeBatch, hostViews, itemPhase, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
+import { firstFailure, hostFailureText, hostMisses, hostViews, itemPhase, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
 import { formatRelativeTime } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 
@@ -23,20 +26,30 @@ const props = defineProps<{
   hosts: readonly UploadHost[];
   config: UserConfig;
   format: LinkFormat;
+  /** 自动复制开着才写「全部完成后统一复制 N 个链接」 */
+  autoCopy: boolean;
+  /** 点一块缩略图 = 复制那一张；结果用来在原地显示「已复制」 */
+  copyItem: (itemId: string) => Promise<CopyLinkResult | null>;
 }>();
 
 const emit = defineEmits<{
-  copyItem: [itemId: string];
   setFormat: [format: LinkFormat];
   retryFailed: [];
   relogin: [hostId: string];
+  /** 某个图床没传上（不是登录问题）：给整批补传这个图床 */
+  retryHost: [hostId: string];
   openInGallery: [];
 }>();
+
+const { copiedKey, markCopied } = useCopyBadgeFeedback(1500);
+async function copyTile(itemId: string): Promise<void> {
+  const result = await props.copyItem(itemId);
+  if (result?.ok) markCopied(itemId);
+}
 
 const counts = computed(() => sessionCounts(props.items));
 const running = computed(() => !props.session.finished || counts.value.uploading + counts.value.waiting > 0);
 const nameOf = (hostId: string) => props.hosts.find((h) => h.id === hostId)?.name ?? hostId;
-const isCookieHost = (hostId: string) => props.hosts.find((h) => h.id === hostId)?.cookieLogin ?? false;
 const confirmedHttpHosts = useConfirmedHttpHosts(() => props.config);
 
 const failedItems = computed(() => props.items.filter((item) => itemPhase(item) === 'failed'));
@@ -46,18 +59,32 @@ const failedReason = computed(() => {
 });
 const failedNames = computed(() => failedItems.value.slice(0, 3).map((item) => item.fileName).join('、') + (failedItems.value.length > 3 ? ' 等' : ''));
 
-/** 某个图床整批都没传上：只报一行 */
-const batchHostFailures = computed(() => hostsFailedForWholeBatch(props.items.filter((item) => itemPhase(item) !== 'failed')).map((hostId) => {
+/**
+ * 某个图床没传上：每个图床只报一行，写清几张没传上（交接说明 4.9「某个图床整批失败只报一行」）。
+ * 进行中只在登录已过期时说「本批不会上传到 X」——别的失败可能下一张就好了，不预言。
+ */
+const batchHostFailures = computed(() => hostMisses(props.items).flatMap(({ hostId, items, error }) => {
+  const loginExpired = hostFailureText(hostId, error, props.hosts).reason === '登录已过期';
   const others = (props.items[0]?.enabledServices ?? []).filter((id) => id !== hostId).map(nameOf).join('与');
-  const reason = isCookieHost(hostId) ? `${nameOf(hostId)}登录已过期` : `${nameOf(hostId)}上传失败`;
-  return {
+  const reason = loginExpired ? `${nameOf(hostId)}登录已过期` : `${nameOf(hostId)}上传失败`;
+  if (running.value) {
+    return loginExpired ? [{ hostId, text: `${reason}，本批不会上传到${nameOf(hostId)}；${others}正常上传。`, action: '重新登录', relogin: true }] : [];
+  }
+  return [{
     hostId,
-    text: running.value
-      ? `${reason}，本批不会上传到${nameOf(hostId)}；${others}正常上传。`
-      : `${reason}，${counts.value.done} 张未上传到${nameOf(hostId)}；${others}均已完成。`,
-    action: isCookieHost(hostId) ? (running.value ? '重新登录' : '重新登录后补传') : null,
-  };
+    text: `${reason}，${items.length} 张未上传到${nameOf(hostId)}；${others}均已完成。`,
+    action: loginExpired ? '重新登录后补传' : '补传',
+    relogin: loginExpired,
+  }];
 }));
+
+/** 一张都没传上时同样说清剪贴板没变（交接说明 8.1「全部失败」） */
+const nothingCopied = computed(() => !running.value && counts.value.done === 0);
+/** 「已复制 N 个链接 · X」写实际复制时的格式 */
+const copiedFormat = computed<LinkFormat>(() => {
+  const copied = props.session.copied?.format;
+  return copied && copied in FORMAT_NAMES ? (copied as LinkFormat) : props.format;
+});
 
 const tiles = computed(() => props.items.map((item) => {
   const phase = itemPhase(item);
@@ -73,7 +100,7 @@ const tiles = computed(() => props.items.map((item) => {
 
 const firstName = computed(() => props.items[0]?.fileName ?? '');
 const formatOptions = (['url', 'markdown', 'html', 'bbcode', 'custom'] as const).map((value) => ({ value, label: FORMAT_NAMES[value] }));
-const formatModel = computed({ get: () => props.format, set: (value: LinkFormat) => emit('setFormat', value) });
+const formatModel = computed({ get: () => copiedFormat.value, set: (value: LinkFormat) => emit('setFormat', value) });
 const listMode = ref(false);
 const RING = 37.7;
 </script>
@@ -85,7 +112,7 @@ const RING = 37.7;
         <span class="batch-card__title">正在上传 {{ counts.total }} 张</span>
         <span class="batch-card__muted2">已完成 {{ counts.done }} 张</span>
         <div class="batch-card__spacer" />
-        <span class="batch-card__note">全部完成后统一复制 {{ counts.total }} 个链接</span>
+        <span v-if="autoCopy" class="batch-card__note">全部完成后统一复制 {{ counts.total }} 个链接</span>
       </div>
       <div role="progressbar" aria-label="上传进度" :aria-valuenow="counts.done" aria-valuemin="0" :aria-valuemax="counts.total" class="batch-card__bar">
         <span :style="{ width: `${counts.total ? (counts.done / counts.total) * 100 : 0}%` }" />
@@ -95,7 +122,7 @@ const RING = 37.7;
       <div class="batch-card__line batch-card__line--center">
         <span v-if="session.copied" class="batch-card__pill">
           <PnIcon name="check" :size="13" :stroke="2.4" />
-          已复制 {{ session.copied.count }} 个链接 · {{ FORMAT_NAMES[format] }}，每行一个
+          已复制 {{ session.copied.count }} 个链接 · {{ FORMAT_NAMES[copiedFormat] }}，每行一个
         </span>
         <div class="batch-card__spacer" />
         <span class="batch-card__note">{{ formatRelativeTime(session.startedAt) }}</span>
@@ -117,7 +144,7 @@ const RING = 37.7;
         :class="{ 'batch-card__tile--waiting': tile.waiting }"
         :title="tile.title"
         :disabled="tile.phase === 'uploading' || tile.phase === 'failed'"
-        @click="emit('copyItem', tile.item.id)"
+        @click="copyTile(tile.item.id)"
       >
         <ThumbnailImage v-if="tile.srcs.length" :srcs="tile.srcs" :alt="tile.item.fileName" :confirmed-http-hosts="confirmedHttpHosts" />
         <span v-if="tile.phase === 'uploading' && !tile.waiting" class="batch-card__veil">
@@ -129,27 +156,30 @@ const RING = 37.7;
         <span v-if="tile.phase === 'failed'" class="batch-card__veil batch-card__veil--failed">
           <PnIcon name="close" :size="18" :stroke="2" />
         </span>
+        <span v-if="copiedKey === tile.item.id" class="batch-card__veil batch-card__veil--copied" role="status" aria-label="已复制">
+          <PnIcon name="check" :size="18" :stroke="2.4" />
+        </span>
       </button>
     </div>
     <ul v-else class="batch-card__list">
       <li v-for="tile in tiles" :key="tile.item.id" class="batch-card__list-row">
         <span class="batch-card__list-name">{{ tile.item.fileName }}</span>
         <span :class="tile.phase === 'failed' ? 'batch-card__danger' : 'batch-card__note'">{{ tile.title.split(' · ')[1] }}</span>
-        <PnButton v-if="tile.phase === 'done' || tile.phase === 'partial'" variant="ghost" size="sm" @click="emit('copyItem', tile.item.id)">复制</PnButton>
+        <CopyButton v-if="tile.phase === 'done' || tile.phase === 'partial'" :copied="copiedKey === tile.item.id" @click="copyTile(tile.item.id)" />
       </li>
     </ul>
 
     <div class="batch-card__lines">
       <div v-if="!running && counts.failed" class="batch-card__notice">
-        <PnIcon name="info" :size="14" :stroke="1.8" class="batch-card__danger" />
-        <span><span class="batch-card__danger batch-card__strong">{{ counts.failed }} 张上传失败</span>：{{ failedNames }}<template v-if="failedReason"> · {{ failedReason }}</template></span>
+        <PnIcon name="failCircle" :size="14" :stroke="1.8" class="batch-card__danger" />
+        <span><span class="batch-card__danger batch-card__strong">{{ counts.failed }} 张上传失败</span>：{{ failedNames }}<template v-if="failedReason"> · {{ failedReason }}</template><template v-if="nothingCopied">。<span class="batch-card__note">剪贴板内容未改变。</span></template></span>
         <div class="batch-card__spacer" />
         <PnButton variant="secondary" size="sm" @click="emit('retryFailed')">重试 {{ counts.failed }} 张</PnButton>
       </div>
       <div v-for="line in batchHostFailures" :key="line.hostId" class="batch-card__notice">
         <PnIcon name="warning" :size="14" :stroke="1.8" class="batch-card__warn" />
         <span>{{ line.text }}</span>
-        <button v-if="line.action" type="button" class="batch-card__link" @click="emit('relogin', line.hostId)">{{ line.action }}</button>
+        <button type="button" class="batch-card__link" @click="line.relogin ? emit('relogin', line.hostId) : emit('retryHost', line.hostId)">{{ line.action }}</button>
       </div>
     </div>
 
@@ -264,6 +294,12 @@ const RING = 37.7;
   border-radius: var(--pn-radius-button-sm);
   background: var(--pn-tile-failed-veil);
   box-shadow: inset 0 0 0 var(--pn-ring-width) var(--pn-tile-failed-ring);
+  color: var(--pn-on-fill);
+}
+
+.batch-card__veil--copied {
+  border-radius: var(--pn-radius-button-sm);
+  background: var(--pn-tile-copied-veil);
   color: var(--pn-on-fill);
 }
 

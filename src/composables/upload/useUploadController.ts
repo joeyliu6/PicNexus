@@ -2,7 +2,7 @@
 // 拖入 / 粘贴 / 选择文件 / 从 URL 下载 / 托盘 / 命令面板，在任何页面发起的上传都走这里；
 // 首页只负责展示。第一次调用必须在组件 setup 里（应用外壳），之后任何地方都拿同一份。
 
-import { computed, reactive, ref, type ComputedRef, type Ref } from 'vue';
+import { computed, reactive, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { ImageCompressionConfig, LinkOutputConfig, UserConfig } from '@/config/types';
 import { DEFAULT_CONFIG, isPublicRiskService } from '@/config/types';
@@ -64,7 +64,7 @@ function createController() {
   const health = useServiceHealth();
   const cookieLogin = useCookieLogin();
   const risk = usePublicRiskConfirm();
-  const { queueItems, clearQueue } = useQueueState();
+  const { queueItems, removeItem } = useQueueState();
 
   const sessions = reactive<UploadSession[]>([]);
   let current: UploadSession | null = null;
@@ -75,10 +75,12 @@ function createController() {
     onCopied: (result) => { if (current) current.copied = { count: result.copiedCount, format: result.format }; },
     resultsOnScreen: () => homeVisible(),
   });
+  // 首页在屏时卡片上已经画出重试的结果，重试服务的通知只在别的页面弹（交接说明：不做双重反馈）
+  const whenOffHome = <A extends unknown[]>(show: (...args: A) => void) => (...args: A) => { if (!homeVisible()) show(...args); };
   const retryService = new RetryService({
     configStore,
     queueManager,
-    toast,
+    toast: { success: whenOffHome(toast.success), error: whenOffHome(toast.error), warn: whenOffHome(toast.warn), info: whenOffHome(toast.info) },
     saveHistoryItem: async (filePath, result, customId) => {
       await uploadManager.saveHistoryItem(filePath, result, customId);
     },
@@ -90,6 +92,10 @@ function createController() {
   const compression = computed<ImageCompressionConfig>(() => config.value.imageCompression ?? DEFAULT_CONFIG.imageCompression!);
   const linkOutput = computed<LinkOutputConfig>(() => ({ ...DEFAULT_CONFIG.linkOutput!, ...(config.value.linkOutput ?? {}) }));
   const showFastUploadHint = ref(false);
+  /** 图床状态与配置读完之前，首页不急着判断「第一次使用 / 没有图床」，免得启动时闪一下 */
+  const ready = ref(false);
+  /** 上次「清空」最近上传的时间：「更早」只列这之后的记录 */
+  const recentClearedAt = ref(0);
 
   const itemById = computed(() => new Map(queueItems.value.map((item) => [item.id, item])));
 
@@ -196,11 +202,15 @@ function createController() {
     await saveConfigPatch((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), copyFromService: hostId } }));
   }
 
-  /** 选中 = 改默认格式，并按新格式重新复制焦点卡的链接（交接说明 8.1「复制为」） */
+  /**
+   * 选中 = 改默认格式，并按新格式重新复制焦点卡的链接（交接说明 8.1「复制为」）。
+   * 多张还没传完时只改格式：整批结束前不动剪贴板，结束时会按新格式一次复制。
+   */
   async function setFormat(format: LinkFormat): Promise<void> {
     await saveConfigPatch((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), defaultFormat: format } }));
     const focus = sessions[0];
-    if (focus) await copySession(focus.id, true);
+    if (!focus || (!focus.finished && focus.itemIds.length > 1)) return;
+    await copySession(focus.id, true);
   }
 
   /** presetId = null 表示「关」（原图上传） */
@@ -239,6 +249,14 @@ function createController() {
     return copyLinks([link], { showSuccessToast: false });
   }
 
+  /** 焦点卡「+N」里的「复制全部 N 条」：这张图在每个已完成图床上的链接，每行一条，按图床顺序 */
+  async function copyAllHosts(itemId: string): Promise<CopyLinkResult | null> {
+    const item = itemById.value.get(itemId);
+    if (!item) return null;
+    const links = item.enabledServices.map((hostId) => linkOf(item, hostId)).filter((link): link is CopyLinkItem => !!link);
+    return links.length ? copyLinks(links, { showSuccessToast: false }) : null;
+  }
+
   /** 整批复制：每行一个，按拖入顺序；只复制有链接的 */
   async function copySession(sessionId: string, quiet = false): Promise<CopyLinkResult | null> {
     const session = sessions.find((s) => s.id === sessionId);
@@ -256,14 +274,37 @@ function createController() {
     await retryService.retrySingleService(itemId, hostId, (await readFreshConfig()) ?? config.value);
   }
 
-  async function retryItem(itemId: string): Promise<void> {
-    await retryService.retryAll(itemId, (await readFreshConfig()) ?? config.value);
+  /**
+   * 单张的「重试」与首次上传一样：第一个图床传完就复制，其余图床后台继续（交接说明 4.9）。
+   * 返回停止监听的函数；不是单张或关了自动复制时什么也不做。
+   */
+  function copyWhenFirstLinkArrives(itemId: string): () => void {
+    const owner = sessions.find((s) => s.itemIds.includes(itemId));
+    if (!owner || owner.itemIds.length !== 1 || linkOutput.value.autoCopy === false) return () => {};
+    const stop = watch(() => {
+      const item = itemById.value.get(itemId);
+      return !!item && hasLink(item);
+    }, (linked) => {
+      if (!linked) return;
+      stop();
+      void copySession(owner.id, true);
+    });
+    return stop;
   }
 
-  /** 只重传失败的（「重试这 2 张」/ 最近上传「重试失败的」）；不给 sessionId 就是全部 */
+  async function retryItem(itemId: string): Promise<void> {
+    const stopCopy = copyWhenFirstLinkArrives(itemId);
+    try {
+      await retryService.retryAll(itemId, (await readFreshConfig()) ?? config.value);
+    } finally {
+      stopCopy();
+    }
+  }
+
+  /** 只重传整张失败的（「重试这 2 张」/ 最近上传「重试失败的」）；只缺某个图床的交给「重新登录后补传」或「重试此图床」 */
   async function retryFailed(sessionId?: string): Promise<void> {
     const pool = sessionId ? sessions.filter((s) => s.id === sessionId) : [...sessions];
-    const failedIds = pool.flatMap(itemsOf).filter((item) => itemPhase(item) === 'failed' || itemPhase(item) === 'partial').map((item) => item.id);
+    const failedIds = pool.flatMap(itemsOf).filter((item) => itemPhase(item) === 'failed').map((item) => item.id);
     if (failedIds.length === 0) return;
     await retryService.retryAllFailed(failedIds, (await readFreshConfig()) ?? config.value);
   }
@@ -286,16 +327,38 @@ function createController() {
     });
   }
 
+  /** 批量卡的「补传」：把这批里所有没传上这个图床的图逐张补传 */
+  async function retryHostForSession(sessionId: string, hostId: string): Promise<void> {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const missed = itemsOf(session).filter((item) => item.enabledServices.includes(hostId) && !isStatusSuccess(item.serviceProgress[hostId]?.status));
+    const latest = (await readFreshConfig()) ?? config.value;
+    await Promise.allSettled(missed.map((item) => retryService.retrySingleService(item.id, hostId, latest, { silentToast: true })));
+  }
+
+  /** 批量卡的「重新登录 / 重新登录后补传」：登录一次，再给整批补传这个图床 */
+  async function reloginSession(sessionId: string, hostId: string): Promise<void> {
+    await cookieLogin.login(hostId, async () => {
+      await refreshConfig();
+      await retryHostForSession(sessionId, hostId);
+    });
+  }
+
   /** 「上传到」面板里图床登录失效时的「重新登录」：只登录，不针对某一张 */
   async function loginHost(hostId: string): Promise<void> {
     await cookieLogin.login(hostId, refreshConfig);
   }
 
-  /** 清空「最近上传」：只清这个列表和上传队列，不影响图库记录；上传中不可清空 */
+  /**
+   * 清空「最近上传」：只清这个列表，不影响图库记录，上传中不可清空。
+   * 焦点卡（最新一次）不在列表里，保留；「更早」从此只显示清空之后的记录（recentClearedAt）。
+   */
   function clearSessions(): void {
     if (busy.value) return;
-    sessions.splice(0);
-    clearQueue();
+    const [focus, ...rest] = sessions;
+    for (const session of rest) for (const id of session.itemIds) removeItem(id);
+    sessions.splice(focus ? 1 : 0);
+    recentClearedAt.value = Date.now();
   }
 
   // ---- 生命周期 ----
@@ -305,6 +368,7 @@ function createController() {
     await uploadManager.loadServiceButtonStates();
     await health.loadHealthStatus();
     await refreshConfig();
+    ready.value = true;
     unlisteners.push(await uploadManager.setupConfigListener());
     unlisteners.push(await listen('config-updated', () => { void refreshConfig(); }));
     unlisteners.push(await listen<string>('tray-action', (event) => {
@@ -346,13 +410,18 @@ function createController() {
     setCompression,
     copyItem,
     copySession,
+    copyAllHosts,
     retryHost,
     retryItem,
     retryFailed,
     uploadAgainWith,
     relogin,
+    reloginSession,
+    retryHostForSession,
     loginHost,
     clearSessions,
+    recentClearedAt,
+    ready,
   };
 }
 

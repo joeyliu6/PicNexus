@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueItem } from '@/core/UploadQueue';
 import {
-  firstFailure, hasLink, hostFailureText, hostsFailedForWholeBatch, itemPhase, petalStates, sessionCounts,
+  firstFailure, hasLink, hostFailureText, hostMisses, itemPhase, petalStates, sessionCounts,
 } from '@/composables/upload/uploadSessions';
 
 function item(status: QueueItem['status'], hosts: Record<string, { status: string; progress?: number; link?: string; error?: string }>): QueueItem {
@@ -54,10 +54,16 @@ describe('uploadSessions', () => {
     expect(counts).toEqual({ total: 4, done: 1, failed: 1, uploading: 1, waiting: 1 });
   });
 
-  it('reports a host that failed for the whole batch only once', () => {
-    const batch = [item('success', { jd: done, weibo: failed }), item('success', { jd: done, weibo: failed })];
-    expect(hostsFailedForWholeBatch(batch)).toEqual(['weibo']);
-    expect(hostsFailedForWholeBatch([batch[0], item('success', { jd: done, weibo: done })])).toEqual([]);
+  // 交接说明 4.9：某个图床没传上只报一行并写清几张；整张都失败的那几张另有一行，这里不重复算
+  it('groups the images each host missed, leaving whole failures to their own line', () => {
+    const batch = [
+      item('success', { jd: done, weibo: { status: '✗ 失败', error: '401' } }),
+      item('success', { jd: done, weibo: done }),
+      item('error', { jd: failed, weibo: failed }),
+      item('success', { jd: done, weibo: failed }),
+    ];
+    expect(hostMisses(batch)).toEqual([{ hostId: 'weibo', items: [batch[0], batch[3]], error: '401' }]);
+    expect(hostMisses([batch[1]])).toEqual([]);
   });
 
   it('picks the first failed host for the reason line', () => {

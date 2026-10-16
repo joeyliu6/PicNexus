@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { DEFAULT_CONFIG } from '@/config/types';
+import type { QueueItem } from '@/core/UploadQueue';
 
 const m = vi.hoisted(() => ({
   handleFilesUpload: vi.fn(),
@@ -15,6 +16,11 @@ const m = vi.hoisted(() => ({
   cookieLogin: vi.fn(),
   cookieInstall: vi.fn(),
   retryAllFailed: vi.fn(),
+  retrySingleService: vi.fn(),
+  retryAll: vi.fn(),
+  copyLinks: vi.fn(),
+  toastError: vi.fn(),
+  retryOptions: null as null | { toast: { error: (title: string, message: string) => void } },
   listeners: {} as Record<string, (event: { payload: unknown }) => void>,
   fresh: {} as Record<string, unknown>,
   onItemAdded: null as null | ((id: string) => void),
@@ -55,7 +61,14 @@ vi.mock('@/composables/upload/useUpload', () => ({
 
 vi.mock('@/composables/upload/useClipboardImage', () => ({ useClipboardImage: () => ({ isProcessing: ref(false), pasteAndUpload: m.pasteAndUpload }) }));
 vi.mock('@/composables/upload/useUrlDownload', () => ({ useUrlDownload: () => ({ isDownloading: ref(false), downloadAndUpload: m.downloadAndUpload }) }));
-vi.mock('@/services/RetryService', () => ({ RetryService: class { retryAllFailed = m.retryAllFailed; retrySingleService = vi.fn(); retryAll = vi.fn(); } }));
+vi.mock('@/services/RetryService', () => ({
+  RetryService: class {
+    constructor(options: typeof m.retryOptions) { m.retryOptions = options; }
+    retryAllFailed = m.retryAllFailed;
+    retrySingleService = m.retrySingleService;
+    retryAll = m.retryAll;
+  },
+}));
 vi.mock('@/composables/useConfig', () => ({ useConfigManager: () => ({ saveConfig: m.saveConfig }) }));
 vi.mock('@/composables/usePublicRiskConfirm', () => ({ usePublicRiskConfirm: () => ({ ensureAccepted: m.ensureAccepted }) }));
 vi.mock('@/composables/useCookieLogin', () => ({ useCookieLogin: () => ({ login: m.cookieLogin, install: m.cookieInstall }) }));
@@ -67,8 +80,8 @@ vi.mock('@/composables/service/useServiceHealth', () => ({
   }),
 }));
 vi.mock('@/store/instances', () => ({ configStore: {}, readFreshConfig: vi.fn(async () => m.fresh) }));
-vi.mock('@/composables/useCopyLink', () => ({ useCopyLink: () => ({ copyLinks: vi.fn(async () => ({ ok: true, copiedCount: 1, format: 'url' })) }) }));
-vi.mock('@/composables/useToast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn(), showConfig: vi.fn() }) }));
+vi.mock('@/composables/useCopyLink', () => ({ useCopyLink: () => ({ copyLinks: m.copyLinks }) }));
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ success: vi.fn(), error: m.toastError, warn: vi.fn(), info: vi.fn(), showConfig: vi.fn() }) }));
 
 import { __resetUploadControllerForTests, useUploadController } from '@/composables/upload/useUploadController';
 import { useQueueState } from '@/composables/upload/useQueueState';
@@ -87,6 +100,7 @@ describe('useUploadController', () => {
     m.setupConfigListener.mockResolvedValue(vi.fn());
     m.cookieInstall.mockResolvedValue(vi.fn());
     m.ensureAccepted.mockResolvedValue(true);
+    m.copyLinks.mockResolvedValue({ ok: true, copiedCount: 1, format: 'url' });
   });
 
   it('lists only added and configured hosts, with names and the reason for a warning', () => {
@@ -160,5 +174,116 @@ describe('useUploadController', () => {
       enabledServices: expect.arrayContaining(['jd']),
     }), true);
     expect(m.loadServiceButtonStates).toHaveBeenCalled();
+  });
+
+  describe('after an upload', () => {
+    type HostState = 'done' | 'failed' | 'uploading';
+    const STATUS: Record<HostState, string> = { done: '✓ 完成', failed: '✗ 失败', uploading: '上传中...' };
+
+    function item(id: string, hosts: Record<string, HostState>): QueueItem {
+      return {
+        id,
+        fileName: `${id}.png`,
+        filePath: `C:/${id}.png`,
+        enabledServices: Object.keys(hosts),
+        serviceProgress: Object.fromEntries(Object.entries(hosts).map(([host, state]) => [host, {
+          serviceId: host,
+          status: STATUS[state],
+          progress: state === 'done' ? 100 : 0,
+          link: state === 'done' ? `https://${host}.example/${id}.png` : undefined,
+          error: state === 'failed' ? '认证失败: 401' : undefined,
+        }])),
+        status: Object.values(hosts).includes('uploading') ? 'uploading' : Object.values(hosts).includes('done') ? 'success' : 'error',
+      } as QueueItem;
+    }
+
+    async function upload(...items: QueueItem[]) {
+      const controller = useUploadController();
+      m.handleFilesUpload.mockImplementationOnce(async () => {
+        for (const queued of items) { useQueueState().addItem(queued); m.onItemAdded?.(queued.id); }
+      });
+      await controller.uploadFiles(items.map((i) => i.filePath));
+      return { controller, session: controller.sessions[0] };
+    }
+
+    it('re-sends only the images that failed everywhere for 重试 N 张', async () => {
+      const { controller, session } = await upload(item('whole', { jd: 'failed' }), item('half', { jd: 'done', weibo: 'failed' }));
+      await controller.retryFailed(session.id);
+      expect(m.retryAllFailed).toHaveBeenCalledWith(['whole'], expect.anything());
+    });
+
+    it('re-logs in once, then re-sends every image of the batch that missed that host', async () => {
+      m.cookieLogin.mockImplementation(async (_host: string, after?: () => Promise<void>) => { await after?.(); });
+      const { controller, session } = await upload(
+        item('a', { jd: 'done', weibo: 'failed' }),
+        item('b', { jd: 'done', weibo: 'failed' }),
+        item('c', { jd: 'done', weibo: 'done' }),
+      );
+      await controller.reloginSession(session.id, 'weibo');
+      expect(m.cookieLogin).toHaveBeenCalledTimes(1);
+      expect(m.retrySingleService.mock.calls.map(([id, host]) => `${id}:${host}`).sort()).toEqual(['a:weibo', 'b:weibo']);
+    });
+
+    it('re-sends one host for every image of the batch that missed it, without logging in', async () => {
+      const { controller, session } = await upload(item('a', { jd: 'done', r2: 'failed' }), item('b', { jd: 'done', r2: 'done' }));
+      await controller.retryHostForSession(session.id, 'r2');
+      expect(m.cookieLogin).not.toHaveBeenCalled();
+      expect(m.retrySingleService.mock.calls.map(([id, host]) => `${id}:${host}`)).toEqual(['a:r2']);
+    });
+
+    it('copies a single retried image as soon as its first host finishes', async () => {
+      const { controller } = await upload(item('one', { jd: 'failed' }));
+      m.retryAll.mockImplementationOnce(async (itemId: string) => {
+        useQueueState().updateItem(itemId, { status: 'uploading', serviceProgress: { jd: { serviceId: 'jd', status: '上传中...', progress: 10, link: undefined, error: undefined } } });
+        await Promise.resolve();
+        useQueueState().updateItem(itemId, { status: 'success', serviceProgress: { jd: { serviceId: 'jd', status: '✓ 完成', progress: 100, link: 'https://jd.example/one.png' } } });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await controller.retryItem('one');
+      expect(m.copyLinks).toHaveBeenCalledWith([{ url: 'https://jd.example/one.png', fileName: 'one.png', serviceId: 'jd' }], expect.anything());
+    });
+
+    it('copies every finished host of one image, one link per line, in host order', async () => {
+      const { controller } = await upload(item('many', { jd: 'done', weibo: 'failed', r2: 'done' }));
+      await controller.copyAllHosts('many');
+      expect(m.copyLinks).toHaveBeenLastCalledWith([
+        { url: 'https://jd.example/many.png', fileName: 'many.png', serviceId: 'jd' },
+        { url: 'https://r2.example/many.png', fileName: 'many.png', serviceId: 'r2' },
+      ], expect.objectContaining({ showSuccessToast: false }));
+    });
+
+    it('keeps retry toasts quiet while the home page shows the result', () => {
+      const controller = useUploadController();
+      let onHome = true;
+      controller.setHomeVisible(() => onHome);
+      m.retryOptions!.toast.error('京东上传失败', '网络超时，请检查网络后重试');
+      expect(m.toastError).not.toHaveBeenCalled();
+      onHome = false;
+      m.retryOptions!.toast.error('京东上传失败', '网络超时，请检查网络后重试');
+      expect(m.toastError).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for a running batch before copying it in a new format', async () => {
+      const controller = useUploadController();
+      let finish!: () => void;
+      m.handleFilesUpload.mockImplementationOnce(() => new Promise<void>((resolve) => {
+        for (const queued of [item('a', { jd: 'done' }), item('b', { jd: 'uploading' })]) { useQueueState().addItem(queued); m.onItemAdded?.(queued.id); }
+        finish = resolve;
+      }));
+      const running = controller.uploadFiles(['C:/a.png', 'C:/b.png']);
+      await controller.setFormat('markdown');
+      expect(m.copyLinks).not.toHaveBeenCalled();
+      finish();
+      await running;
+    });
+
+    it('clears the list but keeps the newest upload on its card', async () => {
+      const { controller } = await upload(item('old', { jd: 'done' }));
+      const { session: newest } = await upload(item('new', { jd: 'done' }));
+      controller.clearSessions();
+      expect(controller.sessions.map((s) => s.id)).toEqual([newest.id]);
+      expect(useQueueState().queueItems.value.map((i) => i.id)).toEqual(['new']);
+      expect(controller.recentClearedAt.value).toBeGreaterThan(0);
+    });
   });
 });

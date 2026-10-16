@@ -245,6 +245,8 @@
   --pn-tile-uploading-veil: rgba(255, 255, 255, 0.6);
   --pn-tile-failed-veil: rgba(185, 28, 28, 0.62);
   --pn-tile-failed-ring: #B91C1C;
+  /* 设计稿没画批量缩略图点了复制之后的样子：照失败那层的做法，换成成功色 */
+  --pn-tile-copied-veil: rgba(22, 163, 74, 0.62);
   --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
   --pn-opacity-tile-waiting: 0.35;
 
@@ -307,4 +309,10 @@
   --pn-window-close-hover: #C42B1C;
   --pn-window-close-fg: var(--pn-on-fill);
   --pn-dur-spin: 900ms;
+
+  /* 焦点卡「+N」展开的图床列表（CopyMulti.dc.html ②）：外宽 330 含浮层内边距 8 */
+  --pn-size-copy-more: 314px;
+  --pn-size-copy-more-row: 36px;
+  --pn-size-copy-more-button: 24px;
+  --pn-space-copy-more-gap: 10px;
 }

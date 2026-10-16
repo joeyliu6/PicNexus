@@ -33,11 +33,17 @@ const props = defineProps<{
   config: UserConfig;
   format: LinkFormat;
   copySource: string | undefined;
+  /** 自动复制开着才写「首个图床完成后自动复制链接」 */
+  autoCopy: boolean;
 }>();
 
 const emit = defineEmits<{
   setFormat: [format: LinkFormat];
+  /** 还没复制时点标签：直接复制 */
+  copy: [];
   copyHost: [hostId: string];
+  /** 「+N」里的「复制全部」：每个图床一条 */
+  copyAllHosts: [];
   relogin: [hostId: string];
   retryHost: [hostId: string];
   retryItem: [];
@@ -56,6 +62,17 @@ const doneHosts = computed(() => hostRows.value.filter((h) => h.state === 'done'
 const failedHosts = computed(() => hostRows.value.filter((h) => h.state === 'failed'));
 const finishedCount = computed(() => doneHosts.value.length);
 const hostsTitle = computed(() => doneHosts.value.map((h) => nameOf(h.id)).join('、'));
+/** CopyMulti.dc.html ②：4 个以上只露前 3 个，其余收进「+N」 */
+const SHOWN_HOSTS = 3;
+const shownHosts = computed(() => (doneHosts.value.length > SHOWN_HOSTS ? doneHosts.value.slice(0, SHOWN_HOSTS) : doneHosts.value));
+const moreHosts = computed(() => (doneHosts.value.length > SHOWN_HOSTS ? doneHosts.value.slice(SHOWN_HOSTS) : []));
+/** 只勾了一个图床时不说「均」 */
+const failedAllTitle = computed(() => (hostRows.value.length === 1 ? `${nameOf(hostRows.value[0].id)}上传失败` : `${hostRows.value.length} 个图床均上传失败`));
+/** 「已复制 · X」写实际复制时的格式，不是现在的默认格式 */
+const copiedFormat = computed<LinkFormat>(() => {
+  const copied = props.session.copied?.format;
+  return copied && copied in FORMAT_NAMES ? (copied as LinkFormat) : props.format;
+});
 
 const copiedLink = computed(() => {
   if (!props.copySource) return null;
@@ -99,7 +116,8 @@ const metaLine = computed(() => {
 });
 
 const formatOptions = (['url', 'markdown', 'html', 'bbcode', 'custom'] as const).map((value) => ({ value, label: FORMAT_NAMES[value] }));
-const formatModel = computed({ get: () => props.format, set: (value: LinkFormat) => emit('setFormat', value) });
+// 勾的是剪贴板里实际的格式；选别的格式就按它重新复制
+const formatModel = computed({ get: () => copiedFormat.value, set: (value: LinkFormat) => emit('setFormat', value) });
 
 const changeHostsOpen = ref(false);
 function copyHost(hostId: string) {
@@ -118,16 +136,21 @@ function copyHost(hostId: string) {
 
     <div class="focus-card__body">
       <div class="focus-card__row">
-        <PnMenu v-if="linkReady" align="start" :width="200">
+        <!-- 「已复制 · Markdown」既说剪贴板里是什么，也是格式开关；还没复制时点它就是复制 -->
+        <PnMenu v-if="linkReady && session.copied" align="start" :width="200">
           <template #trigger>
-            <button type="button" class="focus-card__pill" :class="session.copied ? 'focus-card__pill--copied' : 'focus-card__pill--neutral'" title="切换格式并复制">
-              <PnIcon :name="session.copied ? 'check' : 'copy'" :size="13" :stroke="session.copied ? 2.4 : 1.9" />
-              {{ session.copied ? '已复制' : '复制' }} · {{ FORMAT_NAMES[format] }}
+            <button type="button" class="focus-card__pill focus-card__pill--copied" title="切换格式并复制">
+              <PnIcon name="check" :size="13" :stroke="2.4" />
+              已复制 · {{ FORMAT_NAMES[copiedFormat] }}
               <PnIcon name="chevronDown" :size="11" :stroke="2.2" class="focus-card__pill-caret" />
             </button>
           </template>
           <PnMenuRadioGroup v-model="formatModel" :options="formatOptions" />
         </PnMenu>
+        <button v-else-if="linkReady" type="button" class="focus-card__pill focus-card__pill--neutral" title="复制链接" @click="emit('copy')">
+          <PnIcon name="copy" :size="13" :stroke="1.9" />
+          复制 · {{ FORMAT_NAMES[format] }}
+        </button>
         <span v-else-if="failedAll" class="focus-card__pill focus-card__pill--failed">
           <PnIcon name="close" :size="13" :stroke="2" />
           上传失败
@@ -142,7 +165,7 @@ function copyHost(hostId: string) {
         <div class="focus-card__spacer" />
         <span class="focus-card__hosts" :title="linkReady ? `存在 ${finishedCount} 个图床：${hostsTitle}` : undefined">
           <PetalGlyph :states="petalStates(item)" :size="18" />
-          <template v-if="failedAll">{{ hostRows.length }} 个图床均上传失败</template>
+          <template v-if="failedAll">{{ failedAllTitle }}</template>
           <template v-else-if="!linkReady">{{ finishedCount }} / {{ hostRows.length }} 个图床</template>
         </span>
       </div>
@@ -174,7 +197,7 @@ function copyHost(hostId: string) {
       </template>
       <template v-else-if="failedHosts.length && linkReady">
         <div v-for="host in failedHosts" :key="host.id" class="focus-card__failure">
-          <PnIcon name="info" :size="14" :stroke="1.8" class="focus-card__danger" />
+          <PnIcon name="failCircle" :size="14" :stroke="1.8" class="focus-card__danger" />
           <span class="focus-card__failure-text"><span class="focus-card__danger focus-card__strong">{{ nameOf(host.id) }}上传失败</span>：{{ reasonOf(host.id, host.error) }}</span>
           <div class="focus-card__spacer" />
           <PnButton v-if="isCookieHost(host.id)" variant="secondary" size="sm" @click="emit('relogin', host.id)">重新登录</PnButton>
@@ -184,7 +207,7 @@ function copyHost(hostId: string) {
       <div v-else-if="linkReady && doneHosts.length" class="focus-card__chips">
         <span class="focus-card__muted focus-card__chips-label">按图床复制</span>
         <button
-          v-for="host in doneHosts"
+          v-for="host in shownHosts"
           :key="host.id"
           type="button"
           class="focus-card__chip"
@@ -196,8 +219,35 @@ function copyHost(hostId: string) {
           <PnIcon v-if="isCopied(host.id) || (session.copied && host.id === copySource)" name="check" :size="12" :stroke="2.6" class="focus-card__success" />
           <PnIcon v-else name="copy" :size="12" :stroke="1.9" class="focus-card__muted" />
         </button>
+        <!-- 「+N」是这一行最后一个，右对齐才不会伸出卡片 -->
+        <PnPopover v-if="moreHosts.length" align="end" label="其他图床">
+          <template #trigger>
+            <button type="button" class="focus-card__chip focus-card__chip--more">
+              +{{ moreHosts.length }}
+              <PnIcon name="chevronDown" :size="11" :stroke="2.2" />
+            </button>
+          </template>
+          <div class="focus-card__more">
+            <span class="focus-card__more-title">其他 {{ moreHosts.length }} 个图床</span>
+            <div v-for="host in moreHosts" :key="host.id" class="focus-card__more-row">
+              <HostIcon :host="host.id" :name="nameOf(host.id)" :size="16" class="focus-card__chip-icon" />
+              <span class="focus-card__more-name">{{ nameOf(host.id) }}</span>
+              <span class="focus-card__muted">正常</span>
+              <button type="button" class="focus-card__more-copy" :aria-label="`复制${nameOf(host.id)}的链接`" @click="copyHost(host.id)">
+                <PnIcon :name="isCopied(host.id) ? 'check' : 'copy'" :size="12" :stroke="isCopied(host.id) ? 2.4 : 1.9" />
+                {{ isCopied(host.id) ? '已复制' : '复制' }}
+              </button>
+            </div>
+            <span class="focus-card__more-line" />
+            <button type="button" class="focus-card__more-all" @click="emit('copyAllHosts'); markCopied('all')">
+              <PnIcon :name="isCopied('all') ? 'check' : 'copy'" :size="12" :stroke="isCopied('all') ? 2.4 : 1.9" />
+              <span class="focus-card__more-name">{{ isCopied('all') ? '已复制' : `复制全部 ${doneHosts.length} 条（每行一条）` }}</span>
+              <span class="focus-card__muted">按图床顺序</span>
+            </button>
+          </div>
+        </PnPopover>
       </div>
-      <span v-else-if="!linkReady" class="focus-card__hint">首个图床完成后自动复制链接</span>
+      <span v-else-if="!linkReady && autoCopy" class="focus-card__hint">首个图床完成后自动复制链接</span>
     </div>
   </section>
 </template>
@@ -375,6 +425,65 @@ button.focus-card__pill { padding-right: var(--pn-space-8); cursor: pointer; }
 .focus-card__chip-icon { color: var(--pn-text2); }
 
 .focus-card__hint { font-size: var(--pn-text-footnote); color: var(--pn-text2); }
+
+/* 「+N」展开的完整列表（CopyMulti.dc.html ②：宽 330、行高 36） */
+.focus-card__chip--more { gap: var(--pn-space-4); background: var(--pn-selected); font-weight: var(--pn-weight-medium); }
+
+.focus-card__more {
+  display: flex;
+  flex-direction: column;
+  width: var(--pn-size-copy-more);
+}
+
+.focus-card__more-title {
+  padding: var(--pn-space-6) var(--pn-space-8) var(--pn-space-4);
+  color: var(--pn-text3);
+  font-size: var(--pn-text-caption);
+  font-weight: var(--pn-weight-medium);
+}
+
+.focus-card__more-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pn-space-copy-more-gap);
+  height: var(--pn-size-copy-more-row);
+  padding: 0 var(--pn-space-8);
+  border-radius: var(--pn-radius-button-sm);
+}
+
+.focus-card__more-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.focus-card__more-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--pn-space-4);
+  height: var(--pn-size-copy-more-button);
+  padding: 0 var(--pn-space-8);
+  border: 0;
+  border-radius: var(--pn-radius-sm);
+  background: var(--pn-subtle);
+  color: var(--pn-text1);
+  font: inherit;
+  font-size: var(--pn-text-footnote);
+}
+
+.focus-card__more-line { height: 1px; margin: var(--pn-space-6) var(--pn-space-8); background: var(--pn-border); }
+
+.focus-card__more-all {
+  display: flex;
+  align-items: center;
+  gap: var(--pn-space-8);
+  height: var(--pn-size-button-lg);
+  padding: 0 var(--pn-space-8);
+  border: 0;
+  border-radius: var(--pn-radius-button-sm);
+  background: transparent;
+  color: var(--pn-text1);
+  font: inherit;
+  text-align: left;
+}
+
+.focus-card__more-all:hover { background: var(--pn-menu-sel); }
 
 @keyframes pn-button-spin { to { transform: rotate(360deg); } }
 

@@ -35,7 +35,11 @@ withDefaults(defineProps<{
       </div>
       <div class="recent-row__second"><slot name="second" /></div>
     </div>
-    <div class="recent-row__action"><slot name="action" /></div>
+    <div class="recent-row__action" :class="{ 'recent-row__action--swaps': !!$slots.hover }">
+      <div class="recent-row__rest"><slot name="action" /></div>
+      <!-- 悬停 / 聚焦时盖在状态上；菜单开着时也保持可见，菜单才有地方挂 -->
+      <div v-if="$slots.hover" class="recent-row__hover"><slot name="hover" /></div>
+    </div>
   </div>
 </template>
 
@@ -110,11 +114,37 @@ withDefaults(defineProps<{
 }
 
 .recent-row__action {
-  display: flex;
+  position: relative;
   flex: none;
+  width: var(--pn-size-recent-action);
+}
+
+.recent-row__rest,
+.recent-row__hover {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--pn-space-2);
-  width: var(--pn-size-recent-action);
+  transition: opacity var(--pn-dur-instant) var(--pn-ease-in);
+}
+
+.recent-row__hover {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.recent-row:hover .recent-row__action--swaps .recent-row__hover,
+.recent-row:focus-within .recent-row__action--swaps .recent-row__hover,
+.recent-row:has([data-state='open']) .recent-row__action--swaps .recent-row__hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.recent-row:hover .recent-row__action--swaps .recent-row__rest,
+.recent-row:focus-within .recent-row__action--swaps .recent-row__rest,
+.recent-row:has([data-state='open']) .recent-row__action--swaps .recent-row__rest {
+  opacity: 0;
 }
 </style>

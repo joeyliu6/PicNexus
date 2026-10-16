@@ -35,6 +35,8 @@ export const ICONS = {
   plus: [p('M12 5v14M5 12h14')],
   more: [circle(5, 12, 1), circle(12, 12, 1), circle(19, 12, 1)],
   warning: [p('m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z'), p('M12 9v4M12 17h.01')],
+  // 失败行（HomeScreen.dc.html）：圆圈加 ✕；感叹号是「留意」
+  failCircle: [circle(12, 12, 9), p('m15 9-6 6M9 9l6 6')],
   info: [circle(12, 12, 9), p('M12 8v5M12 16h.01')],
   lock: [rect(4, 11, 16, 10, 2), p('M8 11V7a4 4 0 0 1 8 0v4')],
   copy: [rect(8, 8, 12, 12, 2.5), p('M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2')],

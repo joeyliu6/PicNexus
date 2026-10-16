@@ -32,20 +32,28 @@ const config = computed(() => upload.config.value);
 const format = computed(() => upload.linkOutput.value.defaultFormat);
 const copyFrom = computed(() => upload.linkOutput.value.copyFromService);
 
-const focus = computed(() => upload.sessions[0] ?? null);
+// 新的一次上传在读元数据、压缩时还没有图：这期间焦点卡留给上一次，不让它先掉进列表再弹回来
+const shown = computed(() => upload.sessions.filter((s) => upload.itemsOf(s).length > 0));
+const focus = computed(() => shown.value[0] ?? null);
 const focusItems = computed(() => (focus.value ? upload.itemsOf(focus.value) : []));
-const restSessions = computed(() => upload.sessions.slice(1));
+const restSessions = computed(() => shown.value.slice(1));
 
-/** 这次打开应用后传的那些已经在列表上面了，「更早」里去掉它们 */
+/** 这次打开应用后传的那些已经在列表上面了，「更早」里去掉它们；「清空」之前的也不再列出 */
 const older = computed(() => {
   const inSession = new Set(upload.sessions.flatMap((s) => upload.itemsOf(s)).map((item) => item.historyId).filter(Boolean));
-  return recent.value.filter((item) => !inSession.has(item.id)).slice(0, 6);
+  return recent.value.filter((item) => !inSession.has(item.id) && item.timestamp > upload.recentClearedAt.value).slice(0, 6);
 });
 
+// 图床状态、配置与图库总数读到之前不判断该用哪种布局（启动时不闪「没有图床」）
+const ready = computed(() => upload.ready.value && total.value !== null);
 const noHost = computed(() => hosts.value.length === 0);
 const firstUse = computed(() => !noHost.value && total.value === 0 && upload.sessions.length === 0);
 
-const hotkey = computed(() => formatShortcut(config.value.globalShortcut?.uploadClipboard ?? 'CommandOrControl+Shift+C', uiPlatform()));
+/** 关掉全局快捷键时不再提它（交接说明 T07 沿用到首页） */
+const hotkey = computed(() => (config.value.globalShortcut?.enabled === false
+  ? ''
+  : formatShortcut(config.value.globalShortcut?.uploadClipboard ?? 'CommandOrControl+Shift+C', uiPlatform())));
+const autoCopy = computed(() => upload.linkOutput.value.autoCopy !== false);
 const selectedNames = computed(() => hosts.value.filter((h) => h.selected).map((h) => h.name));
 
 const { open: urlDialogOpen } = useUrlDialog();
@@ -73,9 +81,12 @@ function historyUrl(item: HistoryItem): string | undefined {
   return item.results.find((r) => r.serviceId === item.primaryService && r.status === 'success')?.result?.url ?? item.generatedLink;
 }
 
-async function copyHistory(item: HistoryItem) {
+/** 单条复制：按钮原地显示「已复制」，不弹通知（Patterns.dc.html） */
+async function copyHistory(item: HistoryItem): Promise<boolean> {
   const url = historyUrl(item);
-  if (url) await copyLinks([{ url, fileName: item.localFileName, serviceId: item.primaryService }], { format: format.value });
+  if (!url) return false;
+  const result = await copyLinks([{ url, fileName: item.localFileName, serviceId: item.primaryService }], { format: format.value, showSuccessToast: false });
+  return result.ok;
 }
 
 async function openInBrowser(item: HistoryItem) {
@@ -90,10 +101,10 @@ async function openInBrowser(item: HistoryItem) {
     <BgDecor fade-from="52px" fade-to="104px" />
     <div class="home__scroll">
       <div class="home__column">
-        <HomeNoHost v-if="noHost" @enable-jd="upload.enableNoConfigHost('jd')" @connect="goHosts" />
+        <HomeNoHost v-if="ready && noHost" @enable-jd="upload.enableNoConfigHost('jd')" @connect="goHosts" />
 
         <HomeFirstUse
-          v-else-if="firstUse"
+          v-else-if="ready && firstUse"
           :hosts="hosts"
           :format="format"
           :copy-from="copyFrom"
@@ -107,7 +118,7 @@ async function openInBrowser(item: HistoryItem) {
           @manage-hosts="goHosts"
         />
 
-        <template v-else>
+        <template v-else-if="ready">
           <HomeDropBar :busy="upload.busy.value" @pick="upload.pickAndUpload()" @paste="upload.pasteClipboard()" @url="urlDialogOpen = true" />
           <HomeOptionsRow
             :hosts="hosts"
@@ -133,10 +144,12 @@ async function openInBrowser(item: HistoryItem) {
               :hosts="hosts"
               :config="config"
               :format="format"
-              @copy-item="upload.copyItem($event)"
+              :auto-copy="autoCopy"
+              :copy-item="(itemId: string) => upload.copyItem(itemId)"
               @set-format="upload.setFormat($event)"
               @retry-failed="upload.retryFailed(focus.id)"
-              @relogin="(hostId) => focusItems[0] && upload.relogin(focusItems[0].id, hostId)"
+              @relogin="(hostId) => upload.reloginSession(focus!.id, hostId)"
+              @retry-host="(hostId) => upload.retryHostForSession(focus!.id, hostId)"
               @open-in-gallery="goGallery"
             />
             <FocusCard
@@ -147,7 +160,10 @@ async function openInBrowser(item: HistoryItem) {
               :config="config"
               :format="format"
               :copy-source="upload.copySourceOf(focusItems[0])"
+              :auto-copy="autoCopy"
               @set-format="upload.setFormat($event)"
+              @copy="upload.copySession(focus!.id)"
+              @copy-all-hosts="upload.copyAllHosts(focusItems[0].id)"
               @copy-host="upload.copyItem(focusItems[0].id, $event)"
               @relogin="upload.relogin(focusItems[0].id, $event)"
               @retry-host="upload.retryHost(focusItems[0].id, $event)"
@@ -167,14 +183,14 @@ async function openInBrowser(item: HistoryItem) {
             :format="format"
             :busy="upload.busy.value"
             :copy-source-of="upload.copySourceOf"
-            @copy-item="upload.copyItem($event)"
-            @copy-session="upload.copySession($event)"
+            :copy-item="(itemId: string) => upload.copyItem(itemId)"
+            :copy-session="(sessionId: string) => upload.copySession(sessionId)"
+            :copy-history="copyHistory"
             @retry-item="upload.retryItem($event)"
             @retry-host="(itemId, hostId) => upload.retryHost(itemId, hostId)"
             @relogin="(itemId, hostId) => upload.relogin(itemId, hostId)"
             @retry-failed="upload.retryFailed()"
             @clear="upload.clearSessions()"
-            @copy-history="copyHistory"
             @open-history="goGallery"
             @open-in-browser="openInBrowser"
           />

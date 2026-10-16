@@ -104,13 +104,22 @@ export function sessionCounts(items: readonly QueueItem[]): SessionCounts {
   return counts;
 }
 
-/**
- * 某个图床整批失败（或整批没传上）时只报一行：返回这批里每张都在这个图床失败了的图床
- */
-export function hostsFailedForWholeBatch(items: readonly QueueItem[]): string[] {
-  if (items.length < 2) return [];
-  const first = items[0]?.enabledServices ?? [];
-  return first.filter((hostId) => items.every((item) => hostViews(item).find((h) => h.id === hostId)?.state === 'failed'));
+export interface HostMiss {
+  hostId: string;
+  /** 在这个图床没传上、别的图床传上了的那些图（整张都失败的另有一行） */
+  items: QueueItem[];
+  /** 第一张的失败原因：用来分「登录已过期」还是「上传失败」 */
+  error?: string;
+}
+
+/** 批量里每个图床没传上的那些图：某个图床没传上只报一行，写清几张（交接说明 4.9） */
+export function hostMisses(items: readonly QueueItem[]): HostMiss[] {
+  const hostIds = items[0]?.enabledServices ?? [];
+  return hostIds.flatMap((hostId) => {
+    const missed = items.filter((item) => itemPhase(item) !== 'failed'
+      && hostViews(item).some((h) => h.id === hostId && h.state === 'failed'));
+    return missed.length ? [{ hostId, items: missed, error: missed[0].serviceProgress[hostId]?.error }] : [];
+  });
 }
 
 /** 失败图床里第一条原因（焦点卡「微博上传失败：登录已过期」那一行用） */
