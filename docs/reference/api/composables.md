@@ -11,6 +11,11 @@
 | useConfig | 配置加载/保存/连接测试 | `src/composables/useConfig.ts` |
 | useHistory | 历史记录 CRUD + 搜索 | `src/composables/history/useHistory.ts` |
 | useUpload | 上传流程编排 | `src/composables/upload/useUpload.ts` |
+| useUploadController | 首页与外壳共用的上传入口（单例）：上传会话、「上传到」图床列表、复制格式与固定图床、压缩、重试、托盘上传动作 | `src/composables/upload/useUploadController.ts` |
+| useRecentUploads | 首页「最近上传」与命令面板用的最近 8 张，监听 `history-updated` 刷新 | `src/composables/history/useRecentUploads.ts` |
+| useCookieLogin | Cookie 登录小窗：登录成功后保存 Cookie 并回调（上传中「重新登录」也走这里） | `src/composables/useCookieLogin.ts` |
+| usePublicRiskConfirm | 第一次启用公共图床前的风险确认（交接说明第 9 节文案） | `src/composables/usePublicRiskConfirm.ts` |
+| useConfirmedHttpHosts | 已确认可走明文 HTTP 的图床域名，交给每个 `ThumbnailImage` | `src/composables/image/useConfirmedHttpHosts.ts` |
 | useThumbCache | 缩略图缓存管理 | `src/composables/image/useThumbCache.ts` |
 | useToast | Toast 通知 | `src/composables/useToast.ts` |
 | useTheme | 主题切换 | `src/composables/useTheme.ts` |

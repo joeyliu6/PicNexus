@@ -19,10 +19,11 @@
 
 ### 目录结构
 
+新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
+
 ```
 src/components/
 ├── views/                    # 主视图（路由级）
-│   ├── UploadView.vue       # 上传界面
 │   ├── history/             # 历史记录模块
 │   │   ├── HistoryTableView.vue   # 表格视图
 │   │   ├── HistoryGridView.vue    # 网格视图
@@ -49,7 +50,7 @@ src/components/
 
 | 类型 | 命名模式 | 示例 |
 |------|---------|------|
-| 视图组件 | `*View.vue` | `UploadView.vue` |
+| 视图组件 | `*View.vue` | `HomeView.vue` |
 | 面板组件 | `*Panel.vue` | `SettingsPanel.vue` |
 | 对话框 | `*Dialog.vue` | `SyncConflictDialog.vue` |
 | 通用组件 | 语义化名称 | `ThumbnailImage.vue` |

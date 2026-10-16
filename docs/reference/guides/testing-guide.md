@@ -32,10 +32,10 @@ Vitest 使用 `happy-dom`，全局 setup 为 `tests/unit/setup.ts`，当前会�
 | utils / formatter / status 计算 | 单元测试 | `tests/unit/utils/formatters.spec.ts` 验证 `formatFileSize`、`formatRelativeTime`；`tests/unit/utils/uploadStatus.spec.ts` 验证成功、失败、上传中、等待中状态判断 |
 | URL、Markdown、路径、布局算法 | 单元测试 | `linkFormatter.spec.ts`、`mdParser.spec.ts`、`pathUtils.spec.ts`、`justifiedLayout.spec.ts` |
 | uploader 或 service 分发逻辑 | 单元测试，必要时 mock Tauri invoke | `uploaderFactory.spec.ts`、`multiServiceUploader.spec.ts`、`historyDatabase.spec.ts` |
-| composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD、节流更新与完成态判断；`useBatchMigrate.spec.ts`、`useLinkCheck.spec.ts` 验证业务状态推进 |
-| 组件交互 | 组件测试 | `uploadQueuePanel.spec.ts` 验证按钮点击 emit、loading 禁用态和空队列渲染 |
-| 页面多状态 UI | 视觉截图测试 | `upload.visual.spec.ts` 覆盖 empty、no-services、uploading、failed、success、compression-menu；`timeline.visual.spec.ts` 覆盖滚动、骨架屏、lightbox 等状态 |
-| mocked 原生边界 | mocked E2E | `tests/e2e/app-smoke.e2e.spec.ts` 验证启动不白屏、主导航、设置保存、文件选择、剪贴板、上传队列、历史页壳层、链接检测页 |
+| composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD 与节流更新；`useUploadController.spec.ts` 验证上传会话、图床列表与托盘动作；`useBatchMigrate.spec.ts`、`useLinkCheck.spec.ts` 验证业务状态推进 |
+| 组件交互 | 组件测试 | `tests/unit/shell/appShell.spec.ts` 验证侧栏导航、跳转事件、`Ctrl+\` 收起侧栏 |
+| 页面多状态 UI | 视觉截图测试 | `timeline.visual.spec.ts` 覆盖滚动、骨架屏、lightbox 等状态 |
+| mocked 原生边界 | mocked E2E | `tests/e2e/app-smoke.e2e.spec.ts` 验证启动不白屏、主导航、设置保存、文件选择、剪贴板、上传后复制链接、历史页壳层、链接检测页 |
 | 真实桌面壳层 | 真实 Tauri E2E | `tests/tauri-e2e/app-smoke.tauri.e2e.cjs` 只验证真实应用启动、标题、主布局和四个主导航 |
 
 视觉测试通过 `tests/visual/harness` 构造稳定页面状态，不依赖真实网络、真实图床或真实 Tauri 后端。新增页面截图时，优先把状态放进 harness，再用 `captureVisualState(page, pageName, state)` 截图。

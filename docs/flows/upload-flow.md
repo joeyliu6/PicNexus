@@ -8,18 +8,18 @@
 
 展示从用户操作到最终结果的完整路径。重点关注**分批处理**和**多图床并行**两个关键设计。
 
-> **关键源文件**：`src/composables/upload/useUpload.ts`、`src/core/MultiServiceUploader.ts`
+> **关键源文件**：`src/composables/upload/useUploadController.ts`（界面入口）、`src/composables/upload/useUpload.ts`、`src/core/MultiServiceUploader.ts`
 
 ```mermaid
 flowchart TD
-    %% 用户输入
-    A1[拖拽图片] --> B
-    A2[点击选择文件] --> B
-    A3["粘贴剪贴板<br/>Ctrl+V 仅上传视图激活时响应"] --> B
+    %% 用户输入（拖入与粘贴是全局入口：src/shell/useGlobalUploadInput.ts）
+    A1["拖入窗口任意页面<br/>链接健康页暂由文档修复自己接"] --> B
+    A2[选择文件 / 从 URL 下载] --> B
+    A3["Ctrl+V / ⌘V 粘贴剪贴板<br/>任意页面；输入框内、弹窗打开时不接"] --> B
 
-    B[UploadView 接收文件路径列表]
+    B[useUploadController.uploadFiles<br/>开一个上传会话]
     B --> C{isUploading?}
-    C -- 是 --> C1[提示：上传进行中]
+    C -- 是 --> C1[提示：请稍候]
     C -- 否 --> D
 
     %% 前置校验
@@ -49,7 +49,7 @@ flowchart TD
 
     %% 分批处理
     M[chunkArray 按 50 张分批]
-    M --> N[并发批次控制 max=2]
+    M --> N[一次一批，批内同时传 3 张]
     N --> O[processBatch 批次处理]
 
     %% 单批次流水线
@@ -93,8 +93,8 @@ flowchart TD
     AH1 --> AH2[markItemComplete<br/>统一缩略图主链接]
     AH2 --> AH3{所有批次完成?}
     AH3 -- 否 --> O
-    AH3 -- 是 --> AI[copyLinks 复制最终主链接到剪贴板]
-    AI --> AJ[showUploadSessionSummary Toast 通知]
+    AH3 -- 是 --> AI["copyLinks 复制链接<br/>单张：复制来源一确定就复制（onPrimaryReady），不等其余图床<br/>多张：整批结束后一次复制"]
+    AI --> AJ["showUploadSessionSummary 通知<br/>首页在屏时不弹（结果已在首页卡片上）"]
     AJ --> AK[解锁 isUploading = false]
 
     %% 样式
@@ -118,7 +118,7 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    participant UV as UploadView
+    participant UV as 首页 · useUploadController
     participant UU as useUpload
     participant MSU as MultiServiceUploader
     participant UF as UploaderFactory
@@ -133,7 +133,7 @@ sequenceDiagram
     Note over UU: 文件校验 + 配置读取 + 网络检测
     UU->>UU: chunkArray 分批
 
-    loop 每个批次（max 2 并发）
+    loop 每个批次（一次一批，批内 3 张并发）
         UU->>UU: fetchMetadataBatch（元数据）
         UU->>UU: compressImageBatch（可选压缩）
         UU->>UU: queueManager.addFile
@@ -189,8 +189,8 @@ sequenceDiagram
         UU->>UV: queueManager.updateItem → UI 更新
     end
 
-    UU->>UU: copyLinks 复制到剪贴板
-    UU->>UV: showUploadSessionSummary
+    UU->>UU: copyLinks 复制到剪贴板（单张在复制来源确定时已复制）
+    UU->>UV: onCopied → 首页卡片显示「已复制」；showUploadSessionSummary（首页在屏时不弹）
     deactivate UU
 ```
 
@@ -304,7 +304,7 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 
 > **关键源文件**：`src/services/RetryService.ts`、`src/composables/history/useHistorySaver.ts`（`saveHistoryItemImmediate`）、`src/composables/upload/UploadExecutor.ts`
 
-入口：图床卡片上的重试按钮（某个图床一失败就出现，**不等整项上传结束**）和「批量重传」（逐个重试每项失败的图床）。
+入口：首页焦点卡上的「重试此图床」（某个图床一失败就出现，**不等整项上传结束**）、整张失败时的「重试」，以及批量卡片「重试 N 张」/ 最近上传「重试失败的」（逐个重试每项失败的图床）。
 
 **不变量：**
 
@@ -338,8 +338,10 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | NAS 目录里文件名都带 `_20260817_a3f9` | 防覆盖的唯一段，故意放在原名之后好让你先看到文件名；不想要就关掉那个开关 | WebDAV 可以关掉唯一化 |
 | S3 桶里有对象但历史里查不到 | 上传失败重试留下的孤儿对象（重试用新 key，不覆盖） | S3 系图床 → 对象名唯一化「代价」 |
 | 未知扩展名的文件上传后类型是 `application/octet-stream` | `mime_guess` 无法识别该扩展名，按设计回退 | S3 系图床 → Content-Type |
-| 在历史/链接检测/设置页按 Ctrl+V 也触发了上传 | `UploadView` 的 keydown 监听挂在 `window` 上，且 `AppShell` 的 `KeepAlive` 上限等于页面数、本组件永不卸载，必须靠 `isViewActive` 早退收敛 | 图1 节点 A3 |
-| 在上传页按 Ctrl+V 没反应 | 切走再切回后 `onActivated` 未触发（`isViewActive` 卡在 false）；或焦点在 `INPUT`/`TEXTAREA` 内被有意跳过 | 图1 节点 A3 |
+| 在图库 / 设置等页按 Ctrl+V 也上传了 | 预期行为：粘贴是全局上传入口（交接说明 8.1），监听在 `src/shell/useGlobalUploadInput.ts` | 图1 节点 A3 |
+| 按 Ctrl+V 没反应 | 焦点在输入框里，或有弹窗开着（`.pn-dialog[data-state="open"]`）——这两种情况有意不接 | 图1 节点 A3 |
+| 拖进窗口没出现遮罩 | 当前在链接健康页：过渡期由文档修复自己接拖入的 .md（`PAGES_WITH_OWN_DROP`） | 图1 节点 A1 |
+| 单张传完复制的不是想要的图床 | 复制来源 = 固定的图床（传上了才算），否则最先完成的；不按配置顺序 | 重试 → 不变量 4 |
 | 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关 | `src/composables/useGlobalShortcut.ts` |
 
 ---

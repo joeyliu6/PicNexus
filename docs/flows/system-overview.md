@@ -12,8 +12,8 @@
 
 ```mermaid
 flowchart TD
-    subgraph Views["视图层 (src/components/views/)"]
-        V1[UploadView<br/>上传界面]
+    subgraph Views["视图层 (src/views/ 新界面 · src/components/views/ 过渡期旧页)"]
+        V1[HomeView<br/>首页·快传]
         V2[HistoryView<br/>历史记录]
         V3[TimelineView<br/>时间线]
         V4[SettingsView<br/>设置面板]

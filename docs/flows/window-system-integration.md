@@ -95,7 +95,7 @@ flowchart TD
     E -- open_history --> A4[show main<br/>emit navigate-to history]
     E -- quit --> A5[plugin-process exit 0]
 
-    A1 & A2 & A4 --> F[AppShell / UploadView]
+    A1 & A2 & A4 --> F[AppShell / useUploadController]
     F --> F1[listen navigate-to<br/>切换路由]
     F --> F2[listen tray-action<br/>上传动作]
 
@@ -122,7 +122,7 @@ flowchart TD
 
 统一规则:**凡是「因为配置可能被别的窗口改了而重新读」,一律走 [`readFreshConfig()`](../../src/store/instances.ts),不要直接 `configStore.get()`。** 它先 `invalidateCache()` 再读盘。组件自己写完再读不需要它——写入路径已经同步刷新过本窗口缓存。
 
-现有调用点:`TrayMenuWindow.loadConfig` / `App.vue`(主题) / `UploadView`(压缩配置与 profile) / `useServiceSelector.loadServiceButtonStates`(图床勾选) / `useGlobalShortcut.loadConfig`。
+现有调用点:`TrayMenuWindow.loadConfig` / `App.vue`(主题) / `useUploadController.refreshConfig`(压缩配置与 profile) / `useServiceSelector.loadServiceButtonStates`(图床勾选) / `useGlobalShortcut.loadConfig`。
 
 健康状态另有一层:`useServiceHealth` 的 `autoLoadPromise` 是永久 memoize,托盘要拿最新检测结果必须 `loadHealthStatus({ force: true })`(它会一并作废 `syncStatusStore` 缓存)。托盘侧配置 + 健康状态由 `refreshTrayState()` 串起来,`onMounted` / `config-updated` / `tray-menu-opened` 三个时机共用。
 

@@ -38,8 +38,8 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Vue 3 前端                               │
 ├─────────────┬─────────────┬─────────────┬──────────────────────┤
-│  UploadView │ HistoryView │ TimelineView│    SettingsView      │
-│  (上传界面) │ (历史记录)  │ (时间线)    │    (设置面板)        │
+│  HomeView   │ HistoryView │ TimelineView│    SettingsView      │
+│  (首页快传) │ (历史记录)  │ (时间线)    │    (设置面板)        │
 ├─────────────┴─────────────┴─────────────┴──────────────────────┤
 │                      Composables 层                              │
 │  useUpload │ useHistory │ useConfig │ useThumbCache │ useToast │

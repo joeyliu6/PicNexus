@@ -230,7 +230,7 @@ flowchart TD
 
 配套规则：
 
-- **「已配置」与「已启用」是两件事。** 未配置（`healthStatus === 'unconfigured'`）的图床即使在 `availableServices` 里也不会出现在上传界面——`UploadView.filterVisibleServices` 和 `MultiServiceUploader.filterConfiguredServices` 各挡一道。
+- **「已配置」与「已启用」是两件事。** 未配置（`healthStatus === 'unconfigured'`）的图床即使在 `availableServices` 里也不会出现在上传界面——首页「上传到」只列 `isServiceAvailable` 为真的图床（`useUploadController` 的 `hosts`），`MultiServiceUploader.filterConfiguredServices` 再挡一道。
 - **新建自定义 S3 / WebDAV profile 会自动写入 `availableServices`**（`useStorageProfiles.enableNewProfile`），与删除时的摘除对称。因此用户建好配置、填全凭证后无需再去芯片手动点亮。
 - **内建图床填完凭证不会自动加回 `availableServices`。** `useSettingsForm` 里那条 watch 只保留「配置变空 → 自动移除」，刻意不做「自动添加」，否则用户主动取消勾选后重填 cookie 会被悄悄加回，违反禁用意图。
 - **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用必须走 `ServiceEnableSection.toggleService`，那是 `publicServiceRiskAccepted` 唯一的置位入口。绕过它自动启用，会让上传时被静默过滤，用户看到「设置里明明启用了却不传」。
