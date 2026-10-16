@@ -1,0 +1,17 @@
+/*
+ * 新界面的全局基础样式
+ * 焦点环：品牌蓝 2px 外环（交接说明 3.4）。外壳内的元素和传送到 body 的浮层（.pn-layer）都适用。
+ */
+.app-shell :focus-visible,
+.pn-layer :focus-visible {
+  outline: var(--pn-ring-width) solid var(--pn-ring);
+  outline-offset: var(--pn-ring-offset);
+}
+
+/* 浮层的根字体与外壳一致（传送到 body 后拿不到 .app-shell 的继承） */
+.pn-layer {
+  font-family: var(--pn-font-ui);
+  font-size: var(--pn-text-body);
+  line-height: 1.45;
+  color: var(--pn-text1);
+}

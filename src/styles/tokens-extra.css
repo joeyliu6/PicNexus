@@ -26,7 +26,20 @@
   --pn-drag-veil: rgba(255, 255, 255, 0.72);
   --pn-scrim-light: rgba(23, 23, 23, 0.12);
   --pn-chip-on: #EAF2FD;
+  --pn-toast-action-bg: #F5F5F5;
   --pn-danger-button: #B91C1C;
+  /* 按钮状态（Controls.dc.html V 表） */
+  --pn-button-hover: #2558C4;
+  --pn-button-press: #1F4CAE;
+  --pn-secondary-hover: #F5F5F5;
+  --pn-secondary-press: #EBEBEB;
+  --pn-ghost-hover: #F2F2F2;
+  --pn-ghost-press: #E8E8E8;
+  --pn-danger-button-hover: #A11818;
+  --pn-danger-button-press: #8A1414;
+  /* 白色浮起按钮的悬停：设计稿未画，取次按钮的悬停色 */
+  --pn-btn-soft-hover: #F5F5F5;
+  --pn-seg-track: #EFEFEF;
 }
 
 [data-theme="dark"] {
@@ -48,7 +61,19 @@
   --pn-drag-veil: rgba(28, 28, 30, 0.72);
   --pn-scrim-light: rgba(0, 0, 0, 0.35);
   --pn-chip-on: rgba(76, 147, 245, 0.16);
+  --pn-toast-action-bg: #36363A;
   --pn-danger-button: #C42B2B;
+  --pn-button-hover: #3B7BEA;
+  --pn-button-press: #2C62C7;
+  --pn-secondary-hover: #323236;
+  --pn-secondary-press: #3A3A3E;
+  --pn-ghost-hover: #2A2A2D;
+  --pn-ghost-press: #323236;
+  --pn-danger-button-hover: #D13838;
+  --pn-danger-button-press: #A82424;
+  /* 深色「越靠上越亮」：浮起按钮 #36363A 悬停再亮一级 */
+  --pn-btn-soft-hover: #3E3E42;
+  --pn-seg-track: #2A2A2D;
 }
 
 :root {
@@ -105,6 +130,68 @@
   --pn-size-button-lg: 32px;
   --pn-size-button-dialog: 34px;
 
+  /* 控件 */
+  --pn-size-control: 32px;
+  --pn-size-control-dialog: 34px;
+  --pn-size-switch-w: 36px;
+  --pn-size-switch-h: 20px;
+  --pn-size-switch-thumb: 16px;
+  --pn-size-check: 16px;
+  --pn-size-radio-dot: 6px;
+  --pn-size-menu-item: 32px;
+  --pn-size-menu-min: 180px;
+  --pn-size-menu-max: 360px;
+  --pn-space-menu-indent: 30px;
+  --pn-size-seg-item: 26px;
+  --pn-size-seg-icon: 34px;
+  --pn-size-icon-button: 28px;
+  --pn-radius-button-sm: 7px;
+  --pn-radius-check: 4px;
+  --pn-radius-switch: 10px;
+  --pn-radius-seg: 9px;
+  --pn-radius-seg-item: 7px;
+  --pn-space-button-sm-x: 10px;
+  --pn-space-button-x: 14px;
+  --pn-space-button-dialog-x: 16px;
+  --pn-space-input-x: 10px;
+  --pn-space-tab-gap: 24px;
+  --pn-space-tab-top: 6px;
+  --pn-space-tab-bottom: 10px;
+  --pn-ring-soft-width: 3px;
+  --pn-switch-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --pn-opacity-disabled: 0.45;
+
+  /* 花瓣（PetalScale.dc.html）：上传中 45% 透明；超过 8 个图床时右下角的数字牌 */
+  --pn-opacity-petal-uploading: 0.45;
+  --pn-size-petal-badge: 14px;
+  --pn-size-petal-badge-text: 9px;
+  --pn-space-petal-badge-x: 3px;
+  --pn-petal-badge-offset-x: -6px;
+  --pn-petal-badge-offset-y: -4px;
+
+  /* 复制按钮图标与文字的间距 */
+  --pn-space-copy-gap: 5px;
+
+  /* 骨架 / 空状态 / 快捷键标签 */
+  --pn-size-skeleton-text: 12px;
+  --pn-space-empty-bottom: 80px;
+  --pn-size-empty-text: 360px;
+  --pn-space-kbd-x: 5px;
+
+  /* 弹窗 / 通知 */
+  --pn-size-dialog: 520px;
+  --pn-size-dialog-icon: 40px;
+  --pn-space-dialog-y: 24px;
+  --pn-space-dialog-x: 28px;
+  --pn-space-dialog-gap: 14px;
+  --pn-size-toast: 360px;
+  --pn-size-toast-glyph: 18px;
+  --pn-space-toast-left: 14px;
+  --pn-space-1: 1px;
+  --pn-space-toast-edge: 20px;
+  --pn-size-countdown: 2px;
+  --pn-opacity-toast-older: 0.92;
+
   /* 焦点环：品牌蓝 2px 外环 */
   --pn-ring-width: 2px;
   --pn-ring-offset: 2px;
@@ -119,6 +206,29 @@
 
 :root {
   /* Windows 标题栏关闭键悬停：沿用系统外观（红底白叉），与「红 = 操作失败」无关 */
+  /* 背景装饰（BgDecor.dc.html）：浅色花瓣光晕、深色极光；数值照抄设计稿 */
+  --pn-decor-bloom: radial-gradient(900px 420px at 50% 4%, rgba(46, 166, 242, 0.10), transparent 70%), radial-gradient(600px 380px at 100% 100%, rgba(77, 99, 240, 0.07), transparent 70%);
+  --pn-decor-aurora-shade: linear-gradient(180deg, rgba(8, 12, 24, 0) 0%, rgba(8, 12, 24, 0.35) 100%);
+  --pn-decor-aurora-1: radial-gradient(closest-side, rgba(46, 166, 242, 0.34), rgba(46, 166, 242, 0) 100%);
+  --pn-decor-aurora-2: radial-gradient(closest-side, rgba(124, 92, 246, 0.30), rgba(124, 92, 246, 0) 100%);
+  --pn-decor-aurora-3: radial-gradient(closest-side, rgba(34, 200, 190, 0.22), rgba(34, 200, 190, 0) 100%);
+  --pn-decor-aurora-4: radial-gradient(closest-side, rgba(170, 220, 255, 0.18), rgba(170, 220, 255, 0) 100%);
+  --pn-decor-blur-1: 36px;
+  --pn-decor-blur-2: 42px;
+  --pn-decor-blur-3: 40px;
+  --pn-decor-blur-4: 14px;
+  --pn-decor-petal-strong: 0.10;
+  --pn-decor-petal-soft: 0.06;
+  --pn-decor-star: #FFFFFF;
+  --pn-decor-star-a: 0.55;
+  --pn-decor-star-b: 0.35;
+  --pn-decor-star-c: 0.2;
+  /* 遮罩里「完全不透明」的那一端 */
+  --pn-mask-solid: #000;
+
+  /* 品牌蓝 / 红 / 绿实底上的文字与图标 */
+  --pn-on-fill: #FFFFFF;
   --pn-window-close-hover: #C42B1C;
-  --pn-window-close-fg: #FFFFFF;
+  --pn-window-close-fg: var(--pn-on-fill);
+  --pn-dur-spin: 900ms;
 }

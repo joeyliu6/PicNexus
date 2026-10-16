@@ -100,9 +100,4 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   overflow: auto;
   background: var(--bg-app);
 }
-
-.app-shell :focus-visible {
-  outline: var(--pn-ring-width) solid var(--pn-ring);
-  outline-offset: var(--pn-ring-offset);
-}
 </style>
