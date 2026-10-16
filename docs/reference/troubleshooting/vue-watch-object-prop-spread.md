@@ -11,7 +11,7 @@
 灯箱组件有一个 watch 监听 `props.item` 变化，切换图片时重置缩放/拖拽状态：
 
 ```ts
-// HistoryLightbox.vue
+// 灯箱组件
 watch(() => props.item, () => {
   if (props.visible) resetImageState(); // imageLoading = true
 });

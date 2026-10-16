@@ -65,7 +65,7 @@
 - 0.1s 用 `--duration-micro`，0.15s 用 `--duration-fast`，0.2s 用 `--duration-normal`，0.3s 用 `--duration-medium`
 - `ease`/`ease-out`/`ease-in-out` 保持原样（CSS 原生关键字，不需要变量化）
 - 只替换 `cubic-bezier(...)` 为 `var(--ease-*)`
-- TransitionGroup 的精调动画（如 FavoritesView 的 0.45s/0.55s/0.33s）允许保留非标准值
+- TransitionGroup 的精调动画允许保留非标准值
 
 ## 相关文件
 

@@ -400,9 +400,9 @@ flowchart TD
 | 批量部分失败 → 按记录隔离 | 底层逐条写库无法回滚，一条记录抛错不拖累其余；`applyChanges` 只对真落库的部分生效；回执和确认框同一个单位：整张图移除报「已从记录中移除 N 张图片」，只剥掉链接报「已移除 N 个链接」，部分失败报「N 张图片没移除成功」（warn）；返回 `BulkResultDeleteReport`，视图只移除 `resolvedHistoryIds` 对应的行（含"目标本就不存在"的陈旧行），失败的行保留供重试 |
 | 事件分流 | 整条删走 `emitHistoryDeleted`，仅改走 `emitHistoryUpdated`；其他视图依赖这两类事件刷新缓存 |
 
-### 为什么不共用 `deleteHistoryItem`
+### 为什么不共用 `removeRecords`
 
-`deleteHistoryItem` / `bulkDeleteRecords` 的语义是"删图"（Timeline、收藏、历史视图）。链接检测虽然按图片列出，移除的却是**打不开的那几份链接**——共用会导致"移除失效的微博链接，顺手把能用的 GitHub 链接也删了"这种体验事故。只有每一份都打不开时，记录才随最后一份链接一起消失。
+`removeRecords` 的语义是"删整条记录"（图库的「移除记录」）。链接检测虽然按图片列出，移除的却是**打不开的那几份链接**——共用会导致"移除失效的微博链接，顺手把能用的 GitHub 链接也删了"这种体验事故。只有每一份都打不开时，记录才随最后一份链接一起消失。
 
 ---
 
@@ -455,7 +455,7 @@ flowchart TD
 | 暂停后点取消无响应 | 不应出现——cancel 优先 pause；若确实发生检查 `await_resume_or_cancel` 返回值 | 图 3 暂停 / 恢复：轮询语义 |
 | 卡片按钮是「检查剩下的 N 个」，想全部重查 | 有没查过的链接时主按钮先查剩下的；全部重查点旁边的「全部重新检查」 | 图 4 结论卡决策 |
 | 重检后那一行停了一下才挪走 | 设计行为：结果先在原位停 1200ms 再落定，落定后才按新结果归类 | 图 2 |
-| 移除失效的链接后，同一张图能打开的链接也没了 | 逻辑退化成按 `historyId` 删整条——检查走的是 `bulkDeleteHistoryResults`（按 `(historyId, serviceId)`）而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
+| 移除失效的链接后，同一张图能打开的链接也没了 | 逻辑退化成按 `historyId` 删整条——检查走的是 `bulkDeleteHistoryResults`（按 `(historyId, serviceId)`）而不是 `removeRecords` | 图 5 / useHistoryResultOps.ts |
 | 清理后部分图还在，弹了「部分删除失败」 | 设计行为：处理失败的记录（DB 未改动）保留在列表里供重试，只有真落库的行会淡出 | 图 5 批量部分失败不变量 / `LinkCheckView.handleRemoveLinks` |
 | 删主力图床后 Timeline 卡片缩略图没换 | `primaryService` 未切换或 `emitHistoryUpdated` 未发 | 图 5 补选主力 + 事件分流 |
 | 删完所有图床后历史里还有空壳 | `results[]` 归零兜底未触发，检查 `stripServiceFromItem` 返回值 | 图 5 结果归零分支 |

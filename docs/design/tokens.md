@@ -310,7 +310,6 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
 - **不要**父子各挂一个 tooltip（PrimeVue 绑 `mouseenter`，父子会同时弹两个气泡），把文案合并进同一个
 - 传 `maxWidth` 要与该处 CSS 的 `max-width` 一致（设置页芯片 120、下拉项 160）
-- 历史表格额外注意：`.badge-label` 的 96px 与 `COMPACT_LABEL_WIDTH` 同源，`useHistoryBadgeLayout` 用它给 `+N` 的宽度估算封顶，走散了溢出计数会按未截断宽度算
 
 图标侧对应的兜底见 `src/components/common/ServiceLogo.vue`（内置 SVG → 私有存储按类型退到 PrimeIcons → `pi-cloud`）。
 

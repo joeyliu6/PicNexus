@@ -18,7 +18,7 @@
 | 文件 | 内容 |
 |------|------|
 | [timeline-fixed.md](./troubleshooting/timeline-fixed.md) | 时间线快速滚动闪烁（itemMap 重建 + margin 偏差） |
-| [timeline-view-switch-blank.md](./troubleshooting/timeline-view-switch-blank.md) | 切换时间线视图白屏（KeepAlive 缓存 + isLoading 状态） |
+| [timeline-view-switch-blank.md](./troubleshooting/timeline-view-switch-blank.md) | 图库加载与跳转时的占位策略（冷启动骨架 / 按天占位 / 跳转只跳最后一个） |
 | [ui-fixed.md](./troubleshooting/ui-fixed.md) | 表格滚动条 + 骨架屏偏移修复 |
 | [upload-queue-status-race-condition.md](./troubleshooting/upload-queue-status-race-condition.md) | 上传队列状态竞态（RAF 节流回调覆盖最终状态） |
 | [primevue-scoped-css-width-not-applied.md](./troubleshooting/primevue-scoped-css-width-not-applied.md) | PrimeVue scoped CSS 不生效（`:deep()` 穿透） |

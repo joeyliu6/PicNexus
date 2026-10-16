@@ -48,7 +48,7 @@ SettingsView.vue → useConfig.ts → Store (加密) → config.json
 
 ### 历史浏览流程
 ```
-HistoryView.vue / TimelineView.vue → useHistory.ts → HistoryDatabase → history.db
+GalleryView.vue → useGalleryGrid / useGalleryList → useHistory.ts + HistoryDatabase（TimelineQueryService）→ history.db
 ```
 
 ---

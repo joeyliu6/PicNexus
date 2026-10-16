@@ -9,10 +9,10 @@
 | Composable | 职责 | 源文件 |
 |------------|------|--------|
 | useConfig | 配置加载/保存/连接测试 | `src/composables/useConfig.ts` |
-| useHistory | 历史记录 CRUD + 搜索 | `src/composables/history/useHistory.ts` |
+| useHistory | 历史记录的统计（总数 / 收藏 / 各图床计数 / 年月）、收藏切换、导出、移除记录（`removeRecords`，返回删掉的完整记录）与撤销（`restoreRecords`） | `src/composables/history/useHistory.ts` |
 | useUpload | 上传流程编排 | `src/composables/upload/useUpload.ts` |
 | useUploadController | 首页与外壳共用的上传入口（单例）：上传会话、「上传到」图床列表、复制格式与固定图床、压缩、重试、托盘上传动作 | `src/composables/upload/useUploadController.ts` |
-| useRecentUploads | 首页「最近上传」与命令面板用的最近 8 张，监听 `history-updated` 刷新 | `src/composables/history/useRecentUploads.ts` |
+| useRecentUploads | 首页「最近上传」与命令面板用的最近 8 张，监听 `history-updated` 刷新；`reserve(n)` 让它多读本次会话已在首页显示的 n 张，「更早」不会被一大批新图挤空 | `src/composables/history/useRecentUploads.ts` |
 | useCookieLogin | Cookie 登录小窗：登录成功后保存 Cookie 并回调（上传中「重新登录」也走这里） | `src/composables/useCookieLogin.ts` |
 | usePublicRiskConfirm | 第一次启用公共图床前的风险确认（交接说明第 9 节文案） | `src/composables/usePublicRiskConfirm.ts` |
 | useConfirmedHttpHosts | 已确认可走明文 HTTP 的图床域名，交给每个 `ThumbnailImage` | `src/composables/image/useConfirmedHttpHosts.ts` |
@@ -29,9 +29,15 @@
 | useClipboardImage | 剪贴板图片处理 | `src/composables/upload/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
 | useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
-| useVirtualTimeline | 虚拟滚动时间线 | `src/composables/timeline/useVirtualTimeline.ts` |
+| useVirtualTimeline | 图库网格的虚拟滚动（按天分组的等高行布局） | `src/composables/timeline/useVirtualTimeline.ts` |
+| useTimelineJump | 图库刻度条跳到某年某月；跳转中再来的请求只留最后一个，落地后接着跳 | `src/composables/timeline/useTimelineJump.ts` |
+| useTimelineLightbox | 图库灯箱的翻页（日内快翻 + 跨日按需加载）；当前图与 ±1 预热都过 `safeImageUrl` | `src/composables/timeline/useTimelineLightbox.ts` |
+| useImagePreload | 图库滚动预热下一屏；只预热候选链里第一条通过 `safeImageUrl` 的地址 | `src/composables/timeline/useImagePreload.ts` |
+| usePhotoSwipeBridge | PhotoSwipe 灯箱的打开 / 关闭 / 换图，`pswpEl` 供自绘 UI Teleport | `src/composables/history/usePhotoSwipeBridge.ts` |
+| useHistoryViewState | 图库多选：Ctrl·⌘ 单击 / Shift 连选 / 全选已加载 | `src/composables/history/useHistoryViewState.ts` |
+| useGalleryGrid / useGalleryList / useGalleryActions | 图库页的网格数据、列表分页、批量与单张操作（复制、补充备份、重新检测、移除记录、改用备份的通知） | `src/views/gallery/` |
 | useAnalytics | GA4 P0 生命周期统计 + 在线心跳 | `src/composables/useAnalytics.ts` |
-| useMirrorFallback | 灯箱多图床备份管理（切主图床 / 移除链接 / 重新检测） | `src/composables/history/useMirrorFallback.ts` |
+| useMirrorFallback | 图库详情的备份管理（改用这一份 / 移除这条链接 / 单条重新检测） | `src/composables/history/useMirrorFallback.ts` |
 
 ## useAnalytics
 

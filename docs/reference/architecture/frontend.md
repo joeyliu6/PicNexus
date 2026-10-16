@@ -19,17 +19,11 @@
 
 ### 目录结构
 
-新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
+新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`、图库 `src/views/gallery/GalleryView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
 
 ```
 src/components/
-├── views/                    # 主视图（路由级）
-│   ├── history/             # 历史记录模块
-│   │   ├── HistoryTableView.vue   # 表格视图
-│   │   ├── HistoryGridView.vue    # 网格视图
-│   │   └── HistoryLightbox.vue    # 图片预览
-│   └── timeline/            # 时间线模块
-│       └── TimelineView.vue
+├── views/                    # 过渡期旧页（链接检测等）
 │
 ├── settings/                 # 设置面板
 │   ├── SettingsPanel.vue    # 设置主面板
@@ -107,18 +101,18 @@ const {
   favoriteSet,           // Readonly<Ref<Set<string>>> - 收藏 ID 集合
   favoriteCount,         // Ref<number>
   isLoading,             // Ref<boolean>
-  loadStats,             // (forceReload?) => Promise<void> 仅查 COUNT + favoriteIdList
-  deleteHistoryItem,     // (id) => Promise<boolean>
+  loadStats,             // (forceReload?) => Promise<void> 仅查 COUNT + favoriteIdList + 各图床计数
   clearHistory,          // () => Promise<void>
-  searchHistory,         // (keyword, options) => Promise<SearchResult>
-  loadPageByNumber,      // (page, size, filter?) => Promise<PageResult>
+  removeRecords,         // (ids) => Promise<HistoryItem[]> 不确认直接删，返回删掉的完整记录供撤销
+  restoreRecords,        // (items) => Promise<void> 撤销「移除记录」：原样插回
+  bulkExportJSON,        // (ids) => Promise<void>
   loadTimePeriodStats,   // () => Promise<TimePeriodStats[]>
   toggleFavorite,        // (id) => Promise<boolean>
   batchSetFavorite,      // (ids, favorited) => Promise<void>
 } = useHistoryManager();
 ```
 
-> 视图各自走服务端分页取 metas（表格：`loadPageByNumber`；时间轴：`useTimelineDayPagination`；收藏：`useFavoritesData`），模块不再维护全量 `imageMetas`。
+> 图库的网格（`useTimelineDayPagination`，按天）与列表（`historyDB.getListPage`，按页）各自取记录，收藏是其中一个筛选条件；模块不维护全量 `imageMetas`。
 > 收藏操作的对外 API 不变；写入数据库时会同步维护 `favoriteUpdatedAt` / `favoriteUpdatedBy`，供多设备合并时独立裁决收藏状态。
 
 #### useUpload

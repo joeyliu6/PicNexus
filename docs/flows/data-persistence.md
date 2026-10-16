@@ -207,8 +207,8 @@ flowchart TD
 > ⚠️ **所有取「单条 URL」的入口都必须从候选链取首条**（`getMetaThumbnailUrl` /
 > `getMediumImageUrl` 内部走 `generateMediumThumbnailUrls(...)[0]`）。直接调
 > `generateMediumThumbnailUrl` 拿到的地址**不看降级状态**，代理不通后依然是代理地址。
-> 时间轴预加载器曾踩过这个坑：预热拿到死链 → 把整条记录写进 `failedImages` →
-> `TimelinePhotoItem` 走占位分支 → 候选链里垫底的原图永远没机会顶上，**正好复现 issue #4 症状②**。
+> 图库的滚动预热曾踩过这个坑：预热拿到死链 → 把整条记录写进 `failedImages` →
+> 格子（`GalleryTile`）直接显示「图片加载失败」→ 候选链里垫底的原图永远没机会顶上，**正好复现 issue #4 症状②**。
 > 现在预加载失败**既不上报也不标记**，交给真实渲染时的候选链定性——它只试一条 URL，
 > 没有「下一条成功了」这个对照，无从判断是代理不通还是这张图本身没了（详见下方失败定性说明）。
 
@@ -237,7 +237,7 @@ flowchart TD
 
 > **候选链靠两条路往后翻**：`<img>` 的 `error` 事件，以及 5 秒超时
 > （[ThumbnailImage.vue](../../src/components/common/ThumbnailImage.vue) /
-> [TimelinePhotoItem.vue](../../src/components/views/timeline/TimelinePhotoItem.vue)）。
+> [useThumbnailFallbackChain.ts](../../src/composables/image/useThumbnailFallbackChain.ts)，图库格子用后者）。
 > 只有 error 不够——代理被墙时是连接卡死而非报错，浏览器可能几十秒才放弃，那段时间格子里一直是骨架屏。
 > 超时只在**已进入视口**且**后面还有候选**时才计时：前者因为 `loading="lazy"` 的图在视口外压根没发请求，
 > 计时会把整屏候选误翻一遍；后者因为掐断最后一条只会把「慢但最终能成」变成「直接失败」。
@@ -262,8 +262,8 @@ flowchart TD
 > 那张相同时直接返回。「已加载完成」这个前提不能省——图还在加载中时列表可能刚变长，
 > 短路掉就不会重新计时，卡住的首条永远翻不到垫底的原图。
 >
-> 时间轴与收藏页**没有**这个问题，别照搬这段：它们的加载状态由父组件按图片 id 持有
-> （`useImageLoadManager.loadedImages` / `useFavoritesData.imageStates`），候选链换新不会把
+> 图库网格**没有**这个问题，别照搬这段：它的加载状态由父组件按图片 id 持有
+> （`useImageLoadManager.loadedImages`），候选链换新不会把
 > 已加载的图打回 loading；而这些状态被清空时列表整体重建，`<img>` 是全新元素、必然重新发请求。
 > `ThumbnailImage` 的 `isLoading` 是组件**自己**的内部状态，组件不重建却自己打回 loading——
 > 差别就在这里。

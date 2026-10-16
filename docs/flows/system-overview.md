@@ -14,8 +14,7 @@
 flowchart TD
     subgraph Views["视图层 (src/views/ 新界面 · src/components/views/ 过渡期旧页)"]
         V1[HomeView<br/>首页·快传]
-        V2[HistoryView<br/>历史记录]
-        V3[TimelineView<br/>时间线]
+        V2[GalleryView<br/>图库]
         V4[SettingsView<br/>设置面板]
         V5[LinkCheckView<br/>链接检测]
     end
