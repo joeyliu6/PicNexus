@@ -7,7 +7,7 @@ import type { HistoryItem } from '@/config/types';
 /**
  * 单测目标：useMirrorFallback 的三个核心动作 + 派生态
  * - switchPrimary：成功 / 同 service no-op
- * - removeMirror：非主 confirm → 删；主图床 + 有 successor → 先切再删；无 successor → toast 拦截
+ * - removeMirror：非复制时使用的 confirm → 删；复制时使用 + 有 successor → 先改用再删；无 successor → toast 拦截
  * - checkMirror：成功写 DB / 失败 toast / 并发守卫 / invoke 抛错清理
  */
 
@@ -15,7 +15,7 @@ const {
   toastSuccessMock,
   toastWarnMock,
   toastErrorMock,
-  confirmDeleteMock,
+  showConfirmMock,
   invalidateCacheMock,
   emitHistoryUpdatedMock,
   dbSwitchPrimaryMock,
@@ -26,7 +26,7 @@ const {
   toastSuccessMock: vi.fn(),
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
-  confirmDeleteMock: vi.fn(),
+  showConfirmMock: vi.fn(),
   invalidateCacheMock: vi.fn(),
   emitHistoryUpdatedMock: vi.fn().mockResolvedValue(undefined),
   dbSwitchPrimaryMock: vi.fn().mockResolvedValue(undefined),
@@ -45,7 +45,7 @@ vi.mock('@/composables/useToast', () => ({
 
 vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({
-    confirmDelete: confirmDeleteMock,
+    showConfirm: showConfirmMock,
   }),
 }));
 
@@ -59,6 +59,7 @@ vi.mock('@/composables/history/useHistory', () => ({
 vi.mock('@/composables/useConfig', () => ({
   useConfigManager: () => ({
     loadConfig: vi.fn().mockResolvedValue({}),
+    config: { value: {} },
   }),
 }));
 
@@ -263,12 +264,12 @@ describe('useMirrorFallback - switchPrimary', () => {
     const harness = mountHarness();
     await harness.api().switchPrimary('qiyu');
 
-    expect(toastErrorMock).toHaveBeenCalledWith('切换失败', 'db offline');
+    expect(toastErrorMock).toHaveBeenCalledWith('改用备份失败', 'db offline，请稍后重试');
   });
 });
 
 describe('useMirrorFallback - removeMirror', () => {
-  // removeMirror 内部调 confirmDelete 但不 await 其 onConfirm 回调——
+  // removeMirror 内部调 showConfirm 但不 await 其 accept 回调——
   // 为让断言看到回调内的所有 await 链完成，我们把 onConfirm 的 Promise
   // 收集起来供 test 显式等。
   let pendingConfirms: Array<Promise<unknown>> = [];
@@ -282,20 +283,21 @@ describe('useMirrorFallback - removeMirror', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     pendingConfirms = [];
-    confirmDeleteMock.mockImplementation((_msg: string, onConfirm: () => unknown) => {
-      pendingConfirms.push(Promise.resolve(onConfirm()));
+    showConfirmMock.mockImplementation((options: { accept: () => unknown }) => {
+      pendingConfirms.push(Promise.resolve(options.accept()));
     });
   });
 
-  it('非主图床：confirm → historyDB.removeMirror + toast.success', async () => {
+  // 危险按钮写动作（交接说明 6.2）；这一行从列表里消失就是结果，不再弹通知
+  it('非复制时使用的那条：确认「移除」后删，不弹通知', async () => {
     const harness = mountHarness();
     await harness.api().removeMirror('qiyu');
     await flushConfirms();
 
-    expect(confirmDeleteMock).toHaveBeenCalled();
+    expect(showConfirmMock).toHaveBeenCalledWith(expect.objectContaining({ header: '移除这条链接？', acceptLabel: '移除', acceptClass: 'danger' }));
     expect(dbRemoveMirrorMock).toHaveBeenCalledWith('hist-1', 'qiyu');
     expect(dbSwitchPrimaryMock).not.toHaveBeenCalled();
-    expect(toastSuccessMock).toHaveBeenCalledWith('链接已移除', expect.any(String));
+    expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(harness.item.value?.results.map(r => r.serviceId)).toEqual(['jd', 'weibo']);
   });
 
@@ -312,10 +314,9 @@ describe('useMirrorFallback - removeMirror', () => {
     const switchOrder = dbSwitchPrimaryMock.mock.invocationCallOrder[0];
     const removeOrder = dbRemoveMirrorMock.mock.invocationCallOrder[0];
     expect(switchOrder).toBeLessThan(removeOrder);
-    expect(toastSuccessMock).toHaveBeenCalledWith(
-      '已移除原主链接',
-      expect.stringContaining('qiyu'),
-    );
+    // 说图床名、不说「主图床」（交接说明规则 3）
+    expect(showConfirmMock).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('复制的链接改用七鱼') }));
+    expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 
   it('主图床 + 全部非主图床都 invalid：无 successor，toast.warn 拦截不删', async () => {
@@ -325,19 +326,19 @@ describe('useMirrorFallback - removeMirror', () => {
     }));
     await harness.api().removeMirror('jd');
 
-    expect(toastWarnMock).toHaveBeenCalledWith('这是唯一剩下的链接', expect.any(String));
-    expect(confirmDeleteMock).not.toHaveBeenCalled();
+    expect(toastWarnMock).toHaveBeenCalledWith('这是最后一份链接', '如需删除，请移除整条记录');
+    expect(showConfirmMock).not.toHaveBeenCalled();
     expect(dbRemoveMirrorMock).not.toHaveBeenCalled();
   });
 
   it('用户取消确认：不调 DB', async () => {
-    // 覆盖默认实现：confirmDelete 被调但不触发回调 = 用户取消
-    confirmDeleteMock.mockImplementation(() => { /* noop */ });
+    // 覆盖默认实现：showConfirm 被调但不触发回调 = 用户取消
+    showConfirmMock.mockImplementation(() => { /* noop */ });
     const harness = mountHarness();
     await harness.api().removeMirror('qiyu');
     await nextTick();
 
-    expect(confirmDeleteMock).toHaveBeenCalled();
+    expect(showConfirmMock).toHaveBeenCalled();
     expect(dbRemoveMirrorMock).not.toHaveBeenCalled();
   });
 
@@ -356,7 +357,7 @@ describe('useMirrorFallback - removeMirror', () => {
     expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['hist-1']);
     expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(toastWarnMock).toHaveBeenCalledWith(
-      '主图床已切换，但旧链接未移除',
+      '已改用七鱼，但旧链接未移除',
       expect.stringContaining('db locked'),
     );
   });
@@ -520,7 +521,7 @@ describe('useMirrorFallback - checkMirror', () => {
 
     await harness.api().checkMirror('qiyu');
 
-    expect(toastErrorMock).toHaveBeenCalledWith('检测失败', 'network broken');
+    expect(toastErrorMock).toHaveBeenCalledWith('检测失败', 'network broken，请稍后重试');
     expect(harness.api().checkingServices.value.has('qiyu')).toBe(false);
     expect(dbUpdateMock).not.toHaveBeenCalled();
   });

@@ -21,6 +21,7 @@ import { useHistoryManager } from '@/composables/history/useHistory';
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
 import { useConfirm } from '@/composables/useConfirm';
+import { getServiceDisplayName } from '@/constants/serviceNames';
 import { createLogger } from '@/utils/logger';
 import { isUsableMirror } from '@/utils/historyResults';
 import { getConfirmedHttpHosts } from '@/security/networkPolicy';
@@ -39,9 +40,10 @@ export interface MirrorInfo {
 
 export function useMirrorFallback(item: Ref<HistoryItem | null>) {
   const toast = useToast();
-  const { confirmDelete } = useConfirm();
+  const { showConfirm } = useConfirm();
   const historyManager = useHistoryManager();
-  const { loadConfig } = useConfigManager();
+  const { loadConfig, config } = useConfigManager();
+  const nameOf = (serviceId: string) => getServiceDisplayName(serviceId, config.value);
 
   /** 正在检测的 serviceId 集合（UI 用来把 chip 切成 loading 态） */
   const checkingServices = ref<Set<string>>(new Set());
@@ -251,15 +253,16 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('切换主图床失败:', err);
       optimisticPrimary.value = null;
-      toast.error('切换失败', msg);
+      toast.error('改用备份失败', `${msg}，请稍后重试`);
     }
   }
 
   /**
-   * 移除某条图床链接
-   * - 非主图床：二次确认后直接删
-   * - 主图床：若有备选（valid/unchecked）→ 确认后先切到备选再删原主；
-   *          若无备选 → 提示用户整条记录走"删除历史"入口
+   * 移除某条图床链接（只删记录里的这一条，图床上的图片不动）
+   * - 非复制时使用的那条：确认后直接删
+   * - 复制时使用的那条：若有备选（valid/unchecked）→ 确认后先改用备选再删；
+   *          若无备选 → 提示改为移除整条记录
+   * 成功后这一行从列表里消失，就是结果，不再弹通知
    */
   async function removeMirror(serviceId: string): Promise<void> {
     const cur = item.value;
@@ -270,11 +273,11 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
     if (target.isPrimary) {
       const successor = suggestedMirror.value;
       if (!successor) {
-        toast.warn('这是唯一剩下的链接', '请直接删除整条历史记录');
+        toast.warn('这是最后一份链接', '如需删除，请移除整条记录');
         return;
       }
-      confirmDelete(
-        `删除当前主图床链接后，将自动切换到 ${successor.serviceId} 作为新主图床。确认继续？`,
+      confirmRemove(
+        `移除后，复制的链接改用${nameOf(successor.serviceId)}。记录和其他备份保留。`,
         async () => {
           let switched = false;
           try {
@@ -284,7 +287,6 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
             await historyDB.removeMirror(cur.id, serviceId);
             applyMirrorRemovalToCurrent(serviceId);
             await notifyUpdated(cur.id);
-            toast.success('已移除原主链接', `已切换到 ${successor.serviceId} 作为主图床`);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             log.error('删除主图床失败:', err);
@@ -293,11 +295,11 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
               // 并明确告诉用户"主图床已迁但旧链接还在"，避免菜单显示和实际状态错位
               await notifyUpdated(cur.id);
               toast.warn(
-                '主图床已切换，但旧链接未移除',
-                `已切到 ${successor.serviceId}，请重试移除：${msg}`,
+                `已改用${nameOf(successor.serviceId)}，但旧链接未移除`,
+                `${msg}，请再移除一次`,
               );
             } else {
-              toast.error('删除失败', msg);
+              toast.error('移除失败', `${msg}，请稍后重试`);
             }
           }
         },
@@ -305,21 +307,25 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
       return;
     }
 
-    confirmDelete(
-      `确定要移除此图床链接吗？记录本身会保留，但 ${serviceId} 上的链接将从本条中抹除。`,
+    confirmRemove(
+      `移除${nameOf(serviceId)}上的这条链接？记录和其他备份保留。`,
       async () => {
         try {
           await historyDB.removeMirror(cur.id, serviceId);
           applyMirrorRemovalToCurrent(serviceId);
           await notifyUpdated(cur.id);
-          toast.success('链接已移除', `${serviceId} 的链接已从此记录中移除`);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           log.error('移除图床链接失败:', err);
-          toast.error('移除失败', msg);
+          toast.error('移除失败', `${msg}，请稍后重试`);
         }
       },
     );
+  }
+
+  /** 危险按钮写动作（交接说明 6.2：「移除」而不是「删除 / 确认」） */
+  function confirmRemove(message: string, onConfirm: () => void): void {
+    showConfirm({ header: '移除这条链接？', message, acceptLabel: '移除', acceptClass: 'danger', accept: onConfirm });
   }
 
   /**
@@ -396,7 +402,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('检测图床链接失败:', err);
-      toast.error('检测失败', msg);
+      toast.error('检测失败', `${msg}，请稍后重试`);
     } finally {
       const after = new Set(checkingServices.value);
       after.delete(serviceId);
