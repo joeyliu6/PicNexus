@@ -38,7 +38,10 @@ export interface HealthImage {
   lostForGood: boolean;
 }
 
-/** 检测进行中：属于这一轮、且检测时间早于这一轮开始的结果先当作待查（L02「边查边出现」） */
+/**
+ * 检测进行中：复制时使用的那份若属于这一轮、且检测时间早于这一轮开始，先当作待查（L02「边查边出现」）；
+ * 备份照旧用上一次的结果，查出失效的图才知道能不能改用
+ */
 export interface PendingRun {
   keys: ReadonlySet<string>;
   startedAt: number;
@@ -83,8 +86,8 @@ function resultOf(row: LinkCheckRow, pending?: PendingRun): CheckLinkResult | un
 function toImage(rows: LinkCheckRow[], pending?: PendingRun): HealthImage {
   const inUse = rows.find((r) => r.isPrimary) ?? rows[0];
   const ordered = [inUse, ...rows.filter((r) => r !== inUse)];
-  const copies: HealthCopy[] = ordered.map((row) => {
-    const result = resultOf(row, pending);
+  const copies: HealthCopy[] = ordered.map((row, i) => {
+    const result = i === 0 ? resultOf(row, pending) : row.checkResult;
     return { host: row.serviceId, status: copyStatus(result), latencyMs: result?.response_time, row };
   });
   const [current, ...backups] = copies;
@@ -258,6 +261,15 @@ export function problemSubline(summary: HealthSummary, dead: readonly HealthImag
     `${formatCount(summary.fixable)} 张可用备份修复`,
     summary.limited > 0 ? `另有 ${formatCount(summary.limited)} 张可能受限` : '',
   ].filter(Boolean).join(' · ');
+}
+
+/** 缩略图先试能打开的那份：正常 > 受限 > 尚未检测 > 失效（「图片已不存在」最后） */
+const THUMB_RANK: Record<CopyStatus, number> = { ok: 0, limited: 1, unchecked: 2, timeout: 3, denied: 3, gone: 4 };
+
+export function thumbCopies(image: HealthImage): Array<{ serviceId: string; url: string; fileKey?: string }> {
+  return [...image.copies]
+    .sort((a, b) => THUMB_RANK[a.status] - THUMB_RANK[b.status])
+    .map((c) => ({ serviceId: c.host, url: c.row.rawUrl, fileKey: c.row.fileKey }));
 }
 
 /** 时长说成「15 分钟」「不到 1 分钟」「1 小时 30 分钟」 */

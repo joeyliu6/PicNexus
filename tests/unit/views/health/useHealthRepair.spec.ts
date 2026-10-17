@@ -91,15 +91,19 @@ describe('useHealthRepair', () => {
       ['https://weibo.example/a.png', 'https://r2.example/a.png'],
       ['https://weibo.example/b.png', 'https://jd.example/b.png'],
     ]);
-    expect(m.withAction).toHaveBeenCalledWith('success', '已修复 2 张图片', '已更新 1 个文档中的 3 处旧链接', expect.objectContaining({ label: '撤销' }), { countdown: true });
+    expect(m.withAction).toHaveBeenCalledWith('success', '已修复 2 张图片', '已更新 1 个文档中的 3 处旧链接', expect.objectContaining({ label: '撤销' }), expect.objectContaining({ countdown: true }));
     expect(repairState.fixedThisSession).toBe(2);
     expect(repairState.running).toBe(false);
+    // 文档修复卡写「1 个文档已更新 · 共替换 3 处旧链接，可撤销」，撤销通知消失后回到平常
+    expect(repairState.lastDocs).toEqual({ docs: 1, places: 3 });
+    m.withAction.mock.calls[0][4].onExpire();
+    expect(repairState.lastDocs).toBeNull();
   });
 
   it('行内改用：通知写「已改用 X」；没有文档引用时写复制的链接来自哪里', async () => {
     m.scanned.value = [];
     await useHealthRepair().repair(['b'], 'row');
-    expect(m.withAction).toHaveBeenCalledWith('success', '已改用京东', '复制的链接将来自京东', expect.anything(), { countdown: true });
+    expect(m.withAction).toHaveBeenCalledWith('success', '已改用京东', '复制的链接将来自京东', expect.anything(), expect.objectContaining({ countdown: true }));
   });
 
   it('文档写不成：红色通知写原因，「重试」只重写那几个，写成的并进同一次撤销', async () => {
@@ -137,7 +141,7 @@ describe('useHealthRepair', () => {
     m.scanned.value = [];
     const repair = useHealthRepair();
     await repair.repair(['a']);
-    expect(m.withAction).toHaveBeenCalledWith('success', '已修复 1 张图片', '复制的链接已改用备份', expect.anything(), { countdown: true });
+    expect(m.withAction).toHaveBeenCalledWith('success', '已修复 1 张图片', '复制的链接已改用备份', expect.anything(), expect.objectContaining({ countdown: true }));
     expect(m.withAction).toHaveBeenCalledWith('info', '文档中的旧链接未更新', expect.any(String), expect.objectContaining({ label: '添加文档文件夹…' }));
 
     m.withAction.mockClear();

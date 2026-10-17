@@ -173,3 +173,19 @@ export function parentDir(path: string): string {
   const cut = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
   return cut > 0 ? path.slice(0, cut) : path;
 }
+
+/** 某张图在文档里引用的失效那几份，一律换成 newUrl（「重新上传原图」后用） */
+export function planImageRewrite(index: DocIndex, imageId: string, deadHosts: ReadonlySet<string>, newUrl: string): DocWrite[] {
+  const byPath = new Map<string, DocWrite>();
+  for (const ref of index.refs) {
+    if (ref.imageId !== imageId || !deadHosts.has(ref.host) || ref.url === newUrl) continue;
+    let write = byPath.get(ref.path);
+    if (!write) {
+      write = { folder: ref.folder, path: ref.path, name: ref.name, replacements: new Map(), places: 0 };
+      byPath.set(ref.path, write);
+    }
+    write.replacements.set(ref.url, newUrl);
+    write.places++;
+  }
+  return [...byPath.values()];
+}

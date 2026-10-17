@@ -439,4 +439,77 @@
   --pn-size-detail-host-plate: 22px;
   /* 详情链接旁的「复制」宽 52 */
   --pn-size-detail-copy: 52px;
+
+  /* 链接健康（HealthScreen.dc.html）：状态栏行高 40、内部间距 10；琥珀点 7、转圈 15、暂停符号 13；细进度条 120 */
+  --pn-size-health-status: 40px;
+  --pn-space-health-status-gap: 10px;
+  --pn-size-health-dot: 7px;
+  --pn-size-health-spinner: 15px;
+  --pn-size-health-pause: 13px;
+  --pn-size-health-progress: 120px;
+  /* 上传日历：面板内边距 18 24 22（窄窗口 14 16 16）、行间 14；年份胶囊高 28、圆角 14、左右 11（窄 8）、数字间距 5 */
+  --pn-space-calendar-pad: 18px 24px 22px;
+  --pn-space-calendar-pad-narrow: 14px 16px 16px;
+  --pn-space-calendar-gap: 14px;
+  --pn-size-year-pill: 28px;
+  --pn-radius-year-pill: 14px;
+  --pn-space-year-pill-x: 11px;
+  --pn-space-year-pill-x-narrow: 8px;
+  --pn-space-year-pill-gap: 5px;
+  /* 格子 13、间距 3、圆角 3.5（窄窗口 9 / 2 / 2.5）；星期列宽 28（窄 20）；月份行高 14、与格子隔 6 */
+  --pn-size-calendar-cell: 13px;
+  --pn-size-calendar-cell-narrow: 9px;
+  --pn-space-calendar-cell-gap: 3px;
+  --pn-space-calendar-cell-gap-narrow: 2px;
+  /* tokens.css 的 --pn-radius-calendarCell 不是 kebab-case，样式里引用不了：同值另起一个 */
+  --pn-radius-calendar-cell: 3.5px;
+  --pn-radius-calendar-cell-narrow: 2.5px;
+  --pn-size-calendar-weekday: 28px;
+  --pn-size-calendar-weekday-narrow: 20px;
+  --pn-size-calendar-month-row: 14px;
+  /* 星期标签 10px：字号刻度外的例外（设计稿原值，同花瓣角标 9px） */
+  --pn-size-calendar-weekday-text: 10px;
+  --pn-calendar-pick-ring: 0 0 0 2px var(--pn-surface), 0 0 0 3.5px var(--pn-text1);
+  /* 工具卡：内边距 14、间距 14（窄 10）；插画 60 × 52、圆角 12；说明行高 18 */
+  --pn-space-tool-card: 14px;
+  --pn-space-tool-card-gap-narrow: 10px;
+  --pn-size-tool-art-w: 60px;
+  --pn-size-tool-art-h: 52px;
+  --pn-radius-tool-art: 12px;
+  --pn-leading-tool-desc: 18px;
+  --pn-tool-art-paper-shadow: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.14));
+  --pn-tool-art-badge-shadow: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.22));
+  --pn-tool-art-paper-ring: rgba(0, 0, 0, 0.08);
+  /* 全部失效图片：行至少 56、内边距 8 6 8 12、间距 14、圆角 12；缩略图 40；日期 / 文档 / 操作列各 96；分隔线从缩略图右侧 66 开始；分组标题行 30；日期标签高 24 */
+  --pn-size-dead-row: 56px;
+  --pn-space-dead-row: 8px 6px 8px 12px;
+  --pn-space-dead-row-gap: 14px;
+  --pn-radius-dead-row: 12px;
+  --pn-size-dead-thumb: 40px;
+  --pn-size-dead-col: 96px;
+  --pn-space-dead-divider: 66px;
+  --pn-size-dead-group-head: 30px;
+  --pn-space-dead-head: 0 4px 8px 12px;
+  --pn-size-dead-chip: 24px;
+  --pn-radius-dead-chip: 12px;
+  --pn-space-dead-chip: 0 4px 0 10px;
+  --pn-space-dead-filter: 0 8px 0 10px;
+  /* 三个菜单宽：状态栏「⋯」280、行「⋯」250、年份 200 */
+  --pn-size-health-card-menu: 280px;
+  --pn-size-health-row-menu: 250px;
+  --pn-size-health-year-menu: 200px;
+  /* 两个弹窗里的列表：文件夹行 40（左 14、右 6）、「添加文件夹…」38、文档 / 图床行至少 44；图床图标底板 28、圆角 7；单选圈 18 */
+  --pn-size-doc-folder-row: 40px;
+  --pn-space-doc-folder-row: 0 6px 0 14px;
+  --pn-size-doc-folder-add: 38px;
+  --pn-space-doc-add-x: 14px;
+  --pn-size-dialog-list-row: 44px;
+  --pn-space-doc-row: 6px 8px 6px 14px;
+  --pn-space-target-row: 6px 12px;
+  --pn-size-target-plate: 28px;
+  --pn-size-radio-lg: 18px;
+  --pn-size-radio-lg-dot: 7px;
+  --pn-opacity-target-disabled: 0.55;
+  /* 弹窗里的列表超过 5 行就在框内滚动，弹窗不撑出窗口 */
+  --pn-size-dialog-list-max: 220px;
 }

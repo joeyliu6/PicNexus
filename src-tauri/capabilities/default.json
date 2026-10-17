@@ -153,7 +153,6 @@
     "allow-strip-exif-only",
     "allow-read-image-as-base64",
     "allow-scan-md-folder",
-    "allow-cancel-md-scan",
     "allow-get-or-create-secure-key",
     "allow-set-secure-key",
     "allow-open-log-dir",

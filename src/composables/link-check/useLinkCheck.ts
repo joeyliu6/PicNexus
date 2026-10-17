@@ -322,8 +322,10 @@ export function useLinkCheckManager() {
    * Why 不再「先读有问题的、后台再读其余」：链接健康页的总数、日历、「仅 1 份」都要全量才对，
    * 半截数据会让状态栏先闪一下「全部正常」或错的张数。几万条一次读完也只要一两秒。
    */
-  async function loadHistoryRows(options: { allowDuringCheck?: boolean } = {}): Promise<void> {
+  async function loadHistoryRows(options: { allowDuringCheck?: boolean; force?: boolean } = {}): Promise<void> {
     if (loadHistoryRowsPromise) return loadHistoryRowsPromise;
+    // 调用方刚改过记录（补充备份、重新上传）：不等 history 事件绕一圈，直接重读
+    if (options.force) lastLoadTime = 0;
 
     loadHistoryRowsPromise = doLoadHistoryRows(options).finally(() => {
       loadHistoryRowsPromise = null;
@@ -331,7 +333,7 @@ export function useLinkCheckManager() {
     return loadHistoryRowsPromise;
   }
 
-  async function doLoadHistoryRows(options: { allowDuringCheck?: boolean } = {}): Promise<void> {
+  async function doLoadHistoryRows(options: { allowDuringCheck?: boolean; force?: boolean } = {}): Promise<void> {
     if (isChecking.value && !options.allowDuringCheck) return;
 
     // TTL 缓存：5 分钟内重复进入直接跳过（history 事件会把 lastLoadTime 清零）

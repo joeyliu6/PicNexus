@@ -53,6 +53,12 @@ export const ICONS = {
   link: [p('M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7')],
   arrowRight: [p('M5 12h14M13 6l6 6-6 6')],
   moon: [p('M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z')],
+  // 链接健康（HealthScreen.dc.html）
+  pause: [p('M9 5v14M15 5v14')],
+  folder: [p('M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z')],
+  openExternal: [p('M7 17 17 7M8 7h9v9')],
+  docRepair: [p('M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z'), p('M14 3v6h6M8 13h8M8 17h5')],
+  backupCopy: [rect(9, 9, 12, 12, 2), p('M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

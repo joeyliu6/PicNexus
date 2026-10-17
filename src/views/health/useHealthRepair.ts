@@ -113,7 +113,9 @@ export function useHealthRepair() {
       title = `已修复 ${formatCount(record.switched.length)} 张图片`;
       desc = record.written.length ? docsLine : '复制的链接已改用备份';
     }
-    toast.withAction('success', title, desc, { label: '撤销', run: () => { void undo(record); } }, { countdown: true });
+    repairState.lastDocs = record.written.length ? { docs: record.written.length, places } : null;
+    const forget = () => { if (repairState.lastDocs?.docs === record.written.length) repairState.lastDocs = null; };
+    toast.withAction('success', title, desc, { label: '撤销', run: () => { forget(); void undo(record); } }, { countdown: true, onExpire: forget });
 
     if (!docsConfigured && record.switched.length && !hintShown()) {
       markHintShown();

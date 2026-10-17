@@ -118,6 +118,16 @@ describe('buildHealthImages', () => {
     expect(buildHealthImages(rows, { keys: new Set(['a::weibo']), startedAt: 50 })[0].state).toBe('unfixable');
   });
 
+  it('检测进行中：备份照旧用上一次的结果，查出失效的图才知道能不能改用', () => {
+    const rows = [
+      primary('a', 'weibo', http(404), { checkedAt: 60 }),
+      row('a', 'jd', ok(), { checkedAt: 10 }),
+    ];
+    const [image] = buildHealthImages(rows, { keys: new Set(['a::weibo', 'a::jd']), startedAt: 50 });
+    expect(image.state).toBe('fixable');
+    expect(image.fixTo).toBe('jd');
+  });
+
   it('新到旧排列', () => {
     const images = buildHealthImages([primary('old', 'jd', ok(), { uploadedAt: 1 }), primary('new', 'jd', ok(), { uploadedAt: 9 })]);
     expect(images.map((i) => i.id)).toEqual(['new', 'old']);

@@ -2,6 +2,7 @@
 // 查出失效只在侧栏「链接健康」上点琥珀点。只在应用开着时跑：启动后 30 秒判一次，之后每小时判一次。
 // 从没检测过不自动开始：第一次全量检测要十几分钟网络请求，由用户点。
 
+import { computed } from 'vue';
 import { DEFAULT_CONFIG, type LinkHealthConfig, type UserConfig } from '@/config/types';
 import { useConfigManager } from '@/composables/useConfig';
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
@@ -15,8 +16,34 @@ const FIRST_DELAY_MS = 30_000;
 const INTERVAL_MS = 60 * 60 * 1000;
 const DAY_MS = 86_400_000;
 
-/** 可选的检测间隔（「更改」与「⋯ › 自动检测」子菜单） */
-export const AUTO_CHECK_INTERVALS = [1, 3, 7, 30] as const;
+/** 「更改」与「⋯ › 自动检测」子菜单的选项（值 = 天数，0 = 关闭） */
+export const AUTO_CHECK_OPTIONS = [
+  { value: '1', label: '每天' },
+  { value: '3', label: '每 3 天' },
+  { value: '7', label: '每 7 天' },
+  { value: '30', label: '每 30 天' },
+  { value: '0', label: '关闭' },
+] as const;
+
+export function autoCheckLabel(settings: LinkHealthConfig['autoCheck']): string {
+  if (!settings.enabled) return '已关闭';
+  return settings.intervalDays === 1 ? '每天' : `每 ${settings.intervalDays} 天`;
+}
+
+/** 当前设置与改动（改动即保存，交接说明第 4 节规则 10） */
+export function useAutoCheckSetting() {
+  const { config, loadConfig, saveConfig } = useConfigManager();
+  const settings = computed(() => autoCheckSettings(config.value));
+  /** 选项值：天数，「0」= 关闭 */
+  const value = computed(() => (settings.value.enabled ? String(settings.value.intervalDays) : '0'));
+  async function set(next: string): Promise<void> {
+    const latest = await loadConfig();
+    const days = Number(next);
+    const autoCheck = days > 0 ? { enabled: true, intervalDays: days } : { ...autoCheckSettings(latest), enabled: false };
+    await saveConfig({ ...latest, linkHealth: { ...DEFAULT_CONFIG.linkHealth!, ...latest.linkHealth, autoCheck } }, true);
+  }
+  return { settings, value, label: computed(() => autoCheckLabel(settings.value)), set };
+}
 
 export function autoCheckSettings(config: UserConfig | undefined): LinkHealthConfig['autoCheck'] {
   return { ...DEFAULT_CONFIG.linkHealth!.autoCheck, ...config?.linkHealth?.autoCheck };

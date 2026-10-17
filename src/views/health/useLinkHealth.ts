@@ -31,6 +31,8 @@ export const repairState = reactive({
   rows: new Map<string, { phase: 'waiting' | 'fixing' | 'done' | 'failed'; to: string }>(),
   /** 本次会话修好了几张（L11「15 张已修复」） */
   fixedThisSession: 0,
+  /** 最近一次修复更新的文档（「3 个文档已更新 · 共替换 7 处旧链接，可撤销」）；撤销通知消失或撤销后清掉 */
+  lastDocs: null as { docs: number; places: number } | null,
 });
 
 const retrying = reactive(new Set<string>());
@@ -87,10 +89,11 @@ function create() {
     return { checked: p?.checked ?? 0, total: p?.total ?? run?.keys.size ?? 0, waitingHost };
   });
 
-  async function ensureLoaded(): Promise<void> {
+  /** force：刚改过记录，不管 5 分钟缓存，直接重读 */
+  async function ensureLoaded(options: { force?: boolean } = {}): Promise<void> {
     await loadConfig();
     linkCheck.onViewActivated();
-    await linkCheck.loadHistoryRows();
+    await linkCheck.loadHistoryRows(options);
   }
 
   /** 「开始检测 / 重新检测」：全部；「仅重新检测 N 张失效图片」：只查这几张 */
@@ -160,4 +163,5 @@ export function __resetLinkHealthForTests(): void {
   repairState.running = false;
   repairState.rows.clear();
   repairState.fixedThisSession = 0;
+  repairState.lastDocs = null;
 }

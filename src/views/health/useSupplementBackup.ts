@@ -140,7 +140,8 @@ export function useSupplementBackup() {
     try {
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
     } finally {
-      flush();
+      // 最后一批先广播完再收尾：页面收尾时按新记录重读「仅 1 份」
+      await notifyMigrationPersisted(unsent.splice(0));
       await finish();
     }
   }
