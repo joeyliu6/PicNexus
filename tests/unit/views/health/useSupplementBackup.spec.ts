@@ -36,6 +36,18 @@ describe('useSupplementBackup', () => {
     m.migrateOneItem.mockImplementation(async (_item: HistoryItem, status: MigrateItemStatus) => { status.status = 'success'; });
   });
 
+  it('复制时使用的那份失效：从仍可用的那份下载（真机走查：只试失效的 R2，4 张下载 404）', async () => {
+    m.getById.mockImplementation(async (id: string): Promise<HistoryItem> => ({
+      ...item(id), primaryService: 'r2',
+      results: ['r2', 'jd'].map((serviceId) => ({ serviceId, status: 'success' as const, result: { serviceId, fileKey: id, url: `https://${serviceId}.example/${id}.png` } })),
+      linkCheckStatus: { r2: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx', statusCode: 404 } },
+    }));
+    await useSupplementBackup().start('webdav:nas', ['a']);
+    const status = m.migrateOneItem.mock.calls[0][1] as MigrateItemStatus;
+    expect(status.sourceServiceId).toBeUndefined();
+    expect(status.preferredSourceServiceIds).toEqual(['jd']);
+  });
+
   it('逐张传到目标图床，完成后卡片「已完成」，成功的广播一次让视图重查', async () => {
     const backup = useSupplementBackup();
     await backup.start('r2', ['a', 'b', 'c', 'd']);

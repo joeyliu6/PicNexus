@@ -8,7 +8,7 @@ import { getServiceDisplayName } from '@/constants/serviceNames';
 import { MultiServiceUploader } from '@/core/MultiServiceUploader';
 import { migrateOneItem } from '@/composables/batch-migrate/migrateCore';
 import { notifyMigrationPersisted } from '@/composables/batch-migrate/historyRefresh';
-import { getDefaultMigrateSource } from '@/composables/batch-migrate/sourceSelection';
+import { getBackupSourceIds } from '@/composables/batch-migrate/sourceSelection';
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
 import { historyDB } from '@/services/database';
@@ -113,7 +113,7 @@ export function useSupplementBackup() {
           status: 'pending',
           serviceResults: { [target]: 'pending' },
           existingServiceIds: item.results.filter((r) => r.status === 'success').map((r) => r.serviceId),
-          sourceServiceId: getDefaultMigrateSource(item)?.serviceId,
+          preferredSourceServiceIds: getBackupSourceIds(item),
         };
         try {
           await migrateOneItem(item, status, [target], config, uploader, cancelled, paused, stats);

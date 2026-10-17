@@ -11,7 +11,7 @@ import { useHistoryManager } from '@/composables/history/useHistory';
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { migrateOneItem } from '@/composables/batch-migrate/migrateCore';
 import { notifyMigrationPersisted } from '@/composables/batch-migrate/historyRefresh';
-import { getDefaultMigrateSource } from '@/composables/batch-migrate/sourceSelection';
+import { getBackupSourceIds } from '@/composables/batch-migrate/sourceSelection';
 import { useConfigManager } from '@/composables/useConfig';
 import { useCopyLink, type CopyLinkItem } from '@/composables/useCopyLink';
 import { useToast } from '@/composables/useToast';
@@ -96,7 +96,7 @@ export function useGalleryActions() {
           status: 'pending',
           serviceResults: { [hostId]: 'pending' },
           existingServiceIds: item.results.filter((r) => r.status === 'success').map((r) => r.serviceId),
-          sourceServiceId: getDefaultMigrateSource(item)?.serviceId,
+          preferredSourceServiceIds: getBackupSourceIds(item),
         };
         try {
           await migrateOneItem(item, status, [hostId], config, uploader, never, never, stats);

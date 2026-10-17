@@ -63,11 +63,19 @@ function defaultMigrateSources(
   return sortSources(allowed, item, preferredServiceIds);
 }
 
-export function getDefaultMigrateSource(
-  item: HistoryItem,
-  preferredServiceIds: string[] = [],
-): MigrateSourceCandidate | null {
-  return defaultMigrateSources(item, preferredServiceIds)[0] ?? null;
+/**
+ * 补充备份（链接健康、图库）从哪几份下载：检测过且失效的那几份不试，免得「复制时使用」的那份失效时只试它、整张备份失败。
+ * 失效按链接健康的口径：检测过、没通过、也不是「可能受限」（跳转 / 防盗链）；尚未检测、旧版本留下的排队中当作可用。
+ * 返回空 = 每份都失效（调用方照常尝试，失败时写下载原因）。
+ */
+export function getBackupSourceIds(item: HistoryItem): string[] {
+  return successfulResults(item)
+    .map(({ result }) => result.serviceId)
+    .filter((serviceId) => {
+      const saved = item.linkCheckStatus?.[serviceId];
+      if (!saved || saved.errorType === 'pending' || saved.isValid) return true;
+      return saved.errorType === 'redirect' || saved.browserMightWork === true;
+    });
 }
 
 function getRecoverableLinkInfo(

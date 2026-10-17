@@ -24,7 +24,7 @@ stateDiagram-v2
 
 - **范围**：点「开始备份」这一刻定下——「仅有 1 份」（没被查出失效的副本只剩 1 份，尚未检测的当作可用）、且那 1 份不在目标图床上的图。范围由健康模型算（`healthModel.ts` 的 `singleCopy`），不是数据库里的上传成功份数。
 - **目标图床**：弹窗列「已添加」的图床，按配置顺序；默认选能复制过去最多张的那个可选图床；有警示的（登录过期等）变淡不可选。可用图床少于 2 个时卡片换成「添加图床」。
-- **执行**：3 个 worker 从队列取图，每张 `historyDB.getById` 取最新记录后走 `migrateOneItem`（图 2）。暂停时 worker 停在取下一张之前；正在下载的那张被退回 `pending`，放回队首，继续时重来。停止 = 置取消标志，没开始的不再做，已备份的留着。
+- **执行**：3 个 worker 从队列取图，每张 `historyDB.getById` 取最新记录后走 `migrateOneItem`（图 2），只从没被查出失效的那几份下载（`getBackupSourceIds`：检测过、没通过、也不是「可能受限」的不试；图库的单图补充备份同样）。暂停时 worker 停在取下一张之前；正在下载的那张被退回 `pending`，放回队首，继续时重来。停止 = 置取消标志，没开始的不再做，已备份的留着。
 - **刷新**：成功的每 20 张广播一次 `history-updated`（`notifyMigrationPersisted`），结束前把最后一批广播完；页面在结束时强制重读检测行，「仅 1 份」跟着变。
 - **结束**：有失败 → 一条红色通知写第一条原因 + 处理办法（`describeUploadFailure`），卡片「已完成 · N 张未能备份」+「重试」（只重传失败的）；全部成功且已没有「仅 1 份」的图 → 「已完成 · 每张图片至少保存在 2 个图床」。
 
@@ -59,7 +59,7 @@ flowchart TD
     C -- 是 --> C1["status = skipped"]
     C -- 否 --> D{isCancelled?}
     D -- 是 --> D1["status = skipped"]
-    D -- 否 --> E["查找下载源<br/>item.results.find(success)"]
+    D -- 否 --> E["查找下载源<br/>getSourceCandidatesForStatus<br/>（补充备份限定 getBackupSourceIds）"]
 
     E --> F{有有效源?}
     F -- 否 --> F1["status = failed<br/>errorType = download"]

@@ -25,7 +25,7 @@ vi.mock('@/constants/serviceNames', () => ({ getServiceDisplayName: (id: string)
 vi.mock('@/core/MultiServiceUploader', () => ({ MultiServiceUploader: vi.fn() }));
 vi.mock('@/composables/batch-migrate/migrateCore', () => ({ migrateOneItem: vi.fn() }));
 vi.mock('@/composables/batch-migrate/historyRefresh', () => ({ notifyMigrationPersisted: vi.fn() }));
-vi.mock('@/composables/batch-migrate/sourceSelection', () => ({ getDefaultMigrateSource: vi.fn() }));
+vi.mock('@/composables/batch-migrate/sourceSelection', () => ({ getBackupSourceIds: vi.fn(() => []) }));
 vi.mock('@/services/database', () => ({ historyDB: {} }));
 vi.mock('@/utils/logger', () => ({ createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }) }));
 
