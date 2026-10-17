@@ -729,7 +729,7 @@ async fn test_webdav_storage_core(
                     "public",
                     Some("public_domain"),
                     format!(
-                        "图片已上传，但公开链接打不开 (HTTP {})——请检查「公开访问域名」和 URL 模板",
+                        "图片已上传，但公开链接无法访问 (HTTP {})——请检查「公开访问域名」和 URL 模板",
                         status
                     ),
                 ));

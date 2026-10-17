@@ -200,17 +200,17 @@ describe('WebDAVUploader.testConnection', () => {
     expect(result.message).toBe('连接成功，公开链接可正常访问');
   });
 
-  it('传得上去但公开链接打不开 → 失败并保留后端诊断文案', async () => {
+  it('传得上去但公开链接无法访问 → 失败并保留后端诊断文案', async () => {
     invokeMock.mockResolvedValue({
       success: false,
-      message: '图片已上传，但公开链接打不开 (HTTP 404)——请检查「公开访问域名」和 URL 模板',
+      message: '图片已上传，但公开链接无法访问 (HTTP 404)——请检查「公开访问域名」和 URL 模板',
     });
 
     const result = await uploader.testConnection(makeProfile());
 
     expect(result.success).toBe(false);
     // 这条文案是本功能最有价值的诊断，不能在前端被吞掉换成泛化的"连接失败"
-    expect(result.error).toContain('公开链接打不开');
+    expect(result.error).toContain('公开链接无法访问');
   });
 
   it('缺配置时不发起测试', async () => {

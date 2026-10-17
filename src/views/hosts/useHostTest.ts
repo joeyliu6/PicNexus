@@ -49,7 +49,7 @@ async function testCookie(hostId: string, record: Record<string, unknown>): Prom
       case 'bilibili': await invoke('test_bilibili_connection', { bilibiliCookie: cookie }); break;
       case 'chaoxing': await invoke('test_chaoxing_connection', { chaoxingCookie: cookie }); break;
       case 'nami': await invoke('test_nami_connection', { cookie, authToken: str(record.authToken) || extractNamiAuthToken(cookie) }); break;
-      default: throw new Error(`不认识的 Cookie 图床：${hostId}`);
+      default: throw new Error(`未知的 Cookie 图床：${hostId}`);
     }
     return { ok: true, steps: ['credentials'] };
   } catch (error) {
@@ -63,7 +63,7 @@ async function testToken(hostId: string, record: Record<string, unknown>): Promi
       ? await fetch('https://sm.ms/api/v2/upload', { method: 'POST', headers: { Authorization: str(record.token) } })
       : await fetch('https://api.imgur.com/3/account/albums', { headers: { Authorization: `Client-ID ${str(record.clientId)}` } });
     if (res.ok) return { ok: true, steps: ['credentials'] };
-    return { ok: false, steps: ['credentials'], step: 'credentials', field: 'token', reason: hostId === 'smms' ? 'SM.MS 不认这个 Token' : 'Imgur 不认这个 Client ID' };
+    return { ok: false, steps: ['credentials'], step: 'credentials', field: 'token', reason: hostId === 'smms' ? 'SM.MS 拒绝了这个 Token' : 'Imgur 拒绝了这个 Client ID' };
   } catch {
     return { ok: false, steps: ['credentials'], step: 'credentials', reason: `无法连接 ${hostId === 'smms' ? 'SM.MS' : 'Imgur'}，请检查网络后重试` };
   }
@@ -79,7 +79,7 @@ async function testGithub(record: Record<string, unknown>): Promise<StepOutcome>
   const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   try {
     const info = await fetch(api, { headers });
-    if (info.status === 401) return { ok: false, steps, step: 'credentials', field: 'token', reason: 'GitHub 不认这个 Token' };
+    if (info.status === 401) return { ok: false, steps, step: 'credentials', field: 'token', reason: 'GitHub 拒绝了这个 Token' };
     if (info.status === 404) return { ok: false, steps, step: 'credentials', field: 'repo', reason: '找不到这个仓库，或 Token 没有访问权限' };
     if (!info.ok) return { ok: false, steps, step: 'credentials', reason: `GitHub 返回 HTTP ${info.status}，请稍后重试` };
     const body = await info.json() as { permissions?: { push?: boolean } };

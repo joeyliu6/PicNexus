@@ -50,7 +50,7 @@ const ALL_STEPS: [&str; 3] = ["credentials", "write", "public"];
 /// 凭证这一步（列桶）的服务端错误 → 字段 + 原因
 fn classify_credentials_error(full: &str, brief: &str) -> (Option<&'static str>, String) {
     if full.contains("InvalidAccessKeyId") {
-        (Some("access_key"), "服务商不认识这个 Access Key".to_string())
+        (Some("access_key"), "服务商找不到这个 Access Key".to_string())
     } else if full.contains("SignatureDoesNotMatch") {
         (Some("secret_key"), "服务商拒绝了签名".to_string())
     } else if full.contains("NoSuchBucket") {
@@ -138,13 +138,13 @@ pub async fn probe_s3_storage(service_id: String, config: S3TestConfig) -> Resul
 
     let steps = ALL_STEPS.to_vec();
     let Some(access_key) = non_empty(&config.get_access_key()) else {
-        return Ok(StorageProbeReport::failed("credentials", Some("access_key"), "Access Key 不能为空", steps));
+        return Ok(StorageProbeReport::failed("credentials", Some("access_key"), "未填写 Access Key", steps));
     };
     let Some(secret_key) = non_empty(&config.get_secret_key()) else {
-        return Ok(StorageProbeReport::failed("credentials", Some("secret_key"), "Secret Key 不能为空", steps));
+        return Ok(StorageProbeReport::failed("credentials", Some("secret_key"), "未填写 Secret Key", steps));
     };
     let Some(bucket) = non_empty(&config.get_bucket()) else {
-        return Ok(StorageProbeReport::failed("credentials", Some("bucket"), "存储桶不能为空", steps));
+        return Ok(StorageProbeReport::failed("credentials", Some("bucket"), "未填写存储桶", steps));
     };
     let (endpoint, region) = match build_s3_endpoint(&service_id, &config, &bucket) {
         Ok(pair) => pair,
@@ -202,7 +202,7 @@ pub async fn probe_s3_storage(service_id: String, config: S3TestConfig) -> Resul
 
     // 3. 公开访问：匿名打开探针的公开链接
     let public = match probe_public_url(&service_id, &config, &endpoint, &bucket, &region, &key) {
-        None => StorageProbeReport::failed("public", Some("public_domain"), "公开访问域名不能为空", steps.clone()),
+        None => StorageProbeReport::failed("public", Some("public_domain"), "未填写公开访问域名", steps.clone()),
         Some(url) => check_public_url(&url, steps.clone()).await,
     };
 
@@ -236,7 +236,7 @@ async fn check_public_url(url: &str, steps: Vec<&'static str>) -> StorageProbeRe
                 .unwrap_or("")
                 .to_string();
             if !(200..300).contains(&status) {
-                StorageProbeReport::failed("public", Some("public_domain"), format!("图片已写入，但公开链接打不开（HTTP {}）", status), steps)
+                StorageProbeReport::failed("public", Some("public_domain"), format!("图片已写入，但公开链接无法访问（HTTP {}）", status), steps)
             } else if !content_type.starts_with("image/") {
                 StorageProbeReport::failed("public", Some("public_domain"), "公开链接返回的不是图片", steps)
             } else {

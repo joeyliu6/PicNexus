@@ -31,7 +31,7 @@ export interface HostRow {
 export function problemLabel(hostId: string, reason: string): string {
   if ((COOKIE_BASED_SERVICES as readonly string[]).includes(hostId)) return '登录失效';
   if (/凭证|签名|密钥|Key|Token|token|401|403|Unauthorized|Forbidden|InvalidAccessKeyId|SignatureDoesNotMatch|无效/.test(reason)) return '凭证无效';
-  if (/公开|链接打不开|Content-Type/.test(reason)) return '公开链接异常';
+  if (/公开|Content-Type/.test(reason)) return '公开链接异常';
   return '连接异常';
 }
 

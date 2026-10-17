@@ -171,8 +171,8 @@ export function disconnectHost(config: UserConfig, hostId: string): UserConfig {
   if (next.editorServer && (next.editorServer.typoraService === hostId || next.editorServer.obsidianService === hostId)) {
     next.editorServer = {
       ...next.editorServer,
-      typoraService: next.editorServer.typoraService === hostId ? '' as never : next.editorServer.typoraService,
-      obsidianService: next.editorServer.obsidianService === hostId ? '' as never : next.editorServer.obsidianService,
+      typoraService: next.editorServer.typoraService === hostId ? null : next.editorServer.typoraService,
+      obsidianService: next.editorServer.obsidianService === hostId ? null : next.editorServer.obsidianService,
     };
   }
   if (isWebDAVId(hostId)) {
@@ -245,8 +245,8 @@ export function restoreHost(config: UserConfig, snap: HostSnapshot): UserConfig 
   if ((snap.typora || snap.obsidian) && next.editorServer) {
     next.editorServer = {
       ...next.editorServer,
-      ...(snap.typora ? { typoraService: snap.hostId as never } : {}),
-      ...(snap.obsidian ? { obsidianService: snap.hostId as never } : {}),
+      ...(snap.typora ? { typoraService: snap.hostId } : {}),
+      ...(snap.obsidian ? { obsidianService: snap.hostId } : {}),
     };
   }
   return next;

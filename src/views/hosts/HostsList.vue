@@ -23,7 +23,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [id: string]; add: []; toggle: [id: string] }>();
 
-const rowRefs = ref<HTMLElement[]>([]);
+// 按行号记：v-for 在插槽里，普通的 ref 数组顺序跟排序后的行对不上
+const rowRefs = ref<Array<HTMLElement | null>>([]);
 
 function focusRow(index: number): void {
   const clamped = Math.max(0, Math.min(props.rows.length - 1, index));
@@ -70,7 +71,7 @@ function tabIndexOf(row: HostRow, index: number): number {
       <PnContextMenu v-for="(row, index) in rows" :key="row.id">
         <template #trigger>
           <div
-            ref="rowRefs"
+            :ref="(el) => { rowRefs[index] = el as HTMLElement | null; }"
             role="option"
             class="hosts-list__row"
             :class="{

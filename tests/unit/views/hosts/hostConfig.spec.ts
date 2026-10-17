@@ -44,17 +44,21 @@ describe('hostConfig', () => {
   it('断开：去掉已添加 / 启用、清凭证、复制固定退回；撤销原样放回', () => {
     const config = base();
     config.linkOutput = { ...DEFAULT_CONFIG.linkOutput!, copyFromService: 'r2' };
+    config.editorServer = { ...DEFAULT_CONFIG.editorServer!, typoraService: 'r2', obsidianService: 'jd' };
     const snap = snapshotHost(config, 'r2');
     const off = disconnectHost(config, 'r2');
     expect(off.availableServices).toEqual(['jd', 'github']);
     expect(off.enabledServices).toEqual(['jd']);
     expect(off.services?.r2).toMatchObject({ secretAccessKey: '', accessKeyId: '', accountId: '', path: 'img/' });
     expect(off.linkOutput?.copyFromService).toBeUndefined();
+    // Typora 绑着它：解绑；Obsidian 绑的是别的图床，不动
+    expect(off.editorServer).toMatchObject({ typoraService: null, obsidianService: 'jd' });
     const back = restoreHost(off, snap);
     expect(back.availableServices).toEqual(['jd', 'r2', 'github']);
     expect(back.enabledServices).toContain('r2');
     expect(back.services?.r2).toEqual(config.services?.r2);
     expect(back.linkOutput?.copyFromService).toBe('r2');
+    expect(back.editorServer).toMatchObject({ typoraService: 'r2', obsidianService: 'jd' });
   });
 
   it('断开多份图床整份删掉，撤销放回', () => {

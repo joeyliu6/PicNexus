@@ -29,7 +29,7 @@ describe('problemLabel', () => {
   it('Cookie 图床一律「登录失效」，凭证类错误「凭证无效」，认不出的「连接异常」', () => {
     expect(problemLabel('zhihu', 'whatever')).toBe('登录失效');
     expect(problemLabel('r2', 'SignatureDoesNotMatch')).toBe('凭证无效');
-    expect(problemLabel('webdav:a', '图片已上传，但公开链接打不开 (HTTP 404)')).toBe('公开链接异常');
+    expect(problemLabel('webdav:a', '图片已上传，但公开链接无法访问 (HTTP 404)')).toBe('公开链接异常');
     expect(problemLabel('r2', 'timed out')).toBe('连接异常');
   });
 });

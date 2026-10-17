@@ -62,9 +62,21 @@ function ensureIntegration(): ReturnType<typeof useEditorIntegration> {
  * 按最新配置下发一次。editorServer 传了就用传的（设置页刚改、还没存的编辑器选项）；
  * 返回实际下发的编辑器选项——开启时可能补了一个 authToken，调用方要把它存住，免得下次又换一个。
  */
-export async function applyEditorConfig(
+export function applyEditorConfig(
   editorServer?: EditorServerConfig,
   options: { force?: boolean } = {},
+): Promise<{ ok: boolean; editorServer: EditorServerConfig }> {
+  // 排队执行：启动时那次与配置变化触发的那次会撞在一起，两次共用 source，不排队的话前一次会读到后一次的数据
+  const run = queue.then(() => applyOnce(editorServer, options));
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+let queue: Promise<unknown> = Promise.resolve();
+
+async function applyOnce(
+  editorServer: EditorServerConfig | undefined,
+  options: { force?: boolean },
 ): Promise<{ ok: boolean; editorServer: EditorServerConfig }> {
   const latest = (await readFreshConfig()) ?? DEFAULT_CONFIG;
   source.value = { ...editorSourceFromConfig(latest), ...(editorServer ? { editorServer: structuredClone(editorServer) } : {}) };
@@ -98,5 +110,6 @@ export function installEditorSync(): () => void {
 /** 测试用 */
 export function __resetEditorSyncForTests(): void {
   integration = null;
+  queue = Promise.resolve();
   source.value = editorSourceFromConfig(DEFAULT_CONFIG);
 }

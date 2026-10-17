@@ -56,4 +56,18 @@ describe('editorSync', () => {
     expect(result.editorServer.authToken).toBe('new-token');
     expect(m.saveConfig).not.toHaveBeenCalled();
   });
+
+  it('两次下发排队执行：前一次拿到的是自己那份数据，不被后一次覆盖', async () => {
+    let release!: () => void;
+    m.applyEditorServer.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => { release = resolve; });
+      return true;
+    });
+    const first = applyEditorConfig({ ...DEFAULT_CONFIG.editorServer!, port: 40001 });
+    const second = applyEditorConfig({ ...DEFAULT_CONFIG.editorServer!, port: 40002 });
+    await vi.waitFor(() => expect(m.applyEditorServer).toHaveBeenCalledTimes(1));
+    release();
+    expect((await first).editorServer.port).toBe(40001);
+    expect((await second).editorServer.port).toBe(40002);
+  });
 });

@@ -26,9 +26,13 @@ const props = defineProps<{
 const emit = defineEmits<{ commit: [key: string, value: string] }>();
 
 const local = reactive<Record<string, string>>({});
-watch(() => props.values, (values) => {
-  for (const field of props.fields) local[field.key] = values[field.key] ?? '';
-}, { immediate: true, deep: true });
+// 配置重读时（首页切换启用、托盘、云同步都会存配置）只更新没在改的格：本地值还等于上一次的存值才跟着变
+watch(() => ({ ...props.values }), (values, old) => {
+  for (const field of props.fields) {
+    const next = values[field.key] ?? '';
+    if (!old || (local[field.key] ?? '') === (old[field.key] ?? '')) local[field.key] = next;
+  }
+}, { immediate: true });
 
 function commit(key: string): void {
   const value = (local[key] ?? '').trim();

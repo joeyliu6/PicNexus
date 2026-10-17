@@ -92,7 +92,7 @@ async function finish(): Promise<void> {
   if (!typed.value || !props.hasValue) { cancel(); return; }
   // 输入过又删空：要清掉这一项，先确认（很多服务商的密钥只在生成时显示一次）
   mode.value = 'masked';
-  const ok = await confirm(`清空后需要重新填写才能上传。`, { header: `清空 ${props.label}？`, acceptLabel: '清空', rejectLabel: '取消', acceptClass: 'p-button-danger' });
+  const ok = await confirm('清空后需重新填写，否则无法上传到这个图床。', { header: `清空 ${props.label}？`, acceptLabel: '清空', rejectLabel: '取消', acceptClass: 'p-button-danger' });
   if (ok) emit('commit', '');
 }
 

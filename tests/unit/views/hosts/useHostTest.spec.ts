@@ -35,7 +35,7 @@ describe('useHostTest', () => {
   });
 
   it('公开访问失败：前两步算通过，指到公开访问域名', async () => {
-    m.invoke.mockResolvedValue({ ok: false, failedStep: 'public', field: 'public_domain', message: '图片已写入，但公开链接打不开（HTTP 404）', steps: ['credentials', 'write', 'public'] });
+    m.invoke.mockResolvedValue({ ok: false, failedStep: 'public', field: 'public_domain', message: '图片已写入，但公开链接无法访问（HTTP 404）', steps: ['credentials', 'write', 'public'] });
     const state = await useHostTest().run({ hostId: 'tencent', record: {} });
     expect(state).toMatchObject({ phase: 'fail', step: 'public', field: 'publicDomain', passed: ['credentials', 'write'] });
     expect(failSummary(describeHost('tencent')!, state as never).detail).toBe('读取与写入均通过，请检查公开访问域名');
