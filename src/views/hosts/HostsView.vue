@@ -97,16 +97,17 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
             @pick="hosts.openConnect"
             @close="hosts.closeCatalog"
           />
+          <!-- 连接表单与详情各用各的 key：新连上的多份图床两边是同一个 id，分开 key 保证连上后换一个新实例 -->
           <HostDetail
             v-else-if="hosts.pane.value === 'connect' && hosts.draft.value"
-            :key="hosts.draft.value.hostId"
+            :key="`draft-${hosts.draft.value.hostId}`"
             :host-id="hosts.draft.value.hostId"
             :draft="true"
             :narrow="narrow"
           />
           <HostDetail
             v-else-if="detailId"
-            :key="detailId"
+            :key="`host-${detailId}`"
             :host-id="detailId"
             :draft="false"
             :narrow="narrow"
