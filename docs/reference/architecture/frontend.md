@@ -19,25 +19,26 @@
 
 ### 目录结构
 
-新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`、图库 `src/views/gallery/GalleryView.vue`、链接健康 `src/views/health/HealthView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
+新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`、图库 `src/views/gallery/GalleryView.vue`、链接健康 `src/views/health/HealthView.vue`、图床 `src/views/hosts/HostsView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
 
 ```
 src/components/
 ├── views/                    # 过渡期旧页（设置）
 │
-├── settings/                 # 设置面板
-│   ├── SettingsPanel.vue    # 设置主面板
-│   ├── UploaderSettings.vue # 图床设置
-│   └── GeneralSettings.vue  # 通用设置
+├── settings/                 # 设置各分组（常规 / 备份同步 / 压缩 / 编辑器 / 高级 / 关于；不含图床）
+│   ├── GeneralSettingsPanel.vue
+│   ├── BackupSyncPanel.vue
+│   └── …
+│
+├── login/LoginPanel.vue      # Cookie 登录小窗准备页（P16）
 │
 ├── common/                   # 通用组件
 │   ├── ThumbnailImage.vue   # 缩略图组件
-│   ├── ServiceBadge.vue     # 服务标识
-│   └── LoadingSpinner.vue   # 加载状态
+│   └── SensitiveField.vue   # 设置页的密码框
 │
 └── dialogs/                  # 对话框
-    ├── SyncConflictDialog.vue
-    └── BatchRenameDialog.vue
+    ├── BackupPasswordDialog.vue
+    └── CompressionPreviewDialog.vue
 ```
 
 ### 组件命名规范

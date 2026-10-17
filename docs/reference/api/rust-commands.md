@@ -25,7 +25,8 @@
 | | `test_nowcoder_connection` | 测试牛客连接 |
 | | `test_bilibili_connection` | 测试B站连接 |
 | | `test_nami_connection` | 测试纳米连接 |
-| | `test_webdav_storage` | 测试 WebDAV 图床（传探针图 + 匿名访问公开链接，区分「传不上去」与「链接打不开」）<br/>同样必传 `lanHttpConfirmed: bool`；撞上 fake-ip 时回 `WEBDAV_LAN_HTTP_UNCONFIRMED` 错误类型供前端弹逃生舱 |
+| | `probe_s3_storage` | 图床页对象存储（R2 / 腾讯 / 阿里 / 七牛 / 又拍云 / 自定义 S3）的「测试连接」：列桶 → 传探针图 → 匿名 GET 公开链接 → 删探针。返回 `StorageProbeReport { ok, failedStep, field, message, steps }`：`failedStep` 是 `credentials / write / public`，`field` 是通用字段名（`account_id / access_key / secret_key / bucket / region / endpoint / public_domain`），前端 `hostTestText.resolveField` 换成各图床的配置键。又拍云只验凭证一步（内部调 `test_upyun_connection`，两套凭证都验） |
+| | `test_webdav_storage` | 测试 WebDAV 图床（传探针图 + 匿名访问公开链接，区分「传不上去」与「链接打不开」），结果带 `failedStep` / `field`；地址被策略拒绝、连不上服务器都作为结果返回<br/>同样必传 `lanHttpConfirmed: bool`；撞上 fake-ip 时回 `WEBDAV_LAN_HTTP_UNCONFIRMED` 错误类型供前端弹逃生舱（P12） |
 | | `test_webdav_connection` | 测试**备份** WebDAV 连接（PROPFIND `Depth: 0`），与图床那条是两套独立配置<br/>401/403 时与图床链路**共用** `webdav_upload::describe_status`：读 `WWW-Authenticate`，服务端只提供 Digest 就换专属提示<br/>207 Multi-Status 算成功（PROPFIND 的正常返回码，不是错误） |
 | **WebDAV 底层** | `webdav_request` | 备份链路的通用 WebDAV 请求，方法白名单 `GET / PUT / PROPFIND / MKCOL`，请求头白名单 `authorization / depth / overwrite / content-type`<br/>⚠️ 返回值只有 `{ status, body }`，**不带响应头** —— 所以同步过程中撞上 Digest 只能给通用的认证失败文案，判不了认证方案。缺口分析见 [webdav-image-host-issues.md](../troubleshooting/webdav-image-host-issues.md) |
 | **剪贴板** | `clipboard_has_image` | 检测剪贴板图片 |
@@ -55,7 +56,7 @@
 | **CLI PATH** | `get_cli_path_status` | 读取 PicNexus CLI 是否已加入用户 PATH |
 | | `add_cli_to_path` | 将 PicNexus CLI 加入用户 PATH |
 | | `remove_cli_from_path` | 从用户 PATH 移除 PicNexus CLI |
-| **Cookie 登录** | `open_login_window` | 打开双 Webview 登录窗口（标题栏 36px + 内容区）；窗口已存在则聚焦 |
+| **Cookie 登录** | `open_login_window` | 打开双 Webview 登录窗口（标题栏 40px + 内容区）；macOS 用 Overlay 标题栏 + 系统红绿灯，其余平台无边框；窗口已存在则聚焦 |
 | | `show_login_window` | 前端挂载完成后显示窗口（`open_login_window` 内有 3 秒兜底自动 show） |
 | | `setup_cookie_event_monitoring` | **仅 Windows**：注册 WebView2 `NavigationCompleted` 监听自动抓 Cookie<br/>发两个事件：`cookie-monitoring-ready`（监控已就绪，前端收到才可跳转登录页）、`cookie-monitoring-timeout`（会话超时，默认 60 秒）<br/>事件通道建不起来时自动降级为「仅轮询 + 超时通知」，前端无需感知 |
 

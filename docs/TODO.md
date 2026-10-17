@@ -43,7 +43,7 @@
 - **来源**：2026-10-15 维护者决定整体重做界面与操作逻辑；2026-10-16 Claude Design 交付并验收
 - **现状**：设计包与实施阶段清单在 [docs/design/redesign/README.md](./design/redesign/README.md)；分支 `feat/redesign`，每阶段提交、不 push
 - **要做的**：按 README 的 0–11 阶段逐页替换，最后卸载 PrimeVue 并跑交接说明第 14 节验收清单
-- **待拍板（全部阶段做完后一起定）**：README 里标「待拍板」的条目（图库按「失效」筛选时的分组、Markdown 的 alt 要不要扩展名、窄窗口行高 150 还是 120）；以及 README「设计没画、开发时补的」各节——AI 自行补的做法，统一过目（链接健康一节已按审查补齐，另有 4 条待拍板）。过目前先派 1 个只读审查子助手，对照设计稿和代码查一遍「代码里定了做法、却没写进 README」的漏网项，补齐后再给维护者看
+- **待拍板（全部阶段做完后一起定）**：README 里标「待拍板」的条目（图库按「失效」筛选时的分组、Markdown 的 alt 要不要扩展名、窄窗口行高 150 还是 120）；以及 README「设计没画、开发时补的」各节——AI 自行补的做法，统一过目（链接健康、图床两节已按审查补齐，各另有 4 条待拍板）。过目前先派 1 个只读审查子助手，对照设计稿和代码查一遍「代码里定了做法、却没写进 README」的漏网项，补齐后再给维护者看
 
 **当前处置**：实施中
 
@@ -62,22 +62,20 @@
   全靠人眼追 try/catch，没有门禁下次还会漏
 - **要做的**：写 `scripts/check-app-error-rendering.mjs`：在 `src/` 里找 try 块内含 `invoke(`（或 `shellOpen` 这类薄封装）、
   对应 catch 块内用 `String(x)` / `` `${x}` `` / `x instanceof Error ? x.message : String(x)` 的组合，报错并提示改用
-  `getErrorMessage()`。需要括号配对不是一行 grep；`useConnectionTest.ts:100/114` 那种 catch 的是 fetch 错误的要能放行
+  `getErrorMessage()`。需要括号配对不是一行 grep；catch 的是 fetch 错误的（如图床页 GitHub 测试）要能放行
   （只看 try 体里有没有 invoke）
 - **优先级**：中——发版后做
 
 **当前处置**：待处理
 
-### [ ] login-titlebar 的配色自成一套，未并进主题令牌
+### [ ] 图床（阶段 6）在真应用里走查一遍
 
-- **来源**：2026-08-22 tsconfig 盲区清单的最后一项；同条目的其余部分（`scripts/`、`tests/`、
-  主题 class 命名、`verbatimModuleSyntax`）已于 2026-09-08 全部收掉
-- **优先级**：低——它工作正常，不是缺陷
+- **来源**：2026-10-17 阶段 6 完成
+- **AI 部分已做完（2026-10-17，Windows，做法见 [testing-guide.md](./reference/guides/testing-guide.md)「真机走查」）**：WebDAV（本机假服务）先测失败指到密码、再测通过并连上；京东 + P11；左栏悬停 / 右键 / 空格切换启用；改字段后自动测试、公开访问失败与恢复；敏感字段查看与修改；删除与撤销；R2 连真实 Cloudflare（Account ID 不对时指到 Account ID）；Cookie 小窗 520×600、开始登录后放大、关闭；800×600 两级
+- **只能维护者做的**：用自己的账号走完一次 Cookie 登录（微博等）直到「已登录」；用真实可用的对象存储凭证测一次「服务可用」；macOS / Linux 上看一眼这一页与 Cookie 小窗（macOS 的红绿灯代码没编译过）
+- **提醒**：维护者那部分在阶段 11 收尾验收时一起做
 
-[login-titlebar.html](../login-titlebar.html) 用的 `#111827` / `#f8fafc` 是另起的一套配色，
-不是主题令牌的副本，所以 `scripts/check-theme-token-copies.mjs` 刻意没收编它。
-要收编得先把整套色值对到令牌上，**那是一次独立的视觉改动，必须真机看过标题栏与下方 WebView
-的接缝再定**——单看代码判断不了对不对。
+**当前处置**：待处理
 
 ### [ ] 文档路由和关键词路由还只认「批量迁移」
 
@@ -240,6 +238,10 @@
 ---
 
 ## 已完成
+
+### [x] login-titlebar 的配色并进主题令牌
+
+标题栏改为新界面令牌的副本（侧栏底色、正文色、尺寸），由 `scripts/check-theme-token-copies.mjs` 比对；Cookie 小窗已在真应用里看过（README「设计没画、开发时补的（图床）」）。
 
 ### [x] 历史表格悬停预览的两处计时器问题不再适用
 

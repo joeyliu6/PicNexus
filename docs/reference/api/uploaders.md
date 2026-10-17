@@ -45,10 +45,10 @@
 > |------|------|------|
 > | GUI 上传（S3 端点，SigV4） | `s3AccessKey` / `s3SecretKey` | `UpyunUploader`（本表这一行） |
 > | 编辑器 / CLI（自家 REST，Basic Auth） | `operator` / `password` | `server_upload_upyun` |
-> | **设置页「测试连接」** | **两套都要** | `test_upyun_connection`（2026-08-20 起两条链路各验一次） |
+> | **图床页「测试连接」** | **两套都要** | `probe_s3_storage` → `test_upyun_connection`（两条链路各验一次） |
 >
 > 拿操作员账密去签 S3 请求会回 `ErrInvalidAccessKeyID`——GUI 上传曾因此长期完全不可用，
-> 而设置页「测试连接」当时只走 REST 一直亮绿灯，把问题盖住了。**那正是测试连接改成
+> 而「测试连接」当时只走 REST 一直亮绿灯，把问题盖住了。**那正是测试连接改成
 > 双链路的原因**：只验半条链路的绿灯，和"能不能传"没有关系。
 >
 > 端点与 region（`UPYUN_S3_ENDPOINT` / `UPYUN_S3_REGION`）在 Rust 与 TS 各写一份，
@@ -65,7 +65,7 @@
 | 自定义 S3 | `CustomS3Uploader` | `custom-s3/CustomS3Uploader.ts` | `custom_s3:<profileId>` | AccessKey |
 | WebDAV | `WebDAVUploader` | `webdav/WebDAVUploader.ts` | `webdav:<profileId>` | Basic Auth（密码加密存储） |
 
-多实例上传器不在 `initializeUploaders()` 里静态注册，而是由 `syncCustomS3Uploaders()` / `syncWebDAVUploaders()` 按当前 profile 列表重建。调用点：应用启动流程（`main.ts`）与设置页保存/加载（`profileServiceSync.ts`）。
+多实例上传器不在 `initializeUploaders()` 里静态注册，而是由 `syncCustomS3Uploaders()` / `syncWebDAVUploaders()` 按当前 profile 列表重建。调用点：应用启动流程（`main.ts`）与图床页每次保存（`src/views/hosts/profileServiceSync.ts`）。
 
 > 新增上传器的完整步骤见 [添加新图床指南](../guides/add-new-uploader.md)。
 

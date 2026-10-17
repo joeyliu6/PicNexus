@@ -81,26 +81,26 @@ flowchart TD
 
 > **关键源文件**：`src/config/cookieProviders.ts`、`src/composables/useConfig.ts`、
 > `src/login-webview.ts`（真正发起 invoke 的地方）、`src-tauri/src/commands/cookie_login.rs`、
-> `src-tauri/capabilities/login-content.json`（登录引导页只放行 `setup_cookie_event_monitoring`、`show_login_window`）
+> `src-tauri/capabilities/login-content.json`（登录引导页只放行 `setup_cookie_event_monitoring`、`show_login_window` 与放大窗口用的 `set-size` / `center`）
 
 ```mermaid
 flowchart TD
-    A[用户点击「自动获取 Cookie」] --> B["getCookieProvider(serviceId)"]
+    A[图床页点「登录…」或「重新登录」] --> B["getCookieProvider(serviceId)"]
     B --> C{服务支持自动获取?}
     C -- 否 --> C1[提示：该服务不支持]
     C -- 是 --> D[获取 CookieProvider 配置]
 
-    D --> E["打开登录窗口<br/>默认 1300x800"]
+    D --> E["打开登录小窗 520×600<br/>准备页 P16（LoginPanel）<br/>用户点「开始登录」"]
 
     E --> PLT{平台}
-    PLT -- 非 Windows --> PLT1["直接报错：暂不支持自动提取<br/>（提取靠 WebView2，无跨平台实现）"]
+    PLT -- 非 Windows --> PLT1["准备页按钮下方红字写原因 + 处理办法<br/>（提取靠 WebView2，无跨平台实现）"]
     PLT -- Windows --> F["setup_cookie_event_monitoring<br/>注册 NavigationCompleted 监听"]
 
     F --> H{事件通道建起来了吗?}
     H -- 是 --> I["事件驱动<br/>每次导航完成时提取<br/>+ 首次导航后启动 2 秒轮询兜底"]
     H -- 否 --> J["降级：仅轮询兜底<br/>初始延迟 3 秒 / 间隔 2 秒<br/>同时启动超时计时"]
 
-    I & J --> G["发 cookie-monitoring-ready<br/>前端收到才跳转 loginUrl"]
+    I & J --> G["发 cookie-monitoring-ready<br/>前端收到后窗口放大到 loginWindowSize（默认 1300×800）<br/>再跳转 loginUrl"]
     G --> K[用户在窗口中完成登录]
     G -. 整页跳转限制 .-> NAV["只许去 http/https 网页（微信/QQ 扫码、验证码照常）<br/>跳回 PicNexus 其他页面或 file:、ms-settings: 等链接会被拦<br/>外部网页调用任何应用命令都被拒"]
     K --> L[捕获到 Cookie 字符串]
@@ -120,11 +120,11 @@ flowchart TD
     R -- 失败 --> R1[Toast: 连接测试失败]
     R -- 成功 --> S[保存 Cookie 到配置]
     S --> T[关闭登录窗口]
-    T --> U["Toast: 获取成功 ✓"]
+    T --> U["Toast: 已登录 X"]
 
     %% 超时分支：计时与轮询兜底同时启动，两条通道共用同一个超时预算
     I & J -.-> TIMEOUT{超时?<br/>默认 60秒}
-    TIMEOUT -- 是 --> TIMEOUT1[发 cookie-monitoring-timeout<br/>Toast: 获取超时]
+    TIMEOUT -- 是 --> TIMEOUT1[发 cookie-monitoring-timeout<br/>Toast: X登录超时<br/>处理办法指向重新登录 / 手动粘贴]
 
     style U fill:#e8f5e9,stroke:#2e7d32
     style TIMEOUT1 fill:#ffebee,stroke:#c62828
@@ -162,6 +162,7 @@ flowchart TD
 | Cookie 获取后提示失败 | requiredFields 缺失或 fieldValueChecks 不通过 | 图9 节点 N → O |
 | 登录页里点某个链接没反应 | 去向不是 http/https 网页，或要跳回 PicNexus 自己的其他页面，被登录窗口的跳转限制拦下；日志搜 `[登录导航]` | 图9 NAV 节点 |
 | 「开始登录」点了没反应、报 not allowed | 登录引导页的 capability 没放行 `setup_cookie_event_monitoring` / `show_login_window`（`capabilities/login-content.json`） | 图9 节点 F |
+| 「开始登录」后窗口没放大、官方登录页挤在小窗里 | `login-content.json` 没放行窗口的 `set-size` / `center`；日志搜「登录窗口放大失败」 | 图9 节点 G |
 | 登录超时 | 用户未完成登录 / Cookie 事件未触发 | 图9 TIMEOUT 分支 |
 
 ---
