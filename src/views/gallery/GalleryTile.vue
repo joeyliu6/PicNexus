@@ -249,8 +249,8 @@ function onClick(event: MouseEvent): void {
   background-size: var(--pn-size-checker) var(--pn-size-checker);
 }
 
-/* 动图停在第一帧时图片本身不画，也就不播放 */
-.tile__img--still { visibility: hidden; }
+/* 动图停在第一帧时图片本身不画，也就不播放；不占位置，第一帧的 canvas 才在格子里 */
+.tile__img--still { display: none; }
 
 .tile__fade {
   position: absolute;

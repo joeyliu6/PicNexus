@@ -184,3 +184,18 @@ test('the lightbox opened from the list pages in list order', async ({ page }) =
   await expect(chrome).toContainText('n-01.png');
   await expect(chrome).toContainText('2 / 30');
 });
+
+// 回归：动图停在第一帧时原图只是隐藏、仍占着位置，画第一帧的 canvas 被挤到格子下面看不见，GIF 格子一片空白
+test('a GIF shows its first frame inside its tile', async ({ page }) => {
+  const url = 'https://mock.cdn/ratio/jd/1-480x360.gif';
+  const row = { ...historyRow(1, '加载动画.gif', 10), format: 'gif', width: 480, height: 360, aspect_ratio: 480 / 360, generated_link: url, results: JSON.stringify([{ serviceId: 'jd', status: 'success', result: { serviceId: 'jd', fileKey: url, url } }]) };
+  await openApp(page, { historyRows: [row] });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const tile = page.locator('.gallery .tile[aria-label="加载动画.gif"]');
+  const frame = tile.locator('canvas');
+  await expect(frame).toBeVisible();
+
+  const [tileBox, frameBox] = await Promise.all([tile.boundingBox(), frame.boundingBox()]);
+  expect(frameBox?.y).toBeCloseTo(tileBox!.y, 0);
+  expect(frameBox?.height).toBeCloseTo(tileBox!.height, 0);
+});
