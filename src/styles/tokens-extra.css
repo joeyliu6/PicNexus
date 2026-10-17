@@ -43,6 +43,11 @@
   /* 透明图片底下的棋盘格（ImageRatios.dc.html），深色模式同步变暗 */
   --pn-checker-a: #FFFFFF;
   --pn-checker-b: #EDEDED;
+  /* 图床页（HostsScreen.dc.html）：状态标签底色、左栏悬停行、近 14 天柱子（今天用品牌蓝） */
+  --pn-host-pill-ok: #ECF7EF;
+  --pn-host-pill-bad: #FEF4E6;
+  --pn-host-row-hover: rgba(0, 0, 0, 0.035);
+  --pn-host-bar: rgba(57, 133, 237, 0.38);
 }
 
 [data-theme="dark"] {
@@ -79,6 +84,10 @@
   --pn-seg-track: #2A2A2D;
   --pn-checker-a: #2A2A2D;
   --pn-checker-b: #333337;
+  --pn-host-pill-ok: rgba(34, 197, 94, 0.14);
+  --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
+  --pn-host-row-hover: rgba(255, 255, 255, 0.04);
+  --pn-host-bar: rgba(76, 147, 245, 0.45);
 }
 
 :root {
@@ -509,4 +518,58 @@
   --pn-opacity-target-disabled: 0.55;
   /* 弹窗里的列表超过 5 行就在框内滚动，弹窗不撑出窗口 */
   --pn-size-dialog-list-max: 220px;
+}
+
+:root {
+  /* 图床页（HostsScreen.dc.html）
+     左栏宽 260、内边距 0 12 14 16；标题行 40、上下 6 / 2、左 8；行高 50、内边距 0 10 0 8、圆角 9、间距 10；图标底板 30（圆角 8）、图标 17 */
+  --pn-size-host-list: 260px;
+  --pn-space-host-list: 0 12px 14px 16px;
+  --pn-space-host-list-head: 6px 0 2px;
+  --pn-size-host-row: 50px;
+  --pn-space-host-row: 0 10px 0 8px;
+  --pn-radius-host-row: 9px;
+  --pn-space-host-row-gap: 10px;
+  --pn-size-host-plate: 30px;
+  --pn-size-host-glyph: 17px;
+  /* 详情：限宽 720、内边距 4 32 24、块间距 18；头部图标块 48（圆角 12、图标 28）；状态标签高 22（内边距 0 9 0 8、圆角 11） */
+  --pn-size-host-detail: 720px;
+  --pn-space-host-detail: 4px 32px 24px;
+  --pn-space-host-gap: 18px;
+  --pn-space-host-head-gap: 14px;
+  --pn-size-host-head-icon: 48px;
+  --pn-radius-host-head-icon: 12px;
+  --pn-size-host-head-glyph: 28px;
+  --pn-size-host-pill: 22px;
+  --pn-space-host-pill: 0 9px 0 8px;
+  --pn-radius-host-pill: 11px;
+  --pn-space-host-button: 0 12px 0 10px;
+  /* 结果条内边距 10 14、圆角 10；使用情况内边距 16 20、间距 28、柱区高 44（柱间 3、最矮 3）；说明框内边距 14 16、圆角 12 */
+  --pn-space-host-result: 10px 14px;
+  --pn-space-host-usage: 16px 20px;
+  --pn-space-host-usage-gap: 28px;
+  --pn-size-host-bars: 44px;
+  --pn-space-host-bar-gap: 3px;
+  --pn-size-host-bar-min: 3px;
+  --pn-radius-host-bar: 2px;
+  --pn-space-host-box: 14px 16px;
+  /* 表单两列间距 14 / 16；HTTP 标记高 20、左右 6、圆角 5；模板行内边距 10 14 */
+  --pn-space-host-fields: 14px 16px;
+  --pn-size-host-badge: 20px;
+  --pn-space-host-badge-x: 6px;
+  --pn-radius-host-badge: 5px;
+  --pn-space-host-template: 10px 14px;
+  /* 目录：搜索框高 34、圆角 9、左右 12；卡片高 72、内边距 0 14 0 12、圆角 12、间距 12；图标底板 36（圆角 10）、图标 20；悬停描边 1.5；底部提示内边距 12 14 */
+  --pn-size-catalog-search: 34px;
+  --pn-radius-catalog-search: 9px;
+  --pn-size-catalog-card: 72px;
+  --pn-space-catalog-card: 0 14px 0 12px;
+  --pn-size-catalog-plate: 36px;
+  --pn-size-catalog-glyph: 20px;
+  --pn-size-catalog-ring: 1.5px;
+  --pn-space-catalog-hint: 12px 14px;
+  /* 窄窗口「‹ 图床」：高 28、内边距 0 8 0 4、左 12 */
+  --pn-space-host-back: 0 8px 0 4px;
+  /* 确认框里等宽的那一行（P12 的地址）：内边距 8 10 */
+  --pn-space-code-x: 10px;
 }

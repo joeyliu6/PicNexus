@@ -198,6 +198,12 @@ function createController() {
     await uploadManager.loadServiceButtonStates();
   }
 
+  /** 图床页改完配置后：重算「已添加」与启用状态（与首页「上传到」同一份） */
+  async function refreshHosts(): Promise<void> {
+    await uploadManager.loadServiceButtonStates();
+    await refreshConfig();
+  }
+
   async function setCopyFrom(hostId: string | undefined): Promise<void> {
     await saveConfigPatch((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), copyFromService: hostId } }));
   }
@@ -405,6 +411,7 @@ function createController() {
     dismissFastUploadHint,
     toggleHost,
     enableNoConfigHost,
+    refreshHosts,
     setCopyFrom,
     setFormat,
     setCompression,
