@@ -156,6 +156,8 @@ flowchart TD
 | 切回图库后数据丢失 | KeepAlive 缓存失效后重新加载，但 stats 缓存已过期 | 图 1 节点 B1 |
 | 图片加载时格子跳一下 | 骨架天的预取比例与真图排版不是同一套：`toAspectRatioRow`、`LAYOUT_RATIO_SQL` 与 `layoutRatio` 要一致（`galleryFilters.spec` 在真 SQLite 上对照） | 图 1「格子的比例」 |
 | 打开详情后顶部几行不见了 | 网格变窄重排时滚动锚点在最顶上也去补偿了：`useScrollAnchor` 在 `scrollTop` 为 0 时应不动 | 图 1 网格 |
+| GIF 格子一片空白 | 停在第一帧时原图要 `display: none`：只隐藏不让位，画第一帧的 canvas 被挤到格子外面（`GalleryTile`） | 图 1 网格 |
+| Tab 进不了网格 / 方向键走了焦点没跟 | 网格只有一格 `tabindex=0`（`GalleryGrid` 的 `tabStopId`）；走到的格子还没画出来时由 `focusTile` 等它出现再给焦点 | 图 1 网格 |
 | 重新检测后格子上的 ⚠ 没变 | 检测结果写回后没带 id 广播 `history-updated`，或那一天不在已加载的天里 | 记录变化表第 1 行 |
 
 ---
