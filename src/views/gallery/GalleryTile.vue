@@ -10,6 +10,7 @@ import { useThumbnailFallbackChain } from '@/composables/image/useThumbnailFallb
 import type { ImageMeta } from '@/types/image-meta';
 import { displayKind, displayTag, imageFormat, isAnimatedFormat, mayBeTransparent } from '@/utils/imageDisplay';
 import { badgeOf, petalLabelOf, petalsOf } from './galleryMeta';
+import { badgeFit, tagFits } from './tileMarkFit';
 
 const props = defineProps<{
   meta: ImageMeta;
@@ -58,8 +59,12 @@ const { currentSrc, handleError, handleLoad } = useThumbnailFallbackChain({
   confirmedHttpHosts: () => props.confirmedHttpHosts,
 });
 
-/** 选中时隐藏健康角标（G04） */
-const badge = computed(() => (props.selected ? null : badgeOf(props.meta)));
+/** 选中时隐藏健康角标（G04）；格子太窄时 ⚠ 角标只留 ⚠，「仅 1 份」不画 */
+const badge = computed(() => {
+  const health = props.selected ? null : badgeOf(props.meta);
+  const fit = health ? badgeFit(health, props.width) : 'none';
+  return health && fit !== 'none' ? { ...health, iconOnly: fit === 'icon' } : null;
+});
 const petals = computed(() => petalsOf(props.meta));
 const petalLabel = computed(() => petalLabelOf(props.meta));
 
@@ -75,7 +80,7 @@ const showMarks = computed(() => props.loaded && !props.failed && !props.selecte
  */
 const tag = computed(() => {
   const text = displayTag(props.meta);
-  return text && (!badge.value || kind.value === 'wide') ? text : null;
+  return text && (!badge.value || kind.value === 'wide') && tagFits(text, props.width) ? text : null;
 });
 
 /** 读屏在文件名之后读的状态：问题角标、收藏、比例说明（格子上那几个角标只给眼睛看，被悬停层盖住时这里也照读） */
@@ -185,7 +190,7 @@ function onClick(event: MouseEvent): void {
       <PnIcon v-if="favorited && !overlay" name="star" filled :size="14" class="tile__fav" />
       <span v-if="badge && !overlay" class="tile__badge" aria-hidden="true">
         <PnIcon v-if="badge.warn" name="warning" :size="11" :stroke="2" class="tile__badge-warn" />
-        {{ badge.text }}
+        <template v-if="!badge.iconOnly">{{ badge.text }}</template>
       </span>
       <span v-if="animated && showMarks && !selecting" class="tile__tag tile__tag--gif" aria-hidden="true">GIF</span>
       <span v-if="tag && showMarks" class="tile__tag" :class="`tile__tag--${kind}`" aria-hidden="true">{{ tag }}</span>

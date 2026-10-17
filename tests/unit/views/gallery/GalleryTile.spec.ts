@@ -102,6 +102,26 @@ describe('GalleryTile picture-ratio rules', () => {
     expect(long.find('.tile__badge').text()).toBe('失效');
   });
 
+  // 窄窗口打开详情时一行会被压得很矮，长图格子只剩 20 多 px：放不下的角标不画半截
+  it('drops the 长图 label when the cell is too narrow for it', async () => {
+    const wrapper = mountTile(meta('长截图.png', 1080, 6048), { width: 24, height: 62 });
+    await load(wrapper);
+
+    expect(tags(wrapper)).toEqual([]);
+  });
+
+  it('keeps only ⚠ of a warning badge in a narrow cell and drops 仅 1 份', async () => {
+    const limited = mountTile(meta('长截图.png', 1080, 6048, { copyLinkHealth: 'limited' }), { width: 40, height: 100 });
+    const single = mountTile(meta('长截图.png', 1080, 6048, { mirrorServices: [{ serviceId: 'jd', url: 'https://jd.example/a' }] }), { width: 40, height: 100 });
+    const wide = mountTile(meta('合影.jpg', 4000, 3000, { copyLinkHealth: 'limited' }), { width: 200, height: 150 });
+    await Promise.all([load(limited), load(single), load(wide)]);
+
+    expect(limited.find('.tile__badge').text()).toBe('');
+    expect(limited.find('.tile__badge-warn').exists()).toBe(true);
+    expect(single.find('.tile__badge').exists()).toBe(false);
+    expect(wide.find('.tile__badge').text()).toBe('可能受限');
+  });
+
   it('lays a checkerboard only under formats that can be transparent', async () => {
     const png = mountTile(meta('logo.png', 800, 800));
     const jpg = mountTile(meta('合影.jpg', 4000, 3000));
