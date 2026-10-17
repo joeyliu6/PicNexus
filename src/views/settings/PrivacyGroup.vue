@@ -12,6 +12,7 @@ import { useToast } from '@/composables/useToast';
 import { historyDB } from '@/services/database';
 import { getErrorMessage } from '@/types/errors';
 import { formatCount } from '@/utils/formatters';
+import { clearCacheKeepingPreferences } from './clearCache';
 import SettingRow from './SettingRow.vue';
 import SettingsCard from './SettingsCard.vue';
 import SettingsSection from './SettingsSection.vue';
@@ -50,7 +51,7 @@ async function openDataDir(): Promise<void> {
 async function clearCache(): Promise<void> {
   clearingCache.value = true;
   try {
-    await getCurrentWebview().clearAllBrowsingData();
+    await clearCacheKeepingPreferences(() => getCurrentWebview().clearAllBrowsingData());
     toast.success('已清理应用缓存');
   } catch (error) {
     toast.error('未能清理缓存', `${getErrorMessage(error)}，请重试`);
