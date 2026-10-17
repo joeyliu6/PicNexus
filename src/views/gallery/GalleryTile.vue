@@ -61,6 +61,8 @@ const petals = computed(() => petalsOf(props.meta));
 const petalLabel = computed(() => petalLabelOf(props.meta));
 
 function onClick(event: MouseEvent): void {
+  // 双击的第二下：交给 dblclick 开灯箱，不再切换详情 / 选择
+  if (event.detail > 1) return;
   if (props.selecting || event.ctrlKey || event.metaKey || event.shiftKey) emit('toggleSelect', event);
   else emit('open');
 }

@@ -1,7 +1,7 @@
 // 列表视图的数据（GalleryScreen.dc.html G02）：与网格同一套筛选，按表头排序，按页取（每页 100 行），
 // 只取屏幕附近的那几页；筛选、排序或记录有变化时整体作废重取。
 
-import { computed, onUnmounted, shallowRef, watch, type Ref } from 'vue';
+import { computed, onUnmounted, ref, shallowRef, watch, type Ref } from 'vue';
 import { onCacheEventType } from '@/events/cacheEvents';
 import { historyDB } from '@/services/database';
 import type { DayStatsFilter } from '@/services/database/types';
@@ -16,9 +16,12 @@ export function useGalleryList(filter: Ref<DayStatsFilter>, sort: Ref<GalleryLis
   const pages = shallowRef(new Map<number, GalleryListRow[]>());
   const pending = new Set<number>();
   let version = 0;
+  /** 每作废一次加一：屏幕上的行没变时，调用方靠它知道要重新取页 */
+  const generation = ref(0);
 
   function reset(): void {
     version += 1;
+    generation.value += 1;
     pending.clear();
     pages.value = new Map();
   }
@@ -58,8 +61,19 @@ export function useGalleryList(filter: Ref<DayStatsFilter>, sort: Ref<GalleryLis
     return pages.value.get(Math.floor(index / LIST_PAGE_SIZE))?.[index % LIST_PAGE_SIZE] ?? null;
   }
 
+  /** 这一张在列表里是第几行（只在已取到的页里找）；没找到返回 -1 */
+  function indexOf(id: string): number {
+    for (const [page, rows] of pages.value) {
+      const at = rows.findIndex((row) => row.id === id);
+      if (at >= 0) return page * LIST_PAGE_SIZE + at;
+    }
+    return -1;
+  }
+
   /** 已取到的行，按列表顺序（Shift 连选用） */
   const loadedRows = computed(() => [...pages.value.entries()].sort(([a], [b]) => a - b).flatMap(([, rows]) => rows));
 
-  return { ensure, rowAt, loadedRows };
+  return { ensure, rowAt, indexOf, loadedRows, generation };
 }
+
+export type GalleryListApi = ReturnType<typeof useGalleryList>;

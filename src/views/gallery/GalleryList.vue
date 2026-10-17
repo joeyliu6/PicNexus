@@ -2,7 +2,7 @@
 // 列表视图（GalleryScreen.dc.html G02）：缩略图 · 文件名 · 图床（花瓣 + 名称）· 尺寸与大小 · 上传时间 · 状态 · 操作。
 // 行高 54、虚拟滚动；点表头按文件名 / 大小 / 上传时间排序；「状态」列平时为空，出问题才写「⚠ 失效」。
 // 单击打开详情，双击看大图，Ctrl/⌘ / Shift 单击多选（与网格一致）。
-import { computed, ref, toRef, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
@@ -13,26 +13,31 @@ import PnMenuItem from '@/components/pn/PnMenuItem.vue';
 import PnMenuSeparator from '@/components/pn/PnMenuSeparator.vue';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { openUserExternalUrl } from '@/security/shellOpen';
-import type { DayStatsFilter } from '@/services/database/types';
 import type { GalleryListRow, GalleryListSort, GalleryListSortKey } from '@/services/database/TimelineQueryService';
 import type { ImageMeta } from '@/types/image-meta';
 import { formatFileSize, formatListTime } from '@/utils/formatters';
 import { petalLabelOf, petalsOf, statusOf } from './galleryMeta';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
-import { useGalleryList } from './useGalleryList';
+import type { GalleryListApi } from './useGalleryList';
 
 const props = defineProps<{
-  filter: DayStatsFilter;
   grid: GalleryGridApi;
+  /** 列表的数据与排序放在页面上：切回网格再回来排序还在，灯箱也按它翻页 */
+  list: GalleryListApi;
+  sort: GalleryListSort;
   /** 详情正打开的那一行 */
   focusedId: string | null;
   copiedId: string | null;
+  /** 「今天 / 昨天」按这个时刻算（页面统一刷新） */
+  now: number;
 }>();
 
 const emit = defineEmits<{
   open: [meta: ImageMeta];
-  openLightbox: [meta: ImageMeta];
+  /** index：这一行在列表里是第几行，灯箱按列表顺序翻页 */
+  openLightbox: [meta: ImageMeta, index: number];
+  'update:sort': [sort: GalleryListSort];
   copy: [meta: ImageMeta];
   removed: [ids: string[]];
 }>();
@@ -42,17 +47,15 @@ const ROW_HEIGHT = 54;
 /** 不点表头时按上传时间、新的在前；每列第一次点的方向 */
 const FIRST_DIRECTION: Record<GalleryListSortKey, boolean> = { time: true, name: false, size: true };
 
-const sort = ref<GalleryListSort>({ key: 'time', descending: true });
 function sortBy(key: GalleryListSortKey): void {
-  sort.value = sort.value.key === key ? { key, descending: !sort.value.descending } : { key, descending: FIRST_DIRECTION[key] };
+  emit('update:sort', props.sort.key === key ? { key, descending: !props.sort.descending } : { key, descending: FIRST_DIRECTION[key] });
 }
-const arrow = (key: GalleryListSortKey) => (sort.value.key === key ? (sort.value.descending ? ' ↓' : ' ↑') : '');
-const ariaSort = (key: GalleryListSortKey) => (sort.value.key === key ? (sort.value.descending ? 'descending' : 'ascending') : 'none');
+const arrow = (key: GalleryListSortKey) => (props.sort.key === key ? (props.sort.descending ? ' ↓' : ' ↑') : '');
+const ariaSort = (key: GalleryListSortKey) => (props.sort.key === key ? (props.sort.descending ? 'descending' : 'ascending') : 'none');
 
-const list = useGalleryList(toRef(props, 'filter'), sort);
+const list = props.list;
 const actions = useGalleryActions();
 const { viewState, historyManager } = props.grid;
-const now = Date.now();
 
 const root = ref<HTMLElement | null>(null);
 const scroller = ref<HTMLElement | null>(null);
@@ -67,7 +70,8 @@ const virtualizer = useVirtualizer(computed(() => ({
   overscan: 8,
 })));
 const visible = computed(() => virtualizer.value.getVirtualItems().map((item) => ({ item, row: list.rowAt(item.index) })));
-watch(() => virtualizer.value.getVirtualItems().map((item) => item.index), (indexes) => {
+// 屏幕上的行变了，或排序 / 筛选 / 记录变化让已取的页作废了（行没变也得重取），都把可见行补齐
+watch(() => [virtualizer.value.getVirtualItems().map((item) => item.index), list.generation.value] as const, ([indexes]) => {
   for (const index of indexes) void list.ensure(index);
 }, { immediate: true });
 
@@ -80,6 +84,8 @@ const sizeText = (row: GalleryListRow) => [row.width && row.height ? `${row.widt
   .join(' · ');
 
 function onRowClick(row: GalleryListRow, event: MouseEvent): void {
+  // 双击的第二下：交给 dblclick 开灯箱，不再切换详情 / 选择
+  if (event.detail > 1) return;
   if (viewState.hasSelection.value || event.ctrlKey || event.metaKey || event.shiftKey) {
     viewState.handleSelectClick(row.id, event, list.loadedRows.value.map((r) => r.id));
   } else emit('open', row);
@@ -114,7 +120,7 @@ async function remove(row: GalleryListRow): Promise<void> {
           :aria-selected="row ? selectedIds.has(row.id) : undefined"
           :style="{ transform: `translateY(${item.start}px)` }"
           @click="row && onRowClick(row, $event)"
-          @dblclick="row && emit('openLightbox', row)"
+          @dblclick="row && emit('openLightbox', row, item.index)"
         >
           <template v-if="row">
             <span class="list__thumb" role="cell">
@@ -129,7 +135,7 @@ async function remove(row: GalleryListRow): Promise<void> {
               <span class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
             </span>
             <span v-if="!narrow" class="list__muted" role="cell">{{ sizeText(row) }}</span>
-            <span class="list__muted" role="cell">{{ formatListTime(row.timestamp, now) }}</span>
+            <span class="list__muted" role="cell">{{ formatListTime(row.timestamp, props.now) }}</span>
             <span class="list__status" :class="{ 'list__status--warn': statusOf(row).warn }" role="cell">
               <PnIcon v-if="statusOf(row).warn" name="warning" :size="12" :stroke="2.2" />
               {{ statusOf(row).text }}
@@ -145,7 +151,7 @@ async function remove(row: GalleryListRow): Promise<void> {
                   </button>
                 </template>
                 <PnMenuItem @select="emit('open', row)">查看详情</PnMenuItem>
-                <PnMenuItem @select="emit('openLightbox', row)">查看大图</PnMenuItem>
+                <PnMenuItem @select="emit('openLightbox', row, item.index)">查看大图</PnMenuItem>
                 <PnMenuItem :disabled="!row.primaryUrl" @select="openUserExternalUrl(row.primaryUrl)">在浏览器打开</PnMenuItem>
                 <PnMenuSeparator />
                 <PnMenuItem danger @select="remove(row)">移除记录</PnMenuItem>

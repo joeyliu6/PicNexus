@@ -1,16 +1,18 @@
 <script setup lang="ts">
 // 图库（GalleryScreen.dc.html，交接说明 8.2）：按天分组的等高行网格 / 列表、筛选、多选、详情、灯箱、刻度条。
 // 数据与虚拟滚动在 useGalleryGrid（复用时间轴那组 composables）；这里只做页面编排与键盘。
-import { computed, nextTick, onActivated, onDeactivated, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { refDebounced, until, useElementSize, useEventListener } from '@vueuse/core';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { useCopyLink } from '@/composables/useCopyLink';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import { useToast } from '@/composables/useToast';
 import { useDebouncedTrue } from '@/composables/useDebouncedTrue';
 import TitleRow from '@/shell/TitleRow.vue';
 import { locateRequest, type LocateRequest } from '@/shell/galleryLocate';
 import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
+import type { GalleryListSort } from '@/services/database/TimelineQueryService';
 import type { ImageMeta } from '@/types/image-meta';
 import type { LinkFormat } from '@/utils/linkFormatter';
 import GalleryChips from './GalleryChips.vue';
@@ -27,6 +29,9 @@ import { EMPTY_FILTERS, countText, filterChips, hasActiveFilters, toQueryFilter,
 import { neighborTile, type GridDirection } from './gridNavigation';
 import { scrubberTicks } from './scrubberTicks';
 import { GALLERY_GRID, useGalleryGrid } from './useGalleryGrid';
+import { useGalleryLightbox } from './useGalleryLightbox';
+import { useGalleryList } from './useGalleryList';
+import { useListLightbox } from './useListLightbox';
 
 const router = useRouter();
 const { copyLinks } = useCopyLink();
@@ -44,18 +49,47 @@ onDeactivated(() => { active.value = false; });
 const view = ref<GalleryViewMode>('grid');
 const filters = ref<GalleryFilters>(EMPTY_FILTERS);
 const search = refDebounced(computed(() => filters.value.search), 200);
-const queryFilter = computed(() => toQueryFilter({ ...filters.value, search: search.value }));
+/** 真正交给查询的那份筛选（搜索词按防抖后的算）：空状态与计数照它判断，才和统计对得上 */
+const appliedFilters = computed<GalleryFilters>(() => ({ ...filters.value, search: search.value }));
+const queryFilter = computed(() => toQueryFilter(appliedFilters.value));
 
 const scroller = ref<HTMLElement | null>(null);
 const mainEl = ref<HTMLElement | null>(null);
 const toolbar = ref<InstanceType<typeof GalleryToolbar> | null>(null);
 const grid = useGalleryGrid(scroller, queryFilter, computed(() => active.value && view.value === 'grid'));
 const { viewState, historyManager } = grid;
+
+/** 列表视图的数据与排序：放在页面上，切回网格再回来排序还在，列表里打开的灯箱也按它翻页 */
+const listSort = ref<GalleryListSort>({ key: 'time', descending: true });
+const list = useGalleryList(queryFilter, listSort);
+const lightbox = useGalleryLightbox(grid, useListLightbox({
+  list,
+  total: grid.totalCount,
+  detailCache: historyManager.detailCache,
+  config: grid.config,
+  confirmedHttpHosts: () => grid.confirmedHttpHosts.value,
+  toast: useToast(),
+}));
 const config = computed(() => grid.config.value);
 const format = computed<LinkFormat>(() => config.value.linkOutput?.defaultFormat ?? 'url');
 
-/** 「今天 / 昨天」按打开页面时算；跨午夜不刷新（下次打开就对了） */
-const now = Date.now();
+/**
+ * 「今天 / 昨天」按这个时刻算。外壳的 KeepAlive 让这一页一直不重建：
+ * 页面重新显示时、以及每过一个午夜都刷新一次
+ */
+const now = ref(Date.now());
+let midnightTimer: ReturnType<typeof setTimeout> | undefined;
+function refreshNow(): void {
+  now.value = Date.now();
+  clearTimeout(midnightTimer);
+  const nextDay = new Date(now.value);
+  nextDay.setHours(24, 0, 1, 0);
+  midnightTimer = setTimeout(refreshNow, nextDay.getTime() - now.value);
+}
+refreshNow();
+onActivated(refreshNow);
+onDeactivated(() => clearTimeout(midnightTimer));
+onUnmounted(() => clearTimeout(midnightTimer));
 
 const hostName = (hostId: string) => getServiceDisplayName(hostId, config.value);
 const hostOptions = computed(() => {
@@ -64,7 +98,11 @@ const hostOptions = computed(() => {
 });
 
 const chips = computed(() => filterChips(filters.value, hostName));
-const count = computed(() => countText(filters.value, grid.totalCount.value, !grid.hasLoadedStats.value));
+/** 新条件的统计还没回来：计数与空状态沿用上一次的判断，不闪中间态（如「共 0 张」「暂无图片」） */
+const reloading = computed(() => grid.hasLoadedStats.value && grid.isLoadingStats.value);
+const count = computed<string>((previous) => (reloading.value && previous !== undefined
+  ? previous
+  : countText(appliedFilters.value, grid.totalCount.value, !grid.hasLoadedStats.value)));
 
 function setFilters(next: GalleryFilters): void {
   filters.value = next;
@@ -73,10 +111,11 @@ function setFilters(next: GalleryFilters): void {
 // 换了筛选，之前的选择不再对应眼前这些图
 watch(queryFilter, () => viewState.clearSelection());
 
-const emptyKind = computed<GalleryEmptyKind | null>(() => {
+const emptyKind = computed<GalleryEmptyKind | null>((previous) => {
+  if (reloading.value) return previous ?? null;
   if (!grid.hasLoadedStats.value || grid.totalCount.value > 0) return null;
-  if (!hasActiveFilters(filters.value)) return 'empty';
-  if (filters.value.favoritesOnly && historyManager.favoriteSet.value.size === 0) return 'favEmpty';
+  if (!hasActiveFilters(appliedFilters.value)) return 'empty';
+  if (appliedFilters.value.favoritesOnly && historyManager.favoriteSet.value.size === 0) return 'favEmpty';
   return 'noResults';
 });
 /** 读得快就不闪骨架：超过 300ms 才出现（交接说明 8.2「冷启动」） */
@@ -88,15 +127,34 @@ const detailId = ref<string | null>(null);
 const focusedId = ref<string | null>(null);
 const { copiedKey, markCopied } = useCopyBadgeFeedback(1500);
 
+/** 系统默认的双击间隔：这么短的时间里第二次点击算双击 */
+const DOUBLE_CLICK_MS = 500;
+/** 刚打开详情的那张：双击的第一下已经打开了详情、网格随之变窄重排，第二下可能落到另一张上 */
+let lastOpened: { meta: ImageMeta; at: number } | null = null;
+
 /** 单击 / Enter 打开详情；再点正开着的那张就收起（设计稿的详情没有关闭按钮，鼠标也要关得掉） */
 function openDetail(meta: ImageMeta): void {
   focusedId.value = meta.id;
   detailId.value = detailId.value === meta.id ? null : meta.id;
+  lastOpened = { meta, at: Date.now() };
 }
 
-function openLightbox(meta: ImageMeta): void {
-  focusedId.value = meta.id;
-  void grid.lightbox.openLightbox(meta);
+/**
+ * 打开灯箱：网格里按天翻页；列表视图里按列表眼前的顺序翻页（index = 这一行在列表里是第几行，
+ * 从详情打开时按已取到的行去找）
+ */
+function openLightbox(meta: ImageMeta, index?: number): void {
+  const target = lastOpened && Date.now() - lastOpened.at < DOUBLE_CLICK_MS ? lastOpened.meta : meta;
+  lastOpened = null;
+  focusedId.value = target.id;
+  if (view.value === 'list') {
+    const at = index !== undefined && target.id === meta.id ? index : list.indexOf(target.id);
+    if (at >= 0) {
+      void lightbox.openFromList(at);
+      return;
+    }
+  }
+  void lightbox.openFromGrid(target);
 }
 
 /** 格子右下角「复制」= 复制这张图「复制时使用」的链接（当前格式），按钮原地变「已复制」 */
@@ -147,6 +205,12 @@ function isTextTarget(target: EventTarget | null): boolean {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 }
 
+/** 焦点在按钮、链接、菜单项这类控件上：Enter、空格、方向键归它们自己 */
+const CONTROL_SELECTOR = 'button, a[href], select, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="option"], [role="tab"], [role="switch"], [role="checkbox"], [role="slider"]';
+function isControlTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest(CONTROL_SELECTOR);
+}
+
 /** 方向键走到视口外的那张才滚动，只滚到刚好露出（吸顶的日期标题会盖住顶上 40） */
 function reveal(id: string): void {
   const position = grid.virtual.layoutResult.value?.itemPositionMap.get(id);
@@ -195,8 +259,8 @@ function moveFocus(direction: GridDirection): void {
 
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   if (!active.value || event.defaultPrevented) return;
-  // 对话框、命令面板、灯箱开着时各管各的键
-  if (document.querySelector('.pn-dialog[data-state="open"], .command-palette[data-state="open"], .pswp--open')) return;
+  // 对话框、菜单、浮层、命令面板、灯箱开着时各管各的键（它们的 Esc 晚于这里注册，不能抢在前面收一层）
+  if (document.querySelector('.pn-layer[data-state="open"], .command-palette[data-state="open"], .pswp--open')) return;
   const mod = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
   if (mod && key === 'f') {
@@ -215,7 +279,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     void grid.selectAll();
     return;
   }
-  if (view.value !== 'grid') return;
+  if (view.value !== 'grid' || isControlTarget(event.target)) return;
   const direction = ARROWS[event.key];
   if (direction) {
     event.preventDefault();
@@ -258,8 +322,10 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         </div>
         <GalleryList
           v-if="view === 'list' && !emptyKind"
-          :filter="queryFilter"
+          v-model:sort="listSort"
           :grid="grid"
+          :list="list"
+          :now="now"
           :focused-id="focusedId"
           :copied-id="copiedKey"
           @open="openDetail"
@@ -280,7 +346,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       <GalleryDetail v-if="detailId" :key="detailId" :item-id="detailId" :grid="grid" :format="format" @close="detailId = null" @open-lightbox="openLightbox" @removed="onRemoved" />
     </div>
 
-    <GalleryLightbox :grid="grid" :format="format" @removed="onRemoved" @show-info="(id: string) => { detailId = id; focusedId = id; }" />
+    <GalleryLightbox :grid="grid" :nav="lightbox" :format="format" @removed="onRemoved" @show-info="(id: string) => { detailId = id; focusedId = id; }" />
   </div>
 </template>
 

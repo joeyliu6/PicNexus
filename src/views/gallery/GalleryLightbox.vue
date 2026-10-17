@@ -27,9 +27,12 @@ import type { PetalState } from '@/utils/petals';
 import { hostRows } from './detailHosts';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
+import type { GalleryLightboxApi } from './useGalleryLightbox';
 
 const props = defineProps<{
   grid: GalleryGridApi;
+  /** 翻页从哪来（网格按天、列表按行），见 useGalleryLightbox */
+  nav: GalleryLightboxApi;
   format: LinkFormat;
 }>();
 
@@ -39,7 +42,7 @@ const emit = defineEmits<{
   showInfo: [id: string];
 }>();
 
-const lightbox = props.grid.lightbox;
+const lightbox = props.nav;
 const config = computed(() => props.grid.config.value);
 const hosts = computed(() => props.grid.confirmedHttpHosts.value);
 const thumbCache = useThumbCache();
@@ -105,18 +108,8 @@ function navigate(direction: 'prev' | 'next'): void {
   void lightbox.handleLightboxNavigate(direction);
 }
 
-/** 「3 / 21」：这张在当前结果里排第几（没加载的天按统计的张数算） */
-const position = computed(() => {
-  const id = item.value?.id;
-  if (!id) return null;
-  let before = 0;
-  for (const group of props.grid.groups.value) {
-    const index = group.items.findIndex((meta) => meta.id === id);
-    if (index >= 0) return before + index + 1;
-    before += group.items.length || group.expectedCount || 0;
-  }
-  return null;
-});
+/** 「3 / 21」：这张在当前结果里排第几（网格按天累加，列表就是第几行） */
+const position = lightbox.position;
 
 const metaLine = computed(() => {
   const it = item.value;
