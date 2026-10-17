@@ -59,3 +59,12 @@ test('filters stop applying when the narrow layout hides their buttons', async (
   await expect(page.locator('.dead-list__filter')).toHaveCount(0);
   await expect(page.locator('.dead-row')).toHaveCount(2);
 });
+
+// 真机走查：一个图床都没有时，补充备份卡写成「当前只有 1 个可用图床」
+test('the backup card counts usable hosts instead of always saying one', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openApp(page, { historyRows: [...ROWS, historyRow(3, '仅 1 份.png', 60, 'jd')], config: { availableServices: [], enabledServices: [] } });
+  await page.getByRole('navigation').getByRole('link', { name: '链接健康', exact: true }).click();
+  await expect(page.locator('.health-status')).toContainText('2 张图片失效');
+  await expect(page.locator('.health')).toContainText('需要至少 2 个图床，当前没有可用图床');
+});

@@ -87,7 +87,10 @@ const backupCard = computed(() => {
   // 刚备份完、没有「仅 1 份」的了才说「每张至少 2 个图床」；还剩（那 1 份就在目标图床上）照平常的样子
   if (s.phase === 'done' && single === 0) return { num: '已完成', desc: '每张图片至少保存在 2 个图床', button: '' };
   if (single === 0) return { num: '', desc: '每张图片至少保存在 2 个图床', button: '' };
-  if (usableHosts.value.length < 2) return { num: `${formatCount(single)} 张`, desc: '需要另一个图床，当前只有 1 个可用图床', button: '添加图床' };
+  if (usableHosts.value.length < 2) {
+    const desc = usableHosts.value.length === 1 ? '需要另一个图床，当前只有 1 个可用图床' : '需要至少 2 个图床，当前没有可用图床';
+    return { num: `${formatCount(single)} 张`, desc, button: '添加图床' };
+  }
   return { num: `${formatCount(single)} 张`, desc: '仅保存在 1 个图床，图床失效后无法恢复', button: '补充备份…' };
 });
 
