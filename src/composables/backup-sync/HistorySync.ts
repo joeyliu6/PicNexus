@@ -7,6 +7,7 @@ import { mergeHistoryCollections } from '@/services/database/HistoryMerge';
 import { invalidateCache } from '@/composables/history/useHistory';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import type { WebDAVProfile, HistoryItem } from '@/config/types';
+import { formatCount } from '@/utils/formatters';
 import { createLogger } from '@/utils/logger';
 import {
   writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError,
@@ -32,6 +33,14 @@ async function client(profile: WebDAVProfile) {
 }
 
 /** 合并同步：先把云端记录并进本机，再把合并结果传回云端（两边都没变化时不写云端） */
+/** 「最近操作」里这次同步的说法：为 0 的一半不写（同状态行），大数字千分位 */
+export function describeHistorySync({ uploaded, downloaded, total }: HistorySyncResult): string {
+  const parts: string[] = [];
+  if (uploaded > 0) parts.push(`上传 ${formatCount(uploaded)} 条`);
+  if (downloaded > 0) parts.push(`下载 ${formatCount(downloaded)} 条`);
+  return parts.length ? parts.join(' · ') : `无变化，共 ${formatCount(total)} 条记录`;
+}
+
 export async function syncHistory(profile: WebDAVProfile): Promise<HistorySyncResult> {
   const webdav = await client(profile);
   let cloudItems: HistoryItem[] = [];
@@ -88,8 +97,7 @@ export async function syncHistory(profile: WebDAVProfile): Promise<HistorySyncRe
   }
 
   await recordSync(profile, 'history', 'success');
-  const summary = uploaded || downloaded ? `上传 ${uploaded} 条 · 下载 ${downloaded} 条` : `无变化，共 ${total} 条记录`;
-  await writeSyncLog('sync_history', 'success', summary, profile);
+  await writeSyncLog('sync_history', 'success', describeHistorySync({ uploaded, downloaded, total }), profile);
   return { uploaded, downloaded, total };
 }
 
@@ -100,7 +108,7 @@ export async function pushHistory(profile: WebDAVProfile): Promise<number> {
     const count = await historyDB.getCount();
     await webdav.client.putFile(webdav.remotePath, await historyDB.exportToJSON());
     await recordSync(profile, 'history', 'success');
-    await writeSyncLog('upload_history_cloud', 'success', `${count} 条记录`, profile);
+    await writeSyncLog('upload_history_cloud', 'success', `${formatCount(count)} 条记录`, profile);
     return count;
   } catch (error) {
     const reason = extractErrorCode(error);

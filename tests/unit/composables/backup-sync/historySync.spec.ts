@@ -33,7 +33,7 @@ vi.mock('@/composables/backup-sync/backupSyncUtils', async () => {
   };
 });
 
-import { pushHistory, syncHistory } from '@/composables/backup-sync/HistorySync';
+import { describeHistorySync, pushHistory, syncHistory } from '@/composables/backup-sync/HistorySync';
 import { CLOUD_HISTORY_EMPTY_REASON, SyncFailure } from '@/composables/backup-sync/backupSyncUtils';
 
 const profile: WebDAVProfile = { id: 'p1', name: '坚果云', url: 'https://dav.example.com', username: 'u', passwordEncrypted: 'x', remotePath: '/PicNexus/' };
@@ -43,6 +43,14 @@ beforeEach(() => {
   m.putFile.mockResolvedValue(undefined);
   m.importFromJSON.mockResolvedValue({ imported: 0, added: 0, updated: 0, skipped: 0 });
   m.getAllItems.mockResolvedValue([]);
+});
+
+describe('describeHistorySync', () => {
+  it('最近操作里的说法：为 0 的一半不写，大数字千分位', () => {
+    expect(describeHistorySync({ uploaded: 0, downloaded: 5, total: 12_483 })).toBe('下载 5 条');
+    expect(describeHistorySync({ uploaded: 1_200, downloaded: 3, total: 12_483 })).toBe('上传 1,200 条 · 下载 3 条');
+    expect(describeHistorySync({ uploaded: 0, downloaded: 0, total: 12_483 })).toBe('无变化，共 12,483 条记录');
+  });
 });
 
 describe('syncHistory', () => {

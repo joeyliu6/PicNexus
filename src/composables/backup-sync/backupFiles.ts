@@ -8,6 +8,7 @@ import { emitHistoryUpdated } from '@/events/cacheEvents';
 import { isValidUserConfig, type UserConfig } from '@/config/types';
 import { configStore } from '@/store/instances';
 import { secureStorage, isPasswordEncryptedData } from '@/security/crypto';
+import { formatCount } from '@/utils/formatters';
 import { exportTextFile, importTextFile } from '@/utils/userFiles';
 import { writeSyncLog } from './backupSyncUtils';
 import { mergeCloudConfig, type DecryptContent } from './ConfigSync';
@@ -94,8 +95,8 @@ export async function importHistory(content: string): Promise<{ added: number; s
     const total = await historyDB.getCount();
     invalidateCache();
     emitHistoryUpdated();
-    const skipped = imported.skipped > 0 ? `，跳过 ${imported.skipped} 条格式无效记录` : '';
-    await writeSyncLog('import_history_local', 'success', `新增 ${imported.added} 条，共 ${total} 条${skipped}`);
+    const skipped = imported.skipped > 0 ? `，跳过 ${formatCount(imported.skipped)} 条格式无效记录` : '';
+    await writeSyncLog('import_history_local', 'success', `新增 ${formatCount(imported.added)} 条，共 ${formatCount(total)} 条${skipped}`);
     return { added: imported.added, skipped: imported.skipped, total };
   } catch (error) {
     await writeSyncLog('import_history_local', 'failed', error instanceof Error ? error.message : String(error));
