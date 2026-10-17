@@ -17,7 +17,7 @@ use tauri::Emitter;
 const MAX_SCAN_DEPTH: usize = 64;
 
 /// 修复前原件的备份目录名。
-/// 必须与 JS 侧 `src/composables/md-rescue/useFileBackup.ts` 的 `BACKUP_DIR_NAME` 保持一致
+/// 必须与 JS 侧 `src/views/health/docFiles.ts` 的 `BACKUP_DIR_NAME` 保持一致
 /// （由 `scripts/check-cross-language-constants.mjs` 守着）。
 const BACKUP_DIR_NAME: &str = ".picnexus-backup";
 

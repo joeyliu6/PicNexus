@@ -98,14 +98,14 @@ const PAIRS = [
   },
   {
     name: 'BACKUP_DIR_NAME',
-    why: 'MD 修复的备份目录名。前端用它建备份目录，Rust 扫描用它跳过备份目录；一旦漂移，扫描会把"修复前的原件"当正常文档再修一遍，备份被改写、还会产生嵌套备份',
+    why: '文档修复的备份目录名。前端用它建备份目录，Rust 扫描用它跳过备份目录；一旦漂移，扫描会把"修复前的原件"当正常文档再修一遍，备份被改写、还会产生嵌套备份',
     sources: [
       {
         file: 'src-tauri/src/commands/md_scanner.rs',
         pattern: /const\s+BACKUP_DIR_NAME\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
       },
       {
-        file: 'src/composables/md-rescue/useFileBackup.ts',
+        file: 'src/views/health/docFiles.ts',
         pattern: /const\s+BACKUP_DIR_NAME\s*=\s*'((?:\\.|[^'\\])*)'/,
       },
     ],
