@@ -98,11 +98,14 @@ vi.mock('@tauri-apps/plugin-sql', () => ({ ... }));
 | `npm run test:run` | `test:unit` 的别名，PR 模板里使用这个名字 |
 | `npm run test:coverage` | 跑 Vitest 并生成 `coverage/`，受 `vitest.config.ts` 阈值约束 |
 | `npm run test:visual` | 跑 Playwright 视觉截图 **+ 跨引擎布局哨兵**，自动启动 `tests/visual` Vite harness |
-| `npm run test:visual:update` | 更新视觉快照（只跑 `desktop-*` 两个 project），必须人工确认 diff |
+| `npm run test:visual:update` | 更新视觉快照（`desktop-*` 与 `redesign-*` 四个 project），必须人工确认 diff |
+| `npm run snapshots:noise` | 重录后把工作区里改过的基准图和 `HEAD` 逐像素比，分出「渲染噪声」与「真改动」；加 `-- --restore` 把噪声图 `git checkout` 回去。默认看 `tests/redesign`，可传别的路径 |
 | `npm run test:visual:webkit` | 只跑 WebKit 布局哨兵，见下面「跨引擎层」 |
 | `npm run test:e2e` | 跑 mocked Playwright E2E（chromium + webkit 两个引擎），自动启动 `tests/e2e` Vite harness |
 | `npm run test:e2e:chromium` / `npm run test:e2e:webkit` | 只跑其中一个引擎 |
 | `npm run test:tauri:e2e` | 跑真实 Tauri 桌面冒烟，会检查 driver、构建 Vite、构建 Tauri debug binary |
+
+Rust 侧起本机 HTTP 服务的测试要绕开系统代理：本机开着系统代理时，reqwest 0.11 不读代理例外名单，发往 `127.0.0.1` 的请求也交给代理，关掉的端口会被代理回一个 502（「连不上」测成了「服务器出错」）。测试里用 `reqwest::Client::builder().no_proxy()`，或跑前设 `NO_PROXY=127.0.0.1,localhost`。
 
 首次跑 WebKit 前需要装一次浏览器：`npx playwright install webkit`（约 50MB，独立于系统，不需要装 Safari）。
 
@@ -298,6 +301,12 @@ npm run test:visual
 - 检查 desktop light / desktop dark 两个 project 的变化是否都合理。
 - 确认没有因为真实 bug、元素重叠、空白页、图片加载失败、文字溢出而直接更新基线。
 - PR 描述里说明哪些截图是预期变化。
+
+新界面基准（`tests/redesign/`，每页一份 `*.visual.spec.ts`，图名前缀是设计画板编号）：
+
+- 跑单页：`npx playwright test tests/redesign/<页>.visual.spec.ts --project=redesign-light --project=redesign-dark --timeout=90000`。让 Playwright 自己起服务，不要先手动起 Vite（会留下占着 1421 / 1423 端口的进程）。
+- 本机截图容差是 `maxDiffPixels: 100`（`tests/redesign/helpers.ts`，CI 照旧用全局 1%）：一个提示点、几处 1px 位移都放得过去。改了外壳、全局令牌、共用组件之后，所有页面都 `--update-snapshots=all` 重录一遍，再跑 `npm run snapshots:noise -- --restore`：只剩下真改动的图，逐张看，确认只有该变的地方在变。
+- 噪声的判据：每个通道最多差 8 个色阶（抗锯齿，肉眼看不出），差异像素可以上千个；真改动（换文案、挪 1px、换颜色）的最大色差都在 90 以上。
 
 禁止把真实 UI 回归直接更新掉。遇到视觉测试失败时，先修 UI；只有确认新 UI 就是目标结果，才运行 `npm run test:visual:update`。
 
