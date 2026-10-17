@@ -67,11 +67,11 @@ function goHosts() {
 }
 
 function goTemplate() {
-  void tauriEmit('navigate-to', { view: 'settings', tab: 'general' });
+  void tauriEmit('navigate-to', { view: 'settings', section: 'customTemplate' });
 }
 
 function goCompression() {
-  void tauriEmit('navigate-to', { view: 'settings', tab: 'compression', section: 'imageCompression' });
+  void tauriEmit('navigate-to', { view: 'settings', section: 'compression' });
 }
 
 function goGallery() {
