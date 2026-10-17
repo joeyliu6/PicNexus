@@ -590,3 +590,60 @@
   /* 确认框里等宽的那一行（P12 的地址）：内边距 8 10 */
   --pn-space-code-x: 10px;
 }
+
+:root {
+  /* 设置页（SettingsScreen.dc.html）
+     二级栏宽 220（窄窗口 176）、内边距 0 12 12；标题行 40、上下 6 / 2、左 8；分组项高 34。
+     内容限宽 680、内边距 8 40 40（窄窗口 8 24 24）；页标题与各组间距 24，组之间 26（备份与同步 24、关于 22）。
+     卡片圆角 12（备份与同步的卡片 14）；行最小高 48、内边距 10 16、间距 16；脚注行高 18；小标题左 4 */
+  --pn-size-settings-nav: 220px;
+  --pn-size-settings-nav-narrow: 176px;
+  --pn-space-settings-nav: 0 12px 12px;
+  --pn-space-settings-nav-head: 6px 0 2px;
+  --pn-size-settings-nav-item: 34px;
+  --pn-size-settings-column: 680px;
+  --pn-space-settings-page: 8px 40px 40px;
+  --pn-space-settings-page-narrow: 8px 24px 24px;
+  --pn-space-settings-groups: 26px;
+  --pn-space-settings-groups-backup: 24px;
+  --pn-space-settings-groups-about: 22px;
+  --pn-radius-settings-card: 12px;
+  --pn-size-settings-row: 48px;
+  --pn-space-settings-row: 10px 16px;
+  --pn-leading-settings-note: 18px;
+  /* 外观三卡：预览高 96、内边距 14 12、条间距 7（标题条 8 高 60% 宽、卡片 28 高、说明条 6 高 40% 宽，圆角 2 / 5）；选中描边 2 + 2 */
+  --pn-size-theme-preview: 96px;
+  --pn-space-theme-preview: 14px 12px;
+  --pn-space-theme-preview-gap: 7px;
+  --pn-size-theme-line: 8px;
+  --pn-size-theme-card: 28px;
+  --pn-size-theme-note: 6px;
+  --pn-radius-theme-line: 2px;
+  --pn-radius-theme-card: 5px;
+  /* 首页背景装饰行：内边距 12 16；两张缩略图 64×42、圆角 7、间距 6；缩略图里的花瓣 22（右 5 上 6） */
+  --pn-space-decor-row: 12px 16px;
+  --pn-size-decor-thumb-w: 64px;
+  --pn-size-decor-thumb-h: 42px;
+  --pn-radius-decor-thumb: 7px;
+  --pn-size-decor-petals: 22px;
+  --pn-space-decor-petals-right: 5px;
+  /* 外观预览与背景装饰缩略图画的是固定的浅 / 深两种样子，不随当前主题变 */
+  --pn-theme-light-side: #F3F3F3;
+  --pn-theme-light-main: #FFFFFF;
+  --pn-theme-light-line: #E5E5E5;
+  --pn-theme-light-card: #F5F5F5;
+  --pn-theme-dark-side: #151517;
+  --pn-theme-dark-main: #1C1C1E;
+  --pn-theme-dark-line: #3D3D42;
+  --pn-theme-dark-card: #2A2A2D;
+  --pn-theme-auto-line: #A3A3A3;
+  --pn-decor-thumb-light: radial-gradient(60% 70% at 85% 25%, rgba(46, 166, 242, 0.16), transparent 70%), #FFFFFF;
+  --pn-decor-thumb-light-ring: 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --pn-decor-thumb-dark: #1C1C1E;
+  --pn-decor-thumb-dark-ring: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --pn-decor-thumb-petal-fill: #2EA6F2;
+  --pn-decor-thumb-petal-line: #4D63F0;
+  --pn-decor-thumb-aurora-a: radial-gradient(closest-side, rgba(46, 166, 242, 0.55), transparent);
+  --pn-decor-thumb-aurora-b: radial-gradient(closest-side, rgba(124, 92, 246, 0.5), transparent);
+  --pn-decor-thumb-blur: 6px;
+}

@@ -65,6 +65,13 @@ export const ICONS = {
   infoRound: [circle(12, 12, 9), p('M12 11v5M12 8h.01')],
   failRound: [circle(12, 12, 9), p('m15 9-6 6M9 9l6 6')],
   shieldCheck: [p('M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z'), p('m9 12 2 2 4-4')],
+  // 设置（SettingsScreen.dc.html 二级栏与卡片）
+  sliders: [p('M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4')],
+  keyboard: [p('M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10')],
+  terminal: [p('M4 5h16v14H4zM8 10l3 2-3 2M13 15h3')],
+  cloud: [p('M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z')],
+  cloudDownload: [p('M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z'), p('M12 11v6M9 14l3 3 3-3')],
+  shield: [p('M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;
