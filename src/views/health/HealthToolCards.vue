@@ -99,7 +99,7 @@ function onBackupAction(): void {
   if (s.phase === 'running') backup.pause();
   else if (s.phase === 'paused') backup.resume();
   else if (s.phase === 'done' && s.failed.length) void backup.retryFailed();
-  else if (backupCard.value.button === '添加图床') void router.push('/hosts');
+  else if (backupCard.value.button === '添加图床') void router.push({ path: '/hosts', query: { add: '' } });
   else emit('openBackup');
 }
 

@@ -2,9 +2,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 
-const state = vi.hoisted(() => ({ update: null as null | { value: boolean }, dead: null as null | { value: number } }));
+const state = vi.hoisted(() => ({
+  update: null as null | { value: boolean },
+  dead: null as null | { value: number },
+  hosts: { value: [] as Array<{ id: string; warning: string | null }> },
+}));
 vi.mock('@/composables/useAutoUpdate', () => ({ useAutoUpdate: () => ({ hasAvailableUpdate: state.update }) }));
 vi.mock('@/views/health/healthBadge', () => ({ useHealthBadge: () => ({ deadCount: state.dead }) }));
+vi.mock('@/composables/upload/useUploadController', () => ({ useUploadController: () => ({ hosts: state.hosts }) }));
 
 import { useNavBadges } from '@/shell/useNavBadges';
 
@@ -22,5 +27,15 @@ describe('useNavBadges', () => {
     state.update = ref(true);
     state.dead = ref(1);
     expect(useNavBadges().value).toEqual({ settings: 'brand', health: 'warning' });
+  });
+
+  it('图床：已添加的图床有问题时一个琥珀点', () => {
+    state.update = ref(false);
+    state.dead = ref(0);
+    state.hosts = ref([{ id: 'jd', warning: null }, { id: 'weibo', warning: '登录已失效' }]);
+    const badges = useNavBadges();
+    expect(badges.value).toEqual({ hosts: 'warning' });
+    state.hosts.value = [{ id: 'jd', warning: null }];
+    expect(badges.value).toEqual({});
   });
 });

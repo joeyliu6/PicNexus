@@ -3,6 +3,7 @@
 // 没有二级页面；文档修复、补充备份是弹窗。这里只接线：数据与动作在 useLinkHealth / useHealthRepair / useHealthRowActions。
 import { computed, onActivated, onDeactivated, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
+import { useRoute, useRouter } from 'vue-router';
 import UploadCalendar from '@/components/biz/UploadCalendar.vue';
 import YearPills from '@/components/biz/YearPills.vue';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
@@ -26,6 +27,8 @@ import { repairState, useLinkHealth } from './useLinkHealth';
 import { useSupplementBackup } from './useSupplementBackup';
 
 const health = useLinkHealth();
+const route = useRoute();
+const router = useRouter();
 const repair = useHealthRepair();
 const docFolders = useDocFolders();
 const backup = useSupplementBackup();
@@ -189,6 +192,16 @@ watch(() => backup.state.phase, (phase) => { if (phase === 'done' || phase === '
 
 // ---- 进入 / 离开 ----
 function enter(): void {
+  // 图床页「N 张失效 ›」带 ?host=：清单按这个图床筛（其余筛选清掉，免得被别的条件筛空）
+  const target = route.query.host;
+  if (typeof target === 'string' && target) {
+    host.value = target;
+    reason.value = 'all';
+    listYear.value = 'all';
+    day.value = null;
+    onlyUnfixable.value = false;
+    void router.replace({ path: route.path });
+  }
   refreshNow();
   void health.ensureLoaded();
   if (!repairState.running) void docFolders.scan();

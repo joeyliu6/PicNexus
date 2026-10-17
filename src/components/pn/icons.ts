@@ -59,6 +59,12 @@ export const ICONS = {
   openExternal: [p('M7 17 17 7M8 7h9v9')],
   docRepair: [p('M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z'), p('M14 3v6h6M8 13h8M8 17h5')],
   backupCopy: [rect(9, 9, 12, 12, 2), p('M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1')],
+  // 图床（HostsScreen.dc.html / CookieWindow.dc.html）
+  pencil: [p('M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z')],
+  recheck: [p('M21 12a9 9 0 1 1-2.6-6.4'), p('M21 3v6h-6')],
+  infoRound: [circle(12, 12, 9), p('M12 11v5M12 8h.01')],
+  failRound: [circle(12, 12, 9), p('m15 9-6 6M9 9l6 6')],
+  shieldCheck: [p('M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z'), p('m9 12 2 2 4-4')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

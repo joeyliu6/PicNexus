@@ -180,7 +180,7 @@ export const HOST_CATALOG: readonly HostDescriptor[] = [
     id: 'webdav', kind: 'webdav', catalogName: 'WebDAV', catalogSub: 'NAS、坚果云等', intro: 'WebDAV · 自定义名称', type: 'WebDAV',
     testLabel: '测试连接', steps: OBJECT_STEPS, publicRisk: false,
     fields: [
-      { key: 'url', label: '服务器 URL', wide: true, placeholder: 'https://dav.example.com/dav', help: '局域网地址可用 HTTP，公网地址仅支持 HTTPS' },
+      { key: 'url', label: '服务器 URL', wide: true, placeholder: 'https://dav.example.com/dav' },
       { key: 'username', label: '用户名' },
       { key: 'passwordEncrypted', label: '密码', secret: true },
       { key: 'remotePath', label: '远程路径', placeholder: '/picnexus' },

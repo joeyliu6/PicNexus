@@ -536,6 +536,8 @@
   --pn-size-host-detail: 720px;
   --pn-space-host-detail: 4px 32px 24px;
   --pn-space-host-gap: 18px;
+  /* 一节之内（标题、列表、底部按钮）间距 10；设置区各节之间 16 */
+  --pn-space-host-section: 10px;
   --pn-space-host-head-gap: 14px;
   --pn-size-host-head-icon: 48px;
   --pn-radius-host-head-icon: 12px;
@@ -559,6 +561,8 @@
   --pn-space-host-badge-x: 6px;
   --pn-radius-host-badge: 5px;
   --pn-space-host-template: 10px 14px;
+  /* 输入框里的小按钮（查看 / 取消 / 隐藏）高 24 */
+  --pn-size-host-field-action: 24px;
   /* 目录：搜索框高 34、圆角 9、左右 12；卡片高 72、内边距 0 14 0 12、圆角 12、间距 12；图标底板 36（圆角 10）、图标 20；悬停描边 1.5；底部提示内边距 12 14 */
   --pn-size-catalog-search: 34px;
   --pn-radius-catalog-search: 9px;

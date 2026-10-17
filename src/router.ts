@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-rout
 import HomeView from '@/views/home/HomeView.vue';
 import GalleryView from '@/views/gallery/GalleryView.vue';
 import HealthView from '@/views/health/HealthView.vue';
+import HostsView from '@/views/hosts/HostsView.vue';
 import SettingsView from '@/components/views/SettingsView.vue';
 
 export const routes: RouteRecordRaw[] = [
@@ -10,7 +11,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/home', component: HomeView, meta: { pageKey: 'home' } },
   { path: '/gallery', component: GalleryView, meta: { pageKey: 'gallery' } },
   { path: '/health', component: HealthView, meta: { pageKey: 'health' } },
-  { path: '/hosts', component: SettingsView, props: { fixedTab: 'hosting' }, meta: { pageKey: 'hosts', legacyTitle: '图床' } },
+  { path: '/hosts', component: HostsView, meta: { pageKey: 'hosts' } },
   { path: '/settings', component: SettingsView, meta: { pageKey: 'settings', legacyTitle: '设置' } },
   { path: '/:pathMatch(.*)*', redirect: '/home' },
 ];
