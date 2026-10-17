@@ -30,7 +30,7 @@ const FORMATS: readonly PnSegment<CompressionOutputFormat>[] = (['original', 'we
 const NUMBERS: { key: NumberField; label: string; unit: string; help: string }[] = [
   { key: 'quality', label: '质量', unit: '', help: '1–100，越高越清晰、文件越大' },
   { key: 'maxLongSide', label: '长边上限', unit: 'px', help: '0 = 不限制' },
-  { key: 'scalePercent', label: '缩放', unit: '%', help: '100 = 不缩放；设了长边上限时以长边为准' },
+  { key: 'scalePercent', label: '缩放', unit: '%', help: '100 = 不缩放' },
   { key: 'skipIfSmallerKB', label: '小于此大小不压缩', unit: 'KB', help: '0 = 全部压缩' },
 ];
 
