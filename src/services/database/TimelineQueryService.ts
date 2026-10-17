@@ -41,7 +41,7 @@ const copyLinkField = (field: string) => `json_extract(link_check_status, '$."' 
  * 复制链接的健康状况，取值见 CopyLinkHealth。
  * 没检测过、或检测还停在 pending 都算「尚未检测」；判失效但浏览器可能还能打开的算「可能受限」。
  */
-const COPY_LINK_HEALTH_SQL = `CASE
+export const COPY_LINK_HEALTH_SQL = `CASE
   WHEN ${copyLinkField('isValid')} IS NULL OR ${copyLinkField('errorType')} = 'pending' THEN 'unchecked'
   WHEN ${copyLinkField('isValid')} = 1 THEN 'ok'
   WHEN ${copyLinkField('browserMightWork')} = 1 THEN 'limited'

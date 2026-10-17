@@ -31,6 +31,7 @@ import {
 } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByIdsQuery } from './MigrationQuery';
+import { getHostUsageQuery, type HostUsage } from './HostUsageQuery';
 import {
   getDayStatsQuery,
   getItemsByDayRangeQuery,
@@ -624,6 +625,9 @@ class HistoryDatabase {
     );
     return rows;
   }
+
+  /** 图床页「使用情况」（委托 HostUsageQuery） */
+  async getHostUsage(hostId: string): Promise<HostUsage> { return getHostUsageQuery(await this.connection.getDb(), hostId); }
 
   /** 按 ID 批量取记录，保持输入顺序（委托 MigrationQuery） */
   async getItemsByIds(ids: string[]): Promise<HistoryItem[]> { return getItemsByIdsQuery(await this.connection.getDb(), ids); }
