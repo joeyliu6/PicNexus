@@ -6,6 +6,13 @@ import type { UiPlatform } from './platform';
 const MAC_ORDER = ['Control', 'Alt', 'Shift', 'Command'] as const;
 const MAC_SYMBOL: Record<string, string> = { Control: '⌃', Alt: '⌥', Shift: '⇧', Command: '⌘' };
 
+/** 符号键、方向键按键帽上的样子写（Tauri 写法是键名，如 Comma、Up） */
+const KEY_SYMBOL: Record<string, string> = {
+  Comma: ',', Period: '.', Slash: '/', Backslash: '\\', Semicolon: ';', Quote: "'", Backquote: '`',
+  Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',
+  Up: '↑', Down: '↓', Left: '←', Right: '→',
+};
+
 function normalizeModifier(part: string, platform: UiPlatform): string | null {
   const key = part.toLowerCase();
   if (key === 'commandorcontrol' || key === 'cmdorctrl') return platform === 'macos' ? 'Command' : 'Control';
@@ -24,11 +31,11 @@ export function formatShortcut(accelerator: string, platform: UiPlatform): strin
   for (const part of parts) {
     const modifier = normalizeModifier(part, platform);
     if (modifier) modifiers.add(modifier);
-    else key = part.length === 1 ? part.toUpperCase() : part;
+    else key = KEY_SYMBOL[part] ?? (part.length === 1 ? part.toUpperCase() : part);
   }
   if (platform === 'macos') {
     return MAC_ORDER.filter((m) => modifiers.has(m)).map((m) => MAC_SYMBOL[m]).join('') + key;
   }
-  const label: Record<string, string> = { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Command: 'Win' };
+  const label: Record<string, string> = { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Command: platform === 'linux' ? 'Super' : 'Win' };
   return [...['Control', 'Alt', 'Shift', 'Command'].filter((m) => modifiers.has(m)).map((m) => label[m]), key].join('+');
 }

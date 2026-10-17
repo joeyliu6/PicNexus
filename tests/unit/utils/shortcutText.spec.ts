@@ -12,6 +12,17 @@ describe('formatShortcut', () => {
     expect(formatShortcut('Alt+CommandOrControl+k', 'macos')).toBe('⌥⌘K');
   });
 
+  it('writes punctuation and arrow keys as symbols, not their key names', () => {
+    expect(formatShortcut('CommandOrControl+Comma', 'windows')).toBe('Ctrl+,');
+    expect(formatShortcut('CommandOrControl+Backslash', 'macos')).toBe('⌘\\');
+    expect(formatShortcut('Alt+Shift+Up', 'linux')).toBe('Alt+Shift+↑');
+  });
+
+  it('calls the Super key Win on Windows and Super on Linux', () => {
+    expect(formatShortcut('Super+Shift+C', 'windows')).toBe('Shift+Win+C');
+    expect(formatShortcut('Super+Shift+C', 'linux')).toBe('Shift+Super+C');
+  });
+
   it('keeps an empty accelerator empty', () => {
     expect(formatShortcut('', 'windows')).toBe('');
   });
