@@ -40,6 +40,9 @@ export interface ThemeConfig {
 
   /** 过渡动画持续时间（毫秒） */
   transitionDuration: number;
+
+  /** 首页背景装饰（浅色花瓣 / 深色极光，只在快传页）；不设 = 开 */
+  homeDecor?: boolean;
 }
 
 /**

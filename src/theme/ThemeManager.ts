@@ -37,21 +37,32 @@ export class ThemeManager {
 
   async setTheme(mode: ThemeMode): Promise<void> {
     const previousMode = this.config.theme?.mode || 'auto';
-    const nextConfigTheme = {
-      mode,
-      enableTransitions: false,
-      transitionDuration: this.config.theme?.transitionDuration || 300,
-    };
 
     // 先落盘，成功后再改 DOM / 切换监听。避免"DOM 已切到新主题但
     // 磁盘写入失败"，下次启动读旧 config 恢复旧主题导致抽搐。
-    this.config.theme = nextConfigTheme;
+    // 写的是磁盘上的最新配置：手里的 this.config 可能是旧副本（云同步、导入配置直接写 store、
+    // 不发 config-updated），整份写回会把那些改动盖掉。
+    let latest: UserConfig | null = null;
+    try {
+      latest = await this.store.get<UserConfig>('config');
+    } catch (error) {
+      log.warn('读取最新配置失败，按手里的副本写主题', error);
+    }
+    const base = latest ?? this.config;
+    const nextConfigTheme = {
+      ...base.theme,
+      mode,
+      enableTransitions: false,
+      transitionDuration: base.theme?.transitionDuration || 300,
+    };
+    const previousConfig = this.config;
+    this.config = { ...base, theme: nextConfigTheme };
     try {
       await this.store.set('config', this.config);
       await this.store.save();
     } catch (error) {
       // 回滚内存 config，保持与磁盘一致
-      this.config.theme = { ...nextConfigTheme, mode: previousMode };
+      this.config = { ...previousConfig, theme: { ...nextConfigTheme, mode: previousMode } };
       log.error('保存主题配置失败，已回滚', error);
       throw error;
     }
