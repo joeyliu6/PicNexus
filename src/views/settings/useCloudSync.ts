@@ -3,7 +3,7 @@
 // 下载过云端配置（合并改了本机、或覆盖本机）后出现刷新横幅，直到刷新为止。
 import { computed, ref } from 'vue';
 import type { WebDAVProfile } from '@/config/types';
-import { decryptWithPassword } from '@/security/crypto';
+import { decryptWithPassword, secureStorage } from '@/security/crypto';
 import { createLogger } from '@/utils/logger';
 import { formatCount } from '@/utils/formatters';
 import { pullConfig, pushConfig, syncConfig, type DecryptContent } from '@/composables/backup-sync/ConfigSync';
@@ -27,7 +27,10 @@ const unlockRequest = ref<{ verify: (password: string) => Promise<boolean>; canc
 
 const busy = computed(() => phase.value === 'syncing');
 
-const decrypt: DecryptContent = (encrypted) => new Promise((resolve, reject) => {
+/** 本机设过同一个备份密码时钥匙串里的密钥就能解开，不问；解不开（新设备、别的密码）才弹「输入备份密码」 */
+const decrypt: DecryptContent = (encrypted) => secureStorage.decrypt(encrypted).catch(() => askPassword(encrypted));
+
+const askPassword = (encrypted: string) => new Promise<string>((resolve, reject) => {
   unlockRequest.value = {
     verify: async (password) => {
       try {

@@ -8,10 +8,15 @@ const m = vi.hoisted(() => ({
   pushConfig: vi.fn(),
   pushHistory: vi.fn(),
   pullConfig: vi.fn(),
+  keychainDecrypt: vi.fn(),
 }));
 
 vi.mock('@/composables/backup-sync/ConfigSync', () => ({ syncConfig: m.syncConfig, pushConfig: m.pushConfig, pullConfig: m.pullConfig }));
 vi.mock('@/composables/backup-sync/HistorySync', () => ({ syncHistory: m.syncHistory, pushHistory: m.pushHistory }));
+vi.mock('@/security/crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/security/crypto')>()),
+  secureStorage: { decrypt: m.keychainDecrypt },
+}));
 
 import { SyncFailure } from '@/composables/backup-sync/backupSyncUtils';
 import { __resetCloudSyncForTests, describeSync, useCloudSync } from '@/views/settings/useCloudSync';
@@ -24,6 +29,7 @@ beforeEach(() => {
   for (const fn of Object.values(m)) fn.mockReset();
   m.syncConfig.mockResolvedValue({ changed: false });
   m.syncHistory.mockResolvedValue({ uploaded: 0, downloaded: 0, total: 0 });
+  m.keychainDecrypt.mockRejectedValue(new Error('需要备份密码'));
 });
 
 describe('describeSync', () => {
@@ -102,11 +108,18 @@ describe('useCloudSync', () => {
   it('加密内容：输错密码不放行，输对才继续', async () => {
     const cloud = useCloudSync();
     const pending = cloud.decrypt('PNXPWD:bad');
-    expect(cloud.unlockRequest.value).not.toBeNull();
+    await vi.waitFor(() => expect(cloud.unlockRequest.value).not.toBeNull());
     await expect(cloud.unlockRequest.value!.verify('wrong')).resolves.toBe(false);
     expect(cloud.unlockRequest.value).not.toBeNull();
     cloud.unlockRequest.value!.cancel();
     await expect(pending).rejects.toThrow('user_cancelled');
+    expect(cloud.unlockRequest.value).toBeNull();
+  });
+
+  it('本机设过同一个备份密码：直接用本机的密钥解开，不再问密码', async () => {
+    m.keychainDecrypt.mockResolvedValue('{"plain":true}');
+    const cloud = useCloudSync();
+    await expect(cloud.decrypt('PNXPWD:mine')).resolves.toBe('{"plain":true}');
     expect(cloud.unlockRequest.value).toBeNull();
   });
 });
