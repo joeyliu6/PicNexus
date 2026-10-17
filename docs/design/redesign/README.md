@@ -113,7 +113,7 @@
 | 2 基础件 | Pn 控件、PnToaster / PnConfirmHost（接在 useToast / useUndoToast / useConfirm 下面，调用方式不变）、HostIcon、PetalGlyph、BgDecor、CopyButton、LinkBlock | Controls Patterns PetalScale HostIcons BgDecor N01 | 已完成 |
 | 3 首页·快传 | 焦点卡、最近上传、批量、三个浮层、URL 下载、渐进提示、第一次使用、全局拖放与粘贴、命令面板、传输中心 | H01–H21 HB1–3 | 已完成 |
 | 4 图库 | 网格 / 列表、筛选、多选、详情、灯箱、刻度条、空与加载、读屏与键盘 | G01–G13 K02 K03 K07 | 已完成 |
-| 5 链接健康 | 状态栏、上传日历、工具卡、失效清单、两个弹窗、自动检测 | L01–L18 K04 K08 | 方案待确认：[health-plan.md](./health-plan.md) |
+| 5 链接健康 | 状态栏、上传日历、工具卡、失效清单、两个弹窗、自动检测 | L01–L18 K04 K08 | 进行中：[health-plan.md](./health-plan.md) |
 | 6 图床 | 双栏、接入表单、目录、测试连接、敏感字段、窄窗口、Cookie 小窗 | P01–P16 K09 | 未开始 |
 | 7 设置 | 7 个分组、快捷键录制、云同步、更新卡片 | S01–S21 K05 K10 | 未开始 |
 | 8 托盘 | 原生菜单、托盘图标进度 | T01–T08 K11 | 未开始 |
