@@ -16,6 +16,10 @@ export type HostTestState =
     reason: string;
     /** 之前几步通过了 */
     passed: TestStep[];
+    /** 「测试并连接」时这一格没填（没发请求） */
+    missing?: boolean;
+    /** 测完之后改过标红的那一格：红框清掉，结果条照旧，直到下一次测试 */
+    edited?: boolean;
   };
 
 /** 后端的通用字段名 → 各图床的配置键（取这个图床表单里有的第一个） */
@@ -75,7 +79,8 @@ export function okDetail(descriptor: HostDescriptor, steps: readonly TestStep[])
 /** 失败结果条：粗体标题 + 灰色的「之前几步通过了 + 处理办法」 */
 export function failSummary(descriptor: HostDescriptor, state: Extract<HostTestState, { phase: 'fail' }>): { title: string; detail: string } {
   const field = state.field ? descriptor.fields.find((f) => f.key === state.field) : undefined;
-  const title = field ? `${field.label} 无效` : state.reason;
+  if (field && state.missing) return { title: joinCjk(field.label, '未填写'), detail: '请填写后再试' };
+  const title = field ? joinCjk(field.label, '无效') : state.reason;
   const passed = state.passed.length === 0 ? '' : state.passed.length === 1 ? '凭证有效' : `${state.passed.map((s) => STEP_WORDS[s]).join('与')}均通过`;
   // 指不到字段、原因里已经带了处理办法（「连接超时，请检查网络后重试」）时不再重复一句
   const advice = !field && /请/.test(state.reason) ? '' : adviceFor(descriptor, state);

@@ -135,8 +135,8 @@ async function testWebdav(record: Record<string, unknown>): Promise<StepOutcome>
       : { ok: false, steps, step: report.failedStep ?? 'credentials', field: report.field, reason: report.message };
   } catch (error) {
     if (isLanHttpUnconfirmedError(error)) throw new LanHttpConsentNeeded(getErrorMessage(error));
-    const reason = getErrorMessage(error) || '连接测试失败';
-    return { ok: false, steps, step: 'credentials', field: /公开/.test(reason) ? 'public_domain' : 'url', reason };
+    // 地址填写问题后端已作为结果返回（带字段）；到这里的是意外错误，不猜是哪一格
+    return { ok: false, steps, step: 'credentials', reason: getErrorMessage(error) || '连接测试失败' };
   }
 }
 
@@ -210,7 +210,7 @@ export function useHostTest() {
   /** 字段改了：那一格的红框随之清掉（结果条留着，直到下一次测试） */
   function clearField(hostId: string, key: string): void {
     const state = states.get(hostId);
-    if (state?.phase === 'fail' && state.field === key) states.set(hostId, { ...state, field: undefined });
+    if (state?.phase === 'fail' && state.field === key) states.set(hostId, { ...state, edited: true });
   }
 
   /** 不经后端直接记一个失败（「测试并连接」时必填项没填） */

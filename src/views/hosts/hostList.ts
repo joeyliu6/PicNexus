@@ -30,8 +30,9 @@ export interface HostRow {
  */
 export function problemLabel(hostId: string, reason: string): string {
   if ((COOKIE_BASED_SERVICES as readonly string[]).includes(hostId)) return '登录失效';
-  if (/凭证|签名|密钥|Key|Token|token|401|403|Unauthorized|Forbidden|InvalidAccessKeyId|SignatureDoesNotMatch|无效/.test(reason)) return '凭证无效';
+  // 先认公开访问：「公开链接无法访问（HTTP 403）」里的 403 是公开读没开，不是凭证错了
   if (/公开|Content-Type/.test(reason)) return '公开链接异常';
+  if (/凭证|签名|密钥|Key|Token|token|Account ID|401|403|Unauthorized|Forbidden|InvalidAccessKeyId|SignatureDoesNotMatch|无效/.test(reason)) return '凭证无效';
   return '连接异常';
 }
 

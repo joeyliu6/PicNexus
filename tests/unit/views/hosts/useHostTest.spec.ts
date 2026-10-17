@@ -63,7 +63,8 @@ describe('useHostTest', () => {
     m.invoke.mockResolvedValue({ success: false, message: '用户名或密码错误', failedStep: 'credentials', field: 'password' });
     const state = await useHostTest().run({ hostId: 'webdav:nas', record: {} });
     expect(state).toMatchObject({ phase: 'fail', field: 'passwordEncrypted' });
-    expect(failSummary(describeHost('webdav:nas')!, state as never)).toEqual({ title: '密码 无效', detail: '请检查用户名和密码' });
+    // 中文字段名与「无效」之间不留空格
+    expect(failSummary(describeHost('webdav:nas')!, state as never)).toEqual({ title: '密码无效', detail: '请检查用户名和密码' });
   });
 
   it('Cookie：登录失效指到 Cookie；正在测时再点忽略', async () => {
@@ -78,11 +79,18 @@ describe('useHostTest', () => {
     expect(await first).toMatchObject({ phase: 'fail', field: 'cookie', reason: 'Cookie 已过期' });
   });
 
-  it('改了标红的那一格，红框清掉', async () => {
+  it('改了标红的那一格，红框清掉，结果条的标题不变（直到下一次测试）', async () => {
     m.invoke.mockResolvedValue({ ok: false, failedStep: 'credentials', field: 'bucket', message: '存储桶不存在', steps: ['credentials', 'write', 'public'] });
     const test = useHostTest();
     await test.run({ hostId: 'r2', record: {} });
     test.clearField('r2', 'bucketName');
-    expect(test.stateOf('r2')).toMatchObject({ phase: 'fail', field: undefined });
+    const state = test.stateOf('r2');
+    expect(state).toMatchObject({ phase: 'fail', field: 'bucketName', edited: true });
+    expect(failSummary(describeHost('r2')!, state as never).title).toBe('存储桶无效');
+  });
+
+  it('必填项没填：标题写「X 未填写」，不说「无效」，也不叫人去后台重新复制', () => {
+    const state = { phase: 'fail', step: 'credentials', field: 'token', reason: '请填写 Token', passed: [], missing: true };
+    expect(failSummary(describeHost('github')!, state as never)).toEqual({ title: 'Token 未填写', detail: '请填写后再试' });
   });
 });

@@ -32,6 +32,12 @@ describe('problemLabel', () => {
     expect(problemLabel('webdav:a', '图片已上传，但公开链接无法访问 (HTTP 404)')).toBe('公开链接异常');
     expect(problemLabel('r2', 'timed out')).toBe('连接异常');
   });
+
+  it('公开链接返回 403 是公开访问的问题，不是凭证；Account ID 不对算凭证', () => {
+    expect(problemLabel('tencent', '图片已写入，但公开链接无法访问（HTTP 403）')).toBe('公开链接异常');
+    expect(problemLabel('r2', 'Cloudflare 找不到这个 Account ID')).toBe('凭证无效');
+    expect(problemLabel('r2', '密钥没有访问这个存储桶的权限，请在 Cloudflare 后台为它授予读写权限')).toBe('凭证无效');
+  });
 });
 
 describe('buildCatalog', () => {
