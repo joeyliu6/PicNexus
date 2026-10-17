@@ -108,12 +108,13 @@ describe('useGlobalUploadInput', () => {
     wrapper.unmount();
   });
 
-  it('leaves drops on the legacy health page to that page', async () => {
+  // 链接健康页按新设计重写后不再自己接 .md，拖入回到全局上传入口
+  it('uploads drops on the 链接健康 page like on every other page', async () => {
     const { wrapper, overlay } = await mountInput('/health');
-    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/notes.md'] } });
-    expect(overlay().active).toBe(false);
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/a.png'] } });
+    expect(overlay().active).toBe(true);
     m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
-    expect(m.uploadFiles).not.toHaveBeenCalled();
+    expect(m.uploadFiles).toHaveBeenCalledWith(['C:/a.png']);
     wrapper.unmount();
   });
 });

@@ -21,6 +21,8 @@ import type { NavItem } from './navItems';
 import { useUploadController } from '@/composables/upload/useUploadController';
 import { useRecentUploads } from '@/composables/history/useRecentUploads';
 import { createLogger } from '@/utils/logger';
+import { installAutoCheck } from '@/views/health/autoCheck';
+import { installHealthBadge } from '@/views/health/healthBadge';
 
 const log = createLogger('AppShell');
 
@@ -39,6 +41,8 @@ useAppShortcuts();
 
 const disposers: UnlistenFn[] = [];
 onMounted(async () => {
+  // 链接健康：侧栏琥珀点与定期自动检测，应用开着就在（不必先打开那一页）
+  disposers.push(installHealthBadge(), installAutoCheck());
   // 两件事互不依赖：一件失败不能拖住另一件
   await Promise.all([
     upload.init().then((dispose) => disposers.push(dispose)).catch((error) => log.error('上传控制器初始化失败', error)),

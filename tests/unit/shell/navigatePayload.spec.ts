@@ -19,8 +19,8 @@ describe('resolveNavigateTarget', () => {
       .toEqual({ path: '/settings', settingsTab: 'compression', settingsSection: 'imageCompression' });
   });
 
-  it('passes the link-check tab through', () => {
-    expect(resolveNavigateTarget({ view: 'link-check', tab: 'rescue' })).toEqual({ path: '/health', linkCheckTab: 'rescue' });
+  it('opens 链接健康 for the old link-check view with a tab (the new page has no tabs)', () => {
+    expect(resolveNavigateTarget({ view: 'link-check', tab: 'rescue' })).toEqual({ path: '/health' });
   });
 
   it('ignores unknown or malformed payloads', () => {

@@ -1,13 +1,12 @@
 // 「navigate-to」事件 → 路由
 // 托盘（Rust 与托盘窗口）和应用内各处仍按旧的视图名发事件：
 //   'upload' | 'history' | 'link-check' | 'settings'，或 { view, tab?, section? }
-// 这里统一翻译成新的页面路径；设置页的二级定位（tab / section）与链接健康的标签照旧透传。
+// 这里统一翻译成新的页面路径；设置页的二级定位（tab / section）照旧透传。
 
 export interface NavigateTarget {
   path: string;
   settingsTab?: string;
   settingsSection?: string;
-  linkCheckTab?: string;
 }
 
 export type NavigatePayload = string | { view?: unknown; tab?: unknown; section?: unknown } | null | undefined;
@@ -36,6 +35,5 @@ export function resolveNavigateTarget(payload: NavigatePayload): NavigateTarget 
     if (tab === 'hosting') return { path: '/hosts', settingsSection: section };
     return { path, settingsTab: tab, settingsSection: section };
   }
-  if (payload.view === 'link-check') return { path, linkCheckTab: tab };
   return { path };
 }

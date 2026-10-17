@@ -231,6 +231,8 @@
   --pn-space-transfer-top: 44px;
   --pn-space-transfer-gap: 18px;
   --pn-space-transfer-x: 18px;
+  /* 传输中心「暂停 / 停止 / 取消」小按钮高 26 */
+  --pn-size-transfer-action: 26px;
   --pn-space-palette-top: 110px;
   --pn-size-palette: 640px;
   --pn-size-palette-item: 36px;

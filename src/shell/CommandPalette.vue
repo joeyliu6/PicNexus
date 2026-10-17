@@ -9,6 +9,7 @@ import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import type { HistoryItem } from '@/config/types';
 import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
+import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
 import { useCopyLink } from '@/composables/useCopyLink';
 import { useThemeManager } from '@/composables/useTheme';
@@ -24,6 +25,7 @@ const palette = useCommandPalette();
 const upload = useUploadController();
 const confirmedHttpHosts = useConfirmedHttpHosts(upload.config);
 const router = useRouter();
+const linkCheck = useLinkCheckManager();
 const { copyLinks } = useCopyLink();
 const theme = useThemeManager();
 const urlDialog = useUrlDialog();
@@ -72,7 +74,11 @@ async function run(entry: CommandEntry, alt: boolean): Promise<void> {
   else if (target.action === 'paste') void upload.pasteClipboard();
   else if (target.action === 'pick') void upload.pickAndUpload();
   else if (target.action === 'url') { await router.push('/home'); urlDialog.show(); }
-  else if (target.action === 'check') await router.push('/health');
+  else if (target.action === 'check') {
+    // 直接开始检测，并到链接健康页看进度（正在检测时只跳过去）
+    await router.push('/health');
+    if (!linkCheck.isChecking.value) void linkCheck.checkAllHistoryLinks();
+  }
   else if (target.action === 'theme') await theme.setTheme(theme.effectiveTheme.value === 'dark' ? 'light' : 'dark');
 }
 

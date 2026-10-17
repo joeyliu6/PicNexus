@@ -1,8 +1,6 @@
 // 全局上传入口（交接说明 8.1）：图片拖进窗口任何一页都会出现遮罩并上传；Ctrl+V / ⌘V 粘贴剪贴板图片。
-// 过渡期：链接健康页仍是旧页面，它的「文档修复」自己接拖入的 .md，那一页先不接管拖放。
 
 import { onMounted, onUnmounted, reactive } from 'vue';
-import { useRoute } from 'vue-router';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEventListener } from '@vueuse/core';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -11,9 +9,6 @@ import { createLogger } from '@/utils/logger';
 import { summarizeDrop } from './dropFiles';
 
 const log = createLogger('GlobalUploadInput');
-
-/** 这些页面自己处理拖入（见文件头） */
-const PAGES_WITH_OWN_DROP = new Set(['/health']);
 
 export interface DropOverlayState {
   active: boolean;
@@ -34,13 +29,10 @@ function isTextTarget(target: EventTarget | null): boolean {
 }
 
 export function useGlobalUploadInput() {
-  const route = useRoute();
   const upload = useUploadController();
   const overlay = reactive<DropOverlayState>({ active: false, imageCount: 0, skippedText: '' });
   let unlisten: UnlistenFn | null = null;
   let disposed = false;
-
-  const handlesDrop = () => !PAGES_WITH_OWN_DROP.has(route.path);
 
   function reset() {
     overlay.active = false;
@@ -51,7 +43,6 @@ export function useGlobalUploadInput() {
   onMounted(async () => {
     try {
       const stop = await getCurrentWebview().onDragDropEvent((event) => {
-        if (!handlesDrop()) return;
         const payload = event.payload;
         if (payload.type === 'leave' || modalOpen()) {
           reset();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 标题栏的传输图标（HomeScreen.dc.html）：有进行中的任务时出现，进度环 + 还在传的张数；点开传输中心
+// 标题栏的传输图标（HomeScreen.dc.html）：有进行中的任务时出现，进度环 + 数字（还在传的张数，补充备份、链接检测各算一项）；点开传输中心
 import { computed } from 'vue';
 import { useTransferCenter } from './useTransferCenter';
 

@@ -1,5 +1,5 @@
 // 应用级跳转：把托盘与应用内各处发来的「navigate-to」事件翻译成路由，
-// 并把设置页的二级定位（tab / section）与链接健康的标签交给旧页面（provide/inject）。
+// 并把设置页的二级定位（tab / section）交给旧页面（provide/inject）。
 // 旧页面按新设计重写后，对应的二级定位改由路由参数承担，这里的 provide 随之删除。
 
 import { onMounted, onUnmounted, provide, ref } from 'vue';
@@ -16,15 +16,12 @@ export function useAppNavigation() {
 
   const settingsTargetTab = ref<string | null>(null);
   const settingsTargetSection = ref<string | null>(null);
-  const linkCheckTargetTab = ref<string | null>(null);
   provide('settingsTargetTab', settingsTargetTab);
   provide('settingsTargetSection', settingsTargetSection);
-  provide('linkCheckTargetTab', linkCheckTargetTab);
 
   function go(target: NavigateTarget): void {
     if (target.settingsTab) settingsTargetTab.value = target.settingsTab;
     if (target.settingsSection) settingsTargetSection.value = target.settingsSection;
-    if (target.linkCheckTab) linkCheckTargetTab.value = target.linkCheckTab;
     router.push(target.path).catch((error) => log.warn('页面跳转失败', error));
   }
 

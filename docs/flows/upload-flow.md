@@ -13,7 +13,7 @@
 ```mermaid
 flowchart TD
     %% 用户输入（拖入与粘贴是全局入口：src/shell/useGlobalUploadInput.ts）
-    A1["拖入窗口任意页面<br/>链接健康页暂由文档修复自己接"] --> B
+    A1["拖入窗口任意页面"] --> B
     A2[选择文件 / 从 URL 下载] --> B
     A3["Ctrl+V / ⌘V 粘贴剪贴板<br/>任意页面；输入框内、弹窗打开时不接"] --> B
 
@@ -340,7 +340,7 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 未知扩展名的文件上传后类型是 `application/octet-stream` | `mime_guess` 无法识别该扩展名，按设计回退 | S3 系图床 → Content-Type |
 | 在图库 / 设置等页按 Ctrl+V 也上传了 | 预期行为：粘贴是全局上传入口（交接说明 8.1），监听在 `src/shell/useGlobalUploadInput.ts` | 图1 节点 A3 |
 | 按 Ctrl+V 没反应 | 焦点在输入框里，或有弹窗开着（`.pn-dialog[data-state="open"]`）——这两种情况有意不接 | 图1 节点 A3 |
-| 拖进窗口没出现遮罩 | 当前在链接健康页：过渡期由文档修复自己接拖入的 .md（`PAGES_WITH_OWN_DROP`） | 图1 节点 A1 |
+| 拖进窗口没出现遮罩 | 有弹窗或命令面板开着（`modalOpen`）——有意不接，免得在弹窗背后悄悄传图 | 图1 节点 A1 |
 | 单张传完复制的不是想要的图床 | 复制来源 = 固定的图床（传上了才算），否则最先完成的；不按配置顺序 | 重试 → 不变量 4 |
 | 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关 | `src/composables/useGlobalShortcut.ts` |
 

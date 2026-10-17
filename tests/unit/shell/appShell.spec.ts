@@ -40,13 +40,6 @@ const SettingsStub = defineComponent({
   },
   template: '<section data-testid="settings" :data-section="section" :data-tab="tab" />',
 });
-const LinkCheckStub = defineComponent({
-  setup() {
-    const tab = inject<Ref<string | null>>('linkCheckTargetTab')!;
-    return { tab };
-  },
-  template: '<section data-testid="health" :data-tab="tab" />',
-});
 const page = (id: string) => defineComponent({ template: `<section data-testid="${id}" />` });
 
 function makeRouter(): Router {
@@ -56,7 +49,7 @@ function makeRouter(): Router {
       { path: '/', redirect: '/home' },
       { path: '/home', component: page('home'), meta: { pageKey: 'home', legacyTitle: '' } },
       { path: '/gallery', component: page('gallery'), meta: { pageKey: 'gallery', legacyTitle: '图库' } },
-      { path: '/health', component: LinkCheckStub, meta: { pageKey: 'health', legacyTitle: '链接健康' } },
+      { path: '/health', component: page('health'), meta: { pageKey: 'health' } },
       { path: '/hosts', component: SettingsStub, meta: { pageKey: 'hosts', legacyTitle: '图床' } },
       { path: '/settings', component: SettingsStub, meta: { pageKey: 'settings', legacyTitle: '设置' } },
     ],
@@ -122,12 +115,12 @@ describe('AppShell', () => {
     expect(router.currentRoute.value.path).toBe('/gallery');
   });
 
-  it('passes the link-check tab and cleans up every listener on unmount', async () => {
+  it('opens 链接健康 from the old link-check view name and cleans up every listener on unmount', async () => {
     const { wrapper } = await mountShell();
 
     fire('navigate-to', { view: 'link-check', tab: 'migrate' });
     await flushPromisesAndTicks();
-    expect(wrapper.get('[data-testid="health"]').attributes('data-tab')).toBe('migrate');
+    expect(wrapper.find('[data-testid="health"]').exists()).toBe(true);
 
     wrapper.unmount();
     expect(unlistenNavigate).toHaveBeenCalled();
