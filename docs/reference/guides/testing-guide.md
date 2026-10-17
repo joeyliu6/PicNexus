@@ -7,7 +7,7 @@
 | 类型 | 目录 / 配置 | 主要用途 |
 |------|-------------|----------|
 | 单元 / composable / 组件测试 | `tests/unit/**/*.spec.ts`，`vitest.config.ts` | 纯逻辑、状态流、Vue 组件交互 |
-| 视觉截图测试 | `tests/visual/*.visual.spec.ts`，`playwright.config.ts` | 页面级 UI 状态截图回归 |
+| 视觉截图测试 | `tests/redesign/*.visual.spec.ts`，`playwright.config.ts` | 新界面每页按设计画板编号截图回归 |
 | mocked E2E | `tests/e2e/*.e2e.spec.ts`，`playwright.e2e.config.ts` | 浏览器环境下验证主流程与 mocked Tauri 边界 |
 | 真实 Tauri E2E | `tests/tauri-e2e/*.tauri.e2e.cjs`，`wdio.tauri.e2e.conf.cjs` | 少量真实桌面壳层冒烟 |
 
@@ -34,11 +34,11 @@ Vitest 使用 `happy-dom`，全局 setup 为 `tests/unit/setup.ts`，当前会�
 | uploader 或 service 分发逻辑 | 单元测试，必要时 mock Tauri invoke | `uploaderFactory.spec.ts`、`multiServiceUploader.spec.ts`、`historyDatabase.spec.ts` |
 | composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD 与节流更新；`useUploadController.spec.ts` 验证上传会话、图床列表与托盘动作；`useLinkCheck.spec.ts`、`tests/unit/views/health/*.spec.ts` 验证业务状态推进 |
 | 组件交互 | 组件测试 | `tests/unit/shell/appShell.spec.ts` 验证侧栏导航、跳转事件、`Ctrl+\` 收起侧栏 |
-| 页面多状态 UI | 视觉截图测试 | 新界面：`tests/redesign/home.visual.spec.ts` 跑真应用 + `tests/e2e/mocks`，按设计画板编号覆盖首页 17 个状态；旧页面：`timeline.visual.spec.ts` 覆盖滚动、骨架屏、lightbox 等状态 |
+| 页面多状态 UI | 视觉截图测试 | 新界面：`tests/redesign/home.visual.spec.ts` 跑真应用 + `tests/e2e/mocks`，按设计画板编号覆盖首页、图库、链接健康、图床、设置各状态 |
 | mocked 原生边界 | mocked E2E | `tests/e2e/app-smoke.e2e.spec.ts` 验证启动不白屏、主导航、设置保存、文件选择、剪贴板、上传后复制链接、历史页壳层、链接检测页 |
 | 真实桌面壳层 | 真实 Tauri E2E | `tests/tauri-e2e/app-smoke.tauri.e2e.cjs` 只验证真实应用启动、标题、主布局和四个主导航 |
 
-视觉测试通过 `tests/visual/harness` 构造稳定页面状态，不依赖真实网络、真实图床或真实 Tauri 后端。新增页面截图时，优先把状态放进 harness，再用 `captureVisualState(page, pageName, state)` 截图。
+视觉测试跑真应用 + `tests/e2e/mocks` 的原生接口模拟：配置、历史、上传结果都在页面加载前用种子写进去（`tests/redesign/helpers.ts`），不依赖真实网络、真实图床或真实 Tauri 后端。
 
 mocked E2E 通过 `tests/e2e/vite.config.ts` 把 Tauri API alias 到 `tests/e2e/mocks/*`，适合验证“前端走到了 native 边界且不会崩”。真实 Tauri E2E 成本高，只保留少量冒烟，不承担业务回归主力。
 
@@ -97,10 +97,9 @@ vi.mock('@tauri-apps/plugin-sql', () => ({ ... }));
 | `npm run test:unit` | 跑全部 Vitest 测试 |
 | `npm run test:run` | `test:unit` 的别名，PR 模板里使用这个名字 |
 | `npm run test:coverage` | 跑 Vitest 并生成 `coverage/`，受 `vitest.config.ts` 阈值约束 |
-| `npm run test:visual` | 跑 Playwright 视觉截图 **+ 跨引擎布局哨兵**，自动启动 `tests/visual` Vite harness |
-| `npm run test:visual:update` | 更新视觉快照（`desktop-*` 与 `redesign-*` 四个 project），必须人工确认 diff |
+| `npm run test:visual` | 跑新界面视觉截图（`redesign-light` / `redesign-dark`），自动启动应用的 Vite 服务（端口 1423） |
+| `npm run test:visual:update` | 重录视觉快照，必须人工确认 diff |
 | `npm run snapshots:noise` | 重录后把工作区里改过的基准图和 `HEAD` 逐像素比，分出「渲染噪声」与「真改动」；加 `-- --restore` 把噪声图 `git checkout` 回去。默认看 `tests/redesign`，可传别的路径 |
-| `npm run test:visual:webkit` | 只跑 WebKit 布局哨兵，见下面「跨引擎层」 |
 | `npm run test:e2e` | 跑 mocked Playwright E2E（chromium + webkit 两个引擎），自动启动 `tests/e2e` Vite harness |
 | `npm run test:e2e:chromium` / `npm run test:e2e:webkit` | 只跑其中一个引擎 |
 | `npm run test:tauri:e2e` | 跑真实 Tauri 桌面冒烟，会检查 driver、构建 Vite、构建 Tauri debug binary |
@@ -173,45 +172,12 @@ Tauri 借用系统 WebView，三个平台不是同一个引擎：
 
 **这是一个刻意的决定，不要"顺手"补上。**
 
-跨引擎的字体栅格化与抗锯齿差异必然超过 `playwright.config.ts` 里 `maxDiffPixelRatio: 0.01` 的容差，做成门禁只会持续误报直到被关掉；而把阈值放宽到能容忍差异之后，它又抓不到任何真实回归。更根本的是，像素比对回答的是「两张照片一样吗」，我们要问的是「排版会不会塌」。
+跨引擎的字体栅格化与抗锯齿差异必然超过像素容差，做成门禁只会持续误报直到被关掉；而把阈值放宽到能容忍差异之后，它又抓不到任何真实回归。更根本的是，像素比对回答的是「两张照片一样吗」，我们要问的是「排版会不会塌」。该做的是断言**由 CSS 直接决定的绝对不变式**——裁切、溢出、越界、地标尺寸，换引擎不会变、零基准图。
 
-替代方案是断言**由 CSS 直接决定的绝对不变式**——裁切、溢出、越界、地标尺寸。这些换引擎不会变，所以零基准图、跨引擎稳定。范式来自 `tests/visual/dialog-consistency.visual.spec.ts`：直接量尺寸，不走像素比对。
+### 现状
 
-### 组成
-
-| Project | 引擎 | 收哪些文件 | 作用 |
-|---------|------|-----------|------|
-| `desktop-light` / `desktop-dark` | chromium | `*.visual.spec.ts` | 像素快照，172 张基准 |
-| `layout-chromium` | chromium | `*.probe.spec.ts` | **参照引擎**，保证豁免名单诚实 |
-| `layout-webkit` | webkit | `*.probe.spec.ts` | 目标，近似 WKWebView / WebKitGTK |
-
-project 级 `testMatch` 是**覆盖**语义，所以两类互不干扰，加 project 不会动到任何一张基准图。
-
-`tests/visual/cross-engine/` 下三份：
-
-- `layout-invariants.probe.spec.ts` — 86 个 harness 状态 × 7 条规则（运行时报错 / 外壳填满视口 / 无横滚 / 地标尺寸 / 横向裁切 / 越出视口 / 纵向裁切）
-- `dialog-shell.probe.spec.ts` — 11 个弹窗的外壳规格，只断言引擎无关量（长写 padding、按钮等高同行），常量与 `dialog-consistency` 共用 `tests/visual/dialogSpec.ts`
-- `probe-self-check.probe.spec.ts` — **探针自检**：注入已知塌陷验证能报出来，注入滚动容器 / 省略号 / 图片裁切盒验证不误报。一条从不报警的规则等于没有规则，有人为了消除误报去放宽规则时，这份会先失败
-
-### 哨兵报警了怎么办
-
-先看它在哪个 project 上红：
-
-| 情况 | 判断 |
-|------|------|
-| 只在 `layout-webkit` 红 | **高度可疑是真实的 macOS / Linux 缺陷**。看报告里的 `offenders` 和 `overflowBy` 定位到具体元素，重点查固定 `height` + `overflow:hidden` 的盒子、flex 的 `min-width/min-height: auto` 差异 |
-| 两个 project 都红 | 是既有缺陷或规则本身有问题，与引擎无关 |
-| 确认是引擎行为且 App 不该迎合 | 登记到 `tests/visual/cross-engine/exemptions.ts`，reason 写明差多少 px、为什么视觉上可接受 |
-
-分诊时用只报告不失败的模式，一次拿到全部数据：
-
-```bash
-PROBE_REPORT=1 npx playwright test -c playwright.config.ts --project=layout-chromium
-```
-
-⚠️ 豁免的 reason **不能写「WebKit 上就是这样」**——那正是这套哨兵要抓的东西。
-
-新增 harness 状态时把它加进 `tests/visual/states.ts`（像素快照与哨兵共用这一份），否则会出现「只加了截图、漏了哨兵」。
+- WebKit 这一层现在只有 mocked E2E 的 `webkit` project（`npm run test:e2e:webkit`）：跑得通主要流程，但不量排版。
+- 量排版的跨引擎布局哨兵（在 Chromium 与 WebKit 上各跑一遍、断言上面那些不变式）目前没有，接到 `tests/redesign/` 的新页面上记在 `docs/TODO.md`「不给 WebKit 建像素基准图」。
 
 ### 局限：它抓不到什么
 
@@ -220,11 +186,11 @@ PROBE_REPORT=1 npx playwright test -c playwright.config.ts --project=layout-chro
 - **字体完全不对（最大盲区）**。`src/styles/app.css` 的字体栈在真 macOS 上落到 SF Pro / 苹方，在 Windows 的 Playwright WebKit 上落到微软雅黑。所有由字体度量驱动的差异（换行位置、按钮实际高度、省略号截断点、CJK 与拉丁混排基线）一条都抓不到。这也正是不做像素基准、不做几何量 diff 的原因——那两样在这个盲区下产出的都是假信号。
 - **Playwright WebKit ≠ WKWebView，也 ≠ WebKitGTK**。Playwright 打包的是 WebKit trunk 构建，比任何已发布 Safari 都新。用户如果在老 macOS 上，那是更早的引擎，**Playwright WebKit 支持的特性它可能不支持**。典型例子：`src/` 里多处 `backdrop-filter` 没写 `-webkit-` 前缀，Playwright WebKit 渲染正常，老 mac 上会直接没有毛玻璃效果——这类问题不改变布局，哨兵抓不到，只能靠 code review。
 - **原生控件与窗口层**：titlebar、托盘、原生菜单、macOS 红绿灯按钮，Playwright 里根本没有窗口 chrome。
-- **DPI / 缩放**：哨兵固定 1280×800 @1x，Retina 2x 与 Linux 分数缩放下的 1px 边框消失、圆角走样抓不到。
+- **DPI / 缩放**：截图固定 @1x，Retina 2x 与 Linux 分数缩放下的 1px 边框消失、圆角走样抓不到。
 - **滚动条占位**：macOS 默认 overlay 滚动条不占宽度，Windows / Linux 传统滚动条占约 15px，本机量不到这个差。
 - **Tauri IPC / 权限 / 文件系统**：E2E 那套全是 `tests/e2e/mocks/*` 的假实现，只验前端时序。
 
-一句话：**它是「结构会不会塌」的哨兵，不是「mac 上长什么样」的替身。**
+一句话：**WebKit 跑得通不等于 mac 上长得对。**
 
 ## CI 策略
 
@@ -237,11 +203,10 @@ PR / push 到 `main` 当前必跑 `.github/workflows/ci.yml` 的 `test` job：
 - Obsidian 插件：独立 `obsidian-plugin` job 执行依赖安装、`npm run ci:obsidian`，并确认构建后的 `plugins/obsidian/main.js` 已提交。
 - 覆盖率：只在 `ubuntu-latest` 跑 `npm run test:coverage`，并上传 `coverage-report` artifact。
 
-视觉测试（含跨引擎布局哨兵）由 `visual-impact` 的 paths-filter 决定是否触发：
+视觉测试由 `visual-impact` 的 paths-filter 决定是否触发：
 
-- PR 改到 `playwright.config.ts` / `tests/visual/**` / `src/**` 的 UI 相关文件时自动跑；每日 schedule 与 `run_visual=true` 的手动触发也会跑。
-- Windows runner 先 `npx playwright install chromium webkit`，再执行 `npm run test:visual`——4 个 project 一起跑（2 个像素快照 + `layout-chromium` + `layout-webkit`），上传 `playwright-visual-report`。
-- **失败阻断**。布局哨兵断言的是绝对不变式，不存在像素测试那种渐进漂移——要么绿，要么是真差异。
+- PR 改到 `playwright.config.ts` / `tests/redesign/**` / `tests/e2e/mocks/**` / `src/**` 的 UI 相关文件时自动跑；每日 schedule 与 `run_visual=true` 的手动触发也会跑。
+- Windows runner 先 `npx playwright install chromium`，再执行 `npm run test:visual`（`redesign-light` / `redesign-dark`），上传 `playwright-visual-report`。
 
 mocked E2E：
 
@@ -285,7 +250,7 @@ release 当前还会跑：
 
 - 本次 PR 明确改变了页面 UI、布局、文案、主题 token 或组件视觉状态。
 - 已确认失败截图对应的是预期变化，而不是真实 UI 回归。
-- 新增 visual harness 状态或新增页面截图。
+- 新增页面截图或新的状态。
 
 更新步骤：
 
@@ -298,7 +263,7 @@ npm run test:visual
 更新后必须人工确认：
 
 - 查看 Playwright HTML report 或 `test-results/` 中的 diff。
-- 检查 desktop light / desktop dark 两个 project 的变化是否都合理。
+- 检查 `redesign-light` / `redesign-dark` 两个 project 的变化是否都合理。
 - 确认没有因为真实 bug、元素重叠、空白页、图片加载失败、文字溢出而直接更新基线。
 - PR 描述里说明哪些截图是预期变化。
 
@@ -315,6 +280,6 @@ npm run test:visual
 - 纯逻辑先写 Vitest 单元测试。
 - composable 只断言公共状态和方法效果，不绑定内部实现细节。
 - 组件测试用 `mountWithDefaults`，尽量断言用户可见行为和 emit。
-- 页面视觉状态放到 `tests/visual/harness`，截图前固定时间、图片、动画。
+- 页面视觉状态用 `tests/redesign/helpers.ts` 的种子在加载前写进去，截图前固定时间、图片、动画。
 - Tauri native 行为优先 mock 到 helper 或 `tests/e2e/mocks`。
 - 真实 Tauri E2E 只做启动和导航级冒烟，不接真实账号、真实图床、真实外网。

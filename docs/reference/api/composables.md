@@ -19,12 +19,14 @@
 | useThumbCache | 缩略图缓存管理 | `src/composables/image/useThumbCache.ts` |
 | useToast | Toast 通知 | `src/composables/useToast.ts` |
 | useTheme | 主题切换 | `src/composables/useTheme.ts` |
-| useSettingsForm | 设置页表单读写、保存防抖、恢复默认设置（不含图床：图床配置只由图床页写） | `src/composables/settings/useSettingsForm.ts` |
-| useSettingsReset | 设置页恢复默认设置编排 | `src/composables/settings/useSettingsReset.ts` |
-| useSettingsActions | 设置页副作用动作（主题/自启动/托盘/统计开关、清缓存、备份 WebDAV 测试），含失败回滚与提示 | `src/composables/settings/useSettingsActions.ts` |
-| useBackupSync | 备份与同步入口（本地/云端 × 配置/历史四条路径的编排） | `src/composables/backup-sync/useBackupSync.ts` |
-| createConfigSyncOps | 配置同步实现；上传前强制 `isPasswordMode` 门禁 + 整份加密 | `src/composables/backup-sync/ConfigSync.ts` |
-| createHistorySyncOps | 历史记录同步实现（增量 + 合并去重） | `src/composables/backup-sync/HistorySync.ts` |
+| useSettingsConfig | 设置页读写配置的唯一入口：`patch(rowId, mutate)` 读磁盘最新配置、只改这一项、排队保存，成功在那一行闪「已保存」，失败通知并回到磁盘值（从不写图床配置） | `src/views/settings/useSettingsConfig.ts` |
+| useSettingsEffects | 要先改系统的设置项：开机自启、关闭到托盘（先改系统、成功才写配置、失败回滚）、统计开关、主题、恢复默认设置 | `src/views/settings/settingsEffects.ts` |
+| useShortcutRecorder | 快捷键录制：录制期间暂停全局快捷键、拦住应用内快捷键，判冲突（本应用 / 应用内 / 其他程序占用） | `src/views/settings/useShortcutRecorder.ts` |
+| useEditorCards | 编辑器与命令行三张卡：Typora / Obsidian 选图床、端口、探测本机服务、命令行加入 PATH | `src/views/settings/useEditorCards.ts` |
+| useCloudSync | 云同步卡状态机（应用级单例）：同步（先配置后记录）、用本机覆盖云端、用云端覆盖本机、加密内容先用本机密钥解再问密码、刷新横幅 `needsReload` | `src/views/settings/useCloudSync.ts` |
+| `ConfigSync.ts`（模块） | 配置的 `syncConfig`（拉取合并 → 加密上传）/ `pushConfig` / `pullConfig`；无备份密码时联网前拒绝；`mergeCloudConfig` 留本机同步连接与文档文件夹 | `src/composables/backup-sync/ConfigSync.ts` |
+| `HistorySync.ts`（模块） | 上传记录的 `syncHistory`（合并去重后回传）/ `pushHistory`；`describeHistorySync` 生成最近操作里的说法 | `src/composables/backup-sync/HistorySync.ts` |
+| `backupFiles.ts` / `backupPassword.ts`（模块） | 手动备份：认出文件是配置还是记录、导出 / 导入；设置 / 修改 / 关闭备份密码 | `src/composables/backup-sync/` |
 | `backupSyncUtils.ts`（模块） | WebDAV 建连与远程路径推导（解密密文密码就在这里）；导出 `getWebDAVClientAndPath` / `writeSyncLog` / `extractErrorCode` / `isWebDAVNotFoundError` | `src/composables/backup-sync/backupSyncUtils.ts` |
 | useClipboardImage | 剪贴板图片处理 | `src/composables/upload/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |

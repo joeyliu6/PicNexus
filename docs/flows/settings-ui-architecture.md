@@ -9,83 +9,53 @@ PicNexus 的配置系统绕开了 `tauri-plugin-store`,采用**自写 SimpleStor
 - **配置存储**:`configStore = new Store('.settings.dat')`,单例,**禁止再次 new**(CLAUDE.md 规定)
 - **加密**:AES-GCM,支持"随机密钥"和"备份密码"两种格式(v2.8+)
 - **并发控制**:全局互斥锁,防止多处同时写入导致数据损坏(v2.9+)
-- **配置入口**:`useConfigManager()` composable,返回响应式 `config` + `loadConfig` + `saveConfig`
+- **配置入口**:`useConfigManager()` composable,返回响应式 `config` + `loadConfig` + `saveConfig`；设置页只经 `useSettingsConfig().patch` 写配置(见图 1)
 - **主题切换**:`ThemeManager` 通过 `document.documentElement.classList` 切换 `.dark-theme` / `.light-theme`
 - **跨组件同步**:保存后 `emit('config-updated')`,其他 composable 通过 `listen('config-updated')` 重新读取
 - **强制规则**:序列化 config 时必须先调 `toPlainConfig()` 剥离 Vue Proxy
 
 ---
 
-## 图 1:设置面板数据流(读 → 改 → 写 → 广播)
+## 图 1:设置页改一项(读最新 → 只改这一项 → 写 → 广播)
 
-展示从组件挂载读配置到用户修改后落盘的完整链路,核心关注 `toPlainConfig` 和 `emit('config-updated')` 两个关键节点。
+设置页不握表单副本:每改一项都从磁盘读最新配置、只改这一项、整份保存。副本整份回写会用旧值盖掉图床页、托盘、云同步刚写进去的东西;图床字段设置页从来不碰。
 
-> **关键源文件**:`src/composables/useConfig.ts`、`src/store/index.ts` (Store 门面)、`src/store/instances.ts`、`src/components/settings/GeneralSettingsPanel.vue`
+> **关键源文件**:`src/views/settings/useSettingsConfig.ts`(唯一写入口)、`src/views/settings/settingsEffects.ts`(要先改系统的几项)、`src/composables/useConfig.ts`、`src/store/instances.ts`
 
 ```mermaid
 flowchart TD
-    %% 启动读配置
-    A[App.vue mounted] --> B[useConfigManager]
-    B --> C[loadConfig]
-    C --> D[configStore.get 'config']
-    D --> D1{存在?}
-    D1 -- 否 --> D2[使用 DEFAULT_CONFIG]
-    D1 -- 是 --> D3[AES-GCM 解密]
-    D3 --> D4{解密成功?}
-    D4 -- 否 --> D5[提示输入备份密码<br/>或降级 DEFAULT_CONFIG]
-    D4 -- 是 --> E
-    D2 --> E
-    D5 --> E
+    A[用户改一项<br/>开关 / 分段 / 失焦的输入框] --> B{要先改系统?}
+    B -- 开机自启 / 关闭到托盘 --> B1[settingsEffects:<br/>先调插件或 Rust 命令]
+    B1 --> B2{系统接受?}
+    B2 -- 否 --> B3[开关弹回 + 红色通知<br/>不写配置]
+    B2 -- 是 --> C
+    B -- 其余 --> C[patch rowId, mutate]
 
-    E[config.value = loaded]
-    E --> F[响应式 Ref 下发到<br/>所有设置面板组件]
+    C --> Q[排进写入队列<br/>串行:后一项读到前一项写完的配置]
+    Q --> D[readFreshConfig<br/>读磁盘上的最新配置]
+    D --> E[mutate 只改这一项]
+    E --> F[useConfigManager.saveConfig draft]
+    F --> F1[toPlainConfig + 验证]
+    F1 --> M[configStore.set<br/>mutex.withLock → 加密 → 原子写]
+    M --> G{成功?}
+    G -- 否 --> G1[红色通知「未能保存 / 原因，请重试」<br/>重新读磁盘,界面回到磁盘值]
+    G1 --> G2[settingsEffects:<br/>把系统也改回去]
+    G -- 是 --> H[那一行闪「✓ 已保存」1.5 秒]
+    M --> O[emit 'config-updated']
+    O --> P1[ThemeManager / 全局快捷键 / 自动更新 /<br/>自动上传剪贴板 / 编辑器服务 重读]
+    O --> P2[设置页回到前台时 reload]
 
-    %% 设置面板改配置
-    F --> G[GeneralSettingsPanel<br/>等面板 Props 接收]
-    G --> H{用户操作}
-    H --> H1[修改主题模式]
-    H --> H2[修改自动启动]
-    H --> H3[修改链接输出格式]
-    H --> H4[修改快捷键]
-
-    H1 & H2 & H3 & H4 --> I[emit 'update:xxx' newVal]
-    I --> J[父组件 SettingsView<br/>修改 config.value.xxx]
-    J --> K{保存策略?}
-    K -- 立即保存 --> K1[emit 'save']
-    K -- 延迟保存 --> K2[debounce 500ms]
-    K1 & K2 --> L[saveConfig newConfig]
-
-    %% 保存链路
-    L --> L1[toPlainConfig input<br/>JSON.parse JSON.stringify<br/>剥离 Vue Proxy]
-    L1 --> L2[内嵌验证:<br/>availableServices 非空<br/>prefixList 非空<br/>selectedIndex 合法]
-    L2 --> L3{验证通过?}
-    L3 -- 否 --> L4[toast 错误<br/>不保存]
-    L3 -- 是 --> M[configStore.set 'config', plain]
-
-    %% Store 写入
-    M --> M1[mutex.withLock<br/>防并发]
-    M1 --> M2[_performWrite]
-    M2 --> M3[读现有 .settings.dat<br/>合并新值]
-    M3 --> M4[secureStorage.encrypt<br/>AES-GCM]
-    M4 --> M5[fs.writeTextFile<br/>原子写]
-    M5 --> M6[更新 memCache]
-
-    M6 --> N[config.value = new ref]
-    N --> O[emit 'config-updated'<br/>timestamp]
-
-    %% 广播
-    O --> P[其他 composable<br/>listen 'config-updated']
-    P --> P1[ThemeManager.applyThemeClass]
-    P --> P2[useAutoUpdate 重读<br/>autoUpdateEnabled]
-    P --> P3[useGlobalShortcut 重注册]
-    P --> P4[其他]
-
-    style A fill:#e3f2fd,stroke:#1976d2
-    style L1 fill:#fff3e0,stroke:#ef6c00
-    style M1 fill:#fff3e0,stroke:#ef6c00
-    style O fill:#e8f5e9,stroke:#2e7d32
-    style L4 fill:#ffebee,stroke:#c62828
+    style C fill:#e3f2fd,stroke:#1976d2
+    style D fill:#fff3e0,stroke:#ef6c00
+    style G1 fill:#ffebee,stroke:#c62828
+    style H fill:#e8f5e9,stroke:#2e7d32
 ```
+
+**要点**
+
+- 文本类(模板、端口、压缩参数)离开输入框或停手半秒才 `patch`;开关、分段改了立刻 `patch`。
+- 主题由 `ThemeManager.setTheme` 自己落盘(同样读最新配置、只改 `theme`),设置页随后 `reload`。
+- 云同步合并 / 覆盖本机、从文件导入配置后,设置页顶部出现刷新横幅(「云端配置已下载，刷新后生效。」/「配置已导入，刷新后生效。」),点「刷新」整窗重新载入。
 
 ---
 
@@ -182,36 +152,25 @@ flowchart LR
 
 ---
 
-## 图 4:设置面板组件清单与职责
+## 图 4:设置页分组与职责
 
-展示 `src/components/settings/` 下各面板的职责划分。新增设置项时先判断归属哪个面板,避免新建冗余面板。图床的连接、凭证与启用不在设置页，在图床页（路由 `/hosts`，`src/views/hosts/`，见 [HANDOFF §4](../design/redesign/handoff/HANDOFF.md)）；设置页的表单从不写图床配置（`useSettingsForm.spec` 有守卫）。
+`src/views/settings/` 每组一个组件,`settingsGroups.ts` 是分组与每一行的表(命令面板的设置项也从这张表生成)。新增设置项时先判断归属哪一组。图床的连接、凭证与启用不在设置页，在图床页（路由 `/hosts`，`src/views/hosts/`，见 [HANDOFF §4](../design/redesign/handoff/HANDOFF.md)）；设置页从不写图床配置。各组设计没画、开发时补的做法见 [decisions/settings.md](../design/redesign/decisions/settings.md)。
 
 ```mermaid
 flowchart TD
-    S[SettingsView 根容器] --> T[Tab 切换]
+    S[SettingsView<br/>二级栏 + 标题行 + 滚动区 + 刷新横幅] --> N[SettingsNav 7 组]
 
-    T --> P1[GeneralSettingsPanel<br/>常规]
-    T --> P3[BackupSyncPanel<br/>备份同步]
-    T --> P4[ImageCompressionPanel<br/>压缩]
-    T --> P5[ExternalEditorPanel<br/>编辑器]
-    T --> P6[AdvancedSettingsPanel<br/>高级]
-    T --> P7[AboutUpdatePanel<br/>关于/更新]
+    N --> G1[GeneralGroup 通用] --> G1A[theme.mode / theme.homeDecor<br/>appBehavior 开机自启 静默启动 关闭到托盘]
+    N --> G2[UploadGroup 上传与链接] --> G2A[linkOutput 默认格式 / 自定义模板 / 自动复制<br/>appBehavior.autoUploadClipboard<br/>imageCompression 方案]
+    N --> G3[ShortcutGroup 快捷键] --> G3A[globalShortcut<br/>录制见 useShortcutRecorder]
+    N --> G4[EditorGroup 编辑器与命令行] --> G4A[editorServer<br/>Typora / Obsidian / CLI]
+    N --> G5[BackupGroup 备份与同步] --> G5A[webdav 同步连接与 syncItems<br/>备份密码 / 导出导入 / 最近操作]
+    N --> G6[PrivacyGroup 数据与隐私] --> G6A[analytics / 数据位置 / 缓存<br/>清空记录 / 恢复默认]
+    N --> G7[AboutGroup 关于] --> G7A[autoUpdate / UpdateCard<br/>帮助与反馈链接]
 
-    %% 各面板对应的 config 字段
-    P1 --> P1A[config.theme<br/>config.appBehavior<br/>config.linkOutput<br/>config.globalShortcut<br/>config.analytics]
-
-    P3 --> P3A[config.webdav]
-    P3 --> P3B[WebDAVConfigCollapsible<br/>子组件]
-
-    P4 --> P4A[config.imageCompression]
-
-    P5 --> P5A[config.editorServer]
-
-    P6 --> P6A[linkPrefixConfig<br/>LinkPrefixItem 数组<br/>其他高级选项]
-
-    P7 --> P7A[展示 version<br/>open_log_dir 按钮<br/>checkForUpdate 按钮]
-    P7 -.详见.-> UPD[auto-update-flow]
-    P7 -.详见.-> LOG[logger-diagnostics-flow]
+    G5 -.详见.-> SYNC[sync-flow]
+    G7 -.详见.-> UPD[auto-update-flow]
+    G7 -.详见.-> LOG[logger-diagnostics-flow]
 
     style S fill:#e3f2fd,stroke:#1976d2
 ```
@@ -237,22 +196,18 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[需求:加一个新设置项<br/>比如 "上传后自动清空剪贴板"] --> B[1. 确定归属面板<br/>→ GeneralSettingsPanel]
-    B --> C[2. src/config/types.ts<br/>在 UserConfig 接口加字段<br/>autoClearClipboard: boolean]
+    A[需求:加一个新设置项] --> B[1. 确定归属分组<br/>在 settingsGroups.ts 的 SETTING_ROWS 加一行<br/>命令面板自动能搜到]
+    B --> C[2. src/config/types.ts<br/>UserConfig 加字段]
     C --> D[3. src/config/defaults.ts<br/>DEFAULT_CONFIG 加默认值]
-    D --> E[4. 面板组件:<br/>Props 接收 autoClearClipboard<br/>v-model 绑定 Switch/Input]
-    E --> F[5. 修改时 emit update:xxx<br/>+ emit save]
-    F --> G[6. 父组件 SettingsView<br/>更新 config.value.autoClearClipboard<br/>调用 saveConfig]
-    G --> H{需要业务消费?}
-    H -- 是 --> H1[在对应 composable<br/>比如 useUpload<br/>读取 config.autoClearClipboard]
-    H -- 否 --> I
-    H1 --> I
-    I{需要跨组件重新初始化?}
-    I -- 是 --> I1[listen 'config-updated'<br/>在相关 composable]
-    I -- 否 --> J
-    I1 --> J
-    J[7. UI 层样式:<br/>禁止硬编码<br/>复用 .toggle-row 等 class]
-    J --> K[8. 文档:<br/>同步更新<br/>reference/api/config.md 等]
+    D --> E[4. 分组组件:<br/>SettingRow + Pn 控件<br/>读 settings.config, 改时 settings.patch rowId]
+    E --> F{要先改系统?}
+    F -- 是 --> F1[写进 settingsEffects:<br/>先改系统、成功才 patch、失败回滚]
+    F -- 否 --> G
+    F1 --> G{业务方要跟着变?}
+    G -- 是 --> G1[消费方 listen 'config-updated'<br/>读 readFreshConfig]
+    G -- 否 --> H
+    G1 --> H[5. 偏好类字段:<br/>resetPreferences.ts 决定恢复默认时回不回去]
+    H --> K[6. 测试 + 文档:<br/>decisions/settings.md 记设计没画的做法]
 
     style A fill:#e3f2fd,stroke:#1976d2
     style K fill:#e8f5e9,stroke:#2e7d32
@@ -292,15 +247,17 @@ interface LinkPrefixItem { name: string; template: string }
 
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
-| 改完设置刷新后丢失 | 忘记 `emit('save')` 或 `saveConfig` 未调用 | 图1 K |
+| 改完设置刷新后丢失 | 没走 `useSettingsConfig().patch`,或 patch 失败(看「未能保存」通知与日志) | 图1 C、G1 |
 | 保存报 `Converting circular structure to JSON` | 没调 `toPlainConfig`,直接序列化 Vue Proxy | 图1 L1 |
-| 多处写配置偶尔丢数据 | 没过 `mutex.withLock`(自己 new Store 绕过了单例) | 图1 M1 |
+| 多处写配置偶尔丢数据 | 没过 `mutex.withLock`(自己 new Store 绕过了单例),或拿旧副本整份回写(设置页一律先 `readFreshConfig`) | 图1 D、M |
 | 修改主题后部分组件没变色 | 该组件用了硬编码颜色,不消费 CSS 变量 | 图3 X |
 | auto 模式系统切换不生效 | `setTheme('auto')` 没正确注册 mediaQuery listener | 图2 E3 |
 | 启动时短暂白屏闪烁(FOUC) | `index.html` 的内联脚本没读 localStorage | 图2 I |
 | 保存后其他组件没重新响应 | 没 `listen('config-updated')`,或监听后没 unlisten 导致重复 | 图1 P |
-| 配置文件打不开/解密失败 | 备份密码机制触发,需要引导用户输入 | 图1 D5 |
+| 配置文件打不开/解密失败 | 备份密码机制触发,启动时弹「还原备份配置」(D01) | [app-lifecycle](./app-lifecycle.md) |
 | 新增字段迁移老配置报错 | 新字段没在 DEFAULT_CONFIG 加默认值,老 config 读到 undefined | 新增流程 C、D |
+| 改了开机自启,系统和开关对不上 | 系统改成功后写配置失败,回滚也失败(看日志「回滚失败」) | 图1 G2 |
+| 云同步后设置页还是旧值 | 下载的配置要刷新后生效,看页顶刷新横幅 | 图1 要点 |
 | 样式被硬编码污染 | 违反 CLAUDE.md,用 `docs/design/tokens.md` 里的变量替换 | 图3 |
 | 新加的链接前缀没生效 / 搜狗风格 URL 不对 | template 占位符拼错,或调用方没过 `applyPrefixTemplate` 直接字符串拼接 | 链接前缀数据结构 |
 | 新建的自定义 S3 / WebDAV 在上传界面看不到 | 还没「测试并连接」成功（草稿不保存），或凭证没填全（被 `unconfigured` 过滤挡住） | 图床「启用」的三个字段 |
@@ -316,4 +273,4 @@ interface LinkPrefixItem { name: string; template: string }
 - [应用生命周期](./app-lifecycle.md) — `loadConfig` 的启动时机
 - [IPC 命令层](./ipc-command-flow.md) — `emit/listen` 的事件系统基础
 - [自动更新](./auto-update-flow.md) — `autoUpdateEnabled` 开关消费样例
-- [日志与诊断](./logger-diagnostics-flow.md) — `AboutUpdatePanel` 另一功能
+- [日志与诊断](./logger-diagnostics-flow.md) — 「关于」里的「打开日志目录」

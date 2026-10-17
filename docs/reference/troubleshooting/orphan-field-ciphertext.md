@@ -66,21 +66,15 @@ await rekeyFieldSecrets(snapshots, swapFn);   // 解开 → 换钥匙 → 用新
 
 ### 半个修复不够：内存里那份密文也要换
 
-搬运只更新了**磁盘和 store 缓存**。设置页的 `formData` 里还有一份 `loadSettings`
-时拷贝的**旧密文**（[useSettingsForm.ts](../../../src/composables/settings/useSettingsForm.ts)
-读配置那两段），不同步的话有两处后果，第二处更严重：
+搬运只更新了**磁盘和 store 缓存**。任何握着一份旧密文副本、之后又整份写回的地方都会出两处问题：
+用新钥匙解不开旧密文，以及**下一次保存把旧密文写回磁盘，刚搬好的新密文被覆盖**。
 
-1. 点眼睛拿 formData 里的旧密文去解，用新钥匙解不开 →「解密失败」
-2. **下一次保存把 formData 原样写回磁盘，刚搬好的新密文被旧的覆盖** → 前功尽弃
+设置页现在不握配置副本：每改一项都经 `useSettingsConfig().patch` 从磁盘读最新配置、只改这一项再保存，
+所以换完钥匙不需要通知设置页刷新。托盘是独立 webview、有自己一份 `secureStorage`，
+换钥匙后由 `changeBackupPassword` 广播 `SECURE_KEY_ROTATED_EVENT`，托盘收到后 `forceReinit()` 换掉旧钥匙。
 
-所以 `BackupPasswordSection` 换完钥匙要 `emit('secrets-rekeyed')`，经 `BackupSyncPanel`
-转到 `SettingsView` 调 `reloadFieldSecrets()`——只补密文那两个字段，
-不走整份 `loadSettings()`（那会把用户没保存的编辑一起冲掉）。
-
-> 📌 **这一步是 2026-08-15 第一次真机验收挂掉的地方。** 日志显示
-> `[FieldSecrets] ✓ 字段级密文搬运完成` 之后 7 秒，点眼睛仍然
-> `[WebDAVBackupConfig] WebDAV 备份密码解密失败`——搬运本身是对的，
-> 错在只搬了磁盘、没搬内存。任何持有密文副本的地方都要一起想到。
+> 📌 **这一步是 2026-08-15 第一次真机验收挂掉的地方**：搬运本身是对的，错在只搬了磁盘、没搬内存。
+> 任何持有密文副本的地方都要一起想到。
 
 ### 探测存量的前提
 
@@ -99,12 +93,11 @@ await rekeyFieldSecrets(snapshots, swapFn);   // 解开 → 换钥匙 → 用新
 | `fieldSecrets.spec.ts` 的「decrypts every inner ciphertext before the key swap」 | 顺序。把 `await swap()` 挪到解密循环之前，这条立刻红 |
 | `fieldSecrets.spec.ts` 的「keeps ciphertext that the old key cannot open」 | 不制造二次伤害 |
 | `fieldSecrets.spec.ts` 的「leaves no half-rekeyed snapshot」 | 加密失败时快照不留半新半旧 |
-| `backupPasswordSection.spec.ts` 的「内层密文搬运」四条 | set / disable 两种模式都搬运；解不开的保留；失败回滚不写盘 |
-| `backupPasswordSection.spec.ts` 的「tells the parent to refresh」 | 换完钥匙必须通知父级重读；验证失败 / 回滚时不通知 |
-| `useSettingsForm.spec.ts` 的「refreshes the ciphertext copies」 | `reloadFieldSecrets` 真的把 formData 里的旧密文换掉了 |
+| `backupPassword.spec.ts`（`changeBackupPassword`） | 设置 / 关闭都搬运且先解后换；解不开的保留并报出；写回失败回滚钥匙；当前密码不对什么都不动；换完广播给托盘 |
+| `useSettingsConfig.spec.ts` 的「never writes host config」 | 设置页每次读磁盘最新配置再改，不拿旧副本回写 |
 
-**做过变异测试**：把 `await swap()` 挪到解密循环之前，两个文件合计 9 条变红；
-删掉 `emit('secrets-rekeyed')`，通知那条变红。
+**做过变异测试**：把 `await swap()` 挪到解密循环之前，`fieldSecrets.spec` 变红；
+去掉跳过当前密码校验、去掉广播、去掉写回失败的回滚，`backupPassword.spec` 各有一条变红。
 
 ## 真机验收（2026-08-15）
 
@@ -118,9 +111,7 @@ await rekeyFieldSecrets(snapshots, swapFn);   // 解开 → 换钥匙 → 用新
 | 上传链路解得开搬运后的密文 | ✅ 报的是「无法连接」而非「密码解密失败」——解密先于连接 |
 | 真实上传到可达的 WebDAV 服务器 | ⬜ 本地 OpenList 没起，见 TODO 待验收 |
 
-> 📌 「不重启触发保存」那条是**唯一**能验证事件从 `BackupPasswordSection` 经
-> `BackupSyncPanel` 传到 `SettingsView` 的手段——两头都有单测，中间那段传递没有。
-> 重启之后再测等于白测：`loadSettings` 已经把旧密文副本换掉了。
+> 📌 以上是 2026-08-15 在旧设置页上做的真机验收；设置页改为按项写配置后不再有「父级重读密文」这一环。
 
 ## 这条修不掉的两件事
 

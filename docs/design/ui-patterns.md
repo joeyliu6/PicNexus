@@ -48,34 +48,7 @@
 
 ### 2. 内联空状态（Inline Empty State）
 
-**使用场景**：侧边栏、小型列表、日志面板等紧凑区域
-
-**组件**：`InlineEmptyState.vue`
-
-**样式规范**：
-- 图标大小：36px（`--text-4xl`）
-- 图标颜色：`--text-disabled`，透明度 0.5
-- 标题字号：13px（`--text-sm`），字重 500
-- 标题颜色：`--text-secondary`
-- 提示字号：12px（`--text-xs`）
-- 提示颜色：`--text-tertiary`
-- 垂直间距：`--space-sm`（8px）
-- 容器内边距：`--space-lg`（16px）
-
-**用法示例**：
-
-```vue
-<InlineEmptyState
-  icon="pi pi-inbox"
-  title="暂无记录"
-/>
-
-<InlineEmptyState
-  icon="pi pi-inbox"
-  title="暂无可迁移的图片"
-  hint="历史记录中没有符合条件的图片"
-/>
-```
+新界面的空状态以图库 G09–G11 为准，所有页面共用一份尺寸（见 [decisions/gallery.md](./redesign/decisions/gallery.md)）；紧凑区域（如设置页「最近操作」）没有内容时整组不显示，不画空状态。
 
 ### 3. 交互空状态（Interactive Empty State）
 
@@ -153,10 +126,7 @@ PrimeVue Dialog 会 Teleport 到 `<body>`，其根节点 `.p-dialog` **不带 Vu
 ### 例外怎么登记
 
 确有差异的弹窗（如引导弹窗的正文自带留白）**只写差异**，不复制外壳，
-并在 [`tests/visual/dialog-consistency.visual.spec.ts`](../../tests/visual/dialog-consistency.visual.spec.ts)
-的 `contentPaddingOverride` 里写明原因。未登记的差异会直接测试失败。
-
-> 该测试直接量计算样式而非比像素 —— 像素快照有 1% 容差，按钮从 34px 变 40px 只占整页 0.4%，会被放过。
+并在弹窗组件旁注释写明原因。新界面的弹窗一律用 `PnDialog`（宽 520、圆角 16、内边距 24/28、按钮高 34），外壳规格由组件给定，不在页面里各写一份。
 
 ---
 

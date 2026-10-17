@@ -108,7 +108,6 @@ getCurrentWindow().onFocusChanged(({ payload: focused }) => {
 | `src/services/HistoryDatabase.ts` | healthCheck + reconnect + ensureInitialized 加固 |
 | `src/App.vue` | visibilitychange + onFocusChanged 恢复监听 |
 | `src/components/layout/MainLayout.vue` | KeepAlive max 6→4 |
-| `src/components/views/SettingsView.vue` | onDeactivated 清理定时器 |
 
 ### 关键教训
 

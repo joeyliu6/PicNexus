@@ -10,7 +10,7 @@ PicNexus 的日志系统采用 **前端 createLogger → @tauri-apps/plugin-log 
 - **后端**:`tauri_plugin_log` 三目标输出(stdout + LogDir 文件 + Webview 回传前端 console)
 - **级别**:全局 `Info`,`picnexus` 模块 `Debug`,噪音依赖(hyper/reqwest/aws_sdk_s3)降至 `Warn`
 - **文件**:10MB 单文件上限,`KeepAll` 策略(不自动删除旧日志)
-- **诊断面板**:`AboutUpdatePanel.vue` 仅暴露「版本号」和「打开日志目录」两个入口
+- **诊断入口**:设置 › 关于(`src/views/settings/AboutGroup.vue`)只有「版本号」和「打开日志目录」两个
 - **错误上报**:**未实现**,所有错误仅本地记录
 
 ---
@@ -118,20 +118,20 @@ flowchart LR
 
 ## 图 3:诊断面板数据来源
 
-展示 `AboutUpdatePanel.vue` 的「打开日志目录」按钮如何通过 IPC 打开平台特定文件夹。
+展示「关于」里的「打开日志目录」如何通过 IPC 打开平台特定文件夹。
 
-> **关键源文件**:`src/components/settings/AboutUpdatePanel.vue`、`src-tauri/src/commands/system.rs` `open_log_dir`
+> **关键源文件**:`src/views/settings/AboutGroup.vue`、`src-tauri/src/commands/system.rs` `open_log_dir`
 
 ```mermaid
 sequenceDiagram
     participant U as 用户
-    participant V as AboutUpdatePanel.vue
+    participant V as AboutGroup.vue
     participant I as invoke
     participant R as Rust open_log_dir
     participant P as app.path
     participant O as opener crate
 
-    U->>V: 点击"打开日志目录"按钮
+    U->>V: 点「打开日志目录」
     V->>I: invoke("open_log_dir")
     I->>R: Tauri Command 调用
 
@@ -204,7 +204,7 @@ mindmap
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
 | 前端日志在终端不显示 | 开发模式下 Rust 的 Stdout target 正常,但 WebSocket 热更新期间可能丢失,刷新 DevTools 重试 | 图1 T1 |
-| 生产环境日志文件找不到 | 用户不知道 `%APPDATA%/us.picnex.app/logs` 路径 → 教用户点 AboutUpdatePanel 按钮 | 图3 |
+| 生产环境日志文件找不到 | 用户不知道 `%APPDATA%/us.picnex.app/logs` 路径 → 教用户点 设置 › 关于 ›「打开日志目录」 | 图3 |
 | 日志文件巨大占满磁盘 | `KeepAll` 策略不自动删除,10MB/文件累计 | 图1 T2C |
 | `reqwest` 的 HTTP 请求细节看不到 | 被降级到 `Warn` 级别 | 图2 F4 |
 | `console.log` 写了但看不到 | CLAUDE.md 禁止 `console.log`,应改用 `createLogger` | 图1 B |

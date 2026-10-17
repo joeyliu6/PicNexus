@@ -6,78 +6,9 @@
 
 ## 图 10：WebDAV 同步流程
 
-展示配置同步和历史记录同步的完整路径，重点关注**三种同步模式**和**冲突处理**。
+云同步（设置 › 备份与同步的「同步」与「⋯」里的两个覆盖操作）完整流程见 [sync-flow.md](./sync-flow.md)。
 
-> **关键源文件**：`src/composables/backup-sync/useBackupSync.ts`（入口）、`ConfigSync.ts`（配置同步）、`HistorySync.ts`（历史同步）、`backupSyncUtils.ts`（建连与远程路径推导）
-
-### 配置同步
-
-```mermaid
-flowchart TD
-    subgraph 上传配置
-        U1[用户触发上传] --> U2{isSyncing?}
-        U2 -- 是 --> U2X[提示：同步中]
-        U2 -- 否 --> U3["getClient(profile)<br/>连接 WebDAV"]
-        U3 --> U4["configStore.get('config')<br/>读取本地配置"]
-        U4 --> U5["client.putFile(remotePath, JSON)<br/>上传到云端"]
-        U5 --> U6[updateStatus 记录时间戳]
-        U6 --> U7["Toast: 上传成功 ✓"]
-    end
-
-    subgraph 下载配置
-        D1[用户触发下载] --> D2{isSyncing?}
-        D2 -- 是 --> D2X[提示：同步中]
-        D2 -- 否 --> D3["getClient(profile)<br/>连接 WebDAV"]
-        D3 --> D4["client.getFile(remotePath)<br/>下载远程配置"]
-        D4 --> D5{内容存在?}
-        D5 -- 否 --> D5X[错误：云端不存在]
-        D5 -- 是 --> D6["JSON.parse + isValidUserConfig<br/>验证格式"]
-        D6 --> D7{同步模式}
-        D7 -- merge --> D8["合并：保留本地 WebDAV 配置<br/>其余用远程覆盖"]
-        D7 -- overwrite --> D9[直接覆盖本地]
-        D8 & D9 --> D10["configStore.set + save"]
-        D10 --> D11["Toast: 下载成功 ✓"]
-    end
-
-    style U7 fill:#e8f5e9,stroke:#2e7d32
-    style D11 fill:#e8f5e9,stroke:#2e7d32
-    style D5X fill:#ffebee,stroke:#c62828
-```
-
-### 历史记录同步
-
-```mermaid
-flowchart TD
-    A[用户触发历史同步] --> B{同步模式}
-
-    B -- force --> C1["读取本地全部历史<br/>(getAllStream 分批)"]
-    C1 --> C2[直接上传覆盖云端]
-
-    B -- merge --> D1[读取本地全部历史]
-    D1 --> D2[下载云端历史]
-    D2 --> D3["基于 ID + 时间戳去重<br/>本地优先（较新的覆盖较旧的）"]
-    D3 --> D4[合并后上传]
-
-    B -- incremental --> E1[读取本地全部历史]
-    E1 --> E2[下载云端历史]
-    E2 --> E3["cloudIds = Set(云端 ID)<br/>过滤出云端不存在的记录"]
-    E3 --> E4["云端记录 + 新增记录<br/>合并后上传"]
-
-    C2 & D4 & E4 --> F["client.putFile(remotePath)"]
-    F --> G[updateStatus 记录时间戳]
-    G --> H["Toast: 同步成功 ✓"]
-
-    %% 下载历史
-    I[用户触发历史下载] --> J[下载云端历史 JSON]
-    J --> K["JSON.parse + Array.isArray<br/>逐条走 isImportableHistoryItem"]
-    K --> L{下载模式}
-    L -- merge --> M["基于 ID 去重合并<br/>写入 SQLite"]
-    L -- overwrite --> N["清空本地 + 全量写入"]
-    M & N --> O["Toast: 下载成功 ✓"]
-
-    style H fill:#e8f5e9,stroke:#2e7d32
-    style O fill:#e8f5e9,stroke:#2e7d32
-```
+> **关键源文件**：`src/views/settings/useCloudSync.ts`（状态机）、`src/composables/backup-sync/ConfigSync.ts`（配置）、`HistorySync.ts`（上传记录）、`backupSyncUtils.ts`（建连、远程路径、中止判定）
 
 ---
 
@@ -188,45 +119,47 @@ flowchart TD
 
 ---
 
-## 图 13：备份与恢复流程
+## 图 13：手动备份（导出 / 导入文件）
 
-展示本地备份和云端备份的导入导出路径。
+设置 › 备份与同步 ›「手动备份」三行。导出结果用通知说（本机操作），每次导出 / 导入都记一条「最近操作」。
 
-> **关键源文件**：`src/composables/backup-sync/useBackupSync.ts`
+> **关键源文件**：`src/composables/backup-sync/backupFiles.ts`、`src/views/settings/BackupGroup.vue`
 
 ```mermaid
 flowchart TD
-    subgraph 本地导出
-        LE1[用户点击导出] --> LE2[读取当前配置 / 历史]
-        LE2 --> LE3[序列化为 JSON]
-        LE3 --> LE4["saveDialog 选择保存路径"]
-        LE4 --> LE5[writeTextFile 写入文件]
-        LE5 --> LE6["Toast: 导出成功 ✓"]
+    subgraph 导出配置
+        EC1[点「导出配置…」] --> EC2{设了备份密码?}
+        EC2 -- 否 --> EC3[S10「先设置备份密码？」]
+        EC3 -- 直接导出 --> EC5
+        EC3 -- 先设置密码 --> EC4[设好密码] --> EC5
+        EC2 -- 是 --> EC5[exportConfigFile<br/>有密码就 secureStorage.encrypt]
+        EC5 --> EC6[系统保存对话框 → 写文件<br/>通知 + 最近操作写保存路径]
     end
 
-    subgraph 本地导入
-        LI1[用户点击导入] --> LI2["openDialog 选择文件"]
-        LI2 --> LI3["JSON.parse 解析"]
-        LI3 --> LI4{文件加密?}
-        LI4 -- 是 --> LI5["tryDecryptContent<br/>要求输入密码"]
-        LI5 --> LI6{密码正确?}
-        LI6 -- 否 --> LI7[提示密码错误，重试]
-        LI7 --> LI5
-        LI6 -- 是 --> LI8[解密成功]
-        LI4 -- 否 --> LI8[明文数据]
-        LI8 --> LI9{导入策略}
-        LI9 -- 合并 --> LI10["保留本地 + 追加导入数据"]
-        LI9 -- 覆盖 --> LI11[清空本地 + 写入导入数据]
-        LI10 & LI11 --> LI12["Toast: 导入成功 ✓"]
+    subgraph 导出上传记录
+        EH1[点「导出上传记录…」] --> EH2{有记录?}
+        EH2 -- 否 --> EH3[「还没有上传记录」]
+        EH2 -- 是 --> EH4[exportHistoryFile<br/>明文 JSON 数组]
     end
 
-    subgraph 云端备份
-        CB1[用户触发云端备份] --> CB2[WebDAV 上传配置 / 历史]
-        CB2 --> CB3["详见图 10 WebDAV 同步流程"]
+    subgraph 从文件导入
+        I1[点「从文件导入…」] --> I2[pickBackupFile<br/>系统打开对话框]
+        I2 --> I3{加密的?}
+        I3 -- 是 --> I4[先用本机密钥解<br/>解不开弹「输入备份密码」]
+        I3 -- 否 --> I5
+        I4 --> I5{认出是什么?}
+        I5 -- 对象 = 配置 --> I6[确认「导入配置？」<br/>替换本机配置，无法撤销]
+        I6 -- 确认 --> I7[importConfig<br/>mergeCloudConfig 留本机同步连接与文档文件夹]
+        I7 --> I8[刷新横幅「配置已导入，刷新后生效。」]
+        I5 -- 数组 = 上传记录 --> I9[importHistory 合并<br/>已有的不删]
+        I9 --> I10[通知「已导入 N 条上传记录」]
+        I5 -- 都不是 --> I11[「无法识别这个文件，请选择 PicNexus 导出的配置或上传记录」]
     end
 
-    style LE6 fill:#e8f5e9,stroke:#2e7d32
-    style LI12 fill:#e8f5e9,stroke:#2e7d32
+    style EC6 fill:#e8f5e9,stroke:#2e7d32
+    style I8 fill:#e8f5e9,stroke:#2e7d32
+    style I10 fill:#e8f5e9,stroke:#2e7d32
+    style I11 fill:#ffebee,stroke:#c62828
 ```
 
 ---
@@ -235,21 +168,20 @@ flowchart TD
 
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
-| WebDAV 上传失败 | 连接信息错误 / 远程路径不存在 | 图10 上传配置 U3 |
-| 下载后 WebDAV 配置丢失 | merge 模式未保留本地 WebDAV 字段 | 图10 下载配置 D8 |
-| 历史同步后数据重复 | 同步模式选错（应选 merge 而非 force） | 图10 历史同步 B |
+| 云同步失败 | 见 [sync-flow.md](./sync-flow.md) 排查指南 | 图10 |
+| 导入配置后同步连接变了 | `mergeCloudConfig` 没保留本机 `webdav` | 图13 I7 |
 | 链接检测进度不更新 | Rust 后端未 emit progress 事件 / session 不匹配 | 图11 节点 Q → T |
 | 检测取消后数据丢失 | 正常现象：已完成的结果会入库 | 图11 CANCEL 分支 |
 | 压缩后文件反而更大 | 原图已高度压缩，回退使用原图 | 图12 节点 I → I1 |
 | 小图片未被压缩 | skipIfSmallerKB 阈值跳过了小文件 | 图12 节点 C |
 | GIF 上传后不动了 | 压缩跳过 GIF，但图床可能不支持 | 图12 节点 B → B1 |
-| 导入备份提示密码 | 备份文件已加密（来自其他设备） | 图13 本地导入 LI4 → LI5 |
+| 导入备份提示密码 | 备份文件用别的备份密码加密（来自其他设备，或本机换过密码） | 图13 I4 |
 
 ---
 
 ## 相关文档
 
-- [Composables API](../reference/api/composables.md) — useBackupSync 接口索引
+- [同步流程](./sync-flow.md) — 云同步的完整流程与排查
 - [链接检测性能优化](../reference/patterns/link-check-large-dataset.md) — 5 万条记录场景的优化方案
 - [同步流程](./sync-flow.md) — WebDAV 配置/历史同步的完整流程
 - [链接检测流程（深度展开）](./link-check-flow.md) — 服务感知请求、并发控制、动画状态机

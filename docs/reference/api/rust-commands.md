@@ -32,6 +32,7 @@
 | **剪贴板** | `clipboard_has_image` | 检测剪贴板图片 |
 | | `read_clipboard_image` | 读取剪贴板图片 |
 | | `cleanup_clipboard_temp_file` | 安全清理本次剪贴板图片临时文件（仅允许系统临时目录下 `clipboard_image_*.png`） |
+| | `set_clipboard_watch` | 自动上传剪贴板的后台监听开关（`enabled: bool`）：开着时发现剪贴板里出现新图片就发 `clipboard-image-changed` 事件（只认打开之后新复制的；Windows 看剪贴板序号，其他系统比对图片指纹），前端 `clipboardWatch.ts` 照粘贴上传 |
 | **工具** | `get_image_metadata` | 获取图片元数据 |
 | | `check_image_link` | 检测链接有效性 |
 | | `download_image_from_url` | 下载远程图片 |

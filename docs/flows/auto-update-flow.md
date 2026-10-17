@@ -48,8 +48,8 @@ flowchart TD
     L -- 是 --> M[status = 'available'<br/>pendingUpdate 保存]
 
     M --> M1[updateInfo 赋值:<br/>version / date / body]
-    M1 --> N[AboutUpdatePanel<br/>显示'有新版可用']
-    N --> O{用户点击下载?}
+    M1 --> N[设置 › 关于 › UpdateCard<br/>「发现新版本 X」+ 发布说明前 6 条]
+    N --> O{用户点「立即更新」?}
     O -- 是 --> P[进入下载安装流程<br/>图 2]
     O -- 否 --> O1[保持 available 状态<br/>下次启动重检]
 
@@ -64,84 +64,58 @@ flowchart TD
 
 ## 图 2:下载、安装、重启时序
 
-展示用户点击"下载并安装"后的完整时序,重点关注**进度事件**和**重启调用**。
+下载（`update.download`）与安装（`update.install`）分两步：下载中点「取消」只是不再安装（插件的下载停不下来，照常跑完），再点「立即更新」接着显示同一次下载、下完直接装。安装前、重启前都先过外壳注册的闸门 `setUpdateInstallGate`：等进行中的上传传完。
 
-> **关键源文件**:`src/composables/useAutoUpdate.ts`(L69~L106 downloadAndInstall)
+> **关键源文件**:`src/composables/useAutoUpdate.ts`(`downloadAndInstall` / `install` / `cancelDownload` / `retryRelaunch`)、`src/views/settings/UpdateCard.vue`、`src/shell/AppShell.vue`(注册闸门)
 
 ```mermaid
 sequenceDiagram
     participant U as 用户
-    participant V as AboutUpdatePanel
+    participant V as UpdateCard
     participant H as useAutoUpdate
+    participant G as 安装闸门（AppShell）
     participant P as plugin-updater
     participant R as Rust 后端
-    participant GH as GitHub Releases
     participant PR as plugin-process
 
-    U->>V: 点击"下载并安装"按钮
+    U->>V: 点「立即更新」
     V->>H: downloadAndInstall
-    activate H
-
-    H->>H: status = 'downloading'<br/>downloadProgress = 0
-
-    H->>P: pendingUpdate.downloadAndInstall progressCallback
-    P->>R: IPC 调用
-    R->>GH: HTTP GET 安装包
-    activate GH
-
-    Note over R,GH: 流式下载
-
-    GH-->>R: Stream chunk 1
-    R->>P: Event: Started<br/>contentLength
-    P->>H: callback Started event
-    H->>H: totalBytes = event.data.contentLength
-
+    H->>H: wantInstall = true<br/>status = 'downloading'
+    H->>P: update.download progressCallback
+    P->>R: 流式下载 + minisign 校验
     loop 下载中
-        GH-->>R: Stream chunk N
-        R->>P: Event: Progress<br/>chunkLength
-        P->>H: callback Progress event
-        H->>H: downloadedBytes += chunkLength<br/>downloadProgress = round /total*100
-        H-->>V: Vue reactivity<br/>进度条 UI 更新
+        R-->>H: Started / Progress 事件
+        H-->>V: 「正在下载 X · 11 / 18 MB」+ 进度条
     end
-
-    GH-->>R: 下载完成
-    deactivate GH
-    R->>R: 验证签名<br/>minisign verify
-
-    alt 签名无效
-        R-->>P: Err 签名失败
-        P-->>H: reject
-        H->>H: status = 'error'
-        H-->>V: 错误提示
-    else 签名有效
-        R-->>P: Event: Finished
-        P->>H: callback Finished event
-        H->>H: status = 'installing'<br/>downloadProgress = 100
-        H-->>V: 显示"正在安装更新<br/>应用会自动关闭"
-
-        Note over R: install 开始<br/>Finished 发在它之前,不是之后
-        R->>R: 写入临时目录<br/>拉起 NSIS setup.exe passive 模式
-
+    opt 下载中点「取消」
+        U->>V: 取消
+        V->>H: cancelDownload
+        H->>H: wantInstall = false<br/>status = 'available'（下载照常跑完，不安装）
+    end
+    R-->>H: 下载完成
+    alt 签名无效 / 下载中断
+        H->>H: status = 'error'（已取消的不报错）
+    else wantInstall
+        H->>H: status = 'installing'<br/>waitingForUploads = true
+        H->>G: await installGate
+        G-->>H: 上传都传完了
+        H->>P: update.install
         alt Windows
-            R->>R: std::process::exit 0
-            Note over H,V: 进程当场消失,UI 停在 installing<br/>安装器装完后自行拉起新版<br/>install-pending 分支在此平台不可达
+            R->>R: 拉起 NSIS setup.exe passive<br/>std::process::exit 0
+            Note over H,V: 进程当场消失,UI 停在 installing<br/>安装器装完后自行拉起新版
         else macOS / Linux
-            R-->>P: install 返回
             P-->>H: resolve
             H->>H: status = 'install-pending'
-            H-->>V: 显示"重启完成更新"
-            U->>V: 点击"重启完成更新"
+            U->>V: 点「重启完成更新」
             V->>H: retryRelaunch
+            H->>G: await installGate
             H->>PR: relaunch
-            PR->>PR: 退出并重新启动进程
         end
     end
-
-    deactivate H
 ```
 
 > ⚠️ **Windows 上"重启完成更新"按钮永远不会出现**:`tauri-plugin-updater` 的 `install_inner`
-> 在 `ShellExecuteW` 拉起安装器之后紧跟着 `std::process::exit(0)`,`downloadAndInstall()` 的
+> 在 `ShellExecuteW` 拉起安装器之后紧跟着 `std::process::exit(0)`,`install()` 的
 > `await` 永不返回。[useAutoUpdate.ts](../../src/composables/useAutoUpdate.ts) 里 `install-pending`
 > 的赋值、`retryRelaunch()`、UpdateCard 的 `install-pending` 分支都只服务 macOS / Linux。
 > `installing` 态就是为了填补 Windows 这段"应用消失、安装器在跑"的空窗期(实测 NSIS 之前的
@@ -162,10 +136,11 @@ stateDiagram-v2
     checking --> available: 发现新版本
     checking --> error: 网络/签名失败
 
-    available --> downloading: 用户点下载
-    available --> idle: 用户关闭面板<br/>下次再检查
+    available --> downloading: 点「立即更新」
+    downloading --> available: 点「取消」<br/>下载照常跑完但不安装
+    available --> installing: 再点「立即更新」<br/>且安装包已下好
 
-    downloading --> installing: 下载完成+签名验证通过<br/>Finished 事件
+    downloading --> installing: 下载完成+签名验证通过<br/>先等上传传完
     downloading --> error: 下载中断/签名失败
 
     installing --> [*]: Windows:plugin 调 exit 0<br/>进程消失,安装器接管
@@ -174,14 +149,14 @@ stateDiagram-v2
     install_pending --> [*]: 用户点击重启<br/>relaunch 进程退出
 
     up_to_date --> checking: 手动再次检查
-    error --> checking: 重试按钮
-    error --> idle: 用户放弃
+    error --> checking: 检查失败时「重试」
+    error --> available: 下载失败时「重试」<br/>复用这次检查结果
 
     note right of error
       error 状态下
-      AboutUpdatePanel 显示
-      错误消息 + 重试按钮
-      检查失败时提供手动下载入口
+      UpdateCard 写「更新失败：原因」
+      +「手动下载」「重试」
+      英文原文放悬停提示
     end note
 
     note right of downloading

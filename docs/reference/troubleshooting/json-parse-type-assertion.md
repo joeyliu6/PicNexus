@@ -88,4 +88,4 @@ const items = parsed as HistoryItem[];
 ## 相关文件
 
 - `src/config/validators.ts` - `isValidUserConfig`、`isValidHistoryItem`、`isImportableHistoryItem`（经 `src/config/types.ts` 的 `export *` 转发，外部按 `config/types` 引入）
-- `src/composables/backup-sync/useBackupLocal.ts` - 导入配置时的验证；历史导入的判定权在 `src/services/database/ImportExportService.ts`
+- `src/composables/backup-sync/backupFiles.ts` - 导入文件时认出配置还是记录（`parseBackupFile` 用 `isValidUserConfig`）；历史导入的判定权在 `src/services/database/ImportExportService.ts`

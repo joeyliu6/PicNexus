@@ -15,7 +15,7 @@
 | `confirm` (`useConfirm`) | `confirm(message, options)` Promise | 必须用户决策才能继续 | 是 / 阻塞 | 删除/覆盖/清空等不可逆操作 |
 | `Dialog` | `<Dialog v-model:visible>` | 信息密度高、需多步交互 | 是 / 阻塞 | 设置面板二级配置、密码恢复、URL 下载 |
 | `silent` | `useToast().silent('log'\|'error', summary, detail?)` | 仅写控制台日志，不弹通知 | 否 / 不可见 | 单条复制反馈、内部状态记录 |
-| `inline banner` | 组件级 `<ReloadBanner>` 等 | 常驻于页面顶部，用户主动消费 | 否 / 不会自动消失 | 「请刷新页面」「需重启」「试用版即将到期」 |
+| `inline banner` | 页面级横幅（如设置页的刷新横幅） | 常驻于页面顶部，用户主动消费 | 否 / 不会自动消失 | 「请刷新页面」「需重启」「试用版即将到期」 |
 
 **核心区别**：
 - **toast**：飘起来 → 看到 → 消失。适合「我做完了」的回执，不能承载用户必须执行的下一步。
@@ -163,6 +163,6 @@ toast.warn('扫描进行中', '请等待当前扫描完成或取消后再开始�
 ## 6. 实现位置参考
 
 - `useToast()`：[src/composables/useToast.ts](../../src/composables/useToast.ts)（含 `silent`、`addRaw`、`removeGroup`）
-- `ReloadBanner`：[src/components/common/ReloadBanner.vue](../../src/components/common/ReloadBanner.vue)
+- 刷新横幅：[src/views/settings/SettingsView.vue](../../src/views/settings/SettingsView.vue)（`needsReload`）
 - `useConfirm`：[src/composables/useConfirm.ts](../../src/composables/useConfirm.ts)
 - 全局静默开关：`suppressToasts(true)` 用于批量操作期间临时屏蔽所有 toast，调用方负责复位

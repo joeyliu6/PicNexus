@@ -19,25 +19,22 @@
 
 ### 目录结构
 
-新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`、图库 `src/views/gallery/GalleryView.vue`、链接健康 `src/views/health/HealthView.vue`、图床 `src/views/hosts/HostsView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
+页面在 `src/views/<页面>/`（首页 `home/`、图库 `gallery/`、链接健康 `health/`、图床 `hosts/`、设置 `settings/`，每页一个 `*View.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。
 
 ```
+src/views/settings/
+├── SettingsView.vue          # 二级栏 + 标题行 + 滚动区 + 刷新横幅
+├── settingsGroups.ts         # 7 组与每一行的表（命令面板的设置项也从这里生成）
+├── useSettingsConfig.ts      # 设置页写配置的唯一入口（读最新 → 只改这一项 → 保存）
+├── settingsEffects.ts        # 要先改系统的几项（开机自启、关闭到托盘、恢复默认）
+├── GeneralGroup.vue … AboutGroup.vue   # 每组一个组件
+└── useCloudSync.ts / useShortcutRecorder.ts / useEditorCards.ts   # 各组的状态
+
 src/components/
-├── views/                    # 过渡期旧页（设置）
-│
-├── settings/                 # 设置各分组（常规 / 备份同步 / 压缩 / 编辑器 / 高级 / 关于；不含图床）
-│   ├── GeneralSettingsPanel.vue
-│   ├── BackupSyncPanel.vue
-│   └── …
-│
 ├── login/LoginPanel.vue      # Cookie 登录小窗准备页（P16）
-│
-├── common/                   # 通用组件
-│   ├── ThumbnailImage.vue   # 缩略图组件
-│   └── SensitiveField.vue   # 设置页的密码框
-│
+├── common/ThumbnailImage.vue # 缩略图组件
 └── dialogs/                  # 对话框
-    ├── BackupPasswordDialog.vue
+    ├── BackupPasswordDialog.vue   # D01–D05（PnDialog）
     └── CompressionPreviewDialog.vue
 ```
 
@@ -46,8 +43,8 @@ src/components/
 | 类型 | 命名模式 | 示例 |
 |------|---------|------|
 | 视图组件 | `*View.vue` | `HomeView.vue` |
-| 面板组件 | `*Panel.vue` | `SettingsPanel.vue` |
-| 对话框 | `*Dialog.vue` | `SyncConflictDialog.vue` |
+| 面板组件 | `*Panel.vue` | `LoginPanel.vue` |
+| 对话框 | `*Dialog.vue` | `PortDialog.vue` |
 | 通用组件 | 语义化名称 | `ThumbnailImage.vue` |
 
 ---
@@ -66,7 +63,7 @@ src/composables/
 ├── useThumbCache.ts      # 缩略图缓存
 ├── useToast.ts           # Toast 通知
 ├── useTheme.ts           # 主题切换
-├── backup-sync/          # 备份与同步（useBackupSync 入口 + ConfigSync / HistorySync / backupSyncUtils）
+├── backup-sync/          # 备份与同步（ConfigSync / HistorySync / backupFiles / backupPassword / backupSyncUtils；界面状态在 views/settings/useCloudSync）
 ├── useClipboardImage.ts  # 剪贴板图片
 ├── useConfirm.ts         # 确认对话框
 ├── useQueueState.ts      # 上传队列状态
