@@ -121,7 +121,7 @@ test.describe('PicNexus Tauri smoke', () => {
     await expect(page.locator('.health')).toBeVisible();
 
     await navItem(page, '图床').click();
-    await expect(page.locator('.settings-layout')).toBeVisible();
+    await expect(page.locator('.hosts-list')).toBeVisible();
 
     await navItem(page, '设置').click();
     await expect(page.locator('.settings-layout .settings-sidebar')).toBeVisible();
