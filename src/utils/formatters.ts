@@ -21,7 +21,7 @@ export function formatTime(timestamp: number): string {
 }
 
 /**
- * 格式化相对时间（中文）
+ * 格式化相对时间（中文）：刚刚 / N 分钟前 / N 小时前 / N 天前，一周以上写日期
  */
 export function formatRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -32,7 +32,8 @@ export function formatRelativeTime(timestamp: number): string {
   if (hours < 24) return `${hours} 小时前`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days} 天前`;
-  return new Date(timestamp).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  // 一周以上写日期，与全应用一致（「10月9日」，往年带年份）；toLocaleDateString 在 Chromium 里会写成「10/9」
+  return formatCalendarDate(timestamp);
 }
 
 /**

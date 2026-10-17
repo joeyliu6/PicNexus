@@ -157,15 +157,10 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(NOW - 6 * 86_400_000)).toBe('6 天前');
   });
 
-  it('超过 7 天 → 返回日期字符串', () => {
+  it('超过 7 天写日期，与全应用写法一致（「11月6日」，不写「11/6」）', () => {
     const result = formatRelativeTime(NOW - 8 * 86_400_000);
-    // 格式类似 "11/7" 或 "11月7日"，只验证是非空字符串
-    expect(typeof result).toBe('string');
-    expect(result.length).toBeGreaterThan(0);
-    expect(result).not.toBe('刚刚');
-    expect(result).not.toContain('分钟');
-    expect(result).not.toContain('小时');
-    expect(result).not.toContain('天');
+    expect(result).toMatch(/^\d{1,2}月\d{1,2}日$/);
+    expect(result).toBe(formatCalendarDate(NOW - 8 * 86_400_000, NOW));
   });
 });
 
