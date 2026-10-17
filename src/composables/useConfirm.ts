@@ -48,32 +48,6 @@ export interface ConfirmAsyncOptions {
   code?: string;
 }
 
-/** 三态确认结果 */
-export type ConfirmThreeWayResult = 'accept' | 'reject' | 'dismiss';
-
-/** 三态确认选项 */
-export interface ConfirmThreeWayOptions {
-  /** 对话框标题 */
-  header?: string;
-  /** 消息内容 */
-  message: string;
-  /** 确认按钮文本 */
-  acceptLabel?: string;
-  /** 取消按钮文本 */
-  rejectLabel?: string;
-  /** 图标 */
-  icon?: string;
-  /**
-   * 「本次运行内不再提示」勾选框的状态容器；不传就不显示这个勾选框
-   *
-   * 传的是**对象**而不是布尔值：对话框要把用户的选择写回来，
-   * 布尔值按值传过去就断了。勾选框画在 `PnConfirmHost.vue` 里。
-   *
-   * 目前只有清除已保存凭证用它，见 `useSecretClearConfirm`。
-   */
-  clearOptOut?: { checked: boolean };
-}
-
 interface RequireOptions {
   header: string;
   message: string;
@@ -81,7 +55,6 @@ interface RequireOptions {
   rejectLabel: string;
   icon?: string;
   acceptClass?: string;
-  clearOptOut?: { checked: boolean };
   code?: string;
 }
 
@@ -91,7 +64,6 @@ function require(options: RequireOptions) {
     message: options.message,
     acceptLabel: options.acceptLabel,
     rejectLabel: options.rejectLabel,
-    clearOptOut: options.clearOptOut,
     code: options.code,
     ...resolveConfirmTone(options.icon, options.acceptClass),
   });
@@ -102,7 +74,6 @@ function require(options: RequireOptions) {
  */
 export function useConfirm() {
   const confirmDefaults = UI_COPY.confirm.defaults;
-  const deleteDefaults = UI_COPY.confirm.delete;
   const warnDefaults = UI_COPY.confirm.warn;
 
   /** 显示确认对话框（回调式） */
@@ -119,18 +90,6 @@ export function useConfirm() {
       if (result === 'accept') options.accept?.();
       else if (result === 'reject') options.reject?.();
     });
-  };
-
-  /** 显示删除确认对话框 */
-  const confirmDelete = (message: string, onConfirm: () => void) => {
-    void require({
-      header: deleteDefaults.header,
-      message,
-      icon: deleteDefaults.icon,
-      acceptLabel: deleteDefaults.acceptLabel,
-      rejectLabel: deleteDefaults.rejectLabel,
-      acceptClass: deleteDefaults.acceptClass,
-    }).then((result) => { if (result === 'accept') onConfirm(); });
   };
 
   /** 显示警告确认对话框 */
@@ -174,24 +133,10 @@ export function useConfirm() {
     return result === 'accept';
   };
 
-  /**
-   * 三态确认对话框：accept（确认按钮）、reject（取消按钮）、dismiss（Esc / 点遮罩）
-   */
-  const confirmThreeWay = (options: ConfirmThreeWayOptions): Promise<ConfirmThreeWayResult> => require({
-    header: options.header || confirmDefaults.header,
-    message: options.message,
-    icon: options.icon || confirmDefaults.icon,
-    acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
-    rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
-    clearOptOut: options.clearOptOut,
-  });
-
   return {
     showConfirm,
-    confirmDelete,
     confirmWarn,
     close,
     confirm: confirmAsync,  // 别名，用于 async/await
-    confirmThreeWay
   };
 }

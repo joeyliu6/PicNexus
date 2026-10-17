@@ -12,7 +12,7 @@ export function releaseNotes(body: string): string[] {
     .slice(0, MAX_NOTES);
 }
 
-/** 「更新失败：更新包下载中断」；归类不出来的兜底标题本身就写着「…失败」，不再叠一层 */
+/** 「更新失败：下载被中断」（S21）；归类不出来的兜底标题本身就写着「…失败」，不再叠一层 */
 export function updateFailureTitle(reason: string): string {
   return reason.endsWith('失败') ? reason : `更新失败：${reason}`;
 }

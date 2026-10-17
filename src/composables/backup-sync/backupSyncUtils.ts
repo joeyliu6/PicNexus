@@ -2,8 +2,6 @@
 
 import { WebDAVClient, WEBDAV_AUTH_FAILED_MESSAGE, WEBDAV_FORBIDDEN_MESSAGE } from '@/utils/webdav';
 import { historyDB, type SyncLogOperation } from '@/services/database';
-import type { useToast } from '@/composables/useToast';
-import { TOAST_MESSAGES } from '@/constants';
 import type { WebDAVProfile, HistoryItem } from '@/config/types';
 import { getErrorMessage } from '@/types/errors';
 import { createLogger } from '@/utils/logger';
@@ -146,7 +144,7 @@ export const CLOUD_DATA_ABORT_MARKER = '已中止以避免覆盖云端数据';
 /** 云端 history.json 为 0 字节时的中止原因；措辞刻意避开「文件不存在」/`404`/`not found`
  * （isWebDAVNotFoundError 按子串匹配，命中会把中止当「首次同步」吞掉），并给出唯一逃生舱。 */
 export const CLOUD_HISTORY_EMPTY_REASON =
-  `云端历史文件为空，${CLOUD_DATA_ABORT_MARKER}；若确认云端本就无数据，请改用「强制覆盖云端」`;
+  `云端历史文件为空，${CLOUD_DATA_ABORT_MARKER}；若确认云端本就无数据，请用「⋯ › 用本机覆盖云端」`;
 
 /** 云端 history.json 是合法 JSON 但不是数组时的中止原因 */
 export const CLOUD_HISTORY_NON_ARRAY_REASON =
@@ -154,7 +152,7 @@ export const CLOUD_HISTORY_NON_ARRAY_REASON =
 
 /** 云端 settings.json 为 0 字节时的中止原因（ConfigSync 用；逃生舱是「上传到云端」） */
 export const CLOUD_CONFIG_EMPTY_REASON =
-  `云端配置文件为空，${CLOUD_DATA_ABORT_MARKER}；若确认云端本就无数据，请改用「上传到云端」`;
+  `云端配置文件为空，${CLOUD_DATA_ABORT_MARKER}；若确认云端本就无数据，请用「⋯ › 用本机覆盖云端」`;
 
 export function isCloudDataAbortReason(errorCode: string): boolean {
   return errorCode.includes(CLOUD_DATA_ABORT_MARKER);
@@ -192,15 +190,27 @@ export function parseCloudHistoryForUpload(content: string | null | undefined): 
 }
 
 /**
- * 获取 WebDAV 客户端和远程路径
+ * 一次云同步失败：message 是给用户看的原因 + 处理办法（写在云同步卡的状态行）。
+ * partial = 云端数据已经合并进本机、只是回传失败（状态行要说清本机已经变了）。
+ */
+export class SyncFailure extends Error {
+  constructor(message: string, readonly stage: 'config' | 'history', readonly partial = false) {
+    super(message);
+    this.name = 'SyncFailure';
+  }
+}
+
+/** 云同步连接没填全（地址、用户名、密码缺一项） */
+export const SYNC_NOT_CONFIGURED = '云同步连接不完整，请在「更换同步方式…」中补全后重试';
+
+/**
+ * 获取 WebDAV 客户端和远程路径；连接没填全时返回 null（调用方按 SYNC_NOT_CONFIGURED 收口）
  */
 export async function getWebDAVClientAndPath(
   profile: WebDAVProfile | null,
   fileType: 'settings' | 'history',
-  toast: ReturnType<typeof useToast>
 ): Promise<{ client: WebDAVClient; remotePath: string } | null> {
   if (!profile || !profile.url || !profile.username || (!profile.password && !profile.passwordEncrypted)) {
-    toast.showConfig('warn', TOAST_MESSAGES.sync.noWebDAV);
     return null;
   }
 

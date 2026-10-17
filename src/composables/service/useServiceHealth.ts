@@ -28,7 +28,6 @@ import {
 } from '@/constants/serviceRequiredFields';
 import { syncStatusStore } from '@/store/instances';
 import type { StructuredError } from '@/uploaders/base/ErrorTypes';
-import { formatRelativeTime } from '@/utils/formatters';
 import { formatServiceHealthErrorMessage } from '@/utils/serviceHealthMessage';
 import { createLogger } from '@/utils/logger';
 
@@ -91,30 +90,6 @@ const healthStatusMap: ComputedRef<Record<string, ServiceHealthStatus>> = comput
   const map = {} as Record<string, ServiceHealthStatus>;
   for (const id of Object.keys(healthMap.value)) {
     map[id] = healthMap.value[id]?.status || 'unconfigured';
-  }
-  return map;
-});
-
-// ==================== Tooltip 文本生成 ====================
-
-function buildTooltipText(record: ServiceHealthRecord): string {
-  switch (record.status) {
-    case 'unconfigured':
-      return '未配置';
-    case 'pending':
-      return '待检测';
-    case 'verified':
-      if (record.lastVerifiedAt) return `可用 · ${formatRelativeTime(record.lastVerifiedAt)}`;
-      return '可用';
-    case 'error':
-      return formatServiceHealthErrorMessage(record.lastError);
-  }
-}
-
-const healthTooltipMap: ComputedRef<Record<string, string>> = computed(() => {
-  const map = {} as Record<string, string>;
-  for (const id of Object.keys(healthMap.value)) {
-    map[id] = buildTooltipText(healthMap.value[id]);
   }
   return map;
 });
@@ -238,7 +213,6 @@ export interface UseServiceHealthReturn {
   getHealth: (serviceId: string) => ServiceHealthRecord;
   getStatusClass: (serviceId: string) => string;
   healthStatusMap: ComputedRef<Record<string, ServiceHealthStatus>>;
-  healthTooltipMap: ComputedRef<Record<string, string>>;
   loadHealthStatus: (options?: { force?: boolean }) => Promise<void>;
   evaluateConfig: (config: UserConfig) => void;
   markVerified: (serviceId: string) => void;
@@ -372,7 +346,6 @@ export function useServiceHealth(): UseServiceHealthReturn {
     getHealth,
     getStatusClass,
     healthStatusMap,
-    healthTooltipMap,
     loadHealthStatus,
     evaluateConfig: evaluateConfigInternal,
     markVerified,

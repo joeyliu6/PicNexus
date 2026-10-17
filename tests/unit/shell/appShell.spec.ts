@@ -19,7 +19,7 @@ vi.mock('@/composables/useAutoUpdate', async () => {
   const { computed: vueComputed, ref: vueRef } = await import('vue');
   const flag = vueRef(false);
   mockState.hasUpdate = flag;
-  return { useAutoUpdate: () => ({ hasAvailableUpdate: vueComputed(() => flag.value) }) };
+  return { useAutoUpdate: () => ({ hasAvailableUpdate: vueComputed(() => flag.value) }), setUpdateInstallGate: vi.fn() };
 });
 
 import AppShell from '@/shell/AppShell.vue';
@@ -47,11 +47,11 @@ function makeRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: '/', redirect: '/home' },
-      { path: '/home', component: page('home'), meta: { pageKey: 'home', legacyTitle: '' } },
-      { path: '/gallery', component: page('gallery'), meta: { pageKey: 'gallery', legacyTitle: '图库' } },
+      { path: '/home', component: page('home'), meta: { pageKey: 'home' } },
+      { path: '/gallery', component: page('gallery'), meta: { pageKey: 'gallery' } },
       { path: '/health', component: page('health'), meta: { pageKey: 'health' } },
-      { path: '/hosts', component: SettingsStub, meta: { pageKey: 'hosts', legacyTitle: '图床' } },
-      { path: '/settings', component: SettingsStub, meta: { pageKey: 'settings', legacyTitle: '设置' } },
+      { path: '/hosts', component: SettingsStub, meta: { pageKey: 'hosts' } },
+      { path: '/settings', component: SettingsStub, meta: { pageKey: 'settings' } },
     ],
   });
 }
@@ -99,7 +99,6 @@ describe('AppShell', () => {
     await flushPromisesAndTicks();
     expect(router.currentRoute.value.path).toBe('/gallery');
     expect(wrapper.get('[aria-current="page"]').text()).toContain('图库');
-    expect(wrapper.get('.title-row__title').text()).toBe('图库');
   });
 
   it('routes navigate-to events and hands the settings section to the hosts page', async () => {

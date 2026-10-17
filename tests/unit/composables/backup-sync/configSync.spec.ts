@@ -1,410 +1,161 @@
+// 云端配置同步：没设备份密码不上传；拉取出错 / 云端文件为空或格式坏都中止、不覆盖云端；
+// 合并留本机的同步连接与文档文件夹；合并后回传失败算「部分完成」；用户取消解密整次放弃
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { DEFAULT_CONFIG, type UserConfig, type WebDAVProfile } from '@/config/types';
 
-const {
-  configStoreGetMock,
-  configStoreSetMock,
-  configStoreSaveMock,
-  isValidUserConfigMock,
-  isPasswordModeMock,
-  encryptMock,
-  isPasswordEncryptedDataMock,
-  writeSyncLogMock,
-  extractErrorCodeMock,
-  getWebDAVClientAndPathMock,
-  toastShowConfigMock,
-  toastSuccessMock,
-  toastErrorMock,
-  toastInfoMock,
-  confirmDialogMock,
-  clientGetFileMock,
-  clientPutFileMock,
-  updateConfigSyncStatusMock,
-} = vi.hoisted(() => ({
-  configStoreGetMock: vi.fn(),
-  configStoreSetMock: vi.fn(),
-  configStoreSaveMock: vi.fn(),
-  isValidUserConfigMock: vi.fn(),
-  isPasswordModeMock: vi.fn(),
-  encryptMock: vi.fn(),
-  isPasswordEncryptedDataMock: vi.fn(),
-  writeSyncLogMock: vi.fn(),
-  extractErrorCodeMock: vi.fn(),
-  getWebDAVClientAndPathMock: vi.fn(),
-  toastShowConfigMock: vi.fn(),
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastInfoMock: vi.fn(),
-  confirmDialogMock: vi.fn(),
-  clientGetFileMock: vi.fn(),
-  clientPutFileMock: vi.fn(),
-  updateConfigSyncStatusMock: vi.fn(),
+const m = vi.hoisted(() => ({
+  disk: null as unknown,
+  set: vi.fn(),
+  passwordMode: true,
+  getFile: vi.fn(),
+  putFile: vi.fn(),
+  record: vi.fn(),
+  log: vi.fn(),
 }));
 
 vi.mock('@/store/instances', () => ({
   configStore: {
-    get: configStoreGetMock,
-    set: configStoreSetMock,
-    save: configStoreSaveMock,
+    get: vi.fn(async () => (m.disk ? structuredClone(m.disk) : null)),
+    set: vi.fn(async (_key: string, value: unknown) => { m.set(value); m.disk = structuredClone(value); }),
+    save: vi.fn(),
   },
 }));
-
-vi.mock('@/config/types', async importOriginal => {
-  const actual = await importOriginal<typeof import('@/config/types')>();
-  return {
-    ...actual,
-    isValidUserConfig: isValidUserConfigMock,
-  };
-});
-
 vi.mock('@/security/crypto', () => ({
-  secureStorage: {
-    isPasswordMode: isPasswordModeMock,
-    encrypt: encryptMock,
-  },
-  isPasswordEncryptedData: isPasswordEncryptedDataMock,
+  secureStorage: { isPasswordMode: () => m.passwordMode, encrypt: vi.fn(async (s: string) => `enc:${s}`) },
+  isPasswordEncryptedData: (s: string) => s.startsWith('PNXPWD:'),
 }));
-
-// isWebDAVNotFoundError 用真实实现：它是纯函数，而「拉取云端失败该不该中止」这条防覆盖
-// 安全线正是本文件断言的对象。手抄副本会断言一段假逻辑——此前那份就已漏掉
-// /file.*not.*exist/i 分支。
+vi.mock('@/composables/backup-sync/syncRecords', () => ({ recordSync: m.record }));
 vi.mock('@/composables/backup-sync/backupSyncUtils', async () => {
-  const actual = await vi.importActual<typeof import('@/composables/backup-sync/backupSyncUtils')>(
-    '@/composables/backup-sync/backupSyncUtils',
-  );
+  const actual = await vi.importActual<typeof import('@/composables/backup-sync/backupSyncUtils')>('@/composables/backup-sync/backupSyncUtils');
   return {
     ...actual,
-    writeSyncLog: writeSyncLogMock,
-    extractErrorCode: extractErrorCodeMock,
-    getWebDAVClientAndPath: getWebDAVClientAndPathMock,
+    writeSyncLog: m.log,
+    getWebDAVClientAndPath: vi.fn(async (p: WebDAVProfile | null) => (p ? { client: { getFile: m.getFile, putFile: m.putFile }, remotePath: '/PicNexus/settings.json' } : null)),
   };
 });
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
+import { NEED_BACKUP_PASSWORD, pullConfig, pushConfig, syncConfig } from '@/composables/backup-sync/ConfigSync';
+import { CLOUD_CONFIG_EMPTY_REASON, SyncFailure } from '@/composables/backup-sync/backupSyncUtils';
 
-const { createConfigSyncOps } = await import('@/composables/backup-sync/ConfigSync');
+const profile: WebDAVProfile = { id: 'p1', name: '坚果云', url: 'https://dav.example.com', username: 'u', passwordEncrypted: 'x', remotePath: '/PicNexus/' };
+const decrypt = vi.fn(async (s: string) => s.replace('PNXPWD:', ''));
 
-function makeDeps() {
+function local(): UserConfig {
   return {
-    toast: {
-      showConfig: toastShowConfigMock,
-      success: toastSuccessMock,
-      error: toastErrorMock,
-      info: toastInfoMock,
-      warn: vi.fn(),
-      show: vi.fn(),
-      clear: vi.fn(),
-      silent: vi.fn(),
-      withAction: vi.fn(),
-    },
-    confirmDialog: confirmDialogMock,
-    tryDecryptContent: vi.fn(),
-    updateConfigSyncStatus: updateConfigSyncStatusMock,
-    updateHistorySyncStatus: vi.fn(),
-    uploadSettingsLoading: ref(false),
-    downloadSettingsLoading: ref(false),
-    uploadHistoryLoading: ref(false),
-    downloadHistoryLoading: ref(false),
-    syncConfigLoading: ref(false),
-    syncHistoryLoading: ref(false),
-    uploadHistoryMenuVisible: ref(false),
-    downloadSettingsMenuVisible: ref(true),
-    downloadHistoryMenuVisible: ref(false),
-    needsReload: ref(false),
-    acquireCloudSync: vi.fn(() => true),
-    releaseCloudSync: vi.fn(),
+    ...structuredClone(DEFAULT_CONFIG),
+    enabledServices: ['jd'],
+    webdav: { profiles: [profile], activeId: 'p1', syncItems: { config: true, history: false } },
+    linkHealth: { docFolders: ['D:/notes'], autoCheck: { enabled: true, intervalDays: 7 } },
   };
 }
 
-const profile = {
-  id: 'profile-1',
-  name: 'Main WebDAV',
-  url: 'https://dav.example.com',
-  username: 'user',
-  password: 'pass',
-  remotePath: '/PicNexus/',
-};
+function cloud(patch: Partial<UserConfig> = {}): UserConfig {
+  return { ...structuredClone(DEFAULT_CONFIG), enabledServices: ['r2'], webdav: { profiles: [], activeId: null }, linkHealth: { docFolders: ['/Users/me/notes'], autoCheck: { enabled: false, intervalDays: 30 } }, ...patch };
+}
 
-describe('createConfigSyncOps', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useRealTimers();
-    getWebDAVClientAndPathMock.mockResolvedValue({
-      client: {
-        getFile: clientGetFileMock,
-        putFile: clientPutFileMock,
-      },
-      remotePath: '/PicNexus/settings.json',
-    });
-    configStoreGetMock.mockResolvedValue({ current: true });
-    configStoreSetMock.mockResolvedValue(undefined);
-    configStoreSaveMock.mockResolvedValue(undefined);
-    clientPutFileMock.mockResolvedValue(undefined);
-    clientGetFileMock.mockResolvedValue(JSON.stringify({ cloud: true }));
-    isValidUserConfigMock.mockReturnValue(true);
-    isPasswordModeMock.mockReturnValue(true);
-    encryptMock.mockResolvedValue('encrypted');
-    isPasswordEncryptedDataMock.mockReturnValue(false);
-    writeSyncLogMock.mockResolvedValue(undefined);
-    extractErrorCodeMock.mockReturnValue('SYNC_ERR');
-    confirmDialogMock.mockResolvedValue(true);
+beforeEach(() => {
+  m.disk = local();
+  m.set.mockReset();
+  m.passwordMode = true;
+  m.getFile.mockReset();
+  m.putFile.mockReset().mockResolvedValue(undefined);
+  m.record.mockReset();
+  m.log.mockReset();
+  decrypt.mockClear();
+});
+
+describe('syncConfig', () => {
+  it('没设备份密码时不联网、不上传（云端配置包含图床密钥）', async () => {
+    m.passwordMode = false;
+    await expect(syncConfig(profile, decrypt)).rejects.toThrow(NEED_BACKUP_PASSWORD);
+    expect(m.getFile).not.toHaveBeenCalled();
+    expect(m.putFile).not.toHaveBeenCalled();
   });
 
-  it('uploads the local config to WebDAV and encrypts it when password mode is enabled', async () => {
-    isPasswordModeMock.mockReturnValue(true);
-    configStoreGetMock.mockResolvedValueOnce({ local: true });
-    encryptMock.mockResolvedValueOnce('encrypted-config');
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.uploadSettingsCloud(profile);
-
-    expect(clientPutFileMock).toHaveBeenCalledWith('/PicNexus/settings.json', 'encrypted-config');
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_settings_cloud', 'success', undefined, profile);
-    expect(deps.uploadSettingsLoading.value).toBe(false);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
+  it('合并云端配置：留本机的同步连接与文档文件夹，自动检测取云端的；之后回传并报告「改了」', async () => {
+    m.getFile.mockResolvedValue(JSON.stringify(cloud()));
+    const result = await syncConfig(profile, decrypt);
+    const merged = m.disk as UserConfig;
+    expect(result.changed).toBe(true);
+    expect(merged.enabledServices).toEqual(['r2']);
+    expect(merged.webdav).toEqual(local().webdav);
+    expect(merged.linkHealth).toEqual({ docFolders: ['D:/notes'], autoCheck: { enabled: false, intervalDays: 30 } });
+    expect(m.putFile).toHaveBeenCalledWith('/PicNexus/settings.json', expect.stringMatching(/^enc:/));
+    expect(m.record).toHaveBeenCalledWith(profile, 'config', 'success');
   });
 
-  it('blocks config upload before WebDAV setup or locking when no backup password exists', async () => {
-    isPasswordModeMock.mockReturnValue(false);
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.uploadSettingsCloud(profile);
-
-    expect(getWebDAVClientAndPathMock).not.toHaveBeenCalled();
-    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  it('云端与本机一样时不写本机，报告「没改」', async () => {
+    m.getFile.mockResolvedValue(JSON.stringify({ ...local() }));
+    const result = await syncConfig(profile, decrypt);
+    expect(result.changed).toBe(false);
+    expect(m.set).not.toHaveBeenCalled();
   });
 
-  it('blocks bidirectional config sync before network access when no backup password exists', async () => {
-    isPasswordModeMock.mockReturnValue(false);
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(getWebDAVClientAndPathMock).not.toHaveBeenCalled();
-    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
-    expect(clientGetFileMock).not.toHaveBeenCalled();
-    expect(clientPutFileMock).not.toHaveBeenCalled();
+  it('加密的云端配置先解密', async () => {
+    m.getFile.mockResolvedValue(`PNXPWD:${JSON.stringify(cloud())}`);
+    await syncConfig(profile, decrypt);
+    expect(decrypt).toHaveBeenCalled();
+    expect((m.disk as UserConfig).enabledServices).toEqual(['r2']);
   });
 
-  it('downloads encrypted settings, decrypts them and saves the imported config', async () => {
-    vi.useFakeTimers();
-    clientGetFileMock.mockResolvedValueOnce('encrypted-payload');
-    isPasswordEncryptedDataMock.mockReturnValueOnce(true);
-
-    const deps = makeDeps();
-    deps.tryDecryptContent.mockResolvedValueOnce(JSON.stringify({ fromCloud: true }));
-    const ops = createConfigSyncOps(deps);
-
-    await ops.downloadSettingsOverwrite(profile);
-    await vi.runAllTimersAsync();
-
-    expect(deps.downloadSettingsMenuVisible.value).toBe(false);
-    expect(deps.tryDecryptContent).toHaveBeenCalledWith('encrypted-payload');
-    expect(configStoreSetMock).toHaveBeenCalledWith('config', { fromCloud: true });
-    expect(configStoreSaveMock).toHaveBeenCalledTimes(1);
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
-    expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
-    expect(deps.needsReload.value).toBe(true);
+  it('首次同步（云端没有文件）照常上传', async () => {
+    m.getFile.mockResolvedValue(null);
+    await expect(syncConfig(profile, decrypt)).resolves.toEqual({ changed: false });
+    expect(m.putFile).toHaveBeenCalled();
   });
 
-  it('does not download overwrite settings when the destructive confirmation is rejected', async () => {
-    confirmDialogMock.mockResolvedValueOnce(false);
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.downloadSettingsOverwrite(profile);
-
-    expect(deps.downloadSettingsMenuVisible.value).toBe(false);
-    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
-    expect(clientGetFileMock).not.toHaveBeenCalled();
-    expect(configStoreSetMock).not.toHaveBeenCalled();
-    expect(updateConfigSyncStatusMock).not.toHaveBeenCalled();
+  it.each([
+    ['非 404 的拉取错误', () => m.getFile.mockRejectedValue(new Error('HTTP 401 Unauthorized'))],
+    ['云端文件 0 字节', () => m.getFile.mockResolvedValue('')],
+    ['云端内容不是配置', () => m.getFile.mockResolvedValue(JSON.stringify({ hello: 1 }))],
+  ])('%s：中止，不覆盖云端', async (_name, arrange) => {
+    arrange();
+    const error = await syncConfig(profile, decrypt).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SyncFailure);
+    expect((error as SyncFailure).partial).toBe(false);
+    expect(m.putFile).not.toHaveBeenCalled();
+    expect(m.record).toHaveBeenCalledWith(profile, 'config', 'failed', expect.any(String));
   });
 
-  it('marks download overwrite as failed when cloud settings are not a valid config', async () => {
-    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({ results: [] }));
-    isValidUserConfigMock.mockReturnValueOnce(false);
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.downloadSettingsOverwrite(profile);
-
-    expect(configStoreSetMock).not.toHaveBeenCalled();
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', expect.any(String));
-    expect(writeSyncLogMock.mock.calls.some(([operation, result]) => (
-      operation === 'download_settings_cloud' && result === 'success'
-    ))).toBe(false);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
-    expect(deps.releaseCloudSync).toHaveBeenCalledTimes(1);
-    expect(deps.downloadSettingsLoading.value).toBe(false);
+  it('空文件的中止原因写明出路（「⋯ › 用本机覆盖云端」）', async () => {
+    m.getFile.mockResolvedValue('');
+    await expect(syncConfig(profile, decrypt)).rejects.toThrow(CLOUD_CONFIG_EMPTY_REASON);
   });
 
-  // 合并时绝不能让云端的 webdav 段盖掉本地的——否则同步一次就把自己的图床凭据换成了别人的。
-  // 这条契约原本挂在 downloadSettingsMerge 上，那个入口从没接进 UI 已删除；
-  // syncConfig 第一步是同一套 `{...云端, webdav: 本地}` 逻辑，判据改挂到它上面。
-  it('preserves the local WebDAV config when syncConfig merges cloud settings', async () => {
-    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({
-      webdav: { url: 'https://cloud.example.com' },
-      fromCloud: true,
-    }));
-    configStoreGetMock
-      .mockResolvedValueOnce({ webdav: { url: 'https://local.example.com' }, keepLocal: true })
-      .mockResolvedValueOnce({ webdav: { url: 'https://local.example.com' }, fromCloud: true });
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({
-      webdav: { url: 'https://local.example.com' },
-      fromCloud: true,
-    }));
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
+  it('合并进本机后回传失败：标「部分完成」', async () => {
+    m.getFile.mockResolvedValue(JSON.stringify(cloud()));
+    m.putFile.mockRejectedValue(new Error('timeout'));
+    const error = await syncConfig(profile, decrypt).catch((e: unknown) => e) as SyncFailure;
+    expect(error.partial).toBe(true);
+    expect(m.record).toHaveBeenCalledWith(profile, 'config', 'partial', expect.any(String));
   });
 
-  // 文档文件夹是本机路径：同步一次就换成另一台电脑的路径，链接健康页会列出一串「文件夹不存在」
-  it('keeps the local document folders and takes the cloud auto-check setting when syncConfig merges', async () => {
-    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({
-      linkHealth: { docFolders: ['/Users/other/Notes'], autoCheck: { enabled: false, intervalDays: 30 } },
-    }));
-    configStoreGetMock
-      .mockResolvedValueOnce({ linkHealth: { docFolders: ['D:\Notes'], autoCheck: { enabled: true, intervalDays: 7 } } })
-      .mockResolvedValueOnce({});
+  it('输入密码时取消：整次放弃，不上传', async () => {
+    m.getFile.mockResolvedValue('PNXPWD:x');
+    decrypt.mockRejectedValueOnce(new Error('user_cancelled'));
+    await expect(syncConfig(profile, decrypt)).rejects.toThrow('user_cancelled');
+    expect(m.putFile).not.toHaveBeenCalled();
+  });
+});
 
-    await createConfigSyncOps(makeDeps()).syncConfig(profile);
-
-    expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({
-      linkHealth: { docFolders: ['D:\Notes'], autoCheck: { enabled: false, intervalDays: 30 } },
-    }));
+describe('覆盖', () => {
+  it('用本机覆盖云端：没设备份密码时不上传', async () => {
+    m.passwordMode = false;
+    await expect(pushConfig(profile)).rejects.toThrow(NEED_BACKUP_PASSWORD);
+    expect(m.putFile).not.toHaveBeenCalled();
   });
 
-  it('marks syncConfig as partial when upload fails after cloud data has already been merged locally', async () => {
-    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({
-      webdav: { url: 'https://cloud.example.com' },
-      remoteFlag: true,
-    }));
-    configStoreGetMock
-      .mockResolvedValueOnce({ webdav: { url: 'https://local.example.com' } })
-      .mockResolvedValueOnce({
-        webdav: { url: 'https://local.example.com' },
-        remoteFlag: true,
-      });
-    clientPutFileMock.mockRejectedValueOnce(new Error('put failed'));
-    extractErrorCodeMock.mockReturnValueOnce('PUT_FAILED');
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({
-      webdav: { url: 'https://local.example.com' },
-      remoteFlag: true,
-    }));
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'partial', 'PUT_FAILED');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'PUT_FAILED', profile);
-    expect(toastErrorMock).toHaveBeenCalledTimes(1);
-    expect(deps.syncConfigLoading.value).toBe(false);
+  it('用云端覆盖本机：同样留本机的同步连接与文档文件夹', async () => {
+    m.getFile.mockResolvedValue(JSON.stringify(cloud()));
+    await pullConfig(profile, decrypt);
+    expect((m.disk as UserConfig).enabledServices).toEqual(['r2']);
+    expect((m.disk as UserConfig).webdav).toEqual(local().webdav);
+    expect(m.putFile).not.toHaveBeenCalled();
   });
 
-  it('cancels syncConfig without uploading when the password dialog is cancelled during cloud download', async () => {
-    clientGetFileMock.mockResolvedValueOnce('encrypted-payload');
-    isPasswordEncryptedDataMock.mockReturnValueOnce(true);
-
-    const deps = makeDeps();
-    deps.tryDecryptContent.mockRejectedValueOnce(new Error('user_cancelled'));
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(updateConfigSyncStatusMock).not.toHaveBeenCalled();
-    expect(writeSyncLogMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).not.toHaveBeenCalled();
-    expect(deps.releaseCloudSync).toHaveBeenCalledTimes(1);
-    expect(deps.syncConfigLoading.value).toBe(false);
-  });
-
-  it('stops syncConfig before upload when cloud settings download fails with a non-404 WebDAV error', async () => {
-    clientGetFileMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
-    extractErrorCodeMock.mockReturnValueOnce('AUTH_FAILED');
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(configStoreSetMock).not.toHaveBeenCalled();
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'AUTH_FAILED');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'AUTH_FAILED', profile);
-    expect(toastErrorMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('stops syncConfig before upload when cloud settings are not a valid config', async () => {
-    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({ results: [] }));
-    isValidUserConfigMock.mockReturnValueOnce(false);
-    extractErrorCodeMock.mockReturnValueOnce('INVALID_CLOUD_CONFIG');
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(configStoreSetMock).not.toHaveBeenCalled();
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'INVALID_CLOUD_CONFIG');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'INVALID_CLOUD_CONFIG', profile);
-    expect(toastErrorMock).toHaveBeenCalledTimes(1);
-  });
-
-  // 云端 settings.json 是 0 字节（多半是上次 PUT 中断留下的）：此前 `if (rawContent)`
-  // 把空串当成「首次同步」，步骤 2 直接拿本地配置盖掉云端。
-  it('stops syncConfig before upload when the cloud config file is empty', async () => {
-    clientGetFileMock.mockResolvedValueOnce('');
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(configStoreSetMock).not.toHaveBeenCalled();
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'SYNC_ERR');
-    // stage 仍是 'download'、hasCloudData 仍是 false → 不能误报「云端数据已合并到本地」，
-    // 也不能点亮需要重启的 banner。
-    expect(updateConfigSyncStatusMock).not.toHaveBeenCalledWith(profile, 'partial', expect.anything());
-    expect(deps.needsReload.value).toBe(false);
-  });
-
-  // 反向回归：云端**真的**还没有 settings.json（getFile 返回 null）是首次同步的正常路径，
-  // 必须照常上传。上面那条中止若写成 `!rawContent` 就会把首次同步一起堵死。
-  it('still uploads on first sync when the cloud config file does not exist', async () => {
-    clientGetFileMock.mockResolvedValueOnce(null);
-
-    const deps = makeDeps();
-    const ops = createConfigSyncOps(deps);
-
-    await ops.syncConfig(profile);
-
-    expect(clientPutFileMock).toHaveBeenCalledTimes(1);
-    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
+  it('用云端覆盖本机：云端没有文件算失败（没东西可还原），本机不动', async () => {
+    m.getFile.mockResolvedValue(null);
+    await expect(pullConfig(profile, decrypt)).rejects.toBeInstanceOf(SyncFailure);
+    expect(m.set).not.toHaveBeenCalled();
   });
 });

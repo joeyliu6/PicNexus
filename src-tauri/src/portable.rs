@@ -23,10 +23,6 @@ pub fn portable_root() -> Option<PathBuf> {
     marker.exists().then_some(dir)
 }
 
-pub fn is_portable() -> bool {
-    portable_root().is_some()
-}
-
 pub fn portable_data_dir() -> Option<PathBuf> {
     portable_root().map(|root| root.join(PORTABLE_DATA_DIR))
 }

@@ -130,8 +130,8 @@ const UPDATE_FAILURE_RULES: FailureRule[] = [
     pattern: /error sending request|error following redirect|request or response body error|builder error|error upgrading connection|timed? ?out|timeout|\bdns\b|connection (?:reset|refused|closed|aborted)|network (?:is )?unreachable|certificate|\btls\b|\bssl\b/iu,
     resolve: (phase) => phase === 'download'
       ? {
-        title: '更新包下载中断',
-        hint: '网络不稳定，可重新下载或手动下载',
+        title: '下载被中断',
+        hint: '无法连接 GitHub，请稍后重试或前往发布页手动下载',
       }
       : {
         title: '连不上更新服务器',

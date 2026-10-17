@@ -514,4 +514,7 @@ export interface WebDAVConfig {
 
   /** 当前选中的配置 ID，null 表示未选中 */
   activeId: string | null;
+
+  /** 同步哪些内容（设置页云同步卡的勾选）；不设 = 配置与上传记录都同步。本机设置，云同步合并时保留本机的 */
+  syncItems?: { config: boolean; history: boolean };
 }

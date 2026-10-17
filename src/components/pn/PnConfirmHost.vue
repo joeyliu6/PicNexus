@@ -2,7 +2,6 @@
 // 全局确认框：画 confirmStore 队首的那一个（useConfirm 的所有调用都走这里）
 import { computed } from 'vue';
 import PnButton from './PnButton.vue';
-import PnCheckbox from './PnCheckbox.vue';
 import PnDialog from './PnDialog.vue';
 import { currentConfirm, settleConfirm, type ConfirmResult } from './confirmStore';
 
@@ -30,9 +29,6 @@ const icon = computed(() => (request.value?.tone === 'brand' ? 'info' : 'warning
   >
     <span class="pn-confirm__message">{{ request.message }}</span>
     <span v-if="request.code" class="pn-confirm__code">{{ request.code }}</span>
-    <PnCheckbox v-if="request.clearOptOut" v-model="request.clearOptOut.checked">
-      本次运行内不再提示（重启后恢复）
-    </PnCheckbox>
     <template #footer>
       <PnButton variant="secondary" size="dialog" :data-autofocus="request.danger ? '' : undefined" @click="finish('reject')">
         {{ request.rejectLabel }}

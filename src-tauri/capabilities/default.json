@@ -96,7 +96,6 @@
     "process:allow-restart",
     "log:default",
     "allow-set-close-to-tray",
-    "allow-is-portable-mode",
     "allow-get-user-data-dir",
     "allow-get-history-db-path",
     "allow-analytics-send-batch",

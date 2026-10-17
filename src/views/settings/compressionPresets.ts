@@ -1,15 +1,10 @@
 // 压缩方案（S02「图片压缩」）：一行说明怎么写、取值范围、新方案叫什么。纯函数，组件与测试共用。
-import { DEFAULT_COMPRESSION_PRESET, type CompressionOutputFormat, type CompressionPreset, type ImageCompressionConfig } from '@/config/types';
+import { DEFAULT_COMPRESSION_PRESET, type CompressionPreset, type ImageCompressionConfig } from '@/config/types';
+import { FORMAT_LABELS } from '@/utils/compressionPresetText';
 import { formatFileSize } from '@/utils/formatters';
 
 /** 最多几个方案（设计稿「最多 5 个」） */
 export const MAX_PRESETS = 5;
-
-export const FORMAT_LABELS: Record<CompressionOutputFormat, string> = {
-  original: '原格式',
-  webp: 'WebP',
-  jpeg: 'JPEG',
-};
 
 /** 「小于 100 KB 不压缩」：整 MB 写成「2 MB」，其余按全应用的文件大小写法 */
 export function formatSkipSize(kb: number): string {

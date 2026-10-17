@@ -18,7 +18,10 @@ function applyOverride<T>(override: InvokeOverride, args: unknown): Promise<T> {
   }
   if (override.errorValue !== undefined) return Promise.reject(override.errorValue);
   if (override.byArg) {
-    const value = String((args as Record<string, unknown> | undefined)?.[override.byArg.key] ?? '');
+    // key 可以写成点路径（'request.method'），多个 key 的取值用空格连起来查（'GET https://…/settings.json'）
+    const keys = Array.isArray(override.byArg.key) ? override.byArg.key : [override.byArg.key];
+    const pick = (path: string) => path.split('.').reduce<unknown>((value, part) => (value as Record<string, unknown> | undefined)?.[part], args);
+    const value = keys.map((key) => String(pick(key) ?? '')).join(' ');
     if (value in override.byArg.results) return Promise.resolve(override.byArg.results[value] as T);
   }
   const filePath = String((args as { filePath?: unknown } | undefined)?.filePath ?? '');

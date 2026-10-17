@@ -14,8 +14,6 @@ export interface ConfirmRequestOptions {
   tone: ConfirmTone;
   /** 确认按钮用危险样式（红底）；默认焦点随之落在「取消」，回车不会误触 */
   danger: boolean;
-  /** 「本次运行内不再提示」勾选框的状态容器；不传不显示 */
-  clearOptOut?: { checked: boolean };
   /** 正文下面单独一行等宽显示的内容（P12 明文 HTTP 确认里的地址） */
   code?: string;
 }

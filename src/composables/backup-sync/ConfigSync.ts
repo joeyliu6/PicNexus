@@ -1,253 +1,152 @@
-// src/composables/backup-sync/ConfigSync.ts
-// 云端配置同步：上传 / 覆盖下载 / 双向同步（合并语义只由「同步」提供）
+// 云端配置同步：合并同步 / 用本机覆盖云端 / 用云端覆盖本机。
+// 不弹通知：结果返回给调用方（设置页云同步卡写在状态行），失败抛 SyncFailure（原因 + 处理办法）。
+// 云端配置含图床密钥：没设备份密码时不上传（调用方先引导设置密码）。
 
 import type { WebDAVProfile, UserConfig } from '@/config/types';
 import { DEFAULT_CONFIG, isValidUserConfig } from '@/config/types';
 import { configStore } from '@/store/instances';
 import { secureStorage, isPasswordEncryptedData } from '@/security/crypto';
-import { TOAST_MESSAGES } from '@/constants';
 import { createLogger } from '@/utils/logger';
-import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError, CLOUD_CONFIG_EMPTY_REASON } from './backupSyncUtils';
-import type { BackupCloudDeps } from './useBackupCloud';
+import {
+  writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError,
+  CLOUD_CONFIG_EMPTY_REASON, SyncFailure, SYNC_NOT_CONFIGURED,
+} from './backupSyncUtils';
+import { recordSync } from './syncRecords';
 
 const log = createLogger('ConfigSync');
 
-export function createConfigSyncOps(deps: BackupCloudDeps) {
-  const {
-    toast, confirmDialog, tryDecryptContent,
-    updateConfigSyncStatus,
-    uploadSettingsLoading, downloadSettingsLoading, syncConfigLoading,
-    downloadSettingsMenuVisible,
-    needsReload,
-    acquireCloudSync, releaseCloudSync,
-  } = deps;
+/** 解开加密内容（弹「输入备份密码」）；用户取消时抛 Error('user_cancelled') */
+export type DecryptContent = (encrypted: string) => Promise<string>;
 
-  async function uploadSettingsCloud(profile: WebDAVProfile | null): Promise<void> {
-    if (!secureStorage.isPasswordMode()) {
-      log.warn('未设置备份密码，已阻止云端配置上传');
-      toast.error('请先设置备份密码', '云端配置包含图床凭据，设置密码后才能上传');
-      return;
-    }
+export const NEED_BACKUP_PASSWORD = '同步配置前需要先设置备份密码（云端配置包含图床密钥）';
 
-    const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
-    if (!webdav) return;
-    if (!acquireCloudSync(toast)) return;
-
-    try {
-      uploadSettingsLoading.value = true;
-
-      const config = await configStore.get<UserConfig>('config');
-      if (!config) {
-        throw new Error('无法读取本地配置');
-      }
-
-      const jsonContent = JSON.stringify(config, null, 2);
-      const uploadContent = await secureStorage.encrypt(jsonContent);
-      await webdav.client.putFile(webdav.remotePath, uploadContent);
-
-      updateConfigSyncStatus(profile, 'success');
-      await writeSyncLog('upload_settings_cloud', 'success', undefined, profile);
-      toast.showConfig('success', TOAST_MESSAGES.sync.uploadSuccess('config'));
-    } catch (error) {
-      const errorCode = extractErrorCode(error);
-      log.error('上传配置失败:', error);
-      updateConfigSyncStatus(profile, 'failed', errorCode);
-      await writeSyncLog('upload_settings_cloud', 'failed', errorCode, profile);
-      toast.showConfig('error', TOAST_MESSAGES.sync.uploadFailed(errorCode));
-    } finally {
-      uploadSettingsLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
-  async function downloadSettingsOverwrite(profile: WebDAVProfile | null): Promise<void> {
-    downloadSettingsMenuVisible.value = false;
-
-    const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
-    if (!webdav) return;
-
-    const confirmed = await confirmDialog(
-      '本地的所有配置（包括 WebDAV 连接信息）将被云端数据替换。此操作不可撤销。',
-      { header: '覆盖本地配置', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
-    );
-    if (!confirmed) return;
-    if (!acquireCloudSync(toast)) return;
-
-    try {
-      downloadSettingsLoading.value = true;
-
-      const rawContent = await webdav.client.getFile(webdav.remotePath);
-
-      if (!rawContent) {
-        throw new Error('云端配置文件不存在');
-      }
-
-      let content = rawContent;
-      if (isPasswordEncryptedData(rawContent.trim())) {
-        content = await tryDecryptContent(rawContent.trim());
-      }
-
-      const importedConfig = JSON.parse(content) as unknown;
-
-      if (!isValidUserConfig(importedConfig)) {
-        updateConfigSyncStatus(profile, 'failed', '云端数据格式无效');
-        toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed('云端配置文件内容格式无效'));
-        return;
-      }
-
-      await configStore.set('config', importedConfig);
-      await configStore.save();
-
-      updateConfigSyncStatus(profile, 'success');
-      await writeSyncLog('download_settings_cloud', 'success', undefined, profile);
-      toast.showConfig('success', TOAST_MESSAGES.sync.downloadSuccess('config'));
-
-      needsReload.value = true;
-    } catch (error) {
-      if (error instanceof Error && error.message === 'user_cancelled') return;
-      const errorCode = extractErrorCode(error);
-      log.error('下载配置失败:', error);
-      updateConfigSyncStatus(profile, 'failed', errorCode);
-      await writeSyncLog('download_settings_cloud', 'failed', errorCode, profile);
-      toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed(errorCode));
-    } finally {
-      downloadSettingsLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
-  async function syncConfig(profile: WebDAVProfile | null): Promise<void> {
-    if (!profile) return;
-    if (!secureStorage.isPasswordMode()) {
-      log.warn('未设置备份密码，已阻止云端配置双向同步');
-      toast.error('请先设置备份密码', '云端配置包含图床凭据，设置密码后才能同步');
-      return;
-    }
-    const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
-    if (!webdav) return;
-    if (!acquireCloudSync(toast)) return;
-
-    let stage: 'download' | 'upload' = 'download';
-    // Why: 需要在外层 catch 里根据是否已合并云端数据来决定 toast 文案，所以声明挪到 try 之外
-    let hasCloudData = false;
-    // 云端配置文件存在但读不出可用内容（0 字节）时的中止原因，见下方 Why
-    let cloudUnusable: string | null = null;
-
-    try {
-      syncConfigLoading.value = true;
-
-      const currentConfig = await configStore.get<UserConfig>('config');
-
-      // 步骤 1：拉取云端配置并合并到本地（保留本地 WebDAV 配置）
-      try {
-        const rawContent = await webdav.client.getFile(webdav.remotePath);
-        // Why 用 `=== ''` 而不是 `!rawContent`：`getFile` 对 HTTP 404 返回 **null**（云端还没
-        // 这个文件，首次同步的正常路径，必须放行），对 200 + 空响应体返回 **空字符串**
-        // （文件在、但是 0 字节，多半是上次 PUT 中断留下的）。两者用 falsy 合并判断的话，
-        // 空文件会被当成「首次同步」，步骤 2 就拿本地配置把云端盖了。
-        if (rawContent === '') {
-          cloudUnusable = CLOUD_CONFIG_EMPTY_REASON;
-        } else if (rawContent) {
-          let contentStr = rawContent;
-          if (isPasswordEncryptedData(rawContent.trim())) {
-            contentStr = await tryDecryptContent(rawContent.trim());
-          }
-          const importedConfig = JSON.parse(contentStr) as unknown;
-          if (!isValidUserConfig(importedConfig)) {
-            throw new Error('云端配置文件内容格式无效');
-          }
-
-          hasCloudData = true;
-
-          // Why: 首次使用/配置缺失场景下 currentConfig 为 null，若仅在 currentConfig 存在时保存，
-          // 云端合法配置会被静默丢弃，随后 step 2 读不到本地配置抛"无法读取本地配置"
-          if (currentConfig) {
-            // 文档文件夹是本机路径，换一台电脑多半不存在：合并时留本机的
-            const mergedConfig: UserConfig = {
-              ...importedConfig,
-              webdav: currentConfig.webdav,
-              linkHealth: {
-                ...DEFAULT_CONFIG.linkHealth!,
-                ...importedConfig.linkHealth,
-                docFolders: currentConfig.linkHealth?.docFolders ?? [],
-              },
-            };
-            await configStore.set('config', mergedConfig);
-            await configStore.save();
-          } else {
-            await configStore.set('config', importedConfig);
-            await configStore.save();
-          }
-        }
-      } catch (downloadError) {
-        // Why: 原实现 catch {} 会连 user_cancelled（用户取消输密码）和网络/解密/JSON 错误
-        // 一起吞掉，直接进入上传步骤有覆盖云端合法数据的风险。
-        // - user_cancelled 必须向外抛，让上层 return 掉整个同步流程；
-        // - 只有远端文件不存在可以容忍；认证、网络、JSON/格式错误必须中止，避免覆盖云端。
-        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
-          throw downloadError;
-        }
-        if (!isWebDAVNotFoundError(downloadError)) {
-          log.error('拉取云端配置失败，已中止以避免覆盖云端数据:', downloadError);
-          throw downloadError;
-        }
-        log.warn('云端配置文件不存在，将按首次同步处理');
-      }
-
-      // Why 抛在 catch 之外、且在 stage 改成 'upload' 之前：
-      // 1. 内层 catch 的 isWebDAVNotFoundError 是**子串匹配**，文案里只要出现「文件不存在」
-      //    /404/not found 就会被当成「云端没这个文件」吞掉，中止静默退化回覆盖云端；
-      // 2. 此刻 stage 仍是 'download'、hasCloudData 仍是 false，外层 catch 才会走
-      //    「同步失败：无法获取云端配置」，而不是误报「云端数据已合并到本地」。
-      if (cloudUnusable) {
-        log.error('云端配置数据不可用，已中止以避免覆盖云端数据:', cloudUnusable);
-        throw new Error(cloudUnusable);
-      }
-
-      // 步骤 2：将本地配置上传到云端
-      stage = 'upload';
-      const finalConfig = await configStore.get<UserConfig>('config');
-      if (!finalConfig) throw new Error('无法读取本地配置');
-
-      const jsonContent = JSON.stringify(finalConfig, null, 2);
-      const uploadContent = await secureStorage.encrypt(jsonContent);
-      await webdav.client.putFile(webdav.remotePath, uploadContent);
-
-      updateConfigSyncStatus(profile, 'success');
-      await writeSyncLog('sync_settings', 'success', undefined, profile);
-      toast.success('已同步配置');
-
-      if (hasCloudData) {
-        needsReload.value = true;
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message === 'user_cancelled') return;
-      const errorCode = extractErrorCode(error);
-      log.error('配置同步失败:', error);
-      await writeSyncLog('sync_settings', 'failed', errorCode, profile);
-
-      if (stage === 'upload') {
-        // Why: hasCloudData=false 时 step 1 实际上什么都没合并，旧文案会误导用户"云端数据已覆盖本地"。
-        if (hasCloudData) {
-          updateConfigSyncStatus(profile, 'partial', errorCode);
-          toast.error('云端数据已合并到本地，但上传失败', errorCode);
-        } else {
-          updateConfigSyncStatus(profile, 'failed', errorCode);
-          toast.error('同步失败：本地配置上传失败', errorCode);
-        }
-      } else {
-        updateConfigSyncStatus(profile, 'failed', errorCode);
-        toast.error('同步失败：无法获取云端配置', errorCode);
-      }
-    } finally {
-      syncConfigLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
+/** 云端合并进本机时留本机的几项：同步连接本身，以及文档文件夹（本机路径，换台电脑多半不存在） */
+export function mergeCloudConfig(cloud: UserConfig, local: UserConfig): UserConfig {
   return {
-    uploadSettingsCloud,
-    downloadSettingsOverwrite,
-    syncConfig,
+    ...cloud,
+    webdav: local.webdav,
+    linkHealth: {
+      ...DEFAULT_CONFIG.linkHealth!,
+      ...cloud.linkHealth,
+      docFolders: local.linkHealth?.docFolders ?? [],
+    },
   };
+}
+
+async function client(profile: WebDAVProfile) {
+  const webdav = await getWebDAVClientAndPath(profile, 'settings');
+  if (!webdav) throw new SyncFailure(SYNC_NOT_CONFIGURED, 'config');
+  return webdav;
+}
+
+/** 读云端配置：没有文件返回 null；0 字节、格式坏都中止（继续上传就等于拿本机把云端盖了） */
+async function readCloudConfig(webdav: Awaited<ReturnType<typeof client>>, decrypt: DecryptContent): Promise<UserConfig | null> {
+  let raw: string | null;
+  try {
+    raw = await webdav.client.getFile(webdav.remotePath);
+  } catch (error) {
+    // 只容忍「云端没这个文件」；认证、网络错误必须中止，免得下一步覆盖云端
+    if (isWebDAVNotFoundError(error)) return null;
+    throw error;
+  }
+  // Why 用 `=== ''`：getFile 对 404 返回 null（首次同步，放行），对 200 + 空响应体返回 ''
+  //（文件在但 0 字节，多半是上次上传中断留下的）——后者必须中止
+  if (raw === null) return null;
+  if (raw === '') throw new Error(CLOUD_CONFIG_EMPTY_REASON);
+  const content = isPasswordEncryptedData(raw.trim()) ? await decrypt(raw.trim()) : raw;
+  const parsed = JSON.parse(content) as unknown;
+  if (!isValidUserConfig(parsed)) throw new Error('云端配置文件内容格式无效');
+  return parsed;
+}
+
+async function upload(webdav: Awaited<ReturnType<typeof client>>): Promise<void> {
+  const config = await configStore.get<UserConfig>('config');
+  if (!config) throw new Error('无法读取本地配置');
+  await webdav.client.putFile(webdav.remotePath, await secureStorage.encrypt(JSON.stringify(config, null, 2)));
+}
+
+function isCancel(error: unknown): boolean {
+  return error instanceof Error && error.message === 'user_cancelled';
+}
+
+/**
+ * 合并同步：先把云端配置并进本机（留本机的连接与文档文件夹），再把结果传回云端。
+ * changed = 本机配置被云端改了（需要刷新才生效）。
+ */
+export async function syncConfig(profile: WebDAVProfile, decrypt: DecryptContent): Promise<{ changed: boolean }> {
+  if (!secureStorage.isPasswordMode()) throw new SyncFailure(NEED_BACKUP_PASSWORD, 'config');
+  const webdav = await client(profile);
+  let changed = false;
+  try {
+    const cloud = await readCloudConfig(webdav, decrypt);
+    if (cloud) {
+      const local = await configStore.get<UserConfig>('config');
+      // 首次使用 / 配置缺失：本机没有配置时直接用云端的，否则下一步读不到本地配置
+      const merged = local ? mergeCloudConfig(cloud, local) : cloud;
+      changed = JSON.stringify(merged) !== JSON.stringify(local);
+      if (changed) {
+        await configStore.set('config', merged);
+        await configStore.save();
+      }
+    }
+  } catch (error) {
+    if (isCancel(error)) throw error;
+    const reason = extractErrorCode(error);
+    log.error('拉取云端配置失败，已中止以避免覆盖云端数据:', error);
+    await recordSync(profile, 'config', 'failed', reason);
+    await writeSyncLog('sync_settings', 'failed', reason, profile);
+    throw new SyncFailure(reason, 'config');
+  }
+
+  try {
+    await upload(webdav);
+  } catch (error) {
+    const reason = extractErrorCode(error);
+    log.error('配置同步上传失败:', error);
+    await recordSync(profile, 'config', changed ? 'partial' : 'failed', reason);
+    await writeSyncLog('sync_settings', 'failed', reason, profile);
+    throw new SyncFailure(reason, 'config', changed);
+  }
+
+  await recordSync(profile, 'config', 'success');
+  await writeSyncLog('sync_settings', 'success', changed ? '已合并云端配置' : '配置无变化', profile);
+  return { changed };
+}
+
+/** 用本机覆盖云端（配置） */
+export async function pushConfig(profile: WebDAVProfile): Promise<void> {
+  if (!secureStorage.isPasswordMode()) throw new SyncFailure(NEED_BACKUP_PASSWORD, 'config');
+  const webdav = await client(profile);
+  try {
+    await upload(webdav);
+  } catch (error) {
+    const reason = extractErrorCode(error);
+    log.error('覆盖云端配置失败:', error);
+    await recordSync(profile, 'config', 'failed', reason);
+    await writeSyncLog('upload_settings_cloud', 'failed', reason, profile);
+    throw new SyncFailure(reason, 'config');
+  }
+  await recordSync(profile, 'config', 'success');
+  await writeSyncLog('upload_settings_cloud', 'success', undefined, profile);
+}
+
+/** 用云端覆盖本机（配置）：云端没有文件也算失败（没东西可还原），本机的同步连接与文档文件夹保留 */
+export async function pullConfig(profile: WebDAVProfile, decrypt: DecryptContent): Promise<void> {
+  const webdav = await client(profile);
+  try {
+    const cloud = await readCloudConfig(webdav, decrypt);
+    if (!cloud) throw new Error('云端还没有配置文件');
+    const local = await configStore.get<UserConfig>('config');
+    await configStore.set('config', local ? mergeCloudConfig(cloud, local) : cloud);
+    await configStore.save();
+  } catch (error) {
+    if (isCancel(error)) throw error;
+    const reason = extractErrorCode(error);
+    log.error('用云端覆盖本机配置失败:', error);
+    await recordSync(profile, 'config', 'failed', reason);
+    await writeSyncLog('download_settings_cloud', 'failed', reason, profile);
+    throw new SyncFailure(reason, 'config');
+  }
+  await recordSync(profile, 'config', 'success');
+  await writeSyncLog('download_settings_cloud', 'success', undefined, profile);
 }

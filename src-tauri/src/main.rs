@@ -278,7 +278,6 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             set_close_to_tray,
-            commands::app_paths::is_portable_mode,
             commands::app_paths::get_user_data_dir,
             commands::app_paths::get_history_db_path,
             analytics::analytics_send_batch,

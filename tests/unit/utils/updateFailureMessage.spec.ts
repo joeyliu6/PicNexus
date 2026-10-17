@@ -30,8 +30,8 @@ describe('formatUpdateFailure', () => {
     it('同一个网络错误在下载阶段换一套措辞', () => {
       const text = formatUpdateFailure('download', 'error sending request for url (https://example.com/a.exe)');
 
-      expect(text.title).toBe('更新包下载中断');
-      expect(text.hint).toContain('重新下载');
+      expect(text.title).toBe('下载被中断');
+      expect(text.hint).toBe('无法连接 GitHub，请稍后重试或前往发布页手动下载');
     });
   });
 

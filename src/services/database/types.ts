@@ -78,7 +78,10 @@ export type SyncLogOperation =
   | 'sync_settings'
   | 'upload_history_cloud'
   | 'download_history_cloud'
-  | 'sync_history';
+  | 'sync_history'
+  | 'password_set'
+  | 'password_change'
+  | 'password_disable';
 
 export interface SyncLogEntry {
   id: string;

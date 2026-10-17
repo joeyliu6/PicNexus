@@ -2,9 +2,6 @@ import type {
   CustomS3Profile,
   HttpDomainConfirmable,
   EditorServerConfig,
-  ImageCompressionConfig,
-  UserConfig,
-  WebDAVProfile,
   WebDAVStorageProfile,
 } from '@/config/types';
 
@@ -29,17 +26,5 @@ export interface SettingsFormShape {
   smms: { token: string };
   github: import('@/config/types').GithubServiceConfig;
   imgur: { clientId: string; clientSecret?: string };
-  editorServer: EditorServerConfig;
-}
-
-/** 设置页的表单（不含图床：图床的凭证、启用状态、链接前缀由图床页读写） */
-export interface SettingsFormData {
-  webdav: { profiles: WebDAVProfile[]; activeId: string | null };
-  analyticsEnabled: boolean;
-  appBehavior: NonNullable<UserConfig['appBehavior']>;
-  linkOutput: NonNullable<UserConfig['linkOutput']>;
-  globalShortcut: NonNullable<UserConfig['globalShortcut']>;
-  autoUpdateEnabled: boolean;
-  imageCompression: ImageCompressionConfig;
   editorServer: EditorServerConfig;
 }

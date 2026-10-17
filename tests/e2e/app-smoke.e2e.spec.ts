@@ -124,7 +124,7 @@ test.describe('PicNexus Tauri smoke', () => {
     await expect(page.locator('.hosts-list')).toBeVisible();
 
     await navItem(page, '设置').click();
-    await expect(page.locator('.settings-layout .settings-sidebar')).toBeVisible();
+    await expect(page.locator('.settings .settings-nav')).toBeVisible();
 
     await navItem(page, '快传').click();
     await expect(page.locator('.home')).toBeVisible();
@@ -133,13 +133,9 @@ test.describe('PicNexus Tauri smoke', () => {
   test('settings save path reaches mocked native calls without crashing', async ({ page }) => {
     await openApp(page);
     await navItem(page, '设置').click();
-    await expect(page.locator('.settings-layout')).toBeVisible();
+    await expect(page.locator('.settings')).toBeVisible();
 
-    await page
-      .locator('.settings-layout .toggle-row')
-      .filter({ hasText: '开机自启动' })
-      .locator('.p-toggleswitch')
-      .click();
+    await page.locator('.settings').getByRole('switch', { name: '开机自动启动' }).click();
 
     await expect.poll(async () => {
       const state = await getE2EState(page);
@@ -202,12 +198,9 @@ test.describe('PicNexus Tauri smoke', () => {
   test('settings save failure rolls back autostart through mocked native calls', async ({ page }) => {
     await openApp(page);
     await navItem(page, '设置').click();
-    await expect(page.locator('.settings-layout')).toBeVisible();
+    await expect(page.locator('.settings')).toBeVisible();
 
-    const autoStartSwitch = page
-      .locator('.settings-layout .toggle-row')
-      .filter({ hasText: '开机自启动' })
-      .locator('.p-toggleswitch');
+    const autoStartSwitch = page.locator('.settings').getByRole('switch', { name: '开机自动启动' });
 
     await failNextSettingsWrite(page, 'mock settings disk full');
     await autoStartSwitch.click();
@@ -225,8 +218,8 @@ test.describe('PicNexus Tauri smoke', () => {
       return enableIndex >= 0 && disableIndex > enableIndex;
     }).toBe(true);
 
-    await expect(autoStartSwitch).not.toHaveClass(/p-toggleswitch-checked/);
-    const failure = page.locator('.pn-toast').filter({ hasText: '保存失败' });
+    await expect(autoStartSwitch).toHaveAttribute('aria-checked', 'false');
+    const failure = page.locator('.pn-toast').filter({ hasText: '未能保存' });
     await expect(failure).toBeVisible();
     await expect(failure.locator('.pn-toast__glyph--error')).toBeVisible();
   });

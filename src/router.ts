@@ -4,7 +4,7 @@ import HomeView from '@/views/home/HomeView.vue';
 import GalleryView from '@/views/gallery/GalleryView.vue';
 import HealthView from '@/views/health/HealthView.vue';
 import HostsView from '@/views/hosts/HostsView.vue';
-import SettingsView from '@/components/views/SettingsView.vue';
+import SettingsView from '@/views/settings/SettingsView.vue';
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/home' },
@@ -12,7 +12,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/gallery', component: GalleryView, meta: { pageKey: 'gallery' } },
   { path: '/health', component: HealthView, meta: { pageKey: 'health' } },
   { path: '/hosts', component: HostsView, meta: { pageKey: 'hosts' } },
-  { path: '/settings', component: SettingsView, meta: { pageKey: 'settings', legacyTitle: '设置' } },
+  { path: '/settings', component: SettingsView, meta: { pageKey: 'settings' } },
   { path: '/:pathMatch(.*)*', redirect: '/home' },
 ];
 

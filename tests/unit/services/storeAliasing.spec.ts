@@ -14,27 +14,30 @@
  *
  * 覆盖三层：
  *  1. Store 本身：两次 get() 必须是不同引用，就地改写不影响下一次 get() 的结果
- *  2. useSettingsForm：保存失败后正确回滚到磁盘真值（而不是停在编辑值上空转）——
- *     取代 useSettingsForm.spec.ts 里那个用"configStore.get 每次返回新对象" mock 遮住别名关系、
- *     因而测不出真实缺陷的旧用例
+ *  2. 设置页（useSettingsConfig）：保存失败后界面回到磁盘真值（而不是停在编辑值上空转）
  *  3. useConfig.loadConfig：塞进 ref 的值同样与缓存解耦（审计文档要求一并核实的第二个消费点）
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
 import { Store } from '@/store';
 import { configStore } from '@/store/instances';
-import { useSettingsForm } from '@/composables/settings/useSettingsForm';
+import { useSettingsConfig } from '@/views/settings/useSettingsConfig';
 import { useConfigManager } from '@/composables/useConfig';
 import { createConfig } from '../factories/configFactory';
 import { resetTauriMocks, setupInvokeResponses } from '../helpers/tauriMock';
 
 const mockState = vi.hoisted(() => ({
   toastShowConfig: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock('@/store/instances', async () => {
   const { Store } = await import('@/store');
-  return { configStore: new Store('shared-config.dat', { encrypted: false }) };
+  const configStore = new Store('shared-config.dat', { encrypted: false });
+  return {
+    configStore,
+    readFreshConfig: async () => { await configStore.invalidateCache(); return configStore.get('config'); },
+  };
 });
 vi.mock('@/utils/webdav', () => ({
   WebDAVClient: {
@@ -47,7 +50,7 @@ vi.mock('@/composables/useToast', () => ({
     showConfig: mockState.toastShowConfig,
     success: vi.fn(),
     warn: vi.fn(),
-    error: vi.fn(),
+    error: mockState.toastError,
     info: vi.fn(),
   }),
 }));
@@ -117,36 +120,27 @@ describe('P1-1 回归：Store.get() 返回值与缓存解耦', () => {
   });
 });
 
-describe('P1-1 回归：useSettingsForm 保存失败后正确回滚到磁盘真值', () => {
-  it('磁盘写入失败时，表单与缓存都不会停留在编辑值上空转', async () => {
+describe('P1-1 回归：设置页保存失败后回到磁盘真值', () => {
+  it('磁盘写入失败时，界面与缓存都不会停留在编辑值上空转', async () => {
     const onDisk = createConfig({ linkOutput: { defaultFormat: 'url', customTemplate: '{url}', autoCopy: true } });
     files.set(SHARED_DISK_PATH, JSON.stringify({ config: onDisk }));
 
-    const api = useSettingsForm();
-    await api.loadSettings();
-    expect(api.formData.value.linkOutput.autoCopy).toBe(true);
+    const settings = useSettingsConfig();
+    await settings.reload();
+    expect(settings.config.value.linkOutput?.autoCopy).toBe(true);
 
     writeShouldFail = true;
-    api.formData.value.linkOutput.autoCopy = false;
-    await expect(api.saveSettings({ trackAdvancedStatus: true })).resolves.toBe(false);
+    await expect(settings.patch('autoCopy', (c) => { c.linkOutput!.autoCopy = false; })).resolves.toBe(false);
 
     // 磁盘真值没变（写入根本没成功过）
-    const disk = JSON.parse(files.get(SHARED_DISK_PATH)!).config;
-    expect(disk.linkOutput.autoCopy).toBe(true);
-
+    expect(JSON.parse(files.get(SHARED_DISK_PATH)!).config.linkOutput.autoCopy).toBe(true);
     // 失败提示确实弹出了，不是静默失败
-    expect(mockState.toastShowConfig).toHaveBeenCalledWith('error', expect.any(Object));
-    expect(api.advancedSaveState.value.status).toBe('error');
-    expect(api.advancedSaveState.value.message).toContain('拒绝访问');
-
-    // 核心断言（已反转）：回滚后表单显示磁盘真值，不再停在编辑值上
-    expect(api.formData.value.linkOutput.autoCopy).toBe(true);
-
-    // 缓存也没有被就地改写污染：独立再读一次 configStore，拿到的同样是磁盘真值
+    expect(mockState.toastError).toHaveBeenCalledWith('未能保存', expect.stringContaining('拒绝访问'));
+    // 界面显示磁盘真值，不停在编辑值上
+    expect(settings.config.value.linkOutput?.autoCopy).toBe(true);
+    // 缓存也没有被就地改写污染
     const cached = await configStore.get<typeof onDisk>('config');
     expect(cached!.linkOutput?.autoCopy).toBe(true);
-
-    api.clearTimers();
   });
 });
 

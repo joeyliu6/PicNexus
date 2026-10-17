@@ -9,7 +9,8 @@ import PnSegmented, { type PnSegment } from '@/components/pn/PnSegmented.vue';
 import PnSwitch from '@/components/pn/PnSwitch.vue';
 import type { CompressionOutputFormat, CompressionPreset, ImageCompressionConfig } from '@/config/types';
 import { useUndoToast } from '@/composables/useUndoToast';
-import { FORMAT_LABELS, normalizePreset, removePreset, uniquePresetName } from './compressionPresets';
+import { FORMAT_LABELS } from '@/utils/compressionPresetText';
+import { normalizePreset, removePreset, uniquePresetName } from './compressionPresets';
 
 const props = defineProps<{
   preset: CompressionPreset | null;

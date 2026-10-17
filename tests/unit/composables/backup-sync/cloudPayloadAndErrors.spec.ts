@@ -77,7 +77,7 @@ describe('parseCloudHistoryForUpload', () => {
   it('unusable 的文案要给出自愈路径，且短到不会被 extractErrorCode 截断', () => {
     const result = parseCloudHistoryForUpload('');
     if (result.kind !== 'unusable') throw new Error('预期是 unusable');
-    expect(result.reason).toContain('强制覆盖云端');
+    expect(result.reason).toContain('用本机覆盖云端');
     expect(result.reason.length).toBeLessThanOrEqual(100);
     expect(extractErrorCode(new Error(result.reason))).toBe(result.reason);
   });

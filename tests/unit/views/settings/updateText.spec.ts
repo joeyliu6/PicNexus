@@ -8,7 +8,7 @@ describe('updateText', () => {
   });
 
   it('writes 更新失败：reason, without doubling a reason that already says 失败', () => {
-    expect(updateFailureTitle('更新包下载中断')).toBe('更新失败：更新包下载中断');
+    expect(updateFailureTitle('下载被中断')).toBe('更新失败：下载被中断');
     expect(updateFailureTitle('检查更新失败')).toBe('检查更新失败');
   });
 

@@ -21,8 +21,11 @@ export interface InvokeOverride {
   urlPrefix?: string;
   /** 只让这些文件名失败（配合 error），其余照常 */
   failFor?: string[];
-  /** 按某个参数的取值分别返回（如 scan_md_folder 按 dir 给不同文件夹的扫描结果）；没列到的走 result */
-  byArg?: { key: string; results: Record<string, unknown> };
+  /**
+   * 按参数取值分别返回（如 scan_md_folder 按 dir 给不同文件夹的扫描结果）；没列到的走 result。
+   * key 可写点路径（'request.method'）；给数组时几个取值用空格连起来查（webdav_request 按「方法 地址」）
+   */
+  byArg?: { key: string | string[]; results: Record<string, unknown> };
   /** 以这个值本身失败（结构化的 AppError，如 { type: 'WEBDAV_LAN_HTTP_UNCONFIRMED', data: { message } }） */
   errorValue?: unknown;
   /** 过这么多毫秒（页面时钟）再返回：测试连接的耗时写成固定值 */
@@ -48,6 +51,19 @@ export interface E2ESeed {
   files?: Record<string, string>;
   /** 写这些文件时以给定消息失败一次（文档写不成） */
   failWriteTextFile?: Record<string, string>;
+  /** 检查更新的结果（不给 = 已是最新）：发现的版本、下载到哪、停在哪一步、哪一步失败 */
+  update?: UpdatePlan;
+}
+
+export interface UpdatePlan {
+  version?: string;
+  body?: string;
+  /** 安装包总字节、已下字节 */
+  total?: number;
+  downloaded?: number;
+  hang?: 'check' | 'download' | 'install';
+  checkError?: string;
+  downloadError?: string;
 }
 
 interface E2EState {
@@ -58,6 +74,7 @@ interface E2EState {
   failWriteTextFile: Record<string, string>;
   historyRows: Array<Record<string, unknown>>;
   invokeOverrides: Record<string, InvokeOverride>;
+  update?: UpdatePlan;
   /** 应用注册的拖放监听；测试调用它来模拟拖入 */
   dragDropHandler?: (event: { payload: unknown }) => void;
 }
@@ -99,6 +116,7 @@ export function getState(): E2EState {
     failWriteTextFile: { ...seed.failWriteTextFile },
     historyRows: seed.historyRows ?? [],
     invokeOverrides: seed.invokeOverrides ?? {},
+    update: seed.update,
   };
   return globalThis.__PICNEXUS_E2E__;
 }

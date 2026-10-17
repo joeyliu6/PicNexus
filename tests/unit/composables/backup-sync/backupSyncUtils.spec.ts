@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebDAVClientAndPath } from '@/composables/backup-sync/backupSyncUtils';
 import { secureStorage } from '@/security/crypto';
 import type { WebDAVProfile } from '@/config/types';
-import type { useToast } from '@/composables/useToast';
 import {
   getHttpFetchMock,
   mockInvokeResponse,
@@ -27,13 +26,6 @@ function testKey(fill: number): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
-}
-
-const showConfigMock = vi.fn();
-
-/** 只提供被测代码真正用到的那一个方法 */
-function fakeToast(): ReturnType<typeof useToast> {
-  return { showConfig: showConfigMock } as unknown as ReturnType<typeof useToast>;
 }
 
 function profile(overrides: Partial<WebDAVProfile> = {}): WebDAVProfile {
@@ -63,7 +55,6 @@ async function captureAuthHeader(client: { testConnection: () => Promise<boolean
 
 beforeEach(async () => {
   resetTauriMocks();
-  showConfigMock.mockReset();
   // resetTauriMocks 装的默认实现负责把 webdav_request 转发给假 fetch，
   // mockInvokeResponse 只在它前面插一条，不会顶掉转发
   mockInvokeResponse('get_or_create_secure_key', testKey(0x42));
@@ -84,7 +75,6 @@ describe('getWebDAVClientAndPath · 密码解密', () => {
     const result = await getWebDAVClientAndPath(
       profile({ passwordEncrypted }),
       'settings',
-      fakeToast(),
     );
 
     expect(result).not.toBeNull();
@@ -98,7 +88,6 @@ describe('getWebDAVClientAndPath · 密码解密', () => {
       getWebDAVClientAndPath(
         profile({ passwordEncrypted: 'PNXENC:这不是合法密文' }),
         'settings',
-        fakeToast(),
       ),
     ).rejects.toThrow('WebDAV 密码解密失败，请重新配置');
   });
@@ -108,7 +97,6 @@ describe('getWebDAVClientAndPath · 密码解密', () => {
     const result = await getWebDAVClientAndPath(
       profile({ password: 'legacy-plain' }),
       'settings',
-      fakeToast(),
     );
 
     expect(result).not.toBeNull();
@@ -131,7 +119,6 @@ describe('getWebDAVClientAndPath · 远程路径推导', () => {
     const result = await getWebDAVClientAndPath(
       profile({ passwordEncrypted, remotePath }),
       fileType,
-      fakeToast(),
     );
 
     expect(result?.remotePath).toBe(expected);
@@ -143,7 +130,6 @@ describe('getWebDAVClientAndPath · 远程路径推导', () => {
     const result = await getWebDAVClientAndPath(
       profile({ passwordEncrypted, remotePath: '' }),
       'settings',
-      fakeToast(),
     );
 
     expect(result?.remotePath).toBe('/PicNexus/settings.json');
@@ -158,20 +144,14 @@ describe('getWebDAVClientAndPath · 配置不完整', () => {
     { name: '两种密码都没有', value: profile() },
   ];
 
-  it.each(incomplete)('$name → 返回 null 并提示一次', async ({ value }) => {
-    const result = await getWebDAVClientAndPath(value, 'settings', fakeToast());
-
-    expect(result).toBeNull();
-    expect(showConfigMock).toHaveBeenCalledTimes(1);
-    expect(showConfigMock).toHaveBeenCalledWith(
-      'warn',
-      expect.objectContaining({ summary: '请先配置 WebDAV 连接' }),
-    );
+  // 不弹通知：调用方按 SYNC_NOT_CONFIGURED 写在云同步卡的状态行
+  it.each(incomplete)('$name → 返回 null', async ({ value }) => {
+    expect(await getWebDAVClientAndPath(value, 'settings')).toBeNull();
   });
 
   /** 早退必须发生在建连之前，别让一份残缺配置先去敲网络 */
   it('配置不全时不会发出任何请求', async () => {
-    await getWebDAVClientAndPath(null, 'settings', fakeToast());
+    await getWebDAVClientAndPath(null, 'settings');
 
     expect(getHttpFetchMock()).not.toHaveBeenCalled();
   });

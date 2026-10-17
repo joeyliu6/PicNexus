@@ -1,14 +1,13 @@
 <script setup lang="ts">
 // 应用外壳（交接说明 3.1）：侧栏 208 / 窄窗口 56px 图标栏 + 主栏。
-// 主栏铺满窗口；每个新页面自己画顶部标题行（含窗口按钮），尚未重写的旧页面由外壳代画。
-import { computed, onMounted, onUnmounted } from 'vue';
+// 主栏铺满窗口；每个页面自己画顶部标题行（含窗口按钮）。
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useEventListener } from '@vueuse/core';
 import { TooltipProvider } from 'reka-ui';
 import AppSidebar from './AppSidebar.vue';
 import NavRail from './NavRail.vue';
-import TitleRow from './TitleRow.vue';
 import { useSidebarCollapse } from './useSidebarCollapse';
 import { useNavBadges } from './useNavBadges';
 import { useAppNavigation } from './useAppNavigation';
@@ -24,6 +23,7 @@ import { createLogger } from '@/utils/logger';
 import { installAutoCheck } from '@/views/health/autoCheck';
 import { installEditorSync } from '@/composables/settings/editorSync';
 import { installHealthBadge } from '@/views/health/healthBadge';
+import { setUpdateInstallGate } from '@/composables/useAutoUpdate';
 
 const log = createLogger('AppShell');
 
@@ -37,6 +37,11 @@ useAppNavigation();
 const upload = useUploadController();
 upload.setHomeVisible(() => route.path === '/home');
 const recentUploads = useRecentUploads();
+// 装新版本 / 重启完成更新前，等正在进行的上传传完（交接说明 8.5）
+setUpdateInstallGate(() => new Promise<void>((resolve) => {
+  if (!upload.busy.value) { resolve(); return; }
+  const stop = watch(upload.busy, (busy) => { if (!busy) { stop(); resolve(); } });
+}));
 const { overlay } = useGlobalUploadInput();
 useAppShortcuts();
 
@@ -55,7 +60,6 @@ onMounted(async () => {
 onUnmounted(() => disposers.splice(0).forEach((dispose) => dispose()));
 
 const currentPage = computed(() => route.meta.pageKey);
-const legacyTitle = computed(() => route.meta.legacyTitle);
 
 function navigate(item: NavItem): void {
   if (route.path !== item.path) void router.push(item.path);
@@ -89,8 +93,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         @collapse="toggle"
       />
       <main class="app-shell__main">
-        <TitleRow v-if="legacyTitle !== undefined" :title="legacyTitle || undefined" />
-        <div class="app-shell__page" :class="{ 'app-shell__page--legacy': legacyTitle !== undefined }">
+        <div class="app-shell__page">
           <RouterView v-slot="{ Component, route: viewRoute }">
             <KeepAlive :max="5">
               <component :is="Component" :key="viewRoute.path" />
@@ -133,9 +136,4 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   overflow: hidden;
 }
 
-/* 旧页面：沿用它们原来所在容器的滚动与底色 */
-.app-shell__page--legacy {
-  overflow: auto;
-  background: var(--bg-app);
-}
 </style>

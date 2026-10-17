@@ -17,9 +17,4 @@ describe('UI_COPY', () => {
     expect(TOAST_MESSAGES.upload.success(2)).toEqual(UI_COPY.toast.upload.success(2));
     expect(TOAST_MESSAGES.upload.failed('认证失败')).toEqual(UI_COPY.toast.upload.failed('认证失败'));
   });
-
-  it('provides reusable backup password validation copy', () => {
-    expect(UI_COPY.dialogs.backupPassword.error.remainingAttempts(4)).toBe('密码不正确，剩余尝试次数：4');
-    expect(UI_COPY.dialogs.backupPassword.action.submit.disable).toBe('确认关闭');
-  });
 });

@@ -18,49 +18,12 @@ export const UI_COPY = {
     close: '关闭',
   },
 
-  navigation: {
-    main: {
-      upload: '上传',
-      browse: '浏览',
-      maintenance: '维护',
-      settings: '设置',
-    },
-    mainTitle: {
-      upload: '上传',
-      browse: '浏览记录',
-      maintenance: '链接维护',
-      settings: '设置',
-    },
-    settings: {
-      title: '设置',
-      general: '常规设置',
-      hosting: '图床设置',
-      advanced: '高级设置',
-      backup: '备份与同步',
-      about: '关于与更新',
-    },
-  },
-
-  banner: {
-    reload: {
-      defaultMessage: '配置已更新，请刷新页面以使其生效',
-      action: '刷新',
-    },
-  },
-
   confirm: {
     defaults: {
       header: '确认',
       acceptLabel: '确认',
       rejectLabel: '取消',
       icon: 'pi pi-exclamation-triangle',
-    },
-    delete: {
-      header: '确认删除',
-      acceptLabel: '删除',
-      rejectLabel: '取消',
-      icon: 'pi pi-trash',
-      acceptClass: 'p-button-danger',
     },
     warn: {
       header: '警告',
@@ -100,61 +63,6 @@ export const UI_COPY = {
       title: '暂无可用图床',
       description: '请在设置中配置图床。',
     } satisfies EmptyStateCopy,
-  },
-
-  dialogs: {
-    backupPassword: {
-      title: {
-        set: '设置备份密码',
-        restore: '还原备份配置',
-        change: '修改备份密码',
-        disable: '关闭备份密码',
-      },
-      description: {
-        restore: '你的配置文件已用备份密码加密。输入当时设置的密码，就能还原配置。',
-        disable: '关闭后，后续导出的配置不再使用备份密码加密。已有备份仍需原密码打开。',
-      },
-      field: {
-        currentPassword: '当前密码',
-        backupPassword: '备份密码',
-        password: '密码',
-        newPassword: '新密码',
-        confirmPassword: '确认密码',
-      },
-      placeholder: {
-        currentPassword: '输入当前备份密码',
-        restorePassword: '输入你之前设置的备份密码',
-        newPassword: '至少 8 位，包含数字',
-        confirmPassword: '再次输入密码',
-      },
-      strength: {
-        minLength: '至少 8 位',
-        number: '包含数字',
-        letterCase: '大小写字母',
-        symbol: '特殊符号',
-      },
-      note: {
-        set: '请妥善保管密码，忘记后将无法还原。',
-        change: '修改后旧备份仍需旧密码打开。请妥善保管密码，忘记后将无法还原。',
-      },
-      error: {
-        requiredPassword: '请输入密码',
-        requiredCurrentPassword: '请输入当前密码',
-        requiredNewPassword: '请输入新密码',
-        mismatch: '两次输入的密码不一致',
-        wrongPassword: '密码不正确',
-        remainingAttempts: (remaining: number) => `密码不正确，剩余尝试次数：${remaining}`,
-      },
-      action: {
-        skipRestore: '跳过，使用默认配置',
-        submit: {
-          set: '确认设置',
-          restore: '确认恢复',
-          change: '确认修改',
-          disable: '确认关闭',
-        },
-      },
-    },
   },
 
   status: {

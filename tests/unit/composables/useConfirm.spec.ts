@@ -30,25 +30,6 @@ describe('useConfirm', () => {
     expect(currentConfirm.value).toBeNull();
   });
 
-  it('uses destructive defaults for delete confirmations and calls back only on accept', async () => {
-    const { confirmDelete } = useConfirm();
-    const accept = vi.fn();
-
-    confirmDelete('确定删除这条记录吗？', accept);
-
-    expect(current()).toMatchObject({
-      title: UI_COPY.confirm.delete.header,
-      message: '确定删除这条记录吗？',
-      acceptLabel: UI_COPY.confirm.delete.acceptLabel,
-      rejectLabel: UI_COPY.confirm.delete.rejectLabel,
-      tone: 'danger',
-      danger: true,
-    });
-    settleConfirm(current().id, 'accept');
-    await Promise.resolve();
-    expect(accept).toHaveBeenCalledTimes(1);
-  });
-
   it('uses warning defaults for warn confirmations', () => {
     const { confirmWarn } = useConfirm();
 
@@ -60,14 +41,6 @@ describe('useConfirm', () => {
       tone: 'warning',
       danger: false,
     });
-  });
-
-  it('keeps dismiss distinct from reject in three-way confirmations', async () => {
-    const { confirmThreeWay } = useConfirm();
-    const result = confirmThreeWay({ message: '如何处理本地配置？' });
-
-    settleConfirm(current().id, 'dismiss');
-    await expect(result).resolves.toBe('dismiss');
   });
 
   it('calls neither callback when a callback-style confirm is dismissed', async () => {

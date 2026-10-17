@@ -148,6 +148,8 @@ export interface ProfileSyncRecord {
   historyLastSync: string | null;
   historySyncResult: 'success' | 'failed' | 'partial' | null;
   historySyncError?: string;
+  /** 最近一次成功同步（任一项）的时间，毫秒；设置页状态行写「已同步 · 2 小时前」 */
+  lastSyncAt?: number;
 }
 
 /**
