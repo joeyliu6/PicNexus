@@ -286,6 +286,25 @@ fn map_request_error(err: reqwest::Error) -> AppError {
     }
 }
 
+/// 地址被策略拒绝 → 指到那一格的失败结果；判不出局域网（要用户确认）照旧作为错误返回，由页面弹确认框
+fn address_rejected<T>(checked: Result<T, AppError>, field: &'static str) -> Result<Option<WebDAVTestResult>, AppError> {
+    match checked {
+        Ok(_) => Ok(None),
+        Err(err @ AppError::WebDAVLanHttpUnconfirmed { .. }) => Err(err),
+        Err(err) => Ok(Some(WebDAVTestResult::failed("credentials", Some(field), err.message().to_string()))),
+    }
+}
+
+/// 测试连接时探目录这一步请求没发出去 → 给人看的原因（原始错误只进日志）
+fn describe_unreachable(err: &reqwest::Error) -> String {
+    log::warn!("[WebDAV] 测试连接请求失败: {}", err);
+    if err.is_timeout() {
+        "连接 WebDAV 服务器超时，请检查网络后重试".to_string()
+    } else {
+        "无法连接 WebDAV 服务器，请检查服务器 URL 与网络后重试".to_string()
+    }
+}
+
 fn basic_auth(username: &str, password: &str) -> String {
     format!("Basic {}", STANDARD.encode(format!("{}:{}", username, password)))
 }
@@ -624,11 +643,15 @@ async fn test_webdav_storage_core(
 ) -> Result<WebDAVTestResult, AppError> {
     let consent = lan_http_consent(lan_http_confirmed);
 
-    validate_webdav_url_for_request(url, consent).await?;
-    if public_domain.trim().is_empty() {
-        return Err(AppError::config("公开访问域名不能为空"));
+    if let Some(failed) = address_rejected(validate_webdav_url_for_request(url, consent).await, "url")? {
+        return Ok(failed);
     }
-    validate_webdav_url_for_request(public_domain, consent).await?;
+    if public_domain.trim().is_empty() {
+        return Ok(WebDAVTestResult::failed("credentials", Some("public_domain"), "请填写公开访问地址"));
+    }
+    if let Some(failed) = address_rejected(validate_webdav_url_for_request(public_domain, consent).await, "public_domain")? {
+        return Ok(failed);
+    }
 
     let auth = basic_auth(username, password);
     let dir = normalize_dir(remote_path);
@@ -646,7 +669,8 @@ async fn test_webdav_storage_core(
         .await
     {
         Ok(response) => response,
-        Err(err) => return Ok(WebDAVTestResult::failed("credentials", Some("url"), map_request_error(err).message().to_string())),
+        // 连不上 / 超时多半是网络或 NAS 没开机，不指到「服务器 URL 无效」
+        Err(err) => return Ok(WebDAVTestResult::failed("credentials", None, describe_unreachable(&err))),
     };
 
     let status = response.status().as_u16();
@@ -728,10 +752,7 @@ async fn test_webdav_storage_core(
                 return Ok(WebDAVTestResult::failed(
                     "public",
                     Some("public_domain"),
-                    format!(
-                        "图片已上传，但公开链接无法访问 (HTTP {})——请检查「公开访问域名」和 URL 模板",
-                        status
-                    ),
+                    format!("图片已上传，但公开链接无法访问（HTTP {}），请检查公开访问地址和链接模板", status),
                 ));
             }
 
@@ -740,7 +761,7 @@ async fn test_webdav_storage_core(
                     "public",
                     Some("public_domain"),
                     format!(
-                        "公开链接返回的不是图片 (Content-Type: {})——多半是模板指向了登录页或分享页",
+                        "公开链接返回的不是图片（Content-Type: {}），请检查链接模板是否指向图片文件本身",
                         if content_type.is_empty() { "未知" } else { &content_type }
                     ),
                 ));
@@ -757,14 +778,8 @@ async fn test_webdav_storage_core(
             "public",
             Some("public_domain"),
             format!(
-                "图片已上传，但公开链接无法访问（{}）——请检查「公开访问域名」和 URL 模板",
-                if err.is_timeout() {
-                    "请求超时".to_string()
-                } else if err.is_connect() {
-                    "无法连接".to_string()
-                } else {
-                    err.to_string()
-                }
+                "图片已上传，但公开链接无法访问（{}），请检查公开访问地址和链接模板",
+                if err.is_timeout() { "请求超时" } else { "无法连接" }
             ),
         )),
     }
@@ -813,10 +828,47 @@ mod tests {
 
         let public_broken = run_stub(207, 201, false).await;
         assert_eq!((public_broken.failed_step, public_broken.field), (Some("public"), Some("public_domain")));
+        // 按表单上的叫法说：「公开访问地址」「链接模板」
+        assert!(public_broken.message.contains("请检查公开访问地址和链接模板"), "{}", public_broken.message);
 
         let all_good = run_stub(207, 201, true).await;
         assert!(all_good.success);
         assert_eq!(all_good.failed_step, None);
+    }
+
+    /// 连不上服务器多半是网络（或 NAS 没开机），不指到「服务器 URL 无效」
+    #[tokio::test]
+    async fn unreachable_server_does_not_blame_the_url_field() {
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let base = format!("http://127.0.0.1:{}", port);
+        // 不走系统代理：本机代理会替关掉的端口回一个 502，测不到「连不上」
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let result = test_webdav_storage_core(&client, &format!("{}/dav", base), "u", "p", "img", &base, "{domain}/{path}", false)
+            .await
+            .expect("本地地址不该被策略拦下");
+        assert_eq!((result.failed_step, result.field), (Some("credentials"), None));
+        assert_eq!(result.message, "无法连接 WebDAV 服务器，请检查服务器 URL 与网络后重试");
+    }
+
+    #[tokio::test]
+    async fn a_rejected_public_address_points_at_that_field() {
+        let result = test_webdav_storage_core(&reqwest::Client::new(), "http://127.0.0.1:1/dav", "u", "p", "img", "http://user:pw@127.0.0.1", "{domain}/{path}", false)
+            .await
+            .expect("地址被拒是填写问题，不是调用失败");
+        assert_eq!((result.failed_step, result.field), (Some("credentials"), Some("public_domain")));
+        assert_eq!(result.message, "地址不能包含用户名或密码");
+    }
+
+    #[tokio::test]
+    async fn empty_public_address_points_at_that_field() {
+        let result = test_webdav_storage_core(&reqwest::Client::new(), "http://127.0.0.1:1/dav", "u", "p", "img", " ", "{domain}/{path}", false)
+            .await
+            .expect("空的公开地址是填写问题，不是调用失败");
+        assert_eq!((result.failed_step, result.field), (Some("credentials"), Some("public_domain")));
+        assert_eq!(result.message, "请填写公开访问地址");
     }
 
     #[test]

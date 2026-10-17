@@ -59,7 +59,7 @@ fn classify_credentials_error(service_id: &str, full: &str, brief: &str) -> (Opt
     } else if full.contains("InvalidBucketName") {
         (Some("bucket"), "存储桶名称不合法".to_string())
     } else if full.contains("AccessDenied") {
-        (Some("secret_key"), "没有访问这个存储桶的权限".to_string())
+        (None, "密钥没有访问这个存储桶的权限，请在服务商后台为它授予读写权限".to_string())
     } else if full.contains("HandshakeFailure") && service_id == "r2" {
         (Some("account_id"), "Cloudflare 找不到这个 Account ID".to_string())
     } else if full.contains("dispatch failure") || full.contains("dns error") || full.contains("Connect") {
@@ -225,7 +225,10 @@ pub async fn probe_s3_storage(service_id: String, config: S3TestConfig) -> Resul
 async fn check_public_url(url: &str, steps: Vec<&'static str>) -> StorageProbeReport {
     let client = match reqwest::Client::builder().timeout(STEP_TIMEOUT).build() {
         Ok(client) => client,
-        Err(error) => return StorageProbeReport::failed("public", Some("public_domain"), format!("无法发起请求：{}", error), steps),
+        Err(error) => {
+            log::warn!("[存储检测] 无法创建 HTTP 客户端: {}", error);
+            return StorageProbeReport::failed("public", None, "无法检测公开链接，请稍后重试", steps);
+        }
     };
     match client.get(url).send().await {
         Err(error) => {
@@ -267,6 +270,14 @@ mod tests {
         let (field, message) = classify_credentials_error("tencent", "service error: SlowDown", "SlowDown");
         assert_eq!(field, None);
         assert!(message.contains("SlowDown"));
+    }
+
+    /// 没权限 ≠ 密钥错了：不指到 Secret Key，原因里带处理办法
+    #[test]
+    fn access_denied_is_a_permission_problem_not_a_wrong_secret() {
+        let (field, message) = classify_credentials_error("r2", "AccessDenied: …", "AccessDenied");
+        assert_eq!(field, None);
+        assert_eq!(message, "密钥没有访问这个存储桶的权限，请在服务商后台为它授予读写权限");
     }
 
     /// 真机走查：假的 R2 Account ID 拿到的是 TLS 握手被拒，原样显示的是一长串 SDK 内部错误
