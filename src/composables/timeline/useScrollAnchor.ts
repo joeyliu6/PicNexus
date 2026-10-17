@@ -46,6 +46,8 @@ export function useScrollAnchor(
       if (!container || !layout) return;
 
       if (calculating && !prev) {
+        // 停在最顶上就留在最顶上（同浏览器自己的滚动锚定）：否则打开详情、行变多时顶部几行会被推出视口
+        if (container.scrollTop <= 0) { anchor = null; return; }
         // 即将重算：选视口中心最近的 real item 作锚点
         const viewportCenter = container.scrollTop + container.clientHeight / 2;
         let bestId: string | null = null;
