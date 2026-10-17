@@ -7,6 +7,7 @@ import { useConfirm } from '@/composables/useConfirm';
 import { createLogger } from '@/utils/logger';
 import { useToast } from '@/composables/useToast';
 import { openTrustedExternalUrl } from '@/security/shellOpen';
+import { joinCjk } from '@/utils/cjkSpacing';
 
 const log = createLogger('HostSecretField');
 
@@ -139,7 +140,7 @@ onBeforeUnmount(() => clearTimeout(timer));
       <button v-else-if="hasValue" type="button" class="host-secret__action" @click="toggleReveal">{{ mode === 'revealed' ? '隐藏' : '查看' }}</button>
     </div>
     <span v-if="invalid && help" class="host-secret__help host-secret__help--error">{{ help }}</span>
-    <span v-else-if="mode === 'editing'" class="host-secret__help">粘贴新的 {{ label }}，失焦后自动保存并测试</span>
+    <span v-else-if="mode === 'editing'" class="host-secret__help">{{ joinCjk('粘贴新的', label, '，失焦后自动保存并测试') }}</span>
     <span v-else-if="mode === 'revealed'" class="host-secret__help">30 秒后自动隐藏</span>
     <span v-else-if="help" class="host-secret__help">{{ help }}</span>
   </div>

@@ -82,6 +82,10 @@ export function failSummary(descriptor: HostDescriptor, state: Extract<HostTestS
   return { title, detail: [passed, advice].filter(Boolean).join('，') };
 }
 
+function fieldLabel(descriptor: HostDescriptor, key: string): string | undefined {
+  return descriptor.fields.find((f) => f.key === key)?.label;
+}
+
 function adviceFor(descriptor: HostDescriptor, state: Extract<HostTestState, { phase: 'fail' }>): string {
   const console = CONSOLES[descriptor.id] ?? '服务商后台';
   switch (state.field) {
@@ -103,18 +107,14 @@ function adviceFor(descriptor: HostDescriptor, state: Extract<HostTestState, { p
       return '请检查用户名和密码';
     case 'bucket':
     case 'bucketName':
-      return '请检查存储桶名称';
     case 'repo':
-      return '请检查仓库名称';
     case 'branch':
-      return '请检查分支名称';
     case 'publicDomain':
-      return '请检查公开访问域名';
     case 'url':
     case 'endpoint':
-      return '请检查地址';
     case 'region':
-      return '请检查地域';
+      // 按这个图床表单上的叫法说（WebDAV 是「公开访问地址」，R2 是「公开访问域名」）
+      return joinCjk('请检查', fieldLabel(descriptor, state.field) ?? '配置');
     case 'accountId':
       return joinCjk('请在', console, '重新复制 Account ID');
     default:

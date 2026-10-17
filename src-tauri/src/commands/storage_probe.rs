@@ -47,8 +47,9 @@ impl StorageProbeReport {
 
 const ALL_STEPS: [&str; 3] = ["credentials", "write", "public"];
 
-/// 凭证这一步（列桶）的服务端错误 → 字段 + 原因
-fn classify_credentials_error(full: &str, brief: &str) -> (Option<&'static str>, String) {
+/// 凭证这一步（列桶）的错误 → 字段 + 原因。连不上时按端点是怎么拼的指字段：
+/// R2 的 TLS 握手被拒 = Cloudflare 不认这个 Account ID 的子域名；DNS / 连接失败多半是网络，不指字段。
+fn classify_credentials_error(service_id: &str, full: &str, brief: &str) -> (Option<&'static str>, String) {
     if full.contains("InvalidAccessKeyId") {
         (Some("access_key"), "服务商找不到这个 Access Key".to_string())
     } else if full.contains("SignatureDoesNotMatch") {
@@ -59,8 +60,12 @@ fn classify_credentials_error(full: &str, brief: &str) -> (Option<&'static str>,
         (Some("bucket"), "存储桶名称不合法".to_string())
     } else if full.contains("AccessDenied") {
         (Some("secret_key"), "没有访问这个存储桶的权限".to_string())
+    } else if full.contains("HandshakeFailure") && service_id == "r2" {
+        (Some("account_id"), "Cloudflare 找不到这个 Account ID".to_string())
+    } else if full.contains("dispatch failure") || full.contains("dns error") || full.contains("Connect") {
+        (None, "无法连接存储服务，请检查网络后重试".to_string())
     } else {
-        (None, format!("无法连接存储服务（{}）", brief))
+        (None, format!("存储服务返回错误（{}）", brief))
     }
 }
 
@@ -162,7 +167,7 @@ pub async fn probe_s3_storage(service_id: String, config: S3TestConfig) -> Resul
         Ok(Err(error)) => {
             let described = describe_sdk_error(&error);
             log::warn!("[存储检测] 凭证未通过: {}", described.full);
-            let (field, message) = classify_credentials_error(&described.full, &described.brief);
+            let (field, message) = classify_credentials_error(&service_id, &described.full, &described.brief);
             return Ok(StorageProbeReport::failed("credentials", field, message, steps));
         }
         Err(_) => return Ok(StorageProbeReport::failed("credentials", None, "连接超时，请检查网络后重试", steps)),
@@ -256,12 +261,23 @@ mod tests {
 
     #[test]
     fn credentials_errors_point_at_a_field() {
-        assert_eq!(classify_credentials_error("InvalidAccessKeyId: …", "InvalidAccessKeyId").0, Some("access_key"));
-        assert_eq!(classify_credentials_error("SignatureDoesNotMatch: …", "SignatureDoesNotMatch").0, Some("secret_key"));
-        assert_eq!(classify_credentials_error("NoSuchBucket: …", "NoSuchBucket").0, Some("bucket"));
-        let (field, message) = classify_credentials_error("dispatch failure", "dispatch failure");
+        assert_eq!(classify_credentials_error("r2", "InvalidAccessKeyId: …", "InvalidAccessKeyId").0, Some("access_key"));
+        assert_eq!(classify_credentials_error("r2", "SignatureDoesNotMatch: …", "SignatureDoesNotMatch").0, Some("secret_key"));
+        assert_eq!(classify_credentials_error("tencent", "NoSuchBucket: …", "NoSuchBucket").0, Some("bucket"));
+        let (field, message) = classify_credentials_error("tencent", "service error: SlowDown", "SlowDown");
         assert_eq!(field, None);
-        assert!(message.contains("dispatch failure"));
+        assert!(message.contains("SlowDown"));
+    }
+
+    /// 真机走查：假的 R2 Account ID 拿到的是 TLS 握手被拒，原样显示的是一长串 SDK 内部错误
+    #[test]
+    fn connection_failures_read_like_people_talk() {
+        let tls = "dispatch failure: io error: client error (Connect): received fatal alert: HandshakeFailure";
+        assert_eq!(classify_credentials_error("r2", tls, "dispatch failure: io error"), (Some("account_id"), "Cloudflare 找不到这个 Account ID".to_string()));
+        let (field, message) = classify_credentials_error("tencent", "dispatch failure: io error: dns error: no such host", "dispatch failure");
+        assert_eq!(field, None);
+        assert_eq!(message, "无法连接存储服务，请检查网络后重试");
+        assert!(!message.contains("dispatch"));
     }
 
     #[test]

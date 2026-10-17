@@ -39,6 +39,8 @@ describe('useHostTest', () => {
     const state = await useHostTest().run({ hostId: 'tencent', record: {} });
     expect(state).toMatchObject({ phase: 'fail', step: 'public', field: 'publicDomain', passed: ['credentials', 'write'] });
     expect(failSummary(describeHost('tencent')!, state as never).detail).toBe('读取与写入均通过，请检查公开访问域名');
+    // WebDAV 的那一格叫「公开访问地址」：处理办法按它的叫法说
+    expect(failSummary(describeHost('webdav:x')!, { ...state, field: 'publicDomain' } as never).detail).toBe('读取与写入均通过，请检查公开访问地址');
   });
 
   it('通过：记耗时与步骤；草稿不写健康状态', async () => {
