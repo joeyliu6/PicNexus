@@ -188,6 +188,17 @@ describe('useMirrorFallback - switchPrimary', () => {
     expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 
+  // 回归：改用失败时这里只弹了「改用备份失败」，调用方照样报「已改用备份 · 撤销」——红绿两条一起出现
+  it('tells the caller whether it actually switched', async () => {
+    const harness = mountHarness();
+    await expect(harness.api().switchPrimary('jd')).resolves.toBe(false);
+
+    dbSwitchPrimaryMock.mockRejectedValueOnce(new Error('db locked'));
+    await expect(harness.api().switchPrimary('qiyu')).resolves.toBe(false);
+
+    await expect(harness.api().switchPrimary('qiyu')).resolves.toBe(true);
+  });
+
   it('切到当前主图床是 no-op', async () => {
     const harness = mountHarness();
     await harness.api().switchPrimary('jd');

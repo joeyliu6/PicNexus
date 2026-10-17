@@ -223,13 +223,14 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
    * - DB 写成功：等 emitHistoryUpdated 让 item.primaryService 跟上后清空乐观态
    * - DB 写失败：清空乐观态回滚 + 错误 toast
    */
-  async function switchPrimary(newServiceId: string): Promise<void> {
+  /** @returns 真的换过去了才是 true（已经是这一份、或写库失败都是 false）：调用方据此决定报不报「已改用备份」 */
+  async function switchPrimary(newServiceId: string): Promise<boolean> {
     const cur = item.value;
-    if (!cur) return;
+    if (!cur) return false;
     // 比对 effective primary，而不是 props.primaryService。后者是 snapshot 不刷新，
     // 连续切换时（jd → qiyu → jd）会让"切回原主"被误当 no-op，UI 与 DB 永久错位。
     const currentEffective = optimisticPrimary.value ?? cur.primaryService;
-    if (currentEffective === newServiceId) return;
+    if (currentEffective === newServiceId) return false;
 
     optimisticPrimary.value = newServiceId;
 
@@ -237,11 +238,13 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
       await historyDB.switchPrimaryService(cur.id, newServiceId);
       applyPrimaryToCurrent(newServiceId);
       await notifyUpdated(cur.id);
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('切换主图床失败:', err);
       optimisticPrimary.value = null;
       toast.error('改用备份失败', `${msg}，请稍后重试`);
+      return false;
     }
   }
 

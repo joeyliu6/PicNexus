@@ -107,7 +107,8 @@ async function copyLink(key: string, hostId?: string): Promise<void> {
 /** 改用备份：立即生效，通知里「撤销」改回原来那一份（交接说明规则 3） */
 async function useHost(hostId: string): Promise<void> {
   const previous = source.value?.id;
-  await mirror.switchPrimary(hostId);
+  // 没换成（已经是这一份，或写库失败、已报错）就不报「已改用备份」
+  if (!(await mirror.switchPrimary(hostId))) return;
   justSwitched.value = hostId;
   if (previous) {
     void actions.announceSwitch(hostId, () => {
