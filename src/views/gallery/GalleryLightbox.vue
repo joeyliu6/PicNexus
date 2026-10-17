@@ -3,6 +3,7 @@
 // ← → 切换、滚轮缩放、拖动平移交给 PhotoSwipe（usePhotoSwipeBridge），这里只画顶栏、翻页按钮、底栏。
 // 当前图床没加载出来：顶栏提示 +「换个图床」，各备份带状态，Enter 切到选中的那份（只换这次看的，不改「复制时使用」）。
 // 灯箱不随主题：自绘部分标 data-theme="dark" 取深色令牌。
+// 顶栏、底栏是实心深色底：长图、放大的图平移时从它们下面经过，不盖住按钮。
 import 'photoswipe/style.css';
 import './galleryLightbox.css';
 import { computed, ref, watch } from 'vue';
@@ -223,7 +224,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         </div>
         <span class="lightbox__hosts">
           <PetalGlyph :states="petals" :size="15" />
-          {{ hostLine }}
+          <span class="lightbox__hosts-text">{{ hostLine }}</span>
         </span>
         <div class="lightbox__spacer" />
         <button type="button" class="lightbox__button" :class="{ 'lightbox__button--done': copiedKey === 'link' }" @click="copyLink">{{ copiedKey === 'link' ? '已复制' : '复制链接' }}</button>
@@ -260,6 +261,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   gap: var(--pn-space-button-sm-x);
   height: var(--pn-size-lightbox-top);
   padding: 0 var(--pn-space-12) 0 var(--pn-space-16);
+  background: var(--pn-lightbox-bg);
 }
 
 .lightbox__spacer { flex: 1; }
@@ -275,9 +277,11 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   padding: 0 var(--pn-space-12);
   border: 0;
   border-radius: var(--pn-radius-md);
+  flex: none;
   background: var(--pn-lightbox-button);
   color: var(--pn-text1);
   font: inherit;
+  white-space: nowrap;
 }
 
 .lightbox__button:hover { background: var(--pn-lightbox-button-hover); }
@@ -378,9 +382,17 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   height: var(--pn-size-lightbox-bottom);
   padding: 0 var(--pn-space-16) 0 var(--pn-space-20);
   box-shadow: inset 0 1px 0 var(--pn-lightbox-rule);
+  background: var(--pn-lightbox-bg);
 }
 
 .lightbox__info { display: flex; flex-direction: column; min-width: 0; }
+
+.lightbox__info .lightbox__muted,
+.lightbox__hosts-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .lightbox__name {
   overflow: hidden;
@@ -393,8 +405,8 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   display: flex;
   align-items: center;
   gap: var(--pn-space-6);
+  min-width: 0;
   color: var(--pn-text2);
   font-size: var(--pn-text-footnote);
-  white-space: nowrap;
 }
 </style>
