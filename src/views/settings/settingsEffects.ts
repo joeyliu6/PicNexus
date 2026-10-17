@@ -2,7 +2,10 @@
 // 系统那一步失败时开关弹回、红色通知，不写配置（否则下次启动会按配置再去改系统，两边一直对不上）。
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { ThemeMode } from '@/config/types';
+import { DEFAULT_CONFIG, type ThemeMode } from '@/config/types';
+import { applyEditorConfig } from '@/composables/settings/editorSync';
+import { readFreshConfig } from '@/store/instances';
+import { resetPreferences } from './resetPreferences';
 import { useAnalytics } from '@/composables/useAnalytics';
 import { useThemeManager } from '@/composables/useTheme';
 import { useToast } from '@/composables/useToast';
@@ -80,7 +83,29 @@ export function useSettingsEffects() {
     if (settings.config.value.theme?.mode === mode) settings.flashSaved('theme');
   }
 
-  return { autoStartActual, readAutoStart, changeAutoStart, changeCloseToTray, changeAnalytics, changeTheme };
+  /**
+   * 恢复默认设置：偏好换回出厂值（图床、云同步连接、文档文件夹保留），再把系统那边对齐：
+   * 开机自启、关闭到托盘、统计、主题、编辑器服务。系统那一步失败只记日志——配置已经是默认值，下次启动会按配置再对一次。
+   */
+  async function resetAll(): Promise<boolean> {
+    const before = autoStartActual.value;
+    const ok = await settings.patch('resetDefaults', (c) => { Object.assign(c, resetPreferences(c)); });
+    if (!ok) return false;
+    const defaults = DEFAULT_CONFIG.appBehavior!;
+    if (before !== defaults.autoStart) {
+      await setAutostart(defaults.autoStart).then(() => { autoStartActual.value = defaults.autoStart; })
+        .catch((error) => log.warn('恢复默认时更改开机自启失败', error));
+    }
+    await invoke('set_close_to_tray', { enabled: defaults.closeToTray }).catch((error) => log.warn('恢复默认时更改关闭到托盘失败', error));
+    const analytics = useAnalytics();
+    await (DEFAULT_CONFIG.analytics?.enabled === false ? analytics.disable() : analytics.enable()).catch((error) => log.warn('恢复默认时切换统计失败', error));
+    const fresh = await readFreshConfig();
+    if (fresh) useThemeManager().updateConfig(fresh);
+    await applyEditorConfig().catch((error) => log.warn('恢复默认时下发编辑器配置失败', error));
+    return true;
+  }
+
+  return { autoStartActual, readAutoStart, changeAutoStart, changeCloseToTray, changeAnalytics, changeTheme, resetAll };
 }
 
 function defaultsOf(c: { appBehavior?: { autoStart: boolean; minimizeToTrayOnStart: boolean; closeToTray: boolean } }) {

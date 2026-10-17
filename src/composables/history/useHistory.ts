@@ -260,8 +260,8 @@ export function useHistoryManager() {
   async function clearHistory(): Promise<void> {
     try {
       const confirmed = await confirm(
-        '确定要清空所有上传历史记录吗？确认后有 5 秒可以撤销。',
-        { header: '确认清空', acceptLabel: '清空', acceptClass: 'p-button-danger' }
+        '将删除本机全部上传记录与收藏，图床上的文件不受影响。确认后有 5 秒可以撤销。',
+        { header: '清空全部记录？', acceptLabel: '清空', rejectLabel: '取消', acceptClass: 'p-button-danger' }
       );
 
       if (!confirmed) {
