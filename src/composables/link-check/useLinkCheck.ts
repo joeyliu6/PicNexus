@@ -51,6 +51,11 @@ const progress: Ref<BatchCheckProgress | null> = ref(null);
 /** 进度来源标识：区分是链接检测还是文档修复在跑，防止 UI 串扰 */
 const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
 const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
+/**
+ * 正在跑的这一轮：覆盖哪些行、什么时候开始。链接健康据此把本轮还没查到的旧结果先当作待查
+ * （「边查边出现」）；检测结束（含取消）清空
+ */
+const activeRun = shallowRef<{ keys: ReadonlySet<string>; startedAt: number } | null>(null);
 
 let progressUnlisten: UnlistenFn | null = null;
 let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 finally 不会杀新检测
@@ -289,6 +294,7 @@ export function useLinkCheckManager() {
       isChecking.value = false;
       isPaused.value = false;
       progressSource.value = null;
+      activeRun.value = null;
       clearProgressListener();
     }
     // 同帧合并的 mutation 强制落地：避免最后一批结果还在 rAF 队列里就被
@@ -404,6 +410,7 @@ export function useLinkCheckManager() {
       }
 
       latestStartedBatchKeys = new Set(rows.map(linkCheckRowKey));
+      activeRun.value = { keys: latestStartedBatchKeys, startedAt: Date.now() };
 
       // 监听进度事件（带 session 校验，防止旧会话数据污染新会话）
       clearProgressListener();
@@ -536,6 +543,7 @@ export function useLinkCheckManager() {
       isChecking.value = false;
       isPaused.value = false;
       progressSource.value = null;
+      activeRun.value = null;
       clearProgressListener();
       checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
       log.info('已发送取消请求');
@@ -614,6 +622,7 @@ export function useLinkCheckManager() {
     progressSource.value = 'monitor';
     progress.value = null;
     latestStartedBatchKeys = new Set(filtered.map(linkCheckRowKey));
+    activeRun.value = { keys: latestStartedBatchKeys, startedAt: Date.now() };
 
     try {
       const requestItems: BatchCheckRequestItem[] = filtered.map((row) => ({
@@ -887,6 +896,7 @@ export function useLinkCheckManager() {
     progress,
     progressSource,
     checkRows,
+    activeRun,
     // 方法
     loadHistoryRows,
     loadError,
