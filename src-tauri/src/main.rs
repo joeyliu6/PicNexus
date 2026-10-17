@@ -317,7 +317,6 @@ fn main() {
             commands::github::upload_to_github,
             commands::imgur::upload_to_imgur,
             commands::s3_compatible::upload_to_s3_compatible,
-            commands::s3_compatible::test_s3_connection,
             commands::storage_probe::probe_s3_storage,
             commands::webdav_upload::upload_to_webdav,
             commands::webdav_upload::test_webdav_storage,

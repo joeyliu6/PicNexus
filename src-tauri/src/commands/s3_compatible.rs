@@ -292,100 +292,6 @@ pub(super) fn non_empty(value: &Option<String>) -> Option<String> {
         .map(str::to_string)
 }
 
-/// 测试 S3 兼容存储连接
-/// 根据 service_id 自动构建对应的 endpoint 进行验证
-/// 包含重试机制（最多 1 次）以快速反馈配置问题
-#[tauri::command]
-pub async fn test_s3_connection(
-    service_id: String,
-    config: S3TestConfig,
-) -> Result<String, AppError> {
-    log::info!("[S3测试] 开始测试 {} 连接", service_id);
-
-    // 又拍云先分流：它有两套互不通用的凭证，下面那条通用取值链会把 operator 当成
-    // access key 取走，走完只验得到半条链路——那正是这个缺陷长期潜伏的形态。
-    if service_id == "upyun" {
-        return test_upyun_connection(&config).await;
-    }
-
-    let access_key = config
-        .get_access_key()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::config("Access Key 不能为空"))?;
-
-    let secret_key = config
-        .get_secret_key()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::config("Secret Key 不能为空"))?;
-
-    let bucket = config
-        .get_bucket()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::config("Bucket 名称不能为空"))?;
-
-    // 构建 endpoint 和 region
-    let (endpoint, region) = build_s3_endpoint(&service_id, &config, &bucket)?;
-
-    log::debug!(
-        "[S3测试] Endpoint: {}, Region: {}, Bucket: {}",
-        endpoint,
-        region,
-        bucket
-    );
-
-    // 单次测试，快速反馈优先
-    let test_timeout = Duration::from_secs(10);
-    let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
-
-    let result = timeout(test_timeout, async {
-        client
-            .list_objects_v2()
-            .bucket(&bucket)
-            .max_keys(1)
-            .send()
-            .await
-    })
-    .await;
-
-    match result {
-        Ok(Ok(response)) => {
-            let object_count = response.contents().len();
-            log::info!(
-                "[S3测试] {} 连接成功，存储桶内有 {} 个对象",
-                service_id,
-                object_count
-            );
-            Ok(format!("{} 连接成功！", get_service_name(&service_id)))
-        }
-        Ok(Err(e)) => {
-            // 同样不能用 e.to_string()——理由见 describe_sdk_error。
-            // 这条路径上的 R2 / 腾讯 / 阿里 / 七牛 / 自定义 S3 此前也一直只显示
-            // 「连接失败: service error」，密钥填错了也看不出是密钥的问题。
-            let described = describe_sdk_error(&e);
-            let error_msg = described.full;
-            log::error!("[S3测试] 连接失败: {}", error_msg);
-
-            if error_msg.contains("NoSuchBucket") {
-                Err(AppError::storage(format!("存储桶不存在: {}", bucket)))
-            } else if error_msg.contains("AccessDenied") || error_msg.contains("InvalidAccessKeyId")
-            {
-                Err(AppError::auth("认证失败: 请检查 Access Key 和 Secret Key"))
-            } else if error_msg.contains("SignatureDoesNotMatch") {
-                Err(AppError::auth("签名错误: 请检查 Secret Key 是否正确"))
-            } else if error_msg.contains("InvalidBucketName") {
-                Err(AppError::config(format!("无效的存储桶名称: {}", bucket)))
-            } else {
-                // 兜底走短句：全文是整个 HTTP 响应，塞进 toast 就是一堵墙
-                Err(AppError::storage(format!("连接失败: {}", described.brief)))
-            }
-        }
-        Err(_) => {
-            log::warn!("[S3测试] 连接超时");
-            Err(AppError::storage("连接超时，请检查网络或配置"))
-        }
-    }
-}
-
 /// 根据服务类型构建 S3 endpoint
 pub(super) fn build_s3_endpoint(
     service_id: &str,
@@ -708,19 +614,6 @@ fn classify_upyun_s3_error(error_msg: &str, brief: &str, bucket: &str) -> AppErr
     AppError::storage(format!("S3 链路（软件内上传）连接失败: {}", brief))
 }
 
-/// 获取服务显示名称
-fn get_service_name(service_id: &str) -> &str {
-    match service_id {
-        "r2" => "Cloudflare R2",
-        "tencent" => "腾讯云 COS",
-        "aliyun" => "阿里云 OSS",
-        "qiniu" => "七牛云",
-        "upyun" => "又拍云",
-        s if s == "custom_s3" || s.starts_with("custom_s3:") => "自定义 S3 存储",
-        _ => service_id,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,8 +648,8 @@ mod tests {
     /// 全落进兜底分支——「连接失败: service error」，等于什么也没说。
     ///
     /// **这个坑单测抓不到**：喂给分类函数的是手写字符串，那种字符串现实中不会出现。
-    /// 所以改成扫源码。三处都得走 `describe_sdk_error`：通用连接测试、又拍云 S3 链路、
-    /// 以及上传失败提示（那处用户看得最多）。
+    /// 所以改成扫源码。四处都得走 `describe_sdk_error`：图床页分步检测的凭证与写入两步
+    /// （`storage_probe.rs`）、又拍云 S3 链路、以及上传失败提示（那处用户看得最多）。
     ///
     /// 两个讲究，少一个哨兵就失灵：
     /// - **在 `#[cfg(test)]` 处截断**：`include_str!` 把本测试自己也读进来了，
@@ -764,19 +657,19 @@ mod tests {
     /// - **滤掉注释行**：上面那段说明里就写着违规写法。
     #[test]
     fn sdk_errors_never_go_through_plain_display() {
-        let raw = include_str!("s3_compatible.rs").replace("
-", "
-");
-        let code_only = raw
-            .split_once("
-#[cfg(test)]")
-            .map(|(before, _)| before)
-            .expect("找不到 #[cfg(test)]，截断失效——哨兵会自己触发自己")
-            .lines()
-            .filter(|line| !line.trim_start().starts_with("//"))
-            .collect::<Vec<_>>()
-            .join("
-");
+        // 截断 + 去注释：两份源码同样处理
+        let code_of = |source: &str| -> String {
+            source
+                .replace("\r\n", "\n")
+                .split_once("\n#[cfg(test)]")
+                .map(|(before, _)| before.to_string())
+                .expect("找不到 #[cfg(test)]，截断失效——哨兵会自己触发自己")
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let code_only = format!("{}\n{}", code_of(include_str!("s3_compatible.rs")), code_of(include_str!("storage_probe.rs")));
 
         // ⚠️ 不能直接 contains("e.to_string()")：`code.to_string()`、`source.to_string()`
         // 这些正当写法都以 `e.to_string()` 结尾，会被误判。2026-08-20 这条哨兵上线
@@ -790,10 +683,10 @@ mod tests {
             "上传失败提示在直接 Display SDK 错误——改走 describe_sdk_error",
         );
 
-        // 正向：三处都确实接上了。只查"没有违规写法"的话，把整段删掉也算通过。
+        // 正向：四处都确实接上了。只查"没有违规写法"的话，把整段删掉也算通过。
         assert!(
-            code_only.matches("describe_sdk_error(&").count() >= 3,
-            "describe_sdk_error 的调用点少于 3 处，是不是哪条链路漏接了？",
+            code_only.matches("describe_sdk_error(&").count() >= 4,
+            "describe_sdk_error 的调用点少于 4 处，是不是哪条链路漏接了？",
         );
     }
 

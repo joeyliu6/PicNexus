@@ -131,7 +131,6 @@
     "allow-upload-to-github",
     "allow-upload-to-imgur",
     "allow-upload-to-s3-compatible",
-    "allow-test-s3-connection",
     "allow-probe-s3-storage",
     "allow-upload-to-webdav",
     "allow-test-webdav-storage",
