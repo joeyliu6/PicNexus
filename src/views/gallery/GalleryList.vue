@@ -2,7 +2,9 @@
 // 列表视图（GalleryScreen.dc.html G02）：缩略图 · 文件名 · 图床（花瓣 + 名称）· 尺寸与大小 · 上传时间 · 状态 · 操作。
 // 行高 54、虚拟滚动；点表头按文件名 / 大小 / 上传时间排序；「状态」列平时为空，出问题才写「⚠ 失效」。
 // 单击打开详情，双击看大图，Ctrl/⌘ / Shift 单击多选（与网格一致）。
-import { computed, ref, watch } from 'vue';
+// 键盘：整张表只有一个 Tab 停留点（焦点那行），↑ ↓ / Home / End / PageUp / PageDown 换行，Enter 详情、空格大图；
+// 这一行的「复制」「⋯」接在它后面，其余行的按钮不进 Tab 顺序。
+import { computed, nextTick, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
@@ -40,6 +42,8 @@ const emit = defineEmits<{
   'update:sort': [sort: GalleryListSort];
   copy: [meta: ImageMeta];
   removed: [ids: string[]];
+  /** 键盘把焦点移到了这一行 */
+  navigate: [meta: ImageMeta];
 }>();
 
 /** 与 --pn-size-list-row 一致（虚拟滚动按它算每行位置） */
@@ -94,18 +98,77 @@ function onRowClick(row: GalleryListRow, event: MouseEvent): void {
 async function remove(row: GalleryListRow): Promise<void> {
   if (await actions.removeRecords([row.id], row.localFileName)) emit('removed', [row.id]);
 }
+
+// ---- 键盘 ----
+
+/** 键盘最后停在哪一行（序号） */
+const activeIndex = ref<number | null>(null);
+/** Tab 停在哪一行：详情那行在屏上就是它，其次是键盘最后停的那行，否则视口里第一行 */
+const tabStopIndex = computed(() => {
+  const byDetail = visible.value.find(({ row }) => row && row.id === props.focusedId);
+  if (byDetail) return byDetail.item.index;
+  if (visible.value.some(({ item }) => item.index === activeIndex.value)) return activeIndex.value;
+  const top = virtualizer.value.scrollOffset ?? 0;
+  return visible.value.find(({ item }) => item.end > top)?.item.index ?? null;
+});
+
+// 走到的那行可能还没画出来：先滚过去，等它出现再把焦点给它
+let pendingFocus: number | null = null;
+function applyPendingFocus(): void {
+  if (pendingFocus === null) return;
+  const el = scroller.value?.querySelector<HTMLElement>(`[data-index="${pendingFocus}"]`);
+  if (!el) return;
+  pendingFocus = null;
+  el.focus({ preventScroll: true });
+}
+watch(visible, () => void nextTick(applyPendingFocus));
+
+function moveTo(index: number): void {
+  const target = Math.max(0, Math.min(index, props.grid.totalCount.value - 1));
+  activeIndex.value = target;
+  pendingFocus = target;
+  virtualizer.value.scrollToIndex(target, { align: 'auto' });
+  void nextTick(applyPendingFocus);
+}
+
+function onRowFocus(index: number, row: GalleryListRow | null, event: FocusEvent): void {
+  activeIndex.value = index;
+  if (row && (event.target as HTMLElement).matches(':focus-visible')) emit('navigate', row);
+}
+
+function onRowKeydown(index: number, row: GalleryListRow | null, event: KeyboardEvent): void {
+  if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+  const page = Math.max(1, Math.floor((scroller.value?.clientHeight ?? ROW_HEIGHT) / ROW_HEIGHT) - 1);
+  const moves: Record<string, number> = { ArrowDown: index + 1, ArrowUp: index - 1, PageDown: index + page, PageUp: index - page, Home: 0, End: props.grid.totalCount.value - 1 };
+  if (event.key in moves) {
+    event.preventDefault();
+    moveTo(moves[event.key]);
+  } else if (event.key === 'Enter' && row) {
+    event.preventDefault();
+    emit('open', row);
+  } else if (event.key === ' ' && row) {
+    event.preventDefault();
+    emit('openLightbox', row, index);
+  }
+}
 </script>
 
 <template>
-  <div ref="root" class="list" :class="{ 'list--narrow': narrow }" role="table" aria-label="图片列表" :aria-rowcount="grid.totalCount.value">
-    <div class="list__head" role="row">
-      <span role="columnheader" />
-      <button type="button" role="columnheader" class="list__sort" :class="{ 'list__sort--on': sort.key === 'name' }" :aria-sort="ariaSort('name')" @click="sortBy('name')">文件名{{ arrow('name') }}</button>
+  <div ref="root" class="list" :class="{ 'list--narrow': narrow }" role="grid" aria-label="图片列表" aria-multiselectable="true" :aria-rowcount="grid.totalCount.value + 1">
+    <div class="list__head" role="row" aria-rowindex="1">
+      <span role="columnheader" aria-label="缩略图" />
+      <span role="columnheader" :aria-sort="ariaSort('name')">
+        <button type="button" class="list__sort" :class="{ 'list__sort--on': sort.key === 'name' }" @click="sortBy('name')">文件名{{ arrow('name') }}</button>
+      </span>
       <span role="columnheader">图床</span>
-      <button v-if="!narrow" type="button" role="columnheader" class="list__sort" :class="{ 'list__sort--on': sort.key === 'size' }" :aria-sort="ariaSort('size')" @click="sortBy('size')">尺寸 · 大小{{ arrow('size') }}</button>
-      <button type="button" role="columnheader" class="list__sort" :class="{ 'list__sort--on': sort.key === 'time' }" :aria-sort="ariaSort('time')" @click="sortBy('time')">上传时间{{ arrow('time') }}</button>
+      <span v-if="!narrow" role="columnheader" :aria-sort="ariaSort('size')">
+        <button type="button" class="list__sort" :class="{ 'list__sort--on': sort.key === 'size' }" @click="sortBy('size')">尺寸 · 大小{{ arrow('size') }}</button>
+      </span>
+      <span role="columnheader" :aria-sort="ariaSort('time')">
+        <button type="button" class="list__sort" :class="{ 'list__sort--on': sort.key === 'time' }" @click="sortBy('time')">上传时间{{ arrow('time') }}</button>
+      </span>
       <span role="columnheader">状态</span>
-      <span role="columnheader" />
+      <span role="columnheader" aria-label="操作" />
     </div>
 
     <div ref="scroller" class="list__scroll">
@@ -116,37 +179,43 @@ async function remove(row: GalleryListRow): Promise<void> {
           role="row"
           class="list__row"
           :class="{ 'list__row--selected': row && selectedIds.has(row.id), 'list__row--focused': row && focusedId === row.id }"
-          :aria-rowindex="item.index + 1"
+          :data-index="item.index"
+          :tabindex="item.index === tabStopIndex ? 0 : -1"
+          :aria-rowindex="item.index + 2"
+          :aria-label="row?.localFileName"
+          :aria-busy="row ? undefined : true"
           :aria-selected="row ? selectedIds.has(row.id) : undefined"
           :style="{ transform: `translateY(${item.start}px)` }"
           @click="row && onRowClick(row, $event)"
           @dblclick="row && emit('openLightbox', row, item.index)"
+          @focus="onRowFocus(item.index, row, $event)"
+          @keydown="onRowKeydown(item.index, row, $event)"
         >
           <template v-if="row">
-            <span class="list__thumb" role="cell">
+            <span class="list__thumb" role="gridcell">
               <ThumbnailImage :srcs="grid.getThumbnailUrls(row)" alt="" :confirmed-http-hosts="grid.confirmedHttpHosts.value" />
             </span>
-            <span class="list__name-cell" role="cell">
+            <span class="list__name-cell" role="gridcell">
               <span class="list__name">{{ row.localFileName }}</span>
               <PnIcon v-if="historyManager.favoriteSet.value.has(row.id)" name="star" filled :size="12" class="list__fav" />
             </span>
-            <span class="list__hosts" role="cell">
+            <span class="list__hosts" role="gridcell">
               <PetalGlyph :states="petalsOf(row)" :size="15" :label="petalLabelOf(row)" />
               <span class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
             </span>
-            <span v-if="!narrow" class="list__muted" role="cell">{{ sizeText(row) }}</span>
-            <span class="list__muted" role="cell">{{ formatListTime(row.timestamp, props.now) }}</span>
-            <span class="list__status" :class="{ 'list__status--warn': statusOf(row).warn }" role="cell">
+            <span v-if="!narrow" class="list__muted" role="gridcell">{{ sizeText(row) }}</span>
+            <span class="list__muted" role="gridcell">{{ formatListTime(row.timestamp, props.now) }}</span>
+            <span class="list__status" :class="{ 'list__status--warn': statusOf(row).warn }" role="gridcell">
               <PnIcon v-if="statusOf(row).warn" name="warning" :size="12" :stroke="2.2" />
               {{ statusOf(row).text }}
             </span>
-            <span class="list__actions" role="cell">
-              <button type="button" class="list__icon" :class="{ 'list__icon--done': copiedId === row.id }" :aria-label="copiedId === row.id ? '已复制' : '复制链接'" @click.stop="emit('copy', row)">
+            <span class="list__actions" role="gridcell">
+              <button type="button" class="list__icon" :class="{ 'list__icon--done': copiedId === row.id }" :tabindex="item.index === tabStopIndex ? undefined : -1" :aria-label="copiedId === row.id ? '已复制' : '复制链接'" @click.stop="emit('copy', row)">
                 <PnIcon :name="copiedId === row.id ? 'check' : 'copy'" :size="14" :stroke="copiedId === row.id ? 2.4 : 1.8" />
               </button>
               <PnMenu align="end" :width="180">
                 <template #trigger>
-                  <button type="button" class="list__icon" aria-label="更多操作" @click.stop>
+                  <button type="button" class="list__icon" aria-label="更多操作" :tabindex="item.index === tabStopIndex ? undefined : -1" @click.stop>
                     <PnIcon name="more" :size="15" :stroke="2" />
                   </button>
                 </template>
@@ -198,7 +267,6 @@ async function remove(row: GalleryListRow): Promise<void> {
 }
 
 .list__sort {
-  justify-self: start;
   padding: 0;
   border: 0;
   background: transparent;
@@ -229,6 +297,9 @@ async function remove(row: GalleryListRow): Promise<void> {
 .list__row:hover { background: var(--pn-row-hover); }
 .list__row--focused { background: var(--pn-selected); }
 .list__row--selected { background: var(--pn-brand-soft); }
+
+/* 焦点环画在行内：滚动区会裁掉画在外面的那圈 */
+.list__row:focus-visible { outline-offset: calc(-1 * var(--pn-ring-width)); }
 
 .list__thumb {
   display: flex;

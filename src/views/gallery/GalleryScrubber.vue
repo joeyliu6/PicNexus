@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 图库刻度条（交接说明 8.2 + GalleryScreen.dc.html）：一块毛玻璃浮在图片右缘，图片照常铺满宽度。
 // 滚动或鼠标靠近右缘时出现，停止 1.5 秒后淡出（显隐由页面按鼠标位置控制）；拖动或点刻度跳到那个年月，悬停出同样毛玻璃的「2026 年 10 月」。
+// 键盘：Tab 到它时出现（排在图片之后），↑ ↓ / PageUp / PageDown 换刻度、Home / End 到最新 / 最旧，气泡跟着写当前刻度。
 import { computed, ref } from 'vue';
 import { SCRUBBER_TICK_HEIGHT, type ScrubberTick } from './scrubberTicks';
 
@@ -30,6 +31,9 @@ const markerTop = computed(() => {
 });
 
 const hovered = ref<{ index: number; y: number } | null>(null);
+/** 键盘焦点在刻度条上时选中的刻度（序号） */
+const keyIndex = ref<number | null>(null);
+const currentIndex = computed(() => props.ticks.findIndex((t) => t.current));
 let dragging = false;
 let lastJumped = -1;
 
@@ -72,21 +76,68 @@ function onLeave(): void {
   if (!dragging) hovered.value = null;
 }
 
-const tipText = computed(() => {
-  if (!hovered.value) return '';
-  const tick = props.ticks[hovered.value.index];
-  return tick.month === undefined ? `${tick.year} 年` : `${tick.year} 年 ${tick.month + 1} 月`;
+const tickText = (tick: ScrubberTick) => (tick.month === undefined ? `${tick.year} 年` : `${tick.year} 年 ${tick.month + 1} 月`);
+
+/** 气泡：鼠标悬停的刻度，否则键盘选中的刻度 */
+const tip = computed(() => {
+  const index = hovered.value?.index ?? keyIndex.value;
+  if (index === null || !props.ticks[index]) return null;
+  return { y: hovered.value?.y ?? offsets.value[index], text: tickText(props.ticks[index]) };
 });
+
+const valueIndex = computed(() => keyIndex.value ?? Math.max(0, currentIndex.value));
+
+/** 从当前所在的刻度开始（鼠标点上来的不算：点完移开就该照常淡出） */
+function startKeyboard(): void {
+  keyIndex.value = Math.max(0, currentIndex.value);
+  lastJumped = keyIndex.value;
+}
+
+function onFocus(event: FocusEvent): void {
+  if ((event.target as HTMLElement).matches(':focus-visible')) startKeyboard();
+}
+
+function onBlur(): void {
+  keyIndex.value = null;
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!props.ticks.length) return;
+  if (keyIndex.value === null) startKeyboard();
+  if (keyIndex.value === null) return;
+  const last = props.ticks.length - 1;
+  const moves: Record<string, number> = {
+    ArrowDown: keyIndex.value + 1,
+    ArrowRight: keyIndex.value + 1,
+    ArrowUp: keyIndex.value - 1,
+    ArrowLeft: keyIndex.value - 1,
+    PageDown: keyIndex.value + 5,
+    PageUp: keyIndex.value - 5,
+    Home: 0,
+    End: last,
+  };
+  if (!(event.key in moves)) return;
+  event.preventDefault();
+  keyIndex.value = Math.max(0, Math.min(moves[event.key], last));
+  jumpTo(keyIndex.value);
+}
 </script>
 
 <template>
   <div
     class="scrubber"
-    :class="{ 'scrubber--visible': visible || !!hovered }"
+    :class="{ 'scrubber--visible': visible || !!hovered || keyIndex !== null }"
     role="slider"
+    tabindex="0"
     aria-label="时间刻度"
     aria-orientation="vertical"
-    :aria-valuetext="ticks.find((t) => t.current)?.label"
+    aria-valuemin="0"
+    :aria-valuemax="Math.max(0, ticks.length - 1)"
+    :aria-valuenow="valueIndex"
+    :aria-valuetext="ticks[valueIndex] ? tickText(ticks[valueIndex]) : undefined"
+    @focus="onFocus"
+    @blur="onBlur"
+    @keydown="onKeydown"
     @pointerleave="onLeave"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
@@ -98,11 +149,12 @@ const tipText = computed(() => {
       :key="`${tick.year}-${tick.month ?? 'y'}`"
       class="scrubber__tick"
       :class="[`scrubber__tick--${tick.kind}`, { 'scrubber__tick--current': tick.current }]"
+      aria-hidden="true"
     >
       {{ tick.label }}
     </div>
     <span v-if="markerTop !== null" class="scrubber__marker" :style="{ top: `${markerTop}px` }" />
-    <span v-if="hovered" class="scrubber__tip" :style="{ top: `${hovered.y}px` }">{{ tipText }}</span>
+    <span v-if="tip" class="scrubber__tip" :style="{ top: `${tip.y}px` }" aria-hidden="true">{{ tip.text }}</span>
   </div>
 </template>
 

@@ -23,6 +23,8 @@ const props = defineProps<{
   selecting: boolean;
   /** 详情正打开的那张 / 键盘焦点所在 */
   focused: boolean;
+  /** 网格里唯一的 Tab 停留点（其余格子用方向键走到） */
+  tabbable?: boolean;
   /** 刚复制过：「复制」原地变「已复制」1.5 秒 */
   copied: boolean;
   loaded: boolean;
@@ -40,6 +42,8 @@ const emit = defineEmits<{
   copy: [];
   imageLoad: [];
   imageError: [event?: Event];
+  /** 键盘把焦点移到了这一格（Tab 或方向键；鼠标点击不算） */
+  keyboardFocus: [];
 }>();
 
 const hover = ref(false);
@@ -73,6 +77,17 @@ const tag = computed(() => {
   const text = displayTag(props.meta);
   return text && (!badge.value || kind.value === 'wide') ? text : null;
 });
+
+/** 读屏在文件名之后读的状态：问题角标、收藏、比例说明（格子上那几个角标只给眼睛看，被悬停层盖住时这里也照读） */
+const description = computed(() => {
+  const health = badgeOf(props.meta);
+  const parts = [props.failed && '图片加载失败', health && (health.warn ? `⚠ ${health.text}` : health.text), props.favorited && '已收藏', displayTag(props.meta), animated.value && 'GIF'];
+  return parts.filter(Boolean).join('，') || undefined;
+});
+
+function onFocus(event: FocusEvent): void {
+  if ((event.target as HTMLElement).matches(':focus-visible')) emit('keyboardFocus');
+}
 
 /** 小图按原尺寸放在方格中间；格子比原图小时等比缩小，不放大 */
 const smallBox = computed(() => {
@@ -125,15 +140,18 @@ function onClick(event: MouseEvent): void {
   <div
     class="tile"
     :class="{ 'tile--selected': selected, 'tile--long': kind === 'long', 'tile--small': kind === 'small' && loaded }"
+    :id="`tile-${meta.id}`"
     role="gridcell"
-    :tabindex="focused ? 0 : -1"
+    :tabindex="tabbable ? 0 : -1"
     :aria-selected="selected"
     :aria-label="meta.localFileName"
+    :aria-description="description"
     :title="meta.localFileName"
     :data-lightbox-id="meta.id"
     :style="{ transform: `translate3d(${x}px, ${y}px, 0)`, width: `${width}px`, height: `${height}px` }"
     @click="onClick"
     @dblclick="emit('openLightbox')"
+    @focus="onFocus"
     @mouseenter="hover = true"
     @mouseleave="hover = false"
   >
@@ -159,18 +177,18 @@ function onClick(event: MouseEvent): void {
         aria-hidden="true"
       />
       <span v-if="kind === 'long' && loaded && !failed" class="tile__fade" aria-hidden="true" />
-      <span v-if="failed" class="tile__broken">
+      <span v-if="failed" class="tile__broken" aria-hidden="true">
         <PnIcon name="gallery" :size="20" :stroke="1.4" />
         图片加载失败
       </span>
 
       <PnIcon v-if="favorited && !overlay" name="star" filled :size="14" class="tile__fav" />
-      <span v-if="badge && !overlay" class="tile__badge">
+      <span v-if="badge && !overlay" class="tile__badge" aria-hidden="true">
         <PnIcon v-if="badge.warn" name="warning" :size="11" :stroke="2" class="tile__badge-warn" />
         {{ badge.text }}
       </span>
-      <span v-if="animated && showMarks && !selecting" class="tile__tag tile__tag--gif">GIF</span>
-      <span v-if="tag && showMarks" class="tile__tag" :class="`tile__tag--${kind}`">{{ tag }}</span>
+      <span v-if="animated && showMarks && !selecting" class="tile__tag tile__tag--gif" aria-hidden="true">GIF</span>
+      <span v-if="tag && showMarks" class="tile__tag" :class="`tile__tag--${kind}`" aria-hidden="true">{{ tag }}</span>
 
       <div v-if="overlay" class="tile__hover">
         <button type="button" class="tile__select" aria-label="选择" @click.stop="emit('toggleSelect', $event)" />

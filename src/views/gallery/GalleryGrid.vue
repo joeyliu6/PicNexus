@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // 图库网格（GalleryScreen.dc.html）：按天分组、等高行、宽度按原比例；日期标题滚动时吸顶。
 // 只负责画：布局、加载、选择状态都来自 useGalleryGrid（由页面创建，滚动容器也在页面上）。
-import { computed } from 'vue';
+// 读屏：格子按位置绝对定位、都是网格的直接子元素（重排时不重建）；每行用一个空的 row 以 aria-owns 认领它的格子，
+// 日期标题也是一行，按位置先后与图片行交错排。Tab 只停在一格上（详情 / 焦点那张，没有就是视口里第一张），其余用方向键走。
+import { computed, nextTick, ref, watch } from 'vue';
 import type { ImageMeta } from '@/types/image-meta';
 import { formatDayHeading } from '@/utils/formatters';
 import GalleryTile from './GalleryTile.vue';
@@ -20,6 +22,8 @@ const emit = defineEmits<{
   open: [meta: ImageMeta];
   openLightbox: [meta: ImageMeta];
   copy: [meta: ImageMeta];
+  /** 键盘把焦点移到了这一格 */
+  focus: [meta: ImageMeta];
 }>();
 
 const { virtual, viewState, historyManager } = props.grid;
@@ -57,10 +61,60 @@ const sticky = computed(() => {
 
 const selectedIds = computed(() => new Set(viewState.selectedIdList.value));
 const selecting = computed(() => viewState.hasSelection.value);
+
+/** 读屏的行：日期标题与图片行按位置交错（图片行只认领格子，不改它们在页面里的位置） */
+type Line = { kind: 'day'; key: string; groupId: string; y: number } | { kind: 'row'; key: string; y: number; owns: string };
+const lines = computed<Line[]>(() => {
+  const rows = new Map<string, { y: number; ids: string[] }>();
+  for (const item of visibleItems.value) {
+    const key = `${item.groupId}:${item.y}`;
+    const row = rows.get(key);
+    if (row) row.ids.push(`tile-${item.meta.id}`);
+    else rows.set(key, { y: item.y, ids: [`tile-${item.meta.id}`] });
+  }
+  return [
+    ...visibleHeaders.value.map((header): Line => ({ kind: 'day', key: `day-${header.groupId}`, groupId: header.groupId, y: header.y })),
+    ...[...rows].map(([key, row]): Line => ({ kind: 'row', key: `row-${key}`, y: row.y, owns: row.ids.join(' ') })),
+  ].sort((a, b) => a.y - b.y);
+});
+
+/** Tab 停在哪一格：焦点那张在屏上就是它，否则视口里第一张 */
+const tabStopId = computed(() => {
+  const items = visibleItems.value;
+  if (props.focusedId && items.some((item) => item.meta.id === props.focusedId)) return props.focusedId;
+  const top = virtual.scrollTop.value;
+  return (items.find((item) => item.y + item.height > top) ?? items[0])?.meta.id ?? null;
+});
+
+// 方向键走到的那格可能还没画出来（刚滚过去）：记下来，等它出现再把焦点给它
+const root = ref<HTMLElement | null>(null);
+let pendingFocus: string | null = null;
+function applyPendingFocus(): void {
+  if (!pendingFocus) return;
+  const el = root.value?.querySelector<HTMLElement>(`[id="tile-${CSS.escape(pendingFocus)}"]`);
+  if (!el) return;
+  pendingFocus = null;
+  el.focus({ preventScroll: true });
+}
+watch(visibleItems, () => void nextTick(applyPendingFocus));
+
+/** 把键盘焦点移到这一格（滚动由页面负责） */
+function focusTile(id: string): void {
+  pendingFocus = id;
+  void nextTick(applyPendingFocus);
+}
+
+/** 焦点在网格里（或没有落在任何控件上）：方向键移动时焦点跟着走 */
+function ownsFocus(): boolean {
+  const active = document.activeElement;
+  return !active || active === document.body || !!root.value?.contains(active);
+}
+
+defineExpose({ focusTile, ownsFocus });
 </script>
 
 <template>
-  <div class="grid" role="grid" aria-label="图片" :style="{ height: `${totalHeight}px` }">
+  <div ref="root" class="grid" role="grid" aria-label="图片" aria-multiselectable="true" :style="{ height: `${totalHeight}px` }">
     <div v-if="sticky" class="grid__sticky" aria-hidden="true">
       <div class="grid__day grid__day--sticky" :style="{ transform: `translateY(${sticky.offset}px)` }">
         <span class="grid__day-title">{{ heading(sticky.groupId).title }}</span>
@@ -68,17 +122,19 @@ const selecting = computed(() => viewState.hasSelection.value);
       </div>
     </div>
 
-    <div
-      v-for="header in visibleHeaders"
-      v-show="sticky?.groupId !== header.groupId"
-      :key="`day-${header.groupId}`"
-      class="grid__day"
-      role="row"
-      :style="{ transform: `translate3d(0, ${header.y}px, 0)` }"
-    >
-      <span class="grid__day-title" role="rowheader">{{ heading(header.groupId).title }}</span>
-      <span class="grid__day-sub">{{ heading(header.groupId).sub }}</span>
-    </div>
+    <template v-for="line in lines" :key="line.key">
+      <div
+        v-if="line.kind === 'day'"
+        class="grid__day"
+        :class="{ 'grid__day--covered': sticky?.groupId === line.groupId }"
+        role="row"
+        :style="{ transform: `translate3d(0, ${line.y}px, 0)` }"
+      >
+        <span class="grid__day-title" role="rowheader">{{ heading(line.groupId).title }}</span>
+        <span class="grid__day-sub">{{ heading(line.groupId).sub }}</span>
+      </div>
+      <div v-else role="row" :aria-owns="line.owns" />
+    </template>
 
     <div
       v-for="(slot, index) in displayMode === 'fast' ? fastModeItems : []"
@@ -105,6 +161,7 @@ const selecting = computed(() => viewState.hasSelection.value);
       :favorited="historyManager.favoriteSet.value.has(item.meta.id)"
       :selecting="selecting"
       :focused="focusedId === item.meta.id"
+      :tabbable="tabStopId === item.meta.id"
       :copied="copiedId === item.meta.id"
       :loaded="grid.loadedImages.value.has(item.meta.id)"
       :failed="grid.failedImages.value.has(item.meta.id)"
@@ -116,6 +173,7 @@ const selecting = computed(() => viewState.hasSelection.value);
       @toggle-select="(event: MouseEvent) => grid.toggleSelect(item.meta.id, event)"
       @toggle-favorite="grid.toggleFavorite(item.meta.id)"
       @copy="emit('copy', item.meta)"
+      @keyboard-focus="emit('focus', item.meta)"
       @image-load="grid.onImageLoad(item.meta.id)"
       @image-error="(event?: Event) => grid.onImageError(event, item.meta.id)"
     />
@@ -147,6 +205,9 @@ const selecting = computed(() => viewState.hasSelection.value);
   padding-top: var(--pn-space-6);
   box-sizing: border-box;
 }
+
+/* 被吸顶条盖住的那天：藏起来但留给读屏（吸顶条本身对读屏隐藏） */
+.grid__day--covered { opacity: 0; }
 
 .grid__day--sticky {
   right: 0;

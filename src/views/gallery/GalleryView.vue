@@ -56,6 +56,7 @@ const queryFilter = computed(() => toQueryFilter(appliedFilters.value));
 const scroller = ref<HTMLElement | null>(null);
 const mainEl = ref<HTMLElement | null>(null);
 const toolbar = ref<InstanceType<typeof GalleryToolbar> | null>(null);
+const gridView = ref<InstanceType<typeof GalleryGrid> | null>(null);
 const grid = useGalleryGrid(scroller, queryFilter, computed(() => active.value && view.value === 'grid'));
 const { viewState, historyManager } = grid;
 
@@ -252,9 +253,17 @@ watch([locateRequest, active], ([request, isActive]) => {
 function moveFocus(direction: GridDirection): void {
   const next = neighborTile(grid.virtual.layoutResult.value?.allRows ?? [], focusedId.value, direction);
   if (!next || next === focusedId.value) return;
+  const keyboardInGrid = gridView.value?.ownsFocus() ?? false;
   focusedId.value = next;
   if (detailId.value) detailId.value = next;
   reveal(next);
+  if (keyboardInGrid) gridView.value?.focusTile(next);
+}
+
+/** 列表里用方向键走到另一行：详情开着就跟过去（同网格） */
+function onListNavigate(meta: ImageMeta): void {
+  focusedId.value = meta.id;
+  if (detailId.value) detailId.value = meta.id;
 }
 
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
@@ -311,6 +320,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       <div ref="mainEl" class="gallery__main" @pointermove="onMainPointer" @pointerleave="onMainPointer">
         <div v-show="view === 'grid' && !emptyKind" ref="scroller" class="gallery__scroll" @scroll="grid.onScroll">
           <GalleryGrid
+            ref="gridView"
             :grid="grid"
             :focused-id="focusedId"
             :copied-id="copiedKey"
@@ -318,6 +328,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
             @open="openDetail"
             @open-lightbox="openLightbox"
             @copy="copyMeta"
+            @focus="(meta: ImageMeta) => (focusedId = meta.id)"
           />
         </div>
         <GalleryList
@@ -331,6 +342,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
           @open="openDetail"
           @open-lightbox="openLightbox"
           @copy="copyMeta"
+          @navigate="onListNavigate"
           @removed="onRemoved"
         />
         <GalleryEmpty v-if="emptyKind" :kind="emptyKind" @go-home="router.push('/home')" @clear-filters="setFilters(EMPTY_FILTERS)" />
