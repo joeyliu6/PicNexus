@@ -152,7 +152,8 @@ jobs:
               - 'playwright.config.ts'
               - 'package.json'
               - 'package-lock.json'
-              - 'tests/visual/**'
+              - 'tests/redesign/**'
+              - 'tests/e2e/mocks/**'
               - 'src/**/*.vue'
               - 'src/**/*.css'
               - 'src/**/*.scss'
@@ -201,7 +202,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium webkit
+        run: npx playwright install chromium
 
       - name: Run visual regression tests
         run: npm run test:visual
