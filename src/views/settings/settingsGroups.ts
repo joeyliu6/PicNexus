@@ -35,6 +35,8 @@ export const SETTING_ROWS = {
   autoUploadClipboard: 'upload',
   compression: 'upload',
   globalShortcut: 'shortcut',
+  shortcutClipboard: 'shortcut',
+  shortcutFile: 'shortcut',
   appShortcuts: 'shortcut',
   typora: 'editor',
   obsidian: 'editor',

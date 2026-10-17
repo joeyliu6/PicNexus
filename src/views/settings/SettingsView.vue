@@ -12,6 +12,7 @@ import { useAutoUpdate } from '@/composables/useAutoUpdate';
 import { createLogger } from '@/utils/logger';
 import GeneralGroup from './GeneralGroup.vue';
 import SettingsNav from './SettingsNav.vue';
+import ShortcutGroup from './ShortcutGroup.vue';
 import UploadGroup from './UploadGroup.vue';
 import { SETTING_ROWS, SETTINGS_GROUPS, groupForTab, rowForSection, type SettingsGroupId } from './settingsGroups';
 import { useSettingsConfig } from './useSettingsConfig';
@@ -94,6 +95,7 @@ watch(() => [targetTab?.value, targetSection?.value], () => { if (active.value) 
           </div>
           <GeneralGroup v-if="groupId === 'general'" />
           <UploadGroup v-else-if="groupId === 'upload'" />
+          <ShortcutGroup v-else-if="groupId === 'shortcut'" />
         </div>
       </div>
     </section>

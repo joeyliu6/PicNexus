@@ -235,6 +235,34 @@ describe('useGlobalShortcut 初始化与清理', () => {
   });
 });
 
+describe('useGlobalShortcut 录制期间（设置页）', () => {
+  it('录制时注销全部快捷键，期间配置变化不重新注册，结束后按最新配置注册', async () => {
+    const mod = await import('@/composables/useGlobalShortcut');
+    await mod.useGlobalShortcut().initGlobalShortcuts();
+    await mod.suspendGlobalShortcuts();
+    expect(shortcutMocks.unregisterAll).toHaveBeenCalled();
+    shortcutMocks.register.mockClear();
+
+    configGetMock.mockResolvedValue(makeConfig({ globalShortcut: { enabled: true, uploadClipboard: 'Alt+V', uploadFromFile: 'Alt+O' } }));
+    await configUpdatedHandler?.();
+    expect(shortcutMocks.register).not.toHaveBeenCalled();
+
+    await mod.resumeGlobalShortcuts();
+    expect(shortcutHandlers.has('Alt+V')).toBe(true);
+    expect(shortcutHandlers.has('Alt+O')).toBe(true);
+  });
+
+  it('试注册：别的程序占着时返回 false，能注册时注册完立刻注销', async () => {
+    const mod = await import('@/composables/useGlobalShortcut');
+    shortcutMocks.register.mockRejectedValueOnce(new Error('HotKey already registered'));
+    expect(await mod.probeShortcut('Alt+X')).toBe(false);
+    expect(shortcutMocks.unregister).not.toHaveBeenCalledWith('Alt+X');
+
+    expect(await mod.probeShortcut('Alt+Y')).toBe(true);
+    expect(shortcutMocks.unregister).toHaveBeenCalledWith('Alt+Y');
+  });
+});
+
 describe('useGlobalShortcut 触发上传', () => {
   it('剪贴板快捷键 Pressed 时读取图片、后台上传、保存历史、复制格式化链接并发送汇总通知', async () => {
     invokeMock.mockImplementation(async (cmd) => {

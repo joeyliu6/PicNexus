@@ -616,6 +616,10 @@
   --pn-size-settings-preset-edit: 26px;
   /* 自定义模板对话框里的占位符按钮：高 22（同快捷键标签） */
   --pn-size-settings-token: 22px;
+  /* 快捷键：组合键按钮最小宽 150；应用内快捷键表行高 44、按键标签左右 7 */
+  --pn-size-settings-hotkey: 150px;
+  --pn-size-settings-app-key: 44px;
+  --pn-space-settings-kbd-x: 7px;
   /* 外观三卡：预览高 96、内边距 14 12、条间距 7（标题条 8 高 60% 宽、卡片 28 高、说明条 6 高 40% 宽，圆角 2 / 5）；选中描边 2 + 2 */
   --pn-size-theme-preview: 96px;
   --pn-space-theme-preview: 14px 12px;

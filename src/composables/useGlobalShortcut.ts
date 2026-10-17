@@ -350,6 +350,36 @@ async function unregisterAllShortcuts() {
   }
 }
 
+/** 设置页录制快捷键期间：全局快捷键先注销，免得按到原组合键时系统直接触发上传、网页收不到按键 */
+let suspended = false;
+
+export async function suspendGlobalShortcuts(): Promise<void> {
+  suspended = true;
+  await unregisterAllShortcuts();
+}
+
+/** 录制结束：按当前配置重新注册（录到新值时配置已经写好） */
+export async function resumeGlobalShortcuts(): Promise<void> {
+  suspended = false;
+  const config = await loadConfig();
+  const shortcutConfig = config.globalShortcut || DEFAULT_CONFIG.globalShortcut!;
+  await unregisterAllShortcuts();
+  await registerShortcuts(shortcutConfig);
+  lastShortcutConfig = JSON.parse(JSON.stringify(shortcutConfig));
+}
+
+/** 试注册一下：系统里别的程序占着这个组合键时注册会失败。试完立刻注销 */
+export async function probeShortcut(accelerator: string): Promise<boolean> {
+  try {
+    await register(accelerator, () => {});
+  } catch (err) {
+    log.info(`快捷键 ${accelerator} 试注册失败`, err);
+    return false;
+  }
+  await unregister(accelerator).catch((err) => log.warn(`试注册后注销 ${accelerator} 失败`, err));
+  return true;
+}
+
 /**
  * 全局快捷键 Composable
  */
@@ -368,6 +398,8 @@ export function useGlobalShortcut() {
 
       // 监听配置更新事件，动态重新注册
       configUnlisten = await listen('config-updated', async () => {
+        // 设置页正在录制：先不注册，录制结束时 resumeGlobalShortcuts 按最新配置注册
+        if (suspended) return;
         const newConfig = await loadConfig();
         const newShortcutConfig = newConfig.globalShortcut || DEFAULT_CONFIG.globalShortcut!;
 
