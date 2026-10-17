@@ -10,6 +10,7 @@ pub mod cli_path;
 pub mod cli_config;
 pub mod cookie_login;
 pub mod clipboard;
+pub mod clipboard_watch;
 pub mod github;
 pub mod image_compress;
 pub mod image_meta;

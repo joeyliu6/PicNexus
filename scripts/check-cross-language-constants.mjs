@@ -27,6 +27,20 @@ const failures = [];
 
 const PAIRS = [
   {
+    name: 'CLIPBOARD_IMAGE_EVENT',
+    why: '自动上传剪贴板：Rust 后台发现新图片时发的事件名，前端按这个名字听。名字一分叉，开关开着却什么都不传，也不报错',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/clipboard_watch.rs',
+        pattern: /const\s+CLIPBOARD_IMAGE_EVENT\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/composables/upload/clipboardWatch.ts',
+        pattern: /const\s+CLIPBOARD_IMAGE_EVENT\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'FAKE_IP_HOST_MESSAGE',
     why: 'fake-ip 地址被当成局域网时的提示。设置页由前端拦、上传时由 Rust 拦，是同一件事的两个拦截点',
     sources: [

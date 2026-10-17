@@ -58,6 +58,7 @@ const APP_COMMANDS: &[&str] = &[
     "resume_batch_check",
     "clipboard_has_image",
     "read_clipboard_image",
+    "set_clipboard_watch",
     "cleanup_clipboard_temp_file",
     "export_text_file",
     "import_text_file",

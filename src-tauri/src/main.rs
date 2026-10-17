@@ -265,6 +265,7 @@ fn main() {
         )
         .manage(HttpClient(http_client)) // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
+        .manage(commands::clipboard_watch::ClipboardWatchState::default())
         .manage(analytics::AnalyticsRuntimeState::new())
         .manage(analytics::HeartbeatState::new())
         .manage(commands::link_checker::BatchCheckCancelFlag::new())
@@ -328,6 +329,7 @@ fn main() {
             commands::link_checker::resume_batch_check,
             commands::clipboard::clipboard_has_image,
             commands::clipboard::read_clipboard_image,
+            commands::clipboard_watch::set_clipboard_watch,
             commands::clipboard::cleanup_clipboard_temp_file,
             commands::user_files::export_text_file,
             commands::user_files::import_text_file,

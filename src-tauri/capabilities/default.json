@@ -141,6 +141,7 @@
     "allow-resume-batch-check",
     "allow-clipboard-has-image",
     "allow-read-clipboard-image",
+    "allow-set-clipboard-watch",
     "allow-cleanup-clipboard-temp-file",
     "allow-export-text-file",
     "allow-import-text-file",
