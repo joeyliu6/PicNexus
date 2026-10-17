@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detailBanner, hostRows } from '@/views/gallery/detailHosts';
+import { detailBanner, hostRows, linkHealth } from '@/views/gallery/detailHosts';
 import type { MirrorInfo } from '@/composables/history/useMirrorFallback';
 
 const mirror = (serviceId: string, checkState: MirrorInfo['checkState'], isPrimary = false): MirrorInfo => ({
@@ -30,6 +30,12 @@ describe('hostRows', () => {
     ]);
   });
 
+  // 检测还在排队（errorType pending）：格子角标和状态筛选都算「尚未检测」，详情不能说成「图片已不存在」
+  it('treats a queued check as not checked yet', () => {
+    const rows = hostRows([mirror('jd', 'invalid', true)], { jd: { isValid: false, lastCheckTime: 1, errorType: 'pending' } }, null);
+    expect([rows[0].health, rows[0].canCopy]).toEqual(['unchecked', true]);
+  });
+
   it('notes a copy source that was just switched to', () => {
     expect(hostRows([mirror('jd', 'valid', true)], {}, 'jd')[0].status).toBe('复制时使用 · 刚刚切换');
   });
@@ -47,5 +53,17 @@ describe('detailBanner', () => {
 
   it('shows nothing while the copy source works', () => {
     expect(detailBanner(hostRows([mirror('r2', 'valid', true), mirror('jd', 'invalid')], {}, null), name)).toBeNull();
+  });
+});
+
+describe('linkHealth', () => {
+  it('reads one copy the way the tile badges and the status filter do', () => {
+    const status = {
+      ok: { isValid: true, lastCheckTime: 1, errorType: 'success' },
+      dead: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
+      limited: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx', browserMightWork: true },
+      queued: { isValid: false, lastCheckTime: 1, errorType: 'pending' },
+    } as const;
+    expect(['ok', 'dead', 'limited', 'queued', 'never'].map((id) => linkHealth(status, id))).toEqual(['ok', 'dead', 'limited', 'unchecked', 'unchecked']);
   });
 });

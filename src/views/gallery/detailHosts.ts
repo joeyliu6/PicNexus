@@ -23,10 +23,21 @@ export type DetailBanner =
   | { kind: 'broken'; title: string; sub: string; useId: string; useName: string }
   | { kind: 'dead' };
 
+/** 一条记录在某个图床上那份链接的检测结论（与格子角标、状态筛选的 SQL 同一口径） */
+export function linkHealth(status: HistoryItem['linkCheckStatus'], serviceId: string): HostHealth {
+  const entry = status?.[serviceId];
+  if (!entry || entry.isValid == null || entry.errorType === 'pending') return 'unchecked';
+  if (entry.isValid) return 'ok';
+  return entry.browserMightWork ? 'limited' : 'dead';
+}
+
 function healthOf(mirror: MirrorInfo, status: HistoryItem['linkCheckStatus']): HostHealth {
   if (mirror.checkState === 'valid') return 'ok';
   if (mirror.checkState === 'unchecked') return 'unchecked';
-  return status?.[mirror.serviceId]?.browserMightWork ? 'limited' : 'dead';
+  const entry = status?.[mirror.serviceId];
+  // 检测还在排队（pending）不算失效，与 linkHealth 一致
+  if (entry?.errorType === 'pending') return 'unchecked';
+  return entry?.browserMightWork ? 'limited' : 'dead';
 }
 
 /** @param justSwitched 刚刚「改用」过去的那个图床：写「复制时使用 · 刚刚切换」 */

@@ -15,11 +15,13 @@ import { getDefaultMigrateSource } from '@/composables/batch-migrate/sourceSelec
 import { useConfigManager } from '@/composables/useConfig';
 import { useCopyLink, type CopyLinkItem } from '@/composables/useCopyLink';
 import { useToast } from '@/composables/useToast';
-import { historyDB } from '@/services/database';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
 import type { MigrateItemStatus, MigrateStats } from '@/types/batchMigrate';
+import { formatCount } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 import { createLogger } from '@/utils/logger';
 import { describeUploadFailure } from '@/utils/uploadFailureMessage';
+import { linkHealth } from './detailHosts';
 
 const log = createLogger('GalleryActions');
 
@@ -37,19 +39,19 @@ export function useGalleryActions() {
 
   const hostName = async (hostId: string) => getServiceDisplayName(hostId, await loadConfig());
 
-  /** 选中这些图「复制时使用」的链接（按选中顺序）；hostId 给定时改取这个图床上的那一份 */
+  /**
+   * 选中这些图「复制时使用」的链接（按选中顺序）；hostId 给定时改取这个图床上的那一份。
+   * 确认失效的那份不复制（CopyMulti：失效的置灰、不能点），算进「没有可用链接」。
+   */
   async function linksOf(ids: readonly string[], hostId?: string): Promise<CopyLinkItem[]> {
-    if (!hostId) {
-      const metas = new Map((await historyDB.getMetasByIds([...ids])).map((meta) => [meta.id, meta]));
-      return ids.flatMap((id) => {
-        const meta = metas.get(id);
-        return meta?.primaryUrl ? [{ url: meta.primaryUrl, fileName: meta.localFileName, serviceId: meta.primaryService }] : [];
-      });
-    }
     const details = await historyManager.detailCache.getDetails([...ids]);
     return details.flatMap((detail) => {
-      const url = detail?.results.find((r) => r.serviceId === hostId && r.status === 'success')?.result?.url;
-      return detail && url ? [{ url, fileName: detail.localFileName, serviceId: hostId }] : [];
+      if (!detail) return [];
+      const serviceId = hostId ?? detail.primaryService;
+      const url = detail.results.find((r) => r.serviceId === serviceId && r.status === 'success')?.result?.url
+        ?? (hostId ? undefined : detail.generatedLink);
+      if (!url || linkHealth(detail.linkCheckStatus, serviceId) === 'dead') return [];
+      return [{ url, fileName: detail.localFileName, serviceId }];
     });
   }
 
@@ -64,7 +66,7 @@ export function useGalleryActions() {
     const result = await copyLinks(items, { format, showSuccessToast: false });
     if (!result.ok) return;
     const skipped = ids.length - items.length;
-    const title = skipped ? `已复制 ${items.length} 张（${skipped} 张没有可用链接）` : `已复制 ${items.length} 张`;
+    const title = skipped ? `已复制 ${formatCount(items.length)} 张（${formatCount(skipped)} 张没有可用链接）` : `已复制 ${formatCount(items.length)} 张`;
     toast.success(title, `${FORMAT_NAMES[format]} 格式，每行一个`);
   }
 
@@ -113,29 +115,36 @@ export function useGalleryActions() {
     const name = await hostName(hostId);
     if (outcome.failed.length) {
       const { reason, advice } = describeUploadFailure(hostId, outcome.failed[0].reason);
-      const title = ids.length === 1 ? `补充备份到${name}失败` : `${outcome.failed.length} 张未能备份到${name}`;
+      const title = ids.length === 1 ? `补充备份到${name}失败` : `${formatCount(outcome.failed.length)} 张未能备份到${name}`;
       toast.error(title, `${reason}，${advice}`);
     } else if (!options.quiet && outcome.succeeded.length) {
-      toast.success(`已补充备份 ${outcome.succeeded.length} 张`, `备份到${name}`);
+      toast.success(`已补充备份 ${formatCount(outcome.succeeded.length)} 张`, `备份到${name}`);
     }
     log.info(`补充备份到 ${hostId}：成功 ${outcome.succeeded.length}，失败 ${outcome.failed.length}`);
     return outcome;
   }
 
-  /** 重新检测这些图在各图床上的链接（与链接健康同一个检测器，结果写回记录） */
+  /**
+   * 重新检测这些图在各图床上的链接（与链接健康同一个检测器，结果写回记录）。
+   * 检测器只写库不广播：这里点名广播一次，格子角标与详情才会换成新结论。
+   * 查出失效是需要留意的状态：琥珀；全部正常才是成功。
+   */
   async function recheck(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
     await linkCheck.loadHistoryRows();
     const result = await linkCheck.checkSubset({ historyIds: [...ids] });
     if (!result) return;
-    toast.success(`已重新检测 ${ids.length} 张`, result.invalid ? `${result.invalid} 条链接失效` : '均正常');
+    await emitHistoryUpdated([...ids]).catch((error) => log.warn('history-updated 事件发送失败', error));
+    const title = `已重新检测 ${formatCount(ids.length)} 张`;
+    if (result.invalid) toast.warn(title, `${formatCount(result.invalid)} 条链接失效`);
+    else toast.success(title, '均正常');
   }
 
   /** 移除记录：不弹确认，通知带「撤销」，撤销时原样放回（图床上的图片不动） */
   async function removeRecords(ids: readonly string[], fileName?: string): Promise<boolean> {
     const removed = await historyManager.removeRecords([...ids]);
     if (removed.length === 0) return false;
-    const title = removed.length === 1 ? '已移除记录' : `已移除 ${removed.length} 条记录`;
+    const title = removed.length === 1 ? '已移除记录' : `已移除 ${formatCount(removed.length)} 条记录`;
     const desc = removed.length === 1 ? (fileName ?? removed[0].localFileName) : '图床上的图片不受影响';
     toast.withAction('success', title, desc, { label: '撤销', run: () => { void historyManager.restoreRecords(removed); } }, { countdown: true });
     return true;
