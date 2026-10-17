@@ -10,6 +10,7 @@
 import { ref, watch, onUnmounted, nextTick, type Ref, type ComputedRef } from 'vue';
 import PhotoSwipe from 'photoswipe';
 import type { PhotoSwipeOptions } from 'photoswipe';
+import { isLongRatio } from '@/utils/imageDisplay';
 import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } from '@/utils/reducedMotion';
 
 /*
@@ -112,6 +113,14 @@ interface PswpSlideOptions {
   id: string;
 }
 
+/** 长图（滚动截图，高宽比超过 2.5）：灯箱里按宽度显示、从顶部开始、滚轮上下滚动看全（ImageRatios.dc.html） */
+function isLongSlide(data: { width?: number; height?: number }): boolean {
+  return !!data.width && !!data.height && isLongRatio(data.width / data.height);
+}
+
+/** 滚轮按行滚动时一行折算的像素（与 PhotoSwipe 自己的平移一致） */
+const WHEEL_LINE_PX = 18;
+
 /** 构建 PhotoSwipe 初始化选项（纯函数，与生命周期解耦，便于阅读）*/
 function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
   const reduced = prefersReducedMotion();
@@ -150,8 +159,11 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
     loop: false,
     // 上下留出灯箱的顶栏 52 / 底栏 64（+8 间隙），左右留给翻页按钮（G08）
     paddingFn: () => ({ top: 52, bottom: 72, left: 80, right: 80 }),
-    // 滚轮缩放（交接说明 8.2：← → 切换、滚轮缩放、拖动平移）
+    // 滚轮缩放（交接说明 8.2：← → 切换、滚轮缩放、拖动平移）；长图例外，见 openPswp 里的 wheel
     wheelToZoom: true,
+    // 长图先按宽度（不超过原尺寸）显示，点一下缩成全貌；其余照 PhotoSwipe 默认（初始 fit；返回 0 = 用它的默认放大倍数）
+    initialZoomLevel: (zoom) => (isLongSlide(zoom.itemData) ? zoom.fill : zoom.fit),
+    secondaryZoomLevel: (zoom) => (isLongSlide(zoom.itemData) ? zoom.fit : 0),
     // 点击行为
     bgClickAction: 'close',
     tapAction: 'close',
@@ -486,6 +498,22 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     // 灯箱里的菜单开着：这次按键不交给 PhotoSwipe（见 blockKeys）
     pswp.on('keydown', (e) => {
       if (options.blockKeys?.(e.originalEvent)) e.preventDefault();
+    });
+
+    // 长图从顶部开始看（PhotoSwipe 默认居中；bounds.min 是图片顶边贴住上边距的位置）
+    pswp.on('initialZoomPan', ({ slide }) => {
+      if (isLongSlide(slide.data)) slide.pan.y = slide.bounds.min.y;
+    });
+
+    // 长图能滚的时候滚轮上下滚动（按住 Ctrl 仍是缩放）；缩成全貌后滚轮照常缩放
+    const wheelInstance = pswp;
+    pswp.on('wheel', (e) => {
+      const slide = wheelInstance.currSlide;
+      const wheel = e.originalEvent;
+      if (!slide || wheel.ctrlKey || !isLongSlide(slide.data) || !slide.isPannable()) return;
+      e.preventDefault();
+      const scale = wheel.deltaMode === 1 ? WHEEL_LINE_PX : 1;
+      slide.panTo(slide.pan.x - wheel.deltaX * scale, slide.pan.y - wheel.deltaY * scale);
     });
 
     // 关闭事件 → 同步回 Vue

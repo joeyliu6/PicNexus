@@ -7,6 +7,7 @@ type PswpEvent = {
   isError?: boolean;
   originalEvent?: Event;
   preventDefault?: () => void;
+  slide?: unknown;
 };
 type PswpHandler = (event: PswpEvent) => void;
 type PswpFilter = (thumbEl: unknown, data: { thumbCropped?: boolean }, index: number) => unknown;
@@ -18,7 +19,8 @@ const { pswpInstances } = vi.hoisted(() => ({
 class MockPhotoSwipe {
   options: { dataSource?: unknown };
   element = document.createElement('div');
-  currSlide?: { content?: unknown };
+  /** 当前这张：内容（加载事件比对用），长图用例里还带平移、缩放那几个字段 */
+  currSlide?: { content?: unknown; [field: string]: unknown };
   refreshSlideContent = vi.fn();
   filters = new Map<string, PswpFilter[]>();
   /**
@@ -120,6 +122,8 @@ function mountHarness(options: {
   onLoadError?: () => void;
   onLoadSuccess?: () => void;
   blockKeys?: (event: KeyboardEvent) => boolean;
+  width?: number;
+  height?: number;
 } = {}) {
   const visible = ref(options.visible ?? false);
   const hasPrev = ref(options.hasPrev ?? false);
@@ -135,8 +139,8 @@ function mountHarness(options: {
         imageSrc: computed(() => imageSrc.value),
         mediumSrc: computed(() => options.mediumSrc ?? ''),
         itemId: computed(() => itemId.value),
-        imageWidth: computed(() => 1200),
-        imageHeight: computed(() => 800),
+        imageWidth: computed(() => options.width ?? 1200),
+        imageHeight: computed(() => options.height ?? 800),
         hasPrev,
         hasNext,
         onClose: vi.fn(),
@@ -710,6 +714,89 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     expect(placeholder.classList.contains('is-switching-in')).toBe(true);
 
     pswp.emit('contentActivate', { content: { element: {} } });
+    harness.wrapper.unmount();
+  });
+});
+
+// ImageRatios.dc.html：长图（滚动截图）在灯箱里按宽度显示、从顶部开始，滚轮上下滚动看全；点一下看全貌
+describe('usePhotoSwipeBridge long screenshots', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    pswpInstances.length = 0;
+    document.body.innerHTML = '';
+  });
+
+  type ZoomLevel = { itemData: { width: number; height: number }; fit: number; fill: number };
+  type ZoomOption = (zoom: ZoomLevel) => number;
+  const SHOT = { width: 1080, height: 6048 };
+  const PHOTO = { width: 1200, height: 800 };
+
+  async function open(size = SHOT) {
+    const harness = mountHarness(size);
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+    return { harness, pswp: pswpInstances[0] };
+  }
+
+  /** happy-dom 的 WheelEvent 不认 ctrlKey，手动补上 */
+  const wheelEvent = (init: WheelEventInit) => Object.defineProperty(new WheelEvent('wheel', init), 'ctrlKey', { value: !!init.ctrlKey });
+
+  /** 一张已经放大到能滚动的长图（PhotoSwipe Slide 的那几个字段） */
+  function slideOf(data: { width: number; height: number }, pannable = true) {
+    return { data, pan: { x: 0, y: -300 }, bounds: { min: { x: 0, y: 52 } }, isPannable: () => pannable, panTo: vi.fn() };
+  }
+
+  it('opens a long screenshot at the width of the window and zooms out to the whole on click', async () => {
+    const { harness, pswp } = await open();
+    const options = pswp.options as { initialZoomLevel: ZoomOption; secondaryZoomLevel: ZoomOption };
+    // PhotoSwipe：选项给出假值就用它自己的默认（initial → fit）
+    const initial = (zoom: ZoomLevel) => options.initialZoomLevel(zoom) || zoom.fit;
+
+    expect(initial({ itemData: SHOT, fit: 0.13, fill: 1 })).toBe(1);
+    expect(options.secondaryZoomLevel({ itemData: SHOT, fit: 0.13, fill: 1 })).toBe(0.13);
+    expect(initial({ itemData: PHOTO, fit: 0.97, fill: 1 })).toBe(0.97);
+    expect(options.secondaryZoomLevel({ itemData: PHOTO, fit: 0.97, fill: 1 })).toBeFalsy();
+    harness.wrapper.unmount();
+  });
+
+  it('starts a long screenshot from the top', async () => {
+    const { harness, pswp } = await open();
+    const shot = slideOf(SHOT);
+    const photo = slideOf(PHOTO);
+    pswp.emit('initialZoomPan', { slide: shot });
+    pswp.emit('initialZoomPan', { slide: photo });
+
+    expect(shot.pan.y).toBe(52);
+    expect(photo.pan.y).toBe(-300);
+    harness.wrapper.unmount();
+  });
+
+  it('scrolls a long screenshot with the wheel, zooming only with Ctrl held', async () => {
+    const { harness, pswp } = await open();
+    const shot = slideOf(SHOT);
+    pswp.currSlide = shot;
+
+    const scroll = { originalEvent: wheelEvent({ deltaY: 120 }), preventDefault: vi.fn() };
+    pswp.emit('wheel', scroll);
+    expect(scroll.preventDefault).toHaveBeenCalled();
+    expect(shot.panTo).toHaveBeenCalledWith(0, -420);
+
+    const zoom = { originalEvent: wheelEvent({ deltaY: 120, ctrlKey: true }), preventDefault: vi.fn() };
+    pswp.emit('wheel', zoom);
+    expect(zoom.preventDefault).not.toHaveBeenCalled();
+    harness.wrapper.unmount();
+  });
+
+  it('leaves the wheel to zoom an ordinary picture, and a long one shown whole', async () => {
+    const { harness, pswp } = await open(PHOTO);
+    for (const slide of [slideOf(PHOTO), slideOf(SHOT, false)]) {
+      pswp.currSlide = slide;
+      const wheel = { originalEvent: wheelEvent({ deltaY: 120 }), preventDefault: vi.fn() };
+      pswp.emit('wheel', wheel);
+      expect(wheel.preventDefault).not.toHaveBeenCalled();
+      expect(slide.panTo).not.toHaveBeenCalled();
+    }
     harness.wrapper.unmount();
   });
 });
