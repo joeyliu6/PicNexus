@@ -46,9 +46,9 @@ describe('useDocFolders', () => {
 
   it('文件夹不存在 / 没有权限分开说', async () => {
     configRef.current = { linkHealth: { docFolders: ['D:\\Gone', 'D:\\Locked'], autoCheck: { enabled: true, intervalDays: 7 } } };
-    getInvokeMock().mockImplementation(async (cmd: string, args?: { dir: string }) => {
+    getInvokeMock().mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd !== 'scan_md_folder') return undefined;
-      throw new Error(args?.dir === 'D:\\Gone' ? '路径无效或不存在: D:\\Gone (os error 2)' : '路径无效或不存在: D:\\Locked (Access is denied. (os error 5))');
+      throw new Error((args as { dir: string }).dir === 'D:\\Gone' ? '路径无效或不存在: D:\\Gone (os error 2)' : '路径无效或不存在: D:\\Locked (Access is denied. (os error 5))');
     });
     const docs = await fresh();
     await docs.scan();
