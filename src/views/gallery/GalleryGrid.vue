@@ -154,6 +154,17 @@ const selecting = computed(() => viewState.hasSelection.value);
   background: var(--pn-canvas);
 }
 
+/* 滚动区上边留了 4 的内边距，吸顶条贴在它下面：把底色往上补 4，滚过去的图不从缝里露出来 */
+.grid__day--sticky::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: var(--pn-space-4);
+  background: var(--pn-canvas);
+  content: '';
+}
+
 .grid__day-title {
   font-size: var(--pn-text-headline);
   font-weight: var(--pn-weight-semibold);
