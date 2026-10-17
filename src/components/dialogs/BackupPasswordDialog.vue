@@ -1,543 +1,260 @@
-<template>
-  <Dialog
-    v-model:visible="visible"
-    modal
-    :header="dialogTitle"
-    :style="{ width: 'var(--dialog-width-md)' }"
-    :closable="mode !== 'restore'"
-    :draggable="false"
-    :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
-    @hide="handleCancel"
-  >
-    <div class="backup-password-dialog">
-      <div v-if="mode === 'restore'" class="dialog-description">
-        <i class="pi pi-lock" />
-        <p>{{ UI_COPY.dialogs.backupPassword.description.restore }}</p>
-      </div>
-
-      <div v-if="mode === 'disable'" class="dialog-description dialog-description-danger">
-        <i class="pi pi-lock-open" />
-        <p>{{ UI_COPY.dialogs.backupPassword.description.disable }}</p>
-      </div>
-
-      <div v-if="requiresCurrentPassword" class="field">
-        <label for="backup-current-password">{{ UI_COPY.dialogs.backupPassword.field.currentPassword }}</label>
-        <Password
-          id="backup-current-password"
-          v-model="currentPassword"
-          :feedback="false"
-          toggleMask
-          :inputStyle="{ width: '100%' }"
-          :inputProps="{ autocomplete: 'current-password' }"
-          :class="{ 'p-invalid': currentPasswordError }"
-          :placeholder="UI_COPY.dialogs.backupPassword.placeholder.currentPassword"
-          @keydown.enter="handleSubmit"
-        />
-        <small v-if="currentPasswordError" class="p-error">{{ currentPasswordError }}</small>
-      </div>
-
-      <div v-if="mode === 'set' || mode === 'restore'" class="field">
-        <label for="backup-password">{{ mode === 'restore' ? UI_COPY.dialogs.backupPassword.field.backupPassword : UI_COPY.dialogs.backupPassword.field.password }}</label>
-        <Password
-          id="backup-password"
-          v-model="password"
-          :feedback="false"
-          toggleMask
-          :inputStyle="{ width: '100%' }"
-          :inputProps="{ autocomplete: mode === 'restore' ? 'current-password' : 'new-password' }"
-          :class="{ 'p-invalid': passwordError }"
-          :placeholder="mode === 'restore' ? UI_COPY.dialogs.backupPassword.placeholder.restorePassword : UI_COPY.dialogs.backupPassword.placeholder.newPassword"
-          @keydown.enter="handleSubmit"
-        />
-        <small v-if="passwordError" class="p-error">{{ passwordError }}</small>
-
-        <div v-if="showStrengthHints" class="strength-hints">
-          <span
-            v-for="check in strengthChecks"
-            :key="check.label"
-            class="strength-check"
-            :class="{ passed: check.passed }"
-          >
-            <i :class="check.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
-            {{ check.label }}
-          </span>
-          <span
-            v-for="suggestion in strengthSuggestions"
-            :key="suggestion.label"
-            class="strength-suggestion"
-            :class="{ passed: suggestion.passed }"
-          >
-            <i :class="suggestion.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
-            {{ suggestion.label }}
-          </span>
-        </div>
-      </div>
-
-      <div v-if="mode === 'change'" class="field">
-        <label for="backup-new-password">{{ UI_COPY.dialogs.backupPassword.field.newPassword }}</label>
-        <Password
-          id="backup-new-password"
-          v-model="newPassword"
-          :feedback="false"
-          toggleMask
-          :inputStyle="{ width: '100%' }"
-          :inputProps="{ autocomplete: 'new-password' }"
-          :class="{ 'p-invalid': newPasswordError }"
-          :placeholder="UI_COPY.dialogs.backupPassword.placeholder.newPassword"
-          @keydown.enter="handleSubmit"
-        />
-        <small v-if="newPasswordError" class="p-error">{{ newPasswordError }}</small>
-
-        <div class="strength-hints">
-          <span
-            v-for="check in strengthChecks"
-            :key="check.label"
-            class="strength-check"
-            :class="{ passed: check.passed }"
-          >
-            <i :class="check.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
-            {{ check.label }}
-          </span>
-          <span
-            v-for="suggestion in strengthSuggestions"
-            :key="suggestion.label"
-            class="strength-suggestion"
-            :class="{ passed: suggestion.passed }"
-          >
-            <i :class="suggestion.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
-            {{ suggestion.label }}
-          </span>
-        </div>
-      </div>
-
-      <div v-if="mode === 'set' || mode === 'change'" class="field">
-        <label for="backup-password-confirm">{{ UI_COPY.dialogs.backupPassword.field.confirmPassword }}</label>
-        <Password
-          id="backup-password-confirm"
-          v-model="confirmPassword"
-          :feedback="false"
-          toggleMask
-          :inputStyle="{ width: '100%' }"
-          :inputProps="{ autocomplete: 'new-password' }"
-          :class="{ 'p-invalid': confirmError }"
-          :placeholder="UI_COPY.dialogs.backupPassword.placeholder.confirmPassword"
-          @keydown.enter="handleSubmit"
-        />
-        <small v-if="confirmError" class="p-error">{{ confirmError }}</small>
-      </div>
-
-      <div v-if="mode === 'set' || mode === 'change'" class="dialog-note-warn">
-        <i class="pi pi-info-circle" />
-        <span>
-          {{ mode === 'change'
-            ? UI_COPY.dialogs.backupPassword.note.change
-            : UI_COPY.dialogs.backupPassword.note.set
-          }}
-        </span>
-      </div>
-
-      <div v-if="mode === 'restore' && failedAttempts > 0" class="error-box">
-        <i class="pi pi-times-circle" />
-        <span>{{ UI_COPY.dialogs.backupPassword.error.remainingAttempts(MAX_ATTEMPTS - failedAttempts) }}</span>
-      </div>
-    </div>
-
-    <template #footer>
-      <Button
-        v-if="mode === 'restore'"
-        :label="UI_COPY.dialogs.backupPassword.action.skipRestore"
-        severity="secondary"
-        text
-        class="dialog-btn-secondary"
-        @click="handleSkip"
-      />
-      <Button
-        v-else
-        :label="UI_COPY.actions.cancel"
-        severity="secondary"
-        outlined
-        class="dialog-btn-reject"
-        @click="handleCancel"
-      />
-      <Button
-        :label="submitLabel"
-        :severity="mode === 'disable' ? 'danger' : undefined"
-        :loading="loading"
-        class="dialog-btn-accept"
-        @click="handleSubmit"
-      />
-    </template>
-  </Dialog>
-</template>
-
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import Dialog from 'primevue/dialog';
-import Password from 'primevue/password';
-import Button from 'primevue/button';
+// 备份密码弹窗（Dialogs.dc.html D01–D05）：启动时还原（阻塞，左侧低调的「跳过，使用默认配置」）、
+// 设置（强度提示四条，满足前两条且两次一致才可提交）、修改（写清新旧密码各管哪些文件）、关闭（危险按钮写动作）。
+// 「解锁」= 设置页里同步 / 导入时遇到加密文件，输入密码后继续；取消即放弃这一次。
+// 提交后由调用方验证：成功调 onPasswordSuccess 关闭，失败调 onPasswordFailed 计次（还原最多 5 次）。
+import { computed, ref, watch } from 'vue';
+import PnButton from '@/components/pn/PnButton.vue';
+import PnDialog from '@/components/pn/PnDialog.vue';
 import { validateBackupPassword } from '@/security/crypto';
-import { UI_COPY } from '@/constants/uiCopy';
+import PasswordField from './PasswordField.vue';
 import type { BackupPasswordConfirmPayload, BackupPasswordDialogMode } from './backupPasswordDialogTypes';
-
-interface Props {
-  modelValue: boolean;
-  mode: BackupPasswordDialogMode;
-}
-
-const props = defineProps<Props>();
-
-const emit = defineEmits<{
-  'update:modelValue': [value: boolean];
-  'confirm': [payload: BackupPasswordConfirmPayload];
-  'skip': [];
-  'cancel': [];
-}>();
 
 const MAX_ATTEMPTS = 5;
 
-const currentPassword = ref('');
-const password = ref('');
-const newPassword = ref('');
-const confirmPassword = ref('');
-const currentPasswordError = ref('');
-const passwordError = ref('');
-const newPasswordError = ref('');
-const confirmError = ref('');
+const props = defineProps<{
+  modelValue: boolean;
+  mode: BackupPasswordDialogMode;
+}>();
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean];
+  confirm: [payload: BackupPasswordConfirmPayload];
+  skip: [];
+  cancel: [];
+}>();
+
+const COPY: Record<BackupPasswordDialogMode, { title: string; eyebrow: string; body: string; ok: string }> = {
+  restore: { title: '还原备份配置', eyebrow: '在新设备上首次启动', body: '配置文件已使用备份密码加密。输入密码以还原全部图床账号与设置。', ok: '确认恢复' },
+  unlock: { title: '输入备份密码', eyebrow: '设置 › 备份与同步', body: '这份配置已使用备份密码加密。输入密码后继续。', ok: '继续' },
+  set: { title: '设置备份密码', eyebrow: '设置 › 备份与同步', body: '设置后，导出的配置将加密；在新设备上还原时需输入此密码。', ok: '设置' },
+  change: { title: '修改备份密码', eyebrow: '设置 › 备份与同步', body: '此后的导出使用新密码加密；此前导出的文件仍需旧密码还原。', ok: '修改' },
+  disable: { title: '关闭备份密码？', eyebrow: '设置 › 备份与同步', body: '关闭后，新导出的文件不再加密，图床密钥将以明文保存。此前的加密备份仍需原密码还原。', ok: '关闭密码' },
+};
+
+const open = computed({
+  get: () => props.modelValue,
+  set: (value: boolean) => emit('update:modelValue', value),
+});
+const copy = computed(() => COPY[props.mode]);
+const askingOld = computed(() => props.mode !== 'set');
+const settingNew = computed(() => props.mode === 'set' || props.mode === 'change');
+const oldLabel = computed(() => (props.mode === 'restore' || props.mode === 'unlock' ? '备份密码' : '当前密码'));
+
+const current = ref('');
+const next = ref('');
+const confirmNext = ref('');
+const currentError = ref('');
 const loading = ref(false);
 const failedAttempts = ref(0);
+const exhausted = computed(() => props.mode === 'restore' && failedAttempts.value >= MAX_ATTEMPTS);
 
-const requiresCurrentPassword = computed(() => props.mode === 'change' || props.mode === 'disable');
-const showStrengthHints = computed(() => props.mode === 'set');
-const passwordForStrength = computed(() => props.mode === 'change' ? newPassword.value : password.value);
-
-const strengthChecks = computed(() => {
-  const p = passwordForStrength.value;
-  return [
-    { label: UI_COPY.dialogs.backupPassword.strength.minLength, passed: p.length >= 8 },
-    { label: UI_COPY.dialogs.backupPassword.strength.number, passed: /\d/.test(p) },
-  ];
+const rules = computed(() => [
+  { text: '至少 8 位', met: next.value.length >= 8 },
+  { text: '包含数字', met: /\d/.test(next.value) },
+  { text: '大小写字母', met: /[a-z]/.test(next.value) && /[A-Z]/.test(next.value) },
+  { text: '特殊符号', met: /[^a-zA-Z0-9]/.test(next.value) },
+]);
+const strength = computed(() => rules.value.filter((r) => r.met).length);
+const matches = computed(() => !!confirmNext.value && confirmNext.value === next.value);
+const confirmMessage = computed(() => {
+  if (!confirmNext.value) return null;
+  return matches.value ? { text: '✓ 两次输入一致', tone: 'success' as const } : { text: '两次输入的密码不一致', tone: 'danger' as const };
 });
 
-const strengthSuggestions = computed(() => {
-  const p = passwordForStrength.value;
-  return [
-    { label: UI_COPY.dialogs.backupPassword.strength.letterCase, passed: /[a-z]/.test(p) && /[A-Z]/.test(p) },
-    { label: UI_COPY.dialogs.backupPassword.strength.symbol, passed: /[^a-zA-Z0-9]/.test(p) },
-  ];
-});
-
-const visible = computed({
-  get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-});
-
-const dialogTitle = computed(() => {
-  switch (props.mode) {
-    case 'restore': return UI_COPY.dialogs.backupPassword.title.restore;
-    case 'change': return UI_COPY.dialogs.backupPassword.title.change;
-    case 'disable': return UI_COPY.dialogs.backupPassword.title.disable;
-    default: return UI_COPY.dialogs.backupPassword.title.set;
-  }
-});
-
-const submitLabel = computed(() => {
-  switch (props.mode) {
-    case 'restore': return UI_COPY.dialogs.backupPassword.action.submit.restore;
-    case 'change': return UI_COPY.dialogs.backupPassword.action.submit.change;
-    case 'disable': return UI_COPY.dialogs.backupPassword.action.submit.disable;
-    default: return UI_COPY.dialogs.backupPassword.action.submit.set;
-  }
-});
-
-function resetForm() {
-  currentPassword.value = '';
-  password.value = '';
-  newPassword.value = '';
-  confirmPassword.value = '';
-  currentPasswordError.value = '';
-  passwordError.value = '';
-  newPasswordError.value = '';
-  confirmError.value = '';
-  loading.value = false;
-}
-
-function validateNewPassword(value: string): string {
-  const result = validateBackupPassword(value);
-  return result.valid ? '' : result.message;
-}
-
-function validate(): boolean {
-  currentPasswordError.value = '';
-  passwordError.value = '';
-  newPasswordError.value = '';
-  confirmError.value = '';
-
-  if (props.mode === 'restore') {
-    if (!password.value) {
-      passwordError.value = UI_COPY.dialogs.backupPassword.error.requiredPassword;
-      return false;
-    }
-    return true;
-  }
-
-  if (requiresCurrentPassword.value && !currentPassword.value) {
-    currentPasswordError.value = UI_COPY.dialogs.backupPassword.error.requiredCurrentPassword;
-    return false;
-  }
-
-  if (props.mode === 'disable') {
-    return true;
-  }
-
-  const targetPassword = props.mode === 'change' ? newPassword.value : password.value;
-  if (!targetPassword) {
-    if (props.mode === 'change') newPasswordError.value = UI_COPY.dialogs.backupPassword.error.requiredNewPassword;
-    else passwordError.value = UI_COPY.dialogs.backupPassword.error.requiredPassword;
-    return false;
-  }
-
-  const validationError = validateNewPassword(targetPassword);
-  if (validationError) {
-    if (props.mode === 'change') newPasswordError.value = validationError;
-    else passwordError.value = validationError;
-    return false;
-  }
-
-  if (targetPassword !== confirmPassword.value) {
-    confirmError.value = UI_COPY.dialogs.backupPassword.error.mismatch;
-    return false;
-  }
-
+const canSubmit = computed(() => {
+  if (loading.value || exhausted.value) return false;
+  if (askingOld.value && !current.value) return false;
+  if (settingNew.value) return validateBackupPassword(next.value).valid && matches.value;
   return true;
+});
+
+watch(() => props.modelValue, (value) => { if (value) reset(); });
+
+function reset(): void {
+  current.value = '';
+  next.value = '';
+  confirmNext.value = '';
+  currentError.value = '';
+  loading.value = false;
 }
 
-function buildPayload(): BackupPasswordConfirmPayload {
+function payload(): BackupPasswordConfirmPayload {
   switch (props.mode) {
-    case 'change':
-      return {
-        mode: 'change',
-        currentPassword: currentPassword.value,
-        newPassword: newPassword.value,
-        confirmPassword: confirmPassword.value,
-      };
-    case 'disable':
-      return {
-        mode: 'disable',
-        currentPassword: currentPassword.value,
-      };
-    case 'restore':
-      return {
-        mode: 'restore',
-        password: password.value,
-      };
-    default:
-      return {
-        mode: 'set',
-        password: password.value,
-      };
+    case 'set': return { mode: 'set', password: next.value };
+    case 'change': return { mode: 'change', currentPassword: current.value, newPassword: next.value, confirmPassword: confirmNext.value };
+    case 'disable': return { mode: 'disable', currentPassword: current.value };
+    default: return { mode: props.mode, password: current.value };
   }
 }
 
-async function handleSubmit() {
-  if (!validate()) return;
-
+function submit(): void {
+  if (!canSubmit.value) return;
   loading.value = true;
-  emit('confirm', buildPayload());
+  currentError.value = '';
+  emit('confirm', payload());
 }
 
-function handleSkip() {
-  resetForm();
+function skip(): void {
+  reset();
+  failedAttempts.value = 0;
   emit('skip');
-  visible.value = false;
+  open.value = false;
 }
 
-function handleCancel() {
-  resetForm();
+function cancel(): void {
+  reset();
   emit('cancel');
-  visible.value = false;
+  open.value = false;
 }
 
-function onPasswordFailed() {
+/** 调用方：密码不对 */
+function onPasswordFailed(): void {
   loading.value = false;
-
-  if (requiresCurrentPassword.value) {
-    currentPasswordError.value = UI_COPY.dialogs.backupPassword.error.wrongPassword;
-    currentPassword.value = '';
+  current.value = '';
+  if (props.mode !== 'restore') {
+    currentError.value = '密码不正确';
     return;
   }
-
-  failedAttempts.value++;
-  passwordError.value = UI_COPY.dialogs.backupPassword.error.wrongPassword;
-  password.value = '';
-
-  if (failedAttempts.value >= MAX_ATTEMPTS) {
-    handleSkip();
-  }
+  failedAttempts.value += 1;
+  currentError.value = exhausted.value
+    ? '已达尝试次数上限。加密的配置文件仍在原处，可稍后在「备份与同步」中还原'
+    : `密码不正确，剩余尝试次数：${MAX_ATTEMPTS - failedAttempts.value}`;
 }
 
-function resetLoading() {
-  loading.value = false;
-}
-
-function onPasswordSuccess() {
-  loading.value = false;
-  resetForm();
+/** 调用方：验证通过 */
+function onPasswordSuccess(): void {
+  reset();
   failedAttempts.value = 0;
-  visible.value = false;
+  open.value = false;
 }
 
-defineExpose({
-  onPasswordFailed,
-  onPasswordSuccess,
-  resetLoading
-});
+function resetLoading(): void {
+  loading.value = false;
+}
+
+defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
 </script>
 
+<template>
+  <PnDialog
+    v-model:open="open"
+    :title="copy.title"
+    :eyebrow="copy.eyebrow"
+    icon="lock"
+    :tone="mode === 'disable' ? 'danger' : 'brand'"
+    :blocking="mode === 'restore'"
+    @dismiss="cancel"
+  >
+    <div class="backup-password">
+      <span class="backup-password__body">{{ copy.body }}</span>
+      <PasswordField
+        v-if="askingOld"
+        id="backup-password-current"
+        v-model="current"
+        :label="oldLabel"
+        :message="currentError"
+        :tone="currentError ? 'danger' : 'muted'"
+        :disabled="exhausted"
+        @enter="submit"
+      />
+      <template v-if="settingNew">
+        <PasswordField id="backup-password-new" v-model="next" label="新密码" autocomplete="new-password" @enter="submit" />
+        <PasswordField
+          id="backup-password-confirm"
+          v-model="confirmNext"
+          label="确认密码"
+          autocomplete="new-password"
+          :message="confirmMessage?.text"
+          :tone="confirmMessage?.tone"
+          @enter="submit"
+        />
+      </template>
+      <div v-if="mode === 'set'" class="backup-password__strength" aria-label="密码强度">
+        <div class="backup-password__bars" aria-hidden="true">
+          <span v-for="i in 4" :key="i" class="backup-password__bar" :class="{ 'backup-password__bar--on': i <= strength, 'backup-password__bar--good': strength >= 3 }" />
+        </div>
+        <div class="backup-password__rules">
+          <span v-for="rule in rules" :key="rule.text" class="backup-password__rule" :class="{ 'backup-password__rule--met': rule.met }">
+            <span class="backup-password__mark" aria-hidden="true">{{ rule.met ? '✓' : '·' }}</span>{{ rule.text }}
+          </span>
+        </div>
+      </div>
+      <span v-if="mode === 'set'" class="backup-password__note">密码遗失后将无法还原加密备份，PicNexus 无法找回。</span>
+    </div>
+    <template v-if="mode === 'restore' && !exhausted" #footer-left>
+      <PnButton variant="ghost" size="lg" class="backup-password__skip" @click="skip">跳过，使用默认配置</PnButton>
+    </template>
+    <template #footer>
+      <PnButton v-if="mode !== 'restore'" variant="secondary" size="dialog" @click="cancel">取消</PnButton>
+      <PnButton v-if="exhausted" variant="primary" size="dialog" @click="skip">跳过，使用默认配置</PnButton>
+      <PnButton v-else :variant="mode === 'disable' ? 'danger' : 'primary'" size="dialog" :disabled="!canSubmit" :loading="loading" @click="submit">{{ copy.ok }}</PnButton>
+    </template>
+  </PnDialog>
+</template>
+
 <style scoped>
-.backup-password-dialog {
+.backup-password {
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: var(--pn-space-dialog-gap);
 }
 
-.dialog-description {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm-md);
-  padding: var(--space-md) var(--space-md-lg);
-  border-radius: var(--radius-md);
-  background: var(--primary-alpha-15);
-  color: var(--primary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  line-height: 1.5;
-}
+.backup-password__body { color: var(--pn-text2); }
 
-.dialog-description-danger {
-  background: var(--error-alpha-8);
-  color: var(--error);
-}
-
-.dialog-description i {
-  font-size: var(--text-xl);
-  flex-shrink: 0;
-  color: currentcolor;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 微调对齐，无对应 spacing token */
-  margin-top: 1px;
-}
-
-.dialog-description p {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.dialog-note-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-xs);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 1.6;
-}
-
-.dialog-note-warn i {
-  font-size: var(--text-xs);
-  flex-shrink: 0;
-  margin-top: var(--space-2xs);
-  opacity: 0.7;
-}
-
-.field {
+.backup-password__strength {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs-sm);
+  gap: var(--pn-space-8);
+  padding: var(--pn-space-backup-strength);
+  border-radius: var(--pn-radius-lg);
+  background: var(--pn-subtle);
 }
 
-.field label {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.field :deep(.p-password) {
-  width: 100%;
-}
-
-.field :deep(.p-password input) {
-  width: 100%;
-  border-radius: var(--radius-md);
-  background: var(--bg-input);
-  border: none;
-  padding: var(--space-md) var(--space-lg);
-  color: var(--text-primary);
-}
-
-.field :deep(.p-password input:focus) {
-  box-shadow: none;
-}
-
-.strength-hints {
+.backup-password__bars {
   display: flex;
-  gap: var(--space-sm-md);
-  flex-wrap: wrap;
-  margin-top: var(--space-2xs);
+  gap: var(--pn-space-4);
 }
 
-.strength-check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  transition: color var(--duration-fast);
+.backup-password__bar {
+  flex: 1;
+  height: var(--pn-size-backup-strength-bar);
+  border-radius: var(--pn-radius-backup-strength-bar);
+  background: var(--pn-backup-strength-track);
 }
 
-.strength-check i {
-  font-size: var(--text-xs);
+.backup-password__bar--on { background: var(--pn-warning-fill); }
+.backup-password__bar--on.backup-password__bar--good { background: var(--pn-brand); }
+
+.backup-password__rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pn-space-4) var(--pn-space-12);
+  font-size: var(--pn-text-footnote);
 }
 
-.strength-check.passed {
-  color: var(--success);
-}
-
-.strength-suggestion {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  opacity: 0.6;
-  transition: color var(--duration-fast), opacity var(--duration-fast);
-}
-
-.strength-suggestion i {
-  font-size: var(--text-xs);
-}
-
-.strength-suggestion.passed {
-  color: var(--success);
-  opacity: 1;
-}
-
-.error-box {
+.backup-password__rule {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm-md) var(--space-md-lg);
-  border-radius: var(--radius-md);
-  background: var(--error-alpha-8);
-  border: 1px solid var(--error-alpha-15);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  color: var(--error);
+  gap: var(--pn-space-6);
+  color: var(--pn-text3);
 }
 
-.error-box i {
-  font-size: var(--text-base);
-  flex-shrink: 0;
+.backup-password__rule--met { color: var(--pn-success); }
+
+.backup-password__mark {
+  width: var(--pn-space-12);
+  font-weight: var(--pn-weight-semibold);
 }
 
-/* 底栏按钮规格由 .app-dialog 统一提供，见 src/styles/app.css 第 3 节。
-   注意：Dialog 会 Teleport 到 body，其根节点不带 scoped 属性，
-   按钮样式写在这里的 `:deep()` 里不会生效。 */
+.backup-password__note {
+  color: var(--pn-text3);
+  font-size: var(--pn-text-footnote);
+}
+
+.backup-password__skip {
+  margin-left: calc(-1 * var(--pn-space-6));
+  padding: 0 var(--pn-space-6);
+  color: var(--pn-text2);
+}
 </style>

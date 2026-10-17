@@ -48,6 +48,8 @@
   --pn-host-pill-bad: #FEF4E6;
   --pn-host-row-hover: rgba(0, 0, 0, 0.035);
   --pn-host-bar: rgba(57, 133, 237, 0.38);
+  /* 备份密码强度条的底色（Dialogs.dc.html） */
+  --pn-backup-strength-track: #E5E5E5;
 }
 
 [data-theme="dark"] {
@@ -88,6 +90,7 @@
   --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
   --pn-host-bar: rgba(76, 147, 245, 0.45);
+  --pn-backup-strength-track: #3A3A3E;
 }
 
 :root {
@@ -628,6 +631,10 @@
   /* 「上传到」菜单按钮高 24、左右 6；端口输入框宽 72 */
   --pn-size-settings-picker: 24px;
   --pn-size-settings-port: 72px;
+  /* 备份密码强度框：内边距 10 12、圆角 10；四段条高 4、圆角 2 */
+  --pn-space-backup-strength: 10px 12px;
+  --pn-size-backup-strength-bar: 4px;
+  --pn-radius-backup-strength-bar: 2px;
   /* 外观三卡：预览高 96、内边距 14 12、条间距 7（标题条 8 高 60% 宽、卡片 28 高、说明条 6 高 40% 宽，圆角 2 / 5）；选中描边 2 + 2 */
   --pn-size-theme-preview: 96px;
   --pn-space-theme-preview: 14px 12px;

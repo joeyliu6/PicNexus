@@ -1,150 +1,91 @@
-import { describe, expect, it } from 'vitest';
+// 备份密码弹窗（D01–D05）：设置要满足前两条且两次一致；修改 / 关闭先验当前密码；还原写剩余次数，用完只剩「跳过」
+import { afterEach, describe, expect, it } from 'vitest';
+import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import { mountWithDefaults } from '../helpers/vueMount';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
 
-const PasswordStub = {
-  props: ['modelValue', 'inputProps', 'placeholder'],
-  emits: ['update:modelValue', 'keydown'],
-  template: `
-    <input
-      class="password-stub"
-      :autocomplete="inputProps?.autocomplete"
-      :placeholder="placeholder"
-      :value="modelValue"
-      @input="$emit('update:modelValue', $event.target.value)"
-      @keydown="$emit('keydown', $event)"
-    />
-  `,
-};
+type Mode = 'set' | 'change' | 'disable' | 'restore' | 'unlock';
 
-const ButtonStub = {
-  props: ['label', 'loading', 'severity'],
-  emits: ['click'],
-  template: `
-    <button
-      class="button-stub"
-      :data-label="label"
-      :data-loading="String(loading)"
-      :data-severity="severity || ''"
-      @click="$emit('click')"
-    >
-      {{ label }}
-    </button>
-  `,
-};
-
-function mountDialog(mode: 'set' | 'change' | 'disable' | 'restore') {
-  return mountWithDefaults(BackupPasswordDialog, {
-    props: {
-      modelValue: true,
-      mode,
-    },
-    global: {
-      stubs: {
-        Dialog: {
-          props: ['visible', 'header'],
-          emits: ['update:visible', 'hide'],
-          template: `
-            <section class="dialog-stub" :data-header="header">
-              <slot />
-              <footer><slot name="footer" /></footer>
-            </section>
-          `,
-        },
-        Password: PasswordStub,
-        Button: ButtonStub,
-      },
-    },
-  });
+function mountDialog(mode: Mode) {
+  return mount(BackupPasswordDialog, { props: { modelValue: true, mode }, attachTo: document.body });
 }
 
-async function fillInput(wrapper: ReturnType<typeof mountDialog>, index: number, value: string) {
-  const input = wrapper.findAll('.password-stub')[index];
-  await input.setValue(value);
+const body = () => document.body;
+const input = (id: string) => body().querySelector<HTMLInputElement>(`#${id}`)!;
+const button = (label: string) => [...body().querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
+
+async function type(id: string, value: string): Promise<void> {
+  const el = input(id);
+  el.value = value;
+  el.dispatchEvent(new Event('input'));
+  await nextTick();
 }
 
-async function submit(wrapper: ReturnType<typeof mountDialog>) {
-  await wrapper.findAll('.button-stub').at(-1)!.trigger('click');
-}
+afterEach(() => { document.body.innerHTML = ''; });
 
 describe('BackupPasswordDialog', () => {
-  it('emits set payload after validating password strength and confirmation', async () => {
+  it('设置：至少 8 位且含数字、两次一致才能提交', async () => {
     const wrapper = mountDialog('set');
-
-    await fillInput(wrapper, 0, 'Password123');
-    await fillInput(wrapper, 1, 'Password123');
-    await submit(wrapper);
-
+    await nextTick();
+    await type('backup-password-new', 'abcdefgh');
+    await type('backup-password-confirm', 'abcdefgh');
+    expect(button('设置')!.disabled).toBe(true);
+    await type('backup-password-new', 'Password123');
+    await type('backup-password-confirm', 'Password12');
+    expect(body().textContent).toContain('两次输入的密码不一致');
+    expect(button('设置')!.disabled).toBe(true);
+    await type('backup-password-confirm', 'Password123');
+    expect(body().textContent).toContain('✓ 两次输入一致');
+    button('设置')!.click();
     expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'set', password: 'Password123' }]);
   });
 
-  it('does not submit set mode when confirmation mismatches', async () => {
-    const wrapper = mountDialog('set');
-
-    await fillInput(wrapper, 0, 'Password123');
-    await fillInput(wrapper, 1, 'Password456');
-    await submit(wrapper);
-
-    expect(wrapper.emitted('confirm')).toBeUndefined();
-    expect(wrapper.text()).toContain('两次输入的密码不一致');
-  });
-
-  it('emits change payload with current and new password', async () => {
+  it('修改：当前密码不对时清空当前密码并写原因', async () => {
     const wrapper = mountDialog('change');
-
-    await fillInput(wrapper, 0, 'OldPassword123');
-    await fillInput(wrapper, 1, 'NewPassword123');
-    await fillInput(wrapper, 2, 'NewPassword123');
-    await submit(wrapper);
-
-    expect(wrapper.emitted('confirm')?.[0]).toEqual([{
-      mode: 'change',
-      currentPassword: 'OldPassword123',
-      newPassword: 'NewPassword123',
-      confirmPassword: 'NewPassword123',
-    }]);
-  });
-
-  it('shows current password field error for change mode password failures', async () => {
-    const wrapper = mountDialog('change');
-
-    await fillInput(wrapper, 0, 'WrongPassword123');
-    await fillInput(wrapper, 1, 'NewPassword123');
-    await fillInput(wrapper, 2, 'NewPassword123');
-    await submit(wrapper);
+    await nextTick();
+    await type('backup-password-current', 'Old12345');
+    await type('backup-password-new', 'New12345');
+    await type('backup-password-confirm', 'New12345');
+    button('修改')!.click();
+    expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'change', currentPassword: 'Old12345', newPassword: 'New12345', confirmPassword: 'New12345' }]);
     (wrapper.vm as unknown as { onPasswordFailed: () => void }).onPasswordFailed();
     await nextTick();
-
-    expect(wrapper.text()).toContain('密码不正确');
-    expect((wrapper.findAll('.password-stub')[0].element as HTMLInputElement).value).toBe('');
+    expect(body().textContent).toContain('密码不正确');
+    expect(input('backup-password-current').value).toBe('');
   });
 
-  it('emits disable payload and uses danger submit severity', async () => {
+  it('关闭：危险按钮写动作「关闭密码」', async () => {
     const wrapper = mountDialog('disable');
-
-    await fillInput(wrapper, 0, 'CurrentPassword123');
-    await submit(wrapper);
-
-    expect(wrapper.emitted('confirm')?.[0]).toEqual([{
-      mode: 'disable',
-      currentPassword: 'CurrentPassword123',
-    }]);
-    expect(wrapper.findAll('.button-stub').at(-1)!.attributes('data-severity')).toBe('danger');
+    await nextTick();
+    await type('backup-password-current', 'Old12345');
+    expect(button('关闭密码')!.classList.contains('pn-button--danger')).toBe(true);
+    button('关闭密码')!.click();
+    expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'disable', currentPassword: 'Old12345' }]);
   });
 
-  it('emits restore payload and reports restore password failures with attempts', async () => {
+  it('还原：写剩余次数，5 次用完后只剩「跳过，使用默认配置」', async () => {
     const wrapper = mountDialog('restore');
-
-    await fillInput(wrapper, 0, 'RestorePassword123');
-    await submit(wrapper);
-    (wrapper.vm as unknown as { onPasswordFailed: () => void }).onPasswordFailed();
     await nextTick();
+    expect(button('取消')).toBeUndefined();
+    const vm = wrapper.vm as unknown as { onPasswordFailed: () => void };
+    vm.onPasswordFailed();
+    await nextTick();
+    expect(body().textContent).toContain('密码不正确，剩余尝试次数：4');
+    for (let i = 0; i < 4; i++) vm.onPasswordFailed();
+    await nextTick();
+    expect(button('确认恢复')).toBeUndefined();
+    expect(body().textContent).toContain('加密的配置文件仍在原处');
+    button('跳过，使用默认配置')!.click();
+    expect(wrapper.emitted('skip')).toBeTruthy();
+  });
 
-    expect(wrapper.emitted('confirm')?.[0]).toEqual([{
-      mode: 'restore',
-      password: 'RestorePassword123',
-    }]);
-    expect(wrapper.text()).toContain('剩余尝试次数：4');
+  it('解锁（设置页）：可以取消', async () => {
+    const wrapper = mountDialog('unlock');
+    await nextTick();
+    await type('backup-password-current', 'Pass1234');
+    button('继续')!.click();
+    expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'unlock', password: 'Pass1234' }]);
+    button('取消')!.click();
+    expect(wrapper.emitted('cancel')).toBeTruthy();
   });
 });

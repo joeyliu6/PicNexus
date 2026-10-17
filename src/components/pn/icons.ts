@@ -72,6 +72,9 @@ export const ICONS = {
   cloud: [p('M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z')],
   cloudDownload: [p('M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z'), p('M12 11v6M9 14l3 3 3-3')],
   shield: [p('M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z')],
+  // 备份密码弹窗（Dialogs.dc.html）：显示 / 隐藏密码
+  eye: [p('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z'), circle(12, 12, 3)],
+  eyeOff: [p('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z'), circle(12, 12, 3), p('M3 3l18 18')],
   // 压缩预览左右对比的拖柄（设计未画，与箭头同一笔画）
   arrowsH: [p('M8 7l-5 5 5 5M16 7l5 5-5 5M3 12h18')],
 } as const satisfies Record<string, readonly IconShape[]>;
