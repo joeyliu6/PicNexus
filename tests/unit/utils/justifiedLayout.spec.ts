@@ -21,7 +21,6 @@ const baseOptions: LayoutOptions = {
   containerWidth: 1000,
   targetRowHeight: 200,
   gap: 4,
-  lastRowBehavior: 'justify',
 };
 
 const baseTimelineOptions: TimelineLayoutOptions = {
@@ -34,45 +33,55 @@ const baseTimelineOptions: TimelineLayoutOptions = {
 // calculateJustifiedLayout
 // ═══════════════════════════════════════════════════════════════
 
+// GalleryScreen.dc.html 的排法：放进「按目标行高已经铺满」的那一张为止，再整行缩到正好铺满；
+// 行高只会小于等于目标；最后一行不够宽就保持目标行高、靠左
 describe('calculateJustifiedLayout', () => {
+  const gallery: LayoutOptions = { containerWidth: 1144, targetRowHeight: 150, gap: 6 };
+  const rowWidth = (row: { items: Array<{ width: number }> }, gap: number) =>
+    row.items.reduce((sum, item) => sum + item.width, 0) + (row.items.length - 1) * gap;
+
   it('空数组 → 返回空行和 0 高度', () => {
     const result = calculateJustifiedLayout([], baseOptions);
     expect(result.rows).toEqual([]);
     expect(result.contentHeight).toBe(0);
   });
 
-  it('单张图片（justify 模式）→ 1 行 1 图', () => {
-    const result = calculateJustifiedLayout([makeItem('a', 1.5)], baseOptions);
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0].items).toHaveLength(1);
-    expect(result.rows[0].items[0].id).toBe('a');
-    expect(result.rows[0].items[0].x).toBe(0);
-    expect(result.rows[0].items[0].y).toBe(0);
+  // 设计稿 G01「今天」那 6 张：一行放下、行高约 135（旧排法拆成 5 张约 173 + 单独 1 张）
+  it('takes the picture that overflows into the row and shrinks the row to fit', () => {
+    const today = [16 / 9, 16 / 9, 4 / 3, 1280 / 2200, 1, 16 / 9].map((ratio, i) => makeItem(`t${i}`, ratio));
+    const { rows } = calculateJustifiedLayout(today, gallery);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].items).toHaveLength(6);
+    expect(rows[0].height).toBeCloseTo(135, 0);
+    expect(rowWidth(rows[0], gallery.gap)).toBeCloseTo(gallery.containerWidth, 3);
   });
 
-  it('多张图片超过容器宽度 → 自动换行', () => {
-    // 5 张宽高比 2 的图片，targetRowHeight 200，容器 1000
-    // 每张宽约 400，每行最多 2-3 张
-    const items = Array.from({ length: 5 }, (_, i) => makeItem(`img-${i}`, 2));
-    const result = calculateJustifiedLayout(items, baseOptions);
-    expect(result.rows.length).toBeGreaterThan(1);
-    // 所有图片都应被排进某一行
-    const totalItems = result.rows.reduce((sum, row) => sum + row.items.length, 0);
-    expect(totalItems).toBe(5);
-  });
-
-  it('每行填满容器宽度（justify 模式，非最后行）', () => {
-    // 构造 10 张宽高比 1 的图片，确保前几行都会被填满
-    const items = Array.from({ length: 10 }, (_, i) => makeItem(`img-${i}`, 1));
-    const result = calculateJustifiedLayout(items, baseOptions);
-    // 前几行应该填满（忽略最后一行）
-    for (let r = 0; r < result.rows.length - 1; r++) {
-      const row = result.rows[r];
-      const rowWidth = row.items.reduce((sum, item) => sum + item.width, 0)
-        + (row.items.length - 1) * baseOptions.gap;
-      // 容器宽度允许一点浮点误差
-      expect(rowWidth).toBeCloseTo(baseOptions.containerWidth, 0);
+  it('keeps every full row at or below the target height, filling the width', () => {
+    const ratios = [1.5, 0.75, 1, 2, 1.33, 0.56, 1.78, 1, 3, 0.8, 1.2, 1.6];
+    const { rows } = calculateJustifiedLayout(ratios.map((r, i) => makeItem(`i${i}`, r)), gallery);
+    for (const row of rows.slice(0, -1)) {
+      expect(row.height).toBeLessThanOrEqual(gallery.targetRowHeight);
+      expect(rowWidth(row, gallery.gap)).toBeCloseTo(gallery.containerWidth, 3);
     }
+    expect(rows.reduce((n, row) => n + row.items.length, 0)).toBe(ratios.length);
+  });
+
+  it('leaves a short last row at the target height, left-aligned', () => {
+    const { rows } = calculateJustifiedLayout([makeItem('a', 1), makeItem('b', 1)], gallery);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].height).toBe(gallery.targetRowHeight);
+    expect(rows[0].items.map((item) => item.x)).toEqual([0, 156]);
+  });
+
+  it('fits a single very wide picture into the width instead of a taller row', () => {
+    const { rows } = calculateJustifiedLayout([makeItem('pano', 10)], gallery);
+    expect(rows[0].height).toBeCloseTo(114.4, 3);
+    expect(rows[0].items[0].width).toBeCloseTo(gallery.containerWidth, 3);
+  });
+
+  it('宽高比 0 → fallback 为 1', () => {
+    const { rows } = calculateJustifiedLayout([makeItem('a', 0)], gallery);
+    expect(rows[0].items[0].width).toBe(gallery.targetRowHeight);
   });
 
   it('contentHeight 应等于最后一行 y + height', () => {
@@ -82,73 +91,12 @@ describe('calculateJustifiedLayout', () => {
     expect(result.contentHeight).toBeCloseTo(lastRow.y + lastRow.height, 0);
   });
 
-  it('最后一行 left 对齐（少于 4 张）→ 使用 targetRowHeight', () => {
-    // 前 6 张占 2 行填满，第 3 行只有 2 张
-    const items = Array.from({ length: 8 }, (_, i) => makeItem(`img-${i}`, 1));
-    const result = calculateJustifiedLayout(items, {
-      ...baseOptions,
-      lastRowBehavior: 'left',
-    });
-    const lastRow = result.rows[result.rows.length - 1];
-    if (lastRow.items.length < 4) {
-      // left 模式下最后一行使用 targetRowHeight（或更小以防溢出）
-      expect(lastRow.height).toBeLessThanOrEqual(baseOptions.targetRowHeight);
-    }
-  });
-
-  it('宽高比 0 → fallback 为 1', () => {
-    const items = [makeItem('a', 0), makeItem('b', 0)];
-    // 关掉 maxRowHeight clamp，让行高按 justify 算（否则两张 ratio=1 图填 1000 宽时行高会超 maxRowHeight）
-    const result = calculateJustifiedLayout(items, { ...baseOptions, maxRowHeight: 10000 });
-    expect(result.rows).toHaveLength(1);
-    // 两张 ratio=1 填满容器，每张宽度应约 (1000 - gap) / 2
-    const expectedWidth = (baseOptions.containerWidth - baseOptions.gap) / 2;
-    expect(result.rows[0].items[0].width).toBeCloseTo(expectedWidth, 0);
-  });
-
-  it('maxRowHeight 限制单宽图行高', () => {
-    // 一张极宽的图，行高应被 maxRowHeight 限制
-    const items = [makeItem('wide', 10)];
-    const result = calculateJustifiedLayout(items, {
-      ...baseOptions,
-      maxRowHeight: 250,
-      lastRowBehavior: 'justify', // 避免走 left 分支
-    });
-    expect(result.rows[0].height).toBeLessThanOrEqual(250);
-  });
-
-  it('justify 模式下单张图也会被填满', () => {
-    const items = [makeItem('a', 1.5)];
-    const result = calculateJustifiedLayout(items, {
-      ...baseOptions,
-      maxRowHeight: 10000, // 不触发 maxRowHeight
-    });
-    const item = result.rows[0].items[0];
-    // 单张图 justify → 填满整个容器宽度
-    expect(item.width).toBeCloseTo(baseOptions.containerWidth, 0);
-  });
-
-  it('left 模式且 4+ 张 → 走 justify 计算', () => {
-    // 确保最后一行有 4+ 张不走 left 分支
-    const items = Array.from({ length: 4 }, (_, i) => makeItem(`img-${i}`, 1));
-    const result = calculateJustifiedLayout(items, {
-      ...baseOptions,
-      lastRowBehavior: 'left',
-    });
-    // 填满容器
-    const rowWidth = result.rows[0].items.reduce((s, i) => s + i.width, 0)
-      + (result.rows[0].items.length - 1) * baseOptions.gap;
-    expect(rowWidth).toBeCloseTo(baseOptions.containerWidth, 0);
-  });
-
   it('行间距 gap 应体现在 y 坐标递增', () => {
     const items = Array.from({ length: 6 }, (_, i) => makeItem(`img-${i}`, 1));
     const result = calculateJustifiedLayout(items, baseOptions);
-    if (result.rows.length >= 2) {
-      const row0 = result.rows[0];
-      const row1 = result.rows[1];
-      expect(row1.y).toBeCloseTo(row0.y + row0.height + baseOptions.gap, 0);
-    }
+    expect(result.rows.length).toBeGreaterThanOrEqual(2);
+    const [row0, row1] = result.rows;
+    expect(row1.y).toBeCloseTo(row0.y + row0.height + baseOptions.gap, 0);
   });
 });
 

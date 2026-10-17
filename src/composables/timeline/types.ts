@@ -76,8 +76,6 @@ export interface VirtualTimelineOptions {
   headerHeight?: number;
   /** 分组间距 */
   groupGap?: number;
-  /** 最大行高 */
-  maxRowHeight?: number;
   /** 可视区域上下额外渲染的行数 */
   overscan?: number;
 }
@@ -88,7 +86,6 @@ export const DEFAULT_OPTIONS: Required<VirtualTimelineOptions> = {
   gap: 4,
   headerHeight: 36,
   groupGap: 16,
-  maxRowHeight: 300,
   overscan: 3,
 };
 

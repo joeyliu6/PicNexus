@@ -43,7 +43,6 @@ function mountLayout(initialGroups: PhotoGroup[] = [], initialWidth = 480) {
       api = useTimelineLayout(containerWidth, groups, {
         ...DEFAULT_OPTIONS,
         targetRowHeight: 100,
-        maxRowHeight: 150,
         headerHeight: 24,
         groupGap: 12,
         gap: 4,

@@ -118,7 +118,7 @@ export function useTimelineLayout(
       return null;
     }
 
-    const { headerHeight, groupGap, targetRowHeight, gap, maxRowHeight } = config;
+    const { headerHeight, groupGap, targetRowHeight, gap } = config;
 
     const layoutOptions: TimelineLayoutOptions = {
       containerWidth: containerWidth.value,
@@ -126,8 +126,6 @@ export function useTimelineLayout(
       gap,
       headerHeight,
       groupGap,
-      maxRowHeight,
-      lastRowBehavior: 'left',
     };
 
     // skeleton cache 收敛：清掉不再出现在 groups 的旧 dayKey，防止 filter 切换后残留
@@ -315,8 +313,6 @@ export function useTimelineLayout(
       gap: config.gap,
       headerHeight: config.headerHeight,
       groupGap: config.groupGap,
-      maxRowHeight: config.maxRowHeight,
-      lastRowBehavior: 'left',
     };
 
     const newLayout = updateGroupLayout(

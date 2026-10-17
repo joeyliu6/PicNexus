@@ -91,10 +91,6 @@ export interface LayoutOptions {
   targetRowHeight: number;
   /** 图片间距 */
   gap: number;
-  /** 最大行高限制（防止单张图片撑满整行时过高） */
-  maxRowHeight?: number;
-  /** 最后一行的处理方式：'justify' 填满 | 'left' 左对齐 */
-  lastRowBehavior: 'justify' | 'left';
 }
 
 /** 时间轴布局配置 */
@@ -108,12 +104,11 @@ export interface TimelineLayoutOptions extends LayoutOptions {
 // ==================== 核心算法 ====================
 
 /**
- * 计算单个分组的 Justified Layout
+ * 计算单个分组的 Justified Layout（GalleryScreen.dc.html 的排法）
  *
- * 算法原理：
- * 1. 贪心算法：从左到右累加图片宽度，直到超过容器宽度形成一行
- * 2. 调整行高：让该行所有图片恰好填满容器宽度
- * 3. 最后一行特殊处理：可选择左对齐或填满
+ * 1. 一张张放进这一行，放到「按目标行高排已经铺满宽度」的那一张为止（含这一张）
+ * 2. 把整行缩到正好铺满容器宽度：行高只会小于等于目标行高，不会被放大
+ * 3. 最后一行不够宽：保持目标行高、靠左
  *
  * @param items 图片数组
  * @param options 布局选项
@@ -123,112 +118,42 @@ export function calculateJustifiedLayout(
   items: LayoutItem[],
   options: LayoutOptions
 ): GroupLayoutResult {
-  const {
-    containerWidth,
-    targetRowHeight,
-    gap,
-    maxRowHeight = targetRowHeight * 1.5,
-    lastRowBehavior,
-  } = options;
-
-  // 空数组直接返回
+  const { containerWidth, targetRowHeight, gap } = options;
   if (items.length === 0) {
     return { rows: [], contentHeight: 0 };
   }
 
   const rows: LayoutRow[] = [];
   let currentY = 0;
-  let rowStart = 0;
+  let row: LayoutItem[] = [];
+  let sumRatio = 0;
 
-  while (rowStart < items.length) {
-    // 贪心：尽可能多地放入图片直到超过容器宽度
-    let rowEnd = rowStart;
-    let sumRatio = 0;
-
-    while (rowEnd < items.length) {
-      const item = items[rowEnd];
-      const ratio = item.aspectRatio || 1;
-      const itemWidthAtTargetHeight = targetRowHeight * ratio;
-      const numItemsInRow = rowEnd - rowStart;
-      const totalGapWidth = numItemsInRow * gap;
-      const rowWidthIfAdded = sumRatio * targetRowHeight + itemWidthAtTargetHeight + totalGapWidth;
-
-      // 如果加入这张图片会超出容器宽度，且已经有图片了，就结束本行
-      if (rowWidthIfAdded > containerWidth && rowEnd > rowStart) {
-        break;
-      }
-
-      sumRatio += ratio;
-      rowEnd++;
-    }
-
-    // 计算该行的图片数量和间距
-    const numItems = rowEnd - rowStart;
-    const totalGapWidth = (numItems - 1) * gap;
-    const availableWidth = containerWidth - totalGapWidth;
-
-    // 计算实际行高（让图片恰好填满可用宽度）
-    let rowHeight = availableWidth / sumRatio;
-
-    // 应用最大行高限制
-    if (rowHeight > maxRowHeight) {
-      rowHeight = maxRowHeight;
-    }
-
-    // 判断是否是最后一行
-    const isLastRow = rowEnd >= items.length;
-
-    // 最后一行特殊处理
-    if (isLastRow && lastRowBehavior === 'left' && numItems < 4) {
-      // 最后一行图片少于 4 张时，使用目标行高，左对齐
-      rowHeight = targetRowHeight;
-      // 防止宽图溢出：确保行内最宽图片不超过可用宽度
-      for (let i = rowStart; i < rowEnd; i++) {
-        const ratio = items[i].aspectRatio || 1;
-        const maxHeightForItem = availableWidth / ratio;
-        if (rowHeight > maxHeightForItem) {
-          rowHeight = maxHeightForItem;
-        }
-      }
-    }
-
-    // 计算每张图片的位置和尺寸
-    const rowItems: LayoutedItem[] = [];
+  const placeRow = (rowHeight: number): void => {
     let currentX = 0;
-
-    for (let i = rowStart; i < rowEnd; i++) {
-      const item = items[i];
-      const ratio = item.aspectRatio || 1;
-      const itemWidth = rowHeight * ratio;
-
-      rowItems.push({
-        id: item.id,
-        x: currentX,
-        y: currentY,
-        width: itemWidth,
-        height: rowHeight,
-      });
-
-      currentX += itemWidth + gap;
-    }
-
-    rows.push({
-      y: currentY,
-      height: rowHeight,
-      items: rowItems,
+    const rowItems: LayoutedItem[] = row.map((item) => {
+      const width = rowHeight * (item.aspectRatio || 1);
+      const placed = { id: item.id, x: currentX, y: currentY, width, height: rowHeight };
+      currentX += width + gap;
+      return placed;
     });
-
+    rows.push({ y: currentY, height: rowHeight, items: rowItems });
     currentY += rowHeight + gap;
-    rowStart = rowEnd;
+    row = [];
+    sumRatio = 0;
+  };
+
+  for (const item of items) {
+    row.push(item);
+    sumRatio += item.aspectRatio || 1;
+    const totalGapWidth = (row.length - 1) * gap;
+    if (sumRatio * targetRowHeight + totalGapWidth >= containerWidth) {
+      placeRow((containerWidth - totalGapWidth) / sumRatio);
+    }
   }
+  if (row.length > 0) placeRow(targetRowHeight);
 
   // 总高度 = 最后一行的 y + 高度（不含最后的 gap）
-  const contentHeight = currentY - gap;
-
-  return {
-    rows,
-    contentHeight: Math.max(0, contentHeight),
-  };
+  return { rows, contentHeight: Math.max(0, currentY - gap) };
 }
 
 /**

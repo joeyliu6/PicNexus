@@ -75,7 +75,6 @@ function mountVirtualTimeline(initialGroups: PhotoGroup[]) {
       const container = ref<HTMLElement | null>(null);
       api = useVirtualTimeline(container, groups, {
         targetRowHeight: 100,
-        maxRowHeight: 150,
         headerHeight: 24,
         groupGap: 12,
         gap: 4,
