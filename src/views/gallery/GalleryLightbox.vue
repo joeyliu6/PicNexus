@@ -126,7 +126,8 @@ const metaLine = computed(() => {
   if (it.fileSize) parts.push(formatFileSize(it.fileSize));
   return parts.join(' · ');
 });
-const petals = computed(() => rows.value.map((row): PetalState => (row.health === 'dead' ? 'failed' : row.health === 'limited' ? 'limited' : 'ok')));
+// 与格子一样只数份数（G08 两片都是品牌蓝）；哪份有问题由顶栏提示和「换个图床」菜单说
+const petals = computed(() => rows.value.map((): PetalState => 'ok'));
 const hostLine = computed(() => rows.value.map((row) => name(row.id)).join(' · '));
 const favorited = computed(() => !!item.value && props.grid.historyManager.favoriteSet.value.has(item.value.id));
 

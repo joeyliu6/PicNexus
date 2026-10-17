@@ -9,14 +9,12 @@ function copiesOf(meta: ImageMeta): number {
   return Math.max(meta.mirrorServices?.length ?? 1, 1);
 }
 
-/** 花瓣：几份亮几片；复制时使用的那份失效变红、可能受限变琥珀 */
+/**
+ * 花瓣：几份亮几片，一律品牌蓝（GalleryScreen.dc.html）。链接的健康状况由 ⚠ 角标说，
+ * 红色只留给「刚才的操作失败了」（交接说明规则 4.5）
+ */
 export function petalsOf(meta: ImageMeta): PetalState[] {
-  return Array.from({ length: copiesOf(meta) }, (_, i) => {
-    if (i > 0) return 'ok';
-    if (meta.copyLinkHealth === 'dead') return 'failed';
-    if (meta.copyLinkHealth === 'limited') return 'limited';
-    return 'ok';
-  });
+  return Array.from({ length: copiesOf(meta) }, (): PetalState => 'ok');
 }
 
 export function petalLabelOf(meta: ImageMeta): string {

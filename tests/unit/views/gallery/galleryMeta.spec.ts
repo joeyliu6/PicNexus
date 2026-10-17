@@ -23,11 +23,14 @@ describe('gallery tile and row rules', () => {
     expect(badgeOf(meta('ok', 1))).toEqual({ text: '仅 1 份', warn: false });
   });
 
-  it('lights one petal per copy and colours the copy source by its health', () => {
+  // GalleryScreen.dc.html 的花瓣只数份数（全是品牌蓝）；健康状况由 ⚠ 角标说，
+  // 红色留给「刚才的操作失败了」（交接说明规则 4.5）
+  it('lights one brand petal per copy whatever the link health', () => {
     expect(petalsOf(meta('ok', 3))).toEqual(['ok', 'ok', 'ok']);
-    expect(petalsOf(meta('dead'))).toEqual(['failed', 'ok']);
-    expect(petalsOf(meta('limited'))).toEqual(['limited', 'ok']);
+    expect(petalsOf(meta('dead'))).toEqual(['ok', 'ok']);
+    expect(petalsOf(meta('limited'))).toEqual(['ok', 'ok']);
     expect(petalLabelOf(meta('ok'))).toBe('2 份均正常');
+    expect(petalLabelOf(meta('dead'))).toBe('2 份，复制链接已失效');
   });
 
   it('leaves the list status empty while the link works', () => {
