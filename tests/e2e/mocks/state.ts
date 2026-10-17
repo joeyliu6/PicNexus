@@ -23,6 +23,10 @@ export interface InvokeOverride {
   failFor?: string[];
   /** 按某个参数的取值分别返回（如 scan_md_folder 按 dir 给不同文件夹的扫描结果）；没列到的走 result */
   byArg?: { key: string; results: Record<string, unknown> };
+  /** 以这个值本身失败（结构化的 AppError，如 { type: 'WEBDAV_LAN_HTTP_UNCONFIRMED', data: { message } }） */
+  errorValue?: unknown;
+  /** 过这么多毫秒（页面时钟）再返回：测试连接的耗时写成固定值 */
+  delayMs?: number;
 }
 
 /**

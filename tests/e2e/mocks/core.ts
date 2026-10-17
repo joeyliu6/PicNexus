@@ -12,6 +12,11 @@ export function mockObjectName(fileName: string): string {
 
 function applyOverride<T>(override: InvokeOverride, args: unknown): Promise<T> {
   if (override.hang) return new Promise<T>(() => undefined);
+  if (override.delayMs) {
+    const { delayMs, ...rest } = override;
+    return new Promise<T>((resolve, reject) => { setTimeout(() => { applyOverride<T>(rest, args).then(resolve, reject); }, delayMs); });
+  }
+  if (override.errorValue !== undefined) return Promise.reject(override.errorValue);
   if (override.byArg) {
     const value = String((args as Record<string, unknown> | undefined)?.[override.byArg.key] ?? '');
     if (value in override.byArg.results) return Promise.resolve(override.byArg.results[value] as T);
