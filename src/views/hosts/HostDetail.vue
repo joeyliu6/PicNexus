@@ -64,19 +64,23 @@ function showDead(): void {
   void router.push({ path: '/health', query: { host: props.hostId } });
 }
 
+/** Cookie 图床手动粘贴了 Cookie：按钮不再开登录窗，直接测这份 Cookie */
+const cookiePasted = computed(() => descriptor.value.kind === 'cookie' && !!values.value.cookie);
+
 const connectLabel = computed(() => {
   if (descriptor.value.kind === 'builtin') return '连接';
-  if (descriptor.value.kind === 'cookie') return '登录…';
+  if (descriptor.value.kind === 'cookie' && !cookiePasted.value) return '登录…';
   return '测试并连接';
 });
 
 const connectNote = computed(() => {
+  if (cookiePasted.value) return '';
   if (descriptor.value.kind === 'cookie') return joinCjk('将在新窗口打开', name.value, '官方登录页，登录后自动填入');
   return descriptor.value.connectNote ?? (descriptor.value.steps.includes('write') ? '将写入并删除一个测试文件' : '');
 });
 
 function connect(): void {
-  if (descriptor.value.kind === 'cookie' && !values.value.cookie) void hosts.login(props.hostId);
+  if (descriptor.value.kind === 'cookie' && !cookiePasted.value) void hosts.login(props.hostId);
   else void hosts.connect();
 }
 
@@ -118,7 +122,8 @@ const disconnectNote = computed(() => (multi.value
         <span class="host-detail__expired-title">登录已过期</span>
         <span class="host-detail__muted">{{ joinCjk('重新登录前无法上传到', name, '。登录后可补传未完成的图片。') }}</span>
       </div>
-      <PnButton variant="primary" @click="hosts.login(hostId)">重新登录</PnButton>
+      <!-- 一页一个主按钮：停用时头部的「启用」是主按钮，这里退为次要按钮 -->
+      <PnButton :variant="row?.enabled ? 'primary' : 'secondary'" @click="hosts.login(hostId)">重新登录</PnButton>
     </div>
 
     <HostSettings

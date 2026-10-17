@@ -26,4 +26,17 @@ describe('HostFields', () => {
     await wrapper.get('#t-bucket').trigger('blur');
     expect(wrapper.emitted('commit')).toEqual([['bucket', 'b']]);
   });
+
+  it('Cookie 的密文前面露出第一项的名字（「SUB=••••」，名字不是秘密），其余敏感字段只有圆点', () => {
+    const cookie = mount(HostFields, {
+      props: { fields: [{ key: 'cookie', label: 'Cookie', secret: true }], values: { cookie: 'SUB=_2A25secret; SUBP=x' }, reveal: async () => '', idPrefix: 'c' },
+    });
+    expect(cookie.text()).toMatch(/SUB=•+/);
+    expect(cookie.text()).not.toContain('_2A25secret');
+
+    const key = mount(HostFields, {
+      props: { fields: [{ key: 'secretAccessKey', label: 'Secret Access Key', secret: true }], values: { secretAccessKey: 'AB=cd' }, reveal: async () => '', idPrefix: 'k' },
+    });
+    expect(key.text()).not.toContain('AB=');
+  });
 });

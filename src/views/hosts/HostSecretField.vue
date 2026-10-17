@@ -30,7 +30,9 @@ const props = withDefaults(defineProps<{
   required?: boolean;
   /** 框里的链接（「在 GitHub 生成」） */
   link?: { label: string; url: string };
-}>(), { invalid: false, help: undefined, placeholder: '', id: undefined, required: false, link: undefined });
+  /** 圆点前露出的一段（Cookie 的第一项名字「SUB=」，HostsScreen.dc.html） */
+  maskPrefix?: string;
+}>(), { invalid: false, help: undefined, placeholder: '', id: undefined, required: false, link: undefined, maskPrefix: '' });
 
 const emit = defineEmits<{ commit: [value: string] }>();
 
@@ -133,7 +135,7 @@ onBeforeUnmount(() => clearTimeout(timer));
         :aria-label="`修改${label}`"
         @click="beginEdit"
       >
-        {{ mode === 'revealed' ? plain : hasValue ? MASK : placeholder }}
+        {{ mode === 'revealed' ? plain : hasValue ? maskPrefix + MASK : placeholder }}
       </button>
       <a v-if="link && mode !== 'editing'" class="host-secret__link" href="#" @click.prevent="openTrustedExternalUrl(link.url)">{{ link.label }}</a>
       <button v-if="mode === 'editing'" type="button" class="host-secret__action host-secret__action--muted" @mousedown.prevent @click="cancel">取消</button>

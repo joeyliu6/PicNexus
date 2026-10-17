@@ -39,6 +39,12 @@ function commit(key: string): void {
   if (value !== (props.values[key] ?? '')) emit('commit', key, value);
 }
 
+/** Cookie 第一项的名字（「SUB=」）：名字不是秘密，露出来一眼认得是哪家的登录信息 */
+function cookieName(cookie: string | undefined): string {
+  const match = /^\s*([\w.-]+)=/.exec(cookie ?? '');
+  return match ? `${match[1]}=` : '';
+}
+
 const secretRefs = ref<Record<string, InstanceType<typeof HostSecretField> | null>>({});
 
 /** Cookie「手动粘贴」：把那一格切成编辑态 */
@@ -60,6 +66,7 @@ defineExpose({ editSecret });
         :required="field.required"
         :link="field.link"
         :has-value="!!values[field.key]"
+        :mask-prefix="field.key === 'cookie' ? cookieName(values.cookie) : ''"
         :reveal="() => reveal(field.key)"
         :invalid="invalidField === field.key"
         :help="invalidField === field.key ? invalidReason : field.help"
