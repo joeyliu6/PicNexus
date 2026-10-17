@@ -7,7 +7,11 @@ import PnIcon from '@/components/pn/PnIcon.vue';
 import type { CookieProvider } from '@/config/cookieProviders';
 import { joinCjk } from '@/utils/cjkSpacing';
 
-defineProps<{ provider: CookieProvider }>();
+defineProps<{
+  provider: CookieProvider;
+  /** 「开始登录」失败的原因 + 处理办法 */
+  error?: string;
+}>();
 
 defineEmits<{ startLogin: []; close: [] }>();
 </script>
@@ -26,6 +30,7 @@ defineEmits<{ startLogin: []; close: [] }>();
         <PnButton variant="secondary" @click="$emit('close')">取消</PnButton>
         <PnButton variant="primary" @click="$emit('startLogin')">开始登录</PnButton>
       </div>
+      <p v-if="error" class="login-panel__error" role="alert">{{ error }}</p>
     </div>
     <div class="login-panel__foot">{{ joinCjk('此处将显示', provider.name, '官方登录页') }}</div>
   </div>
@@ -42,7 +47,7 @@ defineEmits<{ startLogin: []; close: [] }>();
   color: var(--pn-text1);
   font-family: var(--pn-font-ui);
   font-size: var(--pn-text-body);
-  line-height: 1.45;
+  line-height: var(--pn-leading-login);
   user-select: none;
 }
 
@@ -105,6 +110,13 @@ defineEmits<{ startLogin: []; close: [] }>();
   display: flex;
   gap: var(--pn-space-8);
   margin-top: var(--pn-space-login-actions);
+}
+
+.login-panel__error {
+  margin: 0;
+  color: var(--pn-danger);
+  font-size: var(--pn-text-footnote);
+  line-height: var(--pn-leading-footnote);
 }
 
 .login-panel__foot {

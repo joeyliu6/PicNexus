@@ -1,5 +1,5 @@
 // 登录窗口 Vue 应用入口
-import { createApp } from 'vue';
+import { createApp, h, ref } from 'vue';
 import LoginPanel from '@/components/login/LoginPanel.vue';
 import { COOKIE_PROVIDERS, DEFAULT_LOGIN_WINDOW_SIZE, type CookieProvider } from '@/config/cookieProviders';
 import { invoke } from '@tauri-apps/api/core';
@@ -23,10 +23,14 @@ const provider: CookieProvider = COOKIE_PROVIDERS[serviceId] || COOKIE_PROVIDERS
 
 log.info('初始化登录窗口', { serviceId, provider });
 
+/** 「开始登录」失败的原因：显示在准备页按钮下方（红 = 刚才的操作失败了） */
+const startError = ref('');
+
 /**
  * 开始登录处理
  */
 async function handleStartLogin() {
+  startError.value = '';
   let unlistenReady: (() => void) | null = null;
   let readyResolved = false;
   let readyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,9 +106,8 @@ async function handleStartLogin() {
       unlistenReady = null;
     }
     log.error('启动登录失败', error);
-    // setup_cookie_event_monitoring 失败时 reject 的是 AppError（非 Windows 平台必达），
-    // 模板字符串直接拼会显示成 [object Object]，把后端给的原因整句吃掉
-    alert(`启动 Cookie 监控失败\n${getErrorMessage(error)}\n请重新打开登录窗口`);
+    // setup_cookie_event_monitoring 失败时 reject 的是 AppError（非 Windows 平台必达），要开盒取原因
+    startError.value = `${getErrorMessage(error) || '无法读取登录状态'}，请关闭此窗口后重试`;
   }
 }
 
@@ -127,10 +130,8 @@ async function bootstrap() {
   await initLoginTheme();
 
   // 创建 Vue 应用
-  const app = createApp(LoginPanel, {
-    provider,
-    onStartLogin: handleStartLogin,
-    onClose: handleClose
+  const app = createApp({
+    render: () => h(LoginPanel, { provider, error: startError.value, onStartLogin: handleStartLogin, onClose: handleClose }),
   });
 
   // 挂载应用

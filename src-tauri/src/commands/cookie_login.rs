@@ -114,13 +114,20 @@ pub async fn open_login_window(
 
     let titlebar_height: f64 = 40.0;
 
-    // 创建无边框窗口
-    let window = tauri::window::WindowBuilder::new(&app, "login-window")
+    // 创建无边框窗口；macOS 保留系统红绿灯（Overlay 标题栏，与主窗口的 tauri.macos.conf.json 一致），
+    // 标题栏页面在 macOS 上不画关闭键（CookieWindow.dc.html）
+    let builder = tauri::window::WindowBuilder::new(&app, "login-window")
         .title(format!("{} 登录", service_name))
         .inner_size(width, height)
         .decorations(false)
         .visible(false)
-        .center()
+        .center();
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .decorations(true)
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder
         .build()
         .map_err(|e| AppError::external(format!("创建登录窗口失败: {}", e)))?;
 

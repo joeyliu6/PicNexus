@@ -32,6 +32,8 @@ const root = process.cwd();
 // 新界面的 --pn-* 令牌（src/styles/tokens*.css）与旧页面的主题变量并存，名字不重叠，摞在同一张表里
 const PN_LIGHT = [
   { file: 'src/styles/tokens.css', selector: ':root, [data-theme="light"]' },
+  // 不分主题的尺寸、字号、窗口按钮色在 tokens-extra.css 的几段 `:root` 里
+  { file: 'src/styles/tokens-extra.css', selector: ':root' },
   { file: 'src/styles/tokens-extra.css', selector: ':root, [data-theme="light"]' },
 ];
 const PN_DARK = [
@@ -66,7 +68,7 @@ const COPIES = [
   },
   {
     file: 'login-titlebar.html',
-    why: 'Cookie 登录小窗的标题栏是独立页面（不走 Vue 入口），拿不到 tokens.css，就地重定义侧栏底色与正文色',
+    why: 'Cookie 登录小窗的标题栏是独立页面（不走 Vue 入口），拿不到 tokens.css，就地重定义用到的颜色与尺寸令牌',
     blocks: [
       { selector: ':root', theme: 'dark', kind: 'custom-properties' },
       { selector: ':root.light-theme', theme: 'light', kind: 'custom-properties' },

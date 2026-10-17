@@ -5,24 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登录授权 - PicNexus</title>
   <style>
-    /* Cookie 登录小窗的标题栏（CookieWindow.dc.html，P16）：高 40、侧栏底色、左 14 写「微博登录」12px / 500，右侧关闭键。
-       这个页面独立于 Vue 入口，拿不到 tokens.css，下面两块就地重定义同名令牌；
-       值与 src/styles/tokens*.css 的一致性由 scripts/check-theme-token-copies.mjs 在 npm run lint 时比对。 */
+    /* Cookie 登录小窗的标题栏（CookieWindow.dc.html，P16）：高 40、侧栏底色、左 14 写「微博登录」12px / 500，右侧关闭键；
+       macOS 用系统红绿灯（窗口是 Overlay 标题栏），不画关闭键，标题让到红绿灯右边（左 80）。
+       这个页面独立于 Vue 入口，拿不到 tokens.css，下面两块就地重定义同名令牌（颜色与尺寸）；
+       值与 src/styles/tokens*.css 的一致性由 scripts/check-theme-token-copies.mjs 在 npm run lint 时比对。
+       关闭键悬停沿用 Windows 系统外观（README「平台限制记录」）。 */
     :root {
       --pn-sidebar: #151517;
       --pn-text1: #EBEBEC;
+      --pn-window-close-hover: #C42B1C;
+      --pn-window-close-fg: #FFFFFF;
+      --pn-size-title-bar: 40px;
+      --pn-size-win-button-w: 46px;
+      --pn-size-win-button-h: 40px;
+      --pn-space-login-title-x: 14px;
+      --pn-space-login-title-mac-x: 80px;
+      --pn-text-footnote: 12px;
+      --pn-weight-medium: 500;
     }
 
     :root.light-theme {
       --pn-sidebar: #F3F3F3;
       --pn-text1: #171717;
+      --pn-sidebar-macos: #ECECEC;
+      --pn-sidebar-linux: #F4F4F4;
     }
 
-    /* Windows 关闭键悬停沿用系统外观（README「平台限制记录」） */
-    html {
-      --login-close-hover: #C42B1C;
-      --login-close-fg: #FFFFFF;
-    }
+    /* 浅色侧栏三平台各一色（tokens.css 的 [data-platform]），深色一样 */
+    :root.light-theme.platform-macos { --pn-sidebar: var(--pn-sidebar-macos); }
+    :root.light-theme.platform-linux { --pn-sidebar: var(--pn-sidebar-linux); }
+    .platform-macos .titlebar { padding-left: var(--pn-space-login-title-mac-x); }
+    .platform-macos .close-btn { display: none; }
 
     * {
       box-sizing: border-box;
@@ -48,8 +61,8 @@
       display: flex;
       align-items: center;
       width: 100%;
-      height: 40px;
-      padding-left: 14px;
+      height: var(--pn-size-title-bar);
+      padding-left: var(--pn-space-login-title-x);
     }
 
     .service-name {
@@ -59,8 +72,8 @@
       display: flex;
       align-items: center;
       overflow: hidden;
-      font-size: 12px;
-      font-weight: 500;
+      font-size: var(--pn-text-footnote);
+      font-weight: var(--pn-weight-medium);
       white-space: nowrap;
       text-overflow: ellipsis;
     }
@@ -69,8 +82,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 46px;
-      height: 40px;
+      width: var(--pn-size-win-button-w);
+      height: var(--pn-size-win-button-h);
       border: 0;
       background: transparent;
       color: inherit;
@@ -78,13 +91,8 @@
     }
 
     .close-btn:hover {
-      background: var(--login-close-hover);
-      color: var(--login-close-fg);
-    }
-
-    .close-btn svg {
-      width: 12px;
-      height: 12px;
+      background: var(--pn-window-close-hover);
+      color: var(--pn-window-close-fg);
     }
   </style>
 </head>
@@ -92,7 +100,7 @@
   <div class="titlebar" data-tauri-drag-region>
     <span class="service-name" id="serviceName" data-tauri-drag-region></span>
     <button class="close-btn" id="closeBtn" title="关闭" aria-label="关闭" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
         <path d="M19 5 5 19M5 5l14 14"/>
       </svg>
     </button>

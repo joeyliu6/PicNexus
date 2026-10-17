@@ -438,7 +438,6 @@ export function useConfigManager() {
             summary: joinCjk(serviceName, '登录超时'),
             // 超时这一刻小窗里是第三方网站，PicNexus 自己的按钮都不在：处理办法指向图床页上真实存在的两个入口
             detail: '未在 60 秒内完成登录。请在图床页重新登录，或用「手动粘贴」填入 Cookie',
-            life: 8000
           });
         });
       } catch (timeoutErr) {
