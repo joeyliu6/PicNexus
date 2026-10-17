@@ -14,6 +14,12 @@
 
 在线画布（可交互，可切深浅色与平台）：https://claude.ai/code/artifact/9dbe340e-3ff9-4fa9-ae80-4ddc199785f3
 
+## 怎么区分「已定」和「待过目」
+
+- 「已定的事」「按交接说明去掉的旧功能」：与维护者一起定的，照做。
+- 「设计没画、开发时补的（…）」各节、`health-plan.md` 里「开发时自定的」：AI 按交接说明的规则自行补的做法，**全部阶段做完后统一请维护者过目**，不同意的再改。
+- 标 **待拍板** 的：设计稿自相矛盾、必须维护者选一个的，同样留到最后一起定。
+
 ## 已定的事
 
 - 零件：Reka UI + 自写 `Pn*` 组件 + scoped CSS，不用 Tailwind / shadcn-vue（理由见 tech-stack 第 2 节）。
@@ -94,7 +100,7 @@
 | 2 基础件 | Pn 控件、PnToaster / PnConfirmHost（接在 useToast / useUndoToast / useConfirm 下面，调用方式不变）、HostIcon、PetalGlyph、BgDecor、CopyButton、LinkBlock | Controls Patterns PetalScale HostIcons BgDecor N01 | 已完成 |
 | 3 首页·快传 | 焦点卡、最近上传、批量、三个浮层、URL 下载、渐进提示、第一次使用、全局拖放与粘贴、命令面板、传输中心 | H01–H21 HB1–3 | 已完成 |
 | 4 图库 | 网格 / 列表、筛选、多选、详情、灯箱、刻度条、空与加载、读屏与键盘 | G01–G13 K02 K03 K07 | 已完成 |
-| 5 链接健康 | 状态栏、上传日历、工具卡、失效清单、两个弹窗、自动检测 | L01–L18 K04 K08 | 未开始 |
+| 5 链接健康 | 状态栏、上传日历、工具卡、失效清单、两个弹窗、自动检测 | L01–L18 K04 K08 | 方案待确认：[health-plan.md](./health-plan.md) |
 | 6 图床 | 双栏、接入表单、目录、测试连接、敏感字段、窄窗口、Cookie 小窗 | P01–P16 K09 | 未开始 |
 | 7 设置 | 7 个分组、快捷键录制、云同步、更新卡片 | S01–S21 K05 K10 | 未开始 |
 | 8 托盘 | 原生菜单、托盘图标进度 | T01–T08 K11 | 未开始 |
