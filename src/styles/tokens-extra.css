@@ -679,6 +679,9 @@
   --pn-decor-thumb-dark-ring: 0 0 0 1px rgba(255, 255, 255, 0.08);
   --pn-decor-thumb-petal-fill: #2EA6F2;
   --pn-decor-thumb-petal-line: #4D63F0;
+  --pn-decor-thumb-petal-fill-opacity: 0.18;
+  --pn-decor-thumb-petal-line-opacity: 0.35;
+  --pn-decor-thumb-petal-stroke: 5;
   --pn-decor-thumb-aurora-a: radial-gradient(closest-side, rgba(46, 166, 242, 0.55), transparent);
   --pn-decor-thumb-aurora-b: radial-gradient(closest-side, rgba(124, 92, 246, 0.5), transparent);
   --pn-decor-thumb-blur: 6px;

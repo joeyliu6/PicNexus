@@ -134,7 +134,7 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
 }
 
 .general__theme:focus-visible { outline: none; }
-.general__theme:focus-visible .general__preview { box-shadow: 0 0 0 2px var(--pn-canvas), 0 0 0 4px var(--pn-ring); }
+.general__theme:focus-visible .general__preview { box-shadow: 0 0 0 var(--pn-ring-offset) var(--pn-canvas), 0 0 0 calc(var(--pn-ring-offset) + var(--pn-ring-width)) var(--pn-ring); }
 
 .general__preview {
   display: flex;
@@ -146,7 +146,7 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
   overflow: hidden;
 }
 
-.general__theme[aria-checked='true'] .general__preview { box-shadow: 0 0 0 2px var(--pn-canvas), 0 0 0 4px var(--pn-brand); }
+.general__theme[aria-checked='true'] .general__preview { box-shadow: 0 0 0 var(--pn-ring-offset) var(--pn-canvas), 0 0 0 calc(var(--pn-ring-offset) + var(--pn-ring-width)) var(--pn-brand); }
 .general__theme[aria-checked='true'] .general__theme-name { font-weight: var(--pn-weight-semibold); }
 
 .general__preview-side { width: 30%; }
@@ -212,8 +212,8 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
   height: var(--pn-size-decor-petals);
 }
 
-.general__thumb-fill { fill: var(--pn-decor-thumb-petal-fill); opacity: 0.18; }
-.general__thumb-line { fill: none; stroke: var(--pn-decor-thumb-petal-line); stroke-width: 5; opacity: 0.35; }
+.general__thumb-fill { fill: var(--pn-decor-thumb-petal-fill); opacity: var(--pn-decor-thumb-petal-fill-opacity); }
+.general__thumb-line { fill: none; stroke: var(--pn-decor-thumb-petal-line); stroke-width: var(--pn-decor-thumb-petal-stroke); opacity: var(--pn-decor-thumb-petal-line-opacity); }
 
 .general__aurora {
   position: absolute;

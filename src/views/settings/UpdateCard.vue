@@ -153,7 +153,7 @@ const view = computed<View>(() => {
   gap: var(--pn-space-12);
 }
 
-.update__spin { flex: none; animation: k-spin var(--duration-spinner) linear infinite; }
+.update__spin { flex: none; animation: k-spin var(--pn-dur-spin) linear infinite; }
 .update__spin-track { stroke: var(--pn-track); }
 .update__spin-arc { stroke: var(--pn-brand); transform: rotate(-90deg); transform-origin: center; }
 
