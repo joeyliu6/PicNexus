@@ -1,11 +1,8 @@
 <script setup lang="ts">
 // 标题栏的传输图标（HomeScreen.dc.html）：有进行中的任务时出现，进度环 + 数字（还在传的张数，补充备份、链接检测各算一项）；点开传输中心
-import { computed } from 'vue';
 import { useTransferCenter } from './useTransferCenter';
 
 const transfer = useTransferCenter();
-const RING = 37.7;
-const dash = computed(() => `${Math.max(transfer.progress.value, 0.05) * RING} ${RING}`);
 </script>
 
 <template>
@@ -20,7 +17,7 @@ const dash = computed(() => `${Math.max(transfer.progress.value, 0.05) * RING} $
   >
     <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
       <circle cx="8" cy="8" r="6" fill="none" class="transfer-button__track" stroke-width="2" />
-      <circle cx="8" cy="8" r="6" fill="none" class="transfer-button__ring" stroke-width="2" stroke-linecap="round" transform="rotate(-90 8 8)" :stroke-dasharray="dash" />
+      <circle cx="8" cy="8" r="6" fill="none" class="transfer-button__ring" stroke-width="2" stroke-linecap="round" transform="rotate(-90 8 8)" :stroke-dasharray="transfer.ringDash.value" />
     </svg>
     <span v-if="transfer.activeCount.value > 0">{{ transfer.activeCount.value }}</span>
   </button>

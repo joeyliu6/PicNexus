@@ -53,4 +53,19 @@ describe('useTransferCenter', () => {
     expect(transfer.finishedChecks).toEqual([]);
     expect(m.backup.clearFinished).toHaveBeenCalled();
   });
+
+  it('任务都结束、传输中心还开着时进度环是空的（真机走查：取消检测后留着一小段蓝弧）', async () => {
+    const isChecking = ref(true);
+    const activeRun = shallowRef<{ keys: Set<string>; startedAt: number } | null>({ keys: new Set(['a', 'b']), startedAt: 0 });
+    m.linkCheck = { isChecking, activeRun, progress: ref({ checked: 0, total: 2, current_url: '' }) };
+    m.backup = { state: reactive({ phase: 'idle', processed: 0, total: 0 }), clearFinished: vi.fn() };
+    const transfer = await fresh();
+    // 刚开始：至少露 5%
+    expect(transfer.ringDash.value).toBe(`${0.05 * 37.7} 37.7`);
+    isChecking.value = false;
+    activeRun.value = null;
+    await nextTick();
+    expect(transfer.activeCount.value).toBe(0);
+    expect(transfer.ringDash.value).toBe('0 37.7');
+  });
 });

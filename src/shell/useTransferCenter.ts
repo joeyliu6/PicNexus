@@ -11,6 +11,8 @@ const open = ref(false);
 /** 在传输中心里手动「清除」过的已完成上传（不影响首页的「最近上传」） */
 const clearedSessionIds = reactive(new Set<string>());
 /** 结束了的链接检测：查完了几个链接、是不是中途取消的；清除后不再显示 */
+/** 标题栏进度环（r = 6）的周长 */
+const RING_LENGTH = 37.7;
 const finishedChecks = reactive<Array<{ id: number; links: number; cancelled: boolean }>>([]);
 let checkSeq = 0;
 let watchingChecks = false;
@@ -68,6 +70,9 @@ export function useTransferCenter() {
     return parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : 0;
   });
 
+  /** 进度环的 stroke-dasharray：有任务时至少露一小段（刚开始也看得出在动）；任务都结束而传输中心还开着时画空环（同设计稿无任务时的 0） */
+  const ringDash = computed(() => `${activeCount.value > 0 ? Math.max(progress.value, 0.05) * RING_LENGTH : 0} ${RING_LENGTH}`);
+
   const backupFinished = computed(() => backup.state.phase === 'done');
 
   return {
@@ -78,6 +83,7 @@ export function useTransferCenter() {
     finishedUploads,
     activeCount,
     progress,
+    ringDash,
     backupActive,
     checkActive,
     backupFinished,
