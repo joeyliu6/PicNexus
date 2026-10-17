@@ -62,16 +62,6 @@ function toPlainConfig(input: UserConfig): UserConfig {
 }
 
 /**
- * 配置验证失败错误（已自带 toast 提示，catch 时无需再次 toast）
- */
-class ConfigValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ConfigValidationError';
-  }
-}
-
-/**
  * 配置管理 Composable
  */
 export function useConfigManager() {
@@ -112,16 +102,6 @@ export function useConfigManager() {
       isSaving.value = true;
       const configToSave = toPlainConfig(newConfig);
 
-      // 验证至少有一个可用图床
-      // Why: 旧实现 silent return → 上层 saveSettings 抓不到失败信号，
-      //   会继续走 syncCustomS3Uploaders / setAdvancedSaveState('saved')，
-      //   导致 UI 显示「已保存」但磁盘其实没改、上传器被错误清空。
-      //   改为 throw 让上层 catch 并回滚 in-memory 表单到磁盘真值。
-      if (!configToSave.availableServices || configToSave.availableServices.length === 0) {
-        toast.showConfig('error', TOAST_MESSAGES.config.validationFailed('至少需要启用一个图床'));
-        throw new ConfigValidationError('至少需要启用一个图床');
-      }
-
       // 验证链接前缀配置
       if (configToSave.linkPrefixConfig) {
         if (!configToSave.linkPrefixConfig.prefixList || configToSave.linkPrefixConfig.prefixList.length === 0) {
@@ -152,8 +132,7 @@ export function useConfigManager() {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log.error('保存配置失败:', error);
-      // 验证错误已经自带 toast，避免重复提示
-      if (!silent && !(error instanceof ConfigValidationError)) {
+      if (!silent) {
         toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
       }
       throw error;

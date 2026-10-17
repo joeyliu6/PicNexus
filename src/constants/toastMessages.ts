@@ -71,10 +71,6 @@ export const TOAST_MESSAGES = {
       summary: '加载失败',
       detail: error
     }),
-    validationFailed: (message: string): ToastMessageConfig => ({
-      summary: '验证失败',
-      detail: message
-    }),
     resetWarning: {
       summary: '配置已重置',
       detail: '检测到配置数据异常，已使用默认配置'

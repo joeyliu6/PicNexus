@@ -65,10 +65,7 @@ flowchart TD
 flowchart TD
     A[用户修改设置] --> B[useConfig.saveConfig&lpar;newConfig&rpar;]
     B --> C[toPlainConfig&lpar;&rpar; 序列化]
-    C --> D[验证：至少一个可用图床]
-    D --> E{验证通过?}
-    E -- 否 --> E1[Toast 错误提示]
-    E -- 是 --> F[configStore.set&lpar;'config', configToSave&rpar;]
+    C --> F[configStore.set&lpar;'config', configToSave&rpar;]
 
     F --> G[Store 内部：mutex 互斥锁获取]
     G --> H[secureStorage.encrypt&lpar;AES-GCM&rpar;]
@@ -81,7 +78,6 @@ flowchart TD
     M --> N["emit('config-updated') 通知其他组件"]
     N --> O[各组件 listen 回调刷新状态]
 
-    style E1 fill:#ffebee,stroke:#c62828
     style O fill:#e8f5e9,stroke:#2e7d32
 ```
 

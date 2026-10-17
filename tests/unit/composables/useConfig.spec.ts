@@ -55,7 +55,6 @@ vi.mock('@/constants', () => ({
     config: {
       loadFailed: (msg: string) => ({ summary: '加载失败', detail: msg }),
       saveFailed: (msg: string) => ({ summary: '保存失败', detail: msg }),
-      validationFailed: (msg: string) => ({ summary: '验证失败', detail: msg }),
     },
     auth: {
       cookieInvalid: { summary: '无效', detail: 'Cookie 无效' },
@@ -167,19 +166,19 @@ describe('useConfigManager', () => {
       expect(mockedEmit).toHaveBeenCalledWith('config-updated', expect.any(Object));
     });
 
-    it('availableServices 为空时拒绝保存', async () => {
-      const badConfig = {
-        enabledServices: ['jd'],
+    it('一个图床都没添加也能保存（图床页断开最后一个、首页「没有图床」都是正常状态）', async () => {
+      const noHosts = {
+        enabledServices: [],
         availableServices: [],
         services: {},
         weiboProxyMode: 'none' as const,
       };
 
       const { saveConfig } = useConfigManager();
-      await expect(saveConfig(badConfig as any)).rejects.toThrow('至少需要启用一个图床');
+      await saveConfig(noHosts as any, true);
 
-      expect(configStoreSetMock).not.toHaveBeenCalled();
-      expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+      expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({ availableServices: [] }));
+      expect(toastShowConfigMock).not.toHaveBeenCalled();
     });
 
     it('空前缀列表自动恢复默认', async () => {
