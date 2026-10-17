@@ -63,6 +63,7 @@ GalleryView.vue → useGalleryGrid / useGalleryList → useHistory.ts + HistoryD
 | `IUploader.ts` 接口 | 所有 17 个上传器实现（`src/uploaders/*/`） |
 | `MultiServiceUploader.ts` | useUpload.ts、错误处理逻辑 |
 | `HistoryDatabase.ts` | useHistory、所有历史视图 |
+| `utils/imageDisplay.ts` 的比例规则（G13） | `TimelineQueryService` 的 `LAYOUT_RATIO_SQL`（按天汇总的同一套规则写在 SQL 里）、`galleryFilters.spec` 的对照用例 |
 | `useUpload.ts` | useUploadController |
 | `useConfig.ts` | SettingsView、各设置面板、useUpload |
 | 任意 Composable 返回值 | 所有使用该 Composable 的组件 |

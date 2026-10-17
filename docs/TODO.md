@@ -43,7 +43,7 @@
 - **来源**：2026-10-15 维护者决定整体重做界面与操作逻辑；2026-10-16 Claude Design 交付并验收
 - **现状**：设计包与实施阶段清单在 [docs/design/redesign/README.md](./design/redesign/README.md)；分支 `feat/redesign`，每阶段提交、不 push
 - **要做的**：按 README 的 0–11 阶段逐页替换，最后卸载 PrimeVue 并跑交接说明第 14 节验收清单
-- **待拍板**：README 里标「待拍板」的条目（图库按「失效」筛选时的分组、Markdown 的 alt 要不要扩展名）
+- **待拍板**：README 里标「待拍板」的条目（图库按「失效」筛选时的分组、Markdown 的 alt 要不要扩展名、窄窗口行高 150 还是 120）
 
 **当前处置**：实施中
 

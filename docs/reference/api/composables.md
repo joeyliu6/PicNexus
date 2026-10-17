@@ -31,13 +31,17 @@
 | useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
 | useVirtualTimeline | 图库网格的虚拟滚动（按天分组的等高行布局） | `src/composables/timeline/useVirtualTimeline.ts` |
 | useTimelineJump | 图库刻度条跳到某年某月；跳转中再来的请求只留最后一个，落地后接着跳 | `src/composables/timeline/useTimelineJump.ts` |
-| useTimelineLightbox | 图库灯箱的翻页（日内快翻 + 跨日按需加载）；当前图与 ±1 预热都过 `safeImageUrl` | `src/composables/timeline/useTimelineLightbox.ts` |
+| useTimelineLightbox | 图库网格里打开的灯箱：按天翻页（日内快翻 + 跨日按需加载，打开前先把那一天读进来）；当前图与 ±1 预热都过 `safeImageUrl` | `src/composables/timeline/useTimelineLightbox.ts` |
+| useListLightbox / useGalleryLightbox | 列表里打开的灯箱按列表眼前的顺序翻页（「3 / 21」是第几行）；`useGalleryLightbox` 按打开的地方在网格 / 列表两份之间二选一，灯箱组件只认它 | `src/views/gallery/` |
 | useImagePreload | 图库滚动预热下一屏；只预热候选链里第一条通过 `safeImageUrl` 的地址 | `src/composables/timeline/useImagePreload.ts` |
-| usePhotoSwipeBridge | PhotoSwipe 灯箱的打开 / 关闭 / 换图，`pswpEl` 供自绘 UI Teleport | `src/composables/history/usePhotoSwipeBridge.ts` |
-| useHistoryViewState | 图库多选：Ctrl·⌘ 单击 / Shift 连选 / 全选已加载 | `src/composables/history/useHistoryViewState.ts` |
+| usePhotoSwipeBridge | PhotoSwipe 灯箱的打开 / 关闭 / 换图，`pswpEl` 供自绘 UI Teleport；`blockKeys` 返回 true 时按键不归灯箱（灯箱里的菜单开着）；长图（高宽比超过 2.5）按窗口宽度从顶部显示、滚轮上下滚动 | `src/composables/history/usePhotoSwipeBridge.ts` |
+| useHistoryViewState | 图库多选：Ctrl·⌘ 单击 / Shift 连选；`selectMany(ids)` 只加不减（全选当前结果用 `historyDB.getIdsByFilter` 查出的全部 id） | `src/composables/history/useHistoryViewState.ts` |
 | useGalleryGrid / useGalleryList / useGalleryActions | 图库页的网格数据、列表分页、批量与单张操作（复制、补充备份、重新检测、移除记录、改用备份的通知） | `src/views/gallery/` |
 | useAnalytics | GA4 P0 生命周期统计 + 在线心跳 | `src/composables/useAnalytics.ts` |
-| useMirrorFallback | 图库详情的备份管理（改用这一份 / 移除这条链接 / 单条重新检测） | `src/composables/history/useMirrorFallback.ts` |
+| useMirrorFallback | 图库详情的备份管理（改用这一份 / 移除这条链接 / 单条重新检测）；`switchPrimary` 返回是否真的换了（已是这一份、写库失败都是 false） | `src/composables/history/useMirrorFallback.ts` |
+| `imageDisplay.ts`（模块） | 不同比例图片怎么占格、怎么画（G13）：`displayKind` / `layoutRatio` / `displayTag`、`imageFormat` / `mayBeTransparent` / `isAnimatedFormat`、灯箱用的 `isLongRatio` | `src/utils/imageDisplay.ts` |
+| `formatCount` | 张数、条数的千分位（「12,483」）；链接检测迁移面板的 `formatNumber` 就是它 | `src/utils/formatters.ts` |
+| PreviewFrame（组件） | 预览框：固定尺寸、图片完整显示且不放大，空白处铺这张图的模糊放大版；透明格式衬棋盘格。衬底用 `ThumbnailImage` 的 `loaded` 事件报回的那个地址，不多发请求 | `src/components/biz/PreviewFrame.vue` |
 
 ## useAnalytics
 

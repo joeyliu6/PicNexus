@@ -103,7 +103,8 @@ flowchart TD
     L -- "⋯ → 改用这一份 / 「改用 Y」" --> M["switchPrimary(serviceId)"]
     M --> M1["historyDB.switchPrimaryService<br/>update primary_service + generated_link"]
     M1 --> M2["invalidateCache + emitHistoryUpdated"]
-    M2 --> M3["通知「已改用备份 · 复制的链接将来自 Y」<br/>+ 撤销（改回原来那份）"]
+    M2 --> M3["switchPrimary 返回 true → 通知「已改用备份 · 复制的链接将来自 Y」<br/>+ 撤销（改回原来那份）"]
+    M -- "已是这一份 / 写库失败（已报错）" --> M4["返回 false：不报「已改用备份」"]
 
     L -- "⋯ → 移除这条链接…" --> N{"是复制时使用的那份?"}
     N -- 否 --> N1["确认框「移除这条链接？」→ historyDB.removeMirror<br/>行消失即反馈，不另弹通知"]

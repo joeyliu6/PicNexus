@@ -13,6 +13,10 @@
 
 两种视图用同一份筛选（图 2）。模块 stats 有 5 分钟 TTL，图库每次显示时 `loadStats()`，`history-updated` 事件 / `invalidateCache()` 让它失效。
 
+**格子的比例**按 ImageRatios（G13）换算：长图裁到 1:2.5、超宽图裁到 4:1、短边小于 120 的小图放进方格，规则在 `src/utils/imageDisplay.ts` 的 `layoutRatio`。还没加载的天（骨架）用的预取比例与按天汇总也换算过（汇总在 SQL 里，`TimelineQueryService` 的 `LAYOUT_RATIO_SQL`），所以图片加载时格子不跳。
+
+**灯箱翻页**：网格里打开按天翻（`useTimelineLightbox`），列表里打开按列表眼前的顺序翻（`useListLightbox`），由 `useGalleryLightbox` 二选一。
+
 > **关键源文件**：`src/composables/history/useHistory.ts`、`src/views/gallery/useGalleryGrid.ts`、`src/composables/timeline/useTimelineDayPagination.ts`、`src/views/gallery/useGalleryList.ts`、`src/services/database/TimelineQueryService.ts`
 
 ```mermaid
@@ -83,13 +87,13 @@ flowchart TD
 flowchart TD
     A["多选栏（已选 N 张）"] --> B{操作}
 
-    B -- 复制链接 ▾ --> C["copyMany(ids, 格式, 图床?)\n默认取「复制时使用」那份"]
+    B -- 复制链接 ▾ --> C["copyMany(ids, 格式, 图床?)\n读完整记录，默认取「复制时使用」那份\n失效的那份不复制"]
     C --> C1["已复制 N 张（M 张没有可用链接）"]
 
     B -- 收藏 / 取消收藏 --> D[batchSetFavorite]
 
-    B -- 重新检测 --> E["useLinkCheckManager().checkSubset"]
-    E --> E1["已重新检测 N 张 · 失效几条"]
+    B -- 重新检测 --> E["useLinkCheckManager().checkSubset\n→ emit history-updated(ids)"]
+    E --> E1["查出失效：琥珀色「N 条链接失效」\n都正常：「均正常」"]
 
     B -- 补充备份到… ▾ --> F["backupTo(ids, 图床)\nmigrateOneItem，同时 3 张"]
     F --> F1["notifyMigrationPersisted → history-updated"]
@@ -108,13 +112,15 @@ flowchart TD
 
 「移除记录」不弹确认，靠通知里的「撤销」反悔；只删本地记录，图床上的图片不动。
 
+`Ctrl/⌘ A` 全选当前结果：`historyDB.getIdsByFilter(filter)` 按当前筛选查出全部 id 交给 `selectMany`，不只是已经加载出来的那几天。
+
 ---
 
 ## 记录变化后视图怎么刷新
 
 | 事件 | 网格（useTimelineDayPagination） | 列表（useGalleryList） | 模块 stats（useHistory） |
 |------|------|------|------|
-| `history-updated`（上传、重试、补充备份、撤销移除） | `reloadAll`：新的天以骨架进入，已加载的天不闪 | 页缓存作废重取 | 防抖 300ms 后重查 |
+| `history-updated`（上传、重试、补充备份、改用、重新检测、撤销移除） | `reloadAll(ids)`：重读按天汇总；张数变了的天回到骨架重取，张数没变、装着这些 id 的已加载天一条范围查询就地重读（角标、详情跟着变，不闪）；新的天以骨架进入 | 页缓存作废重取 | 防抖 300ms 后重查 |
 | `history-deleted` | `removeItemsByIds` 增量去掉；有 id 不在已加载的天里时兜底 `reloadAll` | 页缓存作废重取 | 本窗口删的已就地扣减，跳过；别的窗口删的按 ids 扣减 |
 | `history-cleared` | `reloadAll` | 页缓存作废重取 | 清零 |
 | 点星标 | 不重查，格子上的星标跟着 favoriteSet 变 | 同左 | favoriteSet 乐观更新，写盘失败回滚 |
@@ -148,6 +154,9 @@ flowchart TD
 | `jumpToMonth` 对某月份的判断与刻度条不一致 | 刻度条来自 `dayStats` 聚合，`jumpToMonth` 校验的是 `sharedTimePeriodStats`；删除 / 清空路径需触发 `refreshTimePeriodStats` | 缓存机制第 1 行 |
 | 拖动刻度条停下后画面停在别的月份 | `useTimelineJump` 跳转中的请求只留最后一个、落地后接着跳；检查是否被改回了「跳转中直接丢弃」 | 图 1 网格 |
 | 切回图库后数据丢失 | KeepAlive 缓存失效后重新加载，但 stats 缓存已过期 | 图 1 节点 B1 |
+| 图片加载时格子跳一下 | 骨架天的预取比例与真图排版不是同一套：`toAspectRatioRow`、`LAYOUT_RATIO_SQL` 与 `layoutRatio` 要一致（`galleryFilters.spec` 在真 SQLite 上对照） | 图 1「格子的比例」 |
+| 打开详情后顶部几行不见了 | 网格变窄重排时滚动锚点在最顶上也去补偿了：`useScrollAnchor` 在 `scrollTop` 为 0 时应不动 | 图 1 网格 |
+| 重新检测后格子上的 ⚠ 没变 | 检测结果写回后没带 id 广播 `history-updated`，或那一天不在已加载的天里 | 记录变化表第 1 行 |
 
 ---
 
