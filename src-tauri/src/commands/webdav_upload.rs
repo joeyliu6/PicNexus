@@ -38,7 +38,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const SHORT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 1×1 透明 PNG，用作连接测试的探针图片
-const PROBE_PNG_BASE64: &str =
+pub(super) const PROBE_PNG_BASE64: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 /// 认证失败的统一文案
@@ -91,6 +91,25 @@ pub struct WebDAVUploadResult {
 pub struct WebDAVTestResult {
     pub success: bool,
     pub message: String,
+    /// 失败在哪一步（图床页「测试连接」依次测 凭证 → 写入 → 公开访问）：credentials / write / public
+    pub failed_step: Option<&'static str>,
+    /// 指到哪个字段：url / password / public_domain
+    pub field: Option<&'static str>,
+}
+
+impl WebDAVTestResult {
+    fn failed(step: &'static str, field: Option<&'static str>, message: impl Into<String>) -> Self {
+        Self { success: false, message: message.into(), failed_step: Some(step), field }
+    }
+}
+
+/// 探目录这一步的 HTTP 状态 → 指到哪个字段：401 是账号密码，其余（405、5xx…）多半是地址填错
+fn field_of_propfind_status(status: u16) -> Option<&'static str> {
+    match status {
+        401 => Some("password"),
+        403 => None,
+        _ => Some("url"),
+    }
 }
 
 // ==================== 路径与 URL 处理 ====================
@@ -579,38 +598,65 @@ pub async fn test_webdav_storage(
     lan_http_confirmed: bool,
     http_client: tauri::State<'_, HttpClient>,
 ) -> Result<WebDAVTestResult, AppError> {
+    test_webdav_storage_core(
+        &http_client.0,
+        &url,
+        &username,
+        &password,
+        &remote_path,
+        &public_domain,
+        &public_url_template,
+        lan_http_confirmed,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn test_webdav_storage_core(
+    client: &reqwest::Client,
+    url: &str,
+    username: &str,
+    password: &str,
+    remote_path: &str,
+    public_domain: &str,
+    public_url_template: &str,
+    lan_http_confirmed: bool,
+) -> Result<WebDAVTestResult, AppError> {
     let consent = lan_http_consent(lan_http_confirmed);
 
-    validate_webdav_url_for_request(&url, consent).await?;
+    validate_webdav_url_for_request(url, consent).await?;
     if public_domain.trim().is_empty() {
         return Err(AppError::config("公开访问域名不能为空"));
     }
-    validate_webdav_url_for_request(&public_domain, consent).await?;
+    validate_webdav_url_for_request(public_domain, consent).await?;
 
-    let client = &http_client.0;
-    let auth = basic_auth(&username, &password);
-    let dir = normalize_dir(&remote_path);
+    let auth = basic_auth(username, password);
+    let dir = normalize_dir(remote_path);
 
     // 1. PROPFIND 探目录可达性
     let propfind = reqwest::Method::from_bytes(b"PROPFIND")
         .map_err(|_| AppError::webdav("无法构造 PROPFIND 请求"))?;
-    let probe_dir_url = join_url(&url, &encode_path_segments(&dir));
-    let response = client
+    let probe_dir_url = join_url(url, &encode_path_segments(&dir));
+    let response = match client
         .request(propfind, &probe_dir_url)
         .header("Authorization", &auth)
         .header("Depth", "0")
         .timeout(SHORT_TIMEOUT)
         .send()
         .await
-        .map_err(map_request_error)?;
+    {
+        Ok(response) => response,
+        Err(err) => return Ok(WebDAVTestResult::failed("credentials", Some("url"), map_request_error(err).message().to_string())),
+    };
 
     let status = response.status().as_u16();
     // 404 说明目录还没建，后面 MKCOL 会补上，不算失败
     if !is_ok_status(status) && status != 207 && status != 404 {
-        return Err(AppError::webdav(describe_status(
-            status,
-            Some(response.headers()),
-        )));
+        return Ok(WebDAVTestResult::failed(
+            "credentials",
+            field_of_propfind_status(status),
+            describe_status(status, Some(response.headers())),
+        ));
     }
 
     // 2. 上传探针图
@@ -622,26 +668,30 @@ pub async fn test_webdav_storage(
         format!("{}/{}", encode_path_segments(&dir), encoded_probe_name)
     };
 
-    ensure_remote_dir(client, &url, &dir, &auth).await?;
+    if let Err(err) = ensure_remote_dir(client, url, &dir, &auth).await {
+        return Ok(WebDAVTestResult::failed("write", None, format!("无法创建远程目录：{}", err.message())));
+    }
 
     let probe_bytes = STANDARD
         .decode(PROBE_PNG_BASE64)
         .map_err(|_| AppError::webdav("探针图片解码失败"))?;
 
-    put_binary(
+    if let Err(err) = put_binary(
         client,
-        &join_url(&url, &encoded_path),
+        &join_url(url, &encoded_path),
         &auth,
         probe_bytes,
         "image/png",
     )
     .await
-    .map_err(|err| AppError::webdav(format!("上传失败：{}", err)))?;
+    {
+        return Ok(WebDAVTestResult::failed("write", None, format!("上传失败：{}", err.message())));
+    }
 
     // 3. 匿名 GET 公开链接
     let probe_url = render_public_url(
-        &public_url_template,
-        &public_domain,
+        public_url_template,
+        public_domain,
         &encoded_path,
         &encoded_probe_name,
     );
@@ -654,7 +704,7 @@ pub async fn test_webdav_storage(
 
     // 4. 无论公开链接是否可达，都清理探针文件
     let cleanup = client
-        .delete(join_url(&url, &encoded_path))
+        .delete(join_url(url, &encoded_path))
         .header("Authorization", &auth)
         .timeout(SHORT_TIMEOUT)
         .send()
@@ -675,33 +725,38 @@ pub async fn test_webdav_storage(
                 .to_string();
 
             if !is_ok_status(status) {
-                return Ok(WebDAVTestResult {
-                    success: false,
-                    message: format!(
+                return Ok(WebDAVTestResult::failed(
+                    "public",
+                    Some("public_domain"),
+                    format!(
                         "图片已上传，但公开链接打不开 (HTTP {})——请检查「公开访问域名」和 URL 模板",
                         status
                     ),
-                });
+                ));
             }
 
             if !content_type.starts_with("image/") {
-                return Ok(WebDAVTestResult {
-                    success: false,
-                    message: format!(
+                return Ok(WebDAVTestResult::failed(
+                    "public",
+                    Some("public_domain"),
+                    format!(
                         "公开链接返回的不是图片 (Content-Type: {})——多半是模板指向了登录页或分享页",
                         if content_type.is_empty() { "未知" } else { &content_type }
                     ),
-                });
+                ));
             }
 
             Ok(WebDAVTestResult {
                 success: true,
                 message: "连接成功，公开链接可正常访问".to_string(),
+                failed_step: None,
+                field: None,
             })
         }
-        Err(err) => Ok(WebDAVTestResult {
-            success: false,
-            message: format!(
+        Err(err) => Ok(WebDAVTestResult::failed(
+            "public",
+            Some("public_domain"),
+            format!(
                 "图片已上传，但公开链接无法访问（{}）——请检查「公开访问域名」和 URL 模板",
                 if err.is_timeout() {
                     "请求超时".to_string()
@@ -711,13 +766,65 @@ pub async fn test_webdav_storage(
                     err.to_string()
                 }
             ),
-        }),
+        )),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起一个按方法回固定状态码的本地 WebDAV（GET 回图片或 404），测「测试连接」报的是哪一步、哪一格
+    async fn webdav_stub(propfind: u16, put: u16, get_ok: bool) -> String {
+        use axum::Router;
+        let app = Router::new().fallback(move |method: axum::http::Method, _body: axum::body::Bytes| async move {
+            let code = match method.as_str() {
+                "PROPFIND" => propfind,
+                "MKCOL" => 201,
+                "PUT" => put,
+                "DELETE" => 204,
+                "GET" if get_ok => return (axum::http::StatusCode::OK, [("content-type", "image/png")], vec![0u8; 8]),
+                _ => 404,
+            };
+            (axum::http::StatusCode::from_u16(code).unwrap(), [("content-type", "text/plain")], Vec::new())
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("绑定本地端口失败");
+        let addr = listener.local_addr().expect("获取本地地址失败");
+        tokio::spawn(async move { let _ = axum::serve(listener, app).await; });
+        format!("http://{}", addr)
+    }
+
+    async fn run_stub(propfind: u16, put: u16, get_ok: bool) -> WebDAVTestResult {
+        let base = webdav_stub(propfind, put, get_ok).await;
+        test_webdav_storage_core(&reqwest::Client::new(), &format!("{}/dav", base), "u", "p", "img", &format!("{}/dav", base), "{domain}/{path}", false)
+            .await
+            .expect("本地地址不该被策略拦下")
+    }
+
+    #[tokio::test]
+    async fn storage_test_reports_the_failed_step_and_field() {
+        let wrong_password = run_stub(401, 201, true).await;
+        assert_eq!((wrong_password.success, wrong_password.failed_step, wrong_password.field), (false, Some("credentials"), Some("password")));
+
+        let cannot_write = run_stub(207, 507, true).await;
+        assert_eq!((cannot_write.failed_step, cannot_write.field), (Some("write"), None));
+        assert!(cannot_write.message.starts_with("上传失败："));
+        assert!(!cannot_write.message.contains("WebDAV 错误"), "原因里不带类型前缀：{}", cannot_write.message);
+
+        let public_broken = run_stub(207, 201, false).await;
+        assert_eq!((public_broken.failed_step, public_broken.field), (Some("public"), Some("public_domain")));
+
+        let all_good = run_stub(207, 201, true).await;
+        assert!(all_good.success);
+        assert_eq!(all_good.failed_step, None);
+    }
+
+    #[test]
+    fn propfind_status_points_at_password_or_address() {
+        assert_eq!(field_of_propfind_status(401), Some("password"));
+        assert_eq!(field_of_propfind_status(403), None);
+        assert_eq!(field_of_propfind_status(405), Some("url"));
+    }
 
     /// 流式 PUT 必须走定长编码，不能退回 chunked
     ///

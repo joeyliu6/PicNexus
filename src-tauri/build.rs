@@ -48,6 +48,7 @@ const APP_COMMANDS: &[&str] = &[
     "upload_to_imgur",
     "upload_to_s3_compatible",
     "test_s3_connection",
+    "probe_s3_storage",
     "upload_to_webdav",
     "test_webdav_storage",
     "check_image_link",

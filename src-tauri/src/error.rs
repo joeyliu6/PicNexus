@@ -141,6 +141,23 @@ impl std::error::Error for AppError {}
 // ==================== 便捷构造方法 ====================
 
 impl AppError {
+    /// 不带类型前缀的原因（给界面直接显示；Display 会加「配置错误:」之类的前缀）
+    pub fn message(&self) -> &str {
+        match self {
+            Self::Network { message }
+            | Self::Auth { message }
+            | Self::FileIo { message }
+            | Self::Upload { message, .. }
+            | Self::Config { message }
+            | Self::Clipboard { message }
+            | Self::External { message }
+            | Self::Validation { message }
+            | Self::WebDAV { message }
+            | Self::WebDAVLanHttpUnconfirmed { message }
+            | Self::Storage { message } => message,
+        }
+    }
+
     /// 创建网络错误
     pub fn network(message: impl Into<String>) -> Self {
         AppError::Network {

@@ -41,7 +41,7 @@ pub struct S3UploadResult {
 }
 
 /// 创建 S3 客户端（内部复用函数）
-fn create_s3_client(endpoint: &str, access_key: &str, secret_key: &str, region: &str) -> Client {
+pub(super) fn create_s3_client(endpoint: &str, access_key: &str, secret_key: &str, region: &str) -> Client {
     let credentials = Credentials::new(access_key, secret_key, None, None, "PicNexus");
 
     let config = Config::builder()
@@ -78,7 +78,7 @@ fn validate_https_endpoint(endpoint: &str) -> Result<(), AppError> {
 ///
 /// Endpoint 不吃这条逃生舱（见 `validate_https_endpoint`）：那条请求带着 AK/SK 签名，
 /// 明文传输等于把凭证摊在链路上；公开域名只是取图，风险量级不同。
-fn validate_public_domain(public_domain: &str, confirmed_for: Option<&str>) -> Result<(), AppError> {
+pub(super) fn validate_public_domain(public_domain: &str, confirmed_for: Option<&str>) -> Result<(), AppError> {
     let public_domain = public_domain.trim();
     if public_domain.is_empty() {
         return Ok(());
@@ -252,10 +252,14 @@ pub struct S3TestConfig {
     pub region: Option<String>,
     // 自定义 S3 端点（custom_s3 专用）
     pub endpoint: Option<String>,
+    // 以下三项只有图床页的分步检测（storage_probe）用：探针放在哪、公开链接怎么拼、明文 HTTP 是否已确认
+    pub public_domain: Option<String>,
+    pub path: Option<String>,
+    pub http_domain_confirmed_for: Option<String>,
 }
 
 impl S3TestConfig {
-    fn get_access_key(&self) -> Option<String> {
+    pub(super) fn get_access_key(&self) -> Option<String> {
         self.access_key_id
             .clone()
             .or_else(|| self.secret_id.clone())
@@ -263,7 +267,7 @@ impl S3TestConfig {
             .or_else(|| self.operator.clone())
     }
 
-    fn get_secret_key(&self) -> Option<String> {
+    pub(super) fn get_secret_key(&self) -> Option<String> {
         self.secret_access_key
             .clone()
             .or_else(|| self.secret_key.clone())
@@ -271,7 +275,7 @@ impl S3TestConfig {
             .or_else(|| self.password.clone())
     }
 
-    fn get_bucket(&self) -> Option<String> {
+    pub(super) fn get_bucket(&self) -> Option<String> {
         self.bucket_name.clone().or_else(|| self.bucket.clone())
     }
 }
@@ -280,7 +284,7 @@ impl S3TestConfig {
 ///
 /// 单纯 `filter(|s| !s.is_empty())` 拦不住用户粘贴时带进来的空格：那样的凭证会原样
 /// 发出去，换回一个「认证失败」，用户盯着看起来填好的输入框只会怀疑是密码记错了。
-fn non_empty(value: &Option<String>) -> Option<String> {
+pub(super) fn non_empty(value: &Option<String>) -> Option<String> {
     value
         .as_deref()
         .map(str::trim)
@@ -383,7 +387,7 @@ pub async fn test_s3_connection(
 }
 
 /// 根据服务类型构建 S3 endpoint
-fn build_s3_endpoint(
+pub(super) fn build_s3_endpoint(
     service_id: &str,
     config: &S3TestConfig,
     _bucket: &str,
@@ -494,7 +498,7 @@ fn build_s3_endpoint(
 ///
 /// Why 报错要点名是哪把钥匙：两套凭证长得一样、填在同一张卡片上，只说「认证失败」
 /// 会让用户去改那把本来没错的钥匙。
-async fn test_upyun_connection(config: &S3TestConfig) -> Result<String, AppError> {
+pub(super) async fn test_upyun_connection(config: &S3TestConfig) -> Result<String, AppError> {
     let bucket = non_empty(&config.get_bucket())
         .ok_or_else(|| AppError::config("服务空间名称不能为空"))?;
 
@@ -623,11 +627,11 @@ async fn test_upyun_s3_chain(
 /// Why 要分两份：摊平后的错误链**极长**（整个 HTTP 响应 + 响应头 + XML 正文，
 /// 轻松上千字符）。日志里这是排查金矿，塞进 toast 就是一堵墙。
 /// 2026-08-20 真机验收时正是靠日志里那一大坨才定位到问题，所以两边都要，但不能混。
-struct SdkErrorText {
+pub(super) struct SdkErrorText {
     /// 完整错误链（含错误码）。用于分类匹配和写日志
-    full: String,
+    pub(super) full: String,
     /// 短句。用于给用户看的提示——优先服务端错误码，没有就截断的概要
-    brief: String,
+    pub(super) brief: String,
 }
 
 /// 摊平 SDK 错误，取出真正的错误码
@@ -644,7 +648,7 @@ struct SdkErrorText {
 /// 两样都取：
 /// - `code()` 是服务端返回的错误码本身（`ErrInvalidAccessKeyID` 这种），最准
 /// - `DisplayErrorContext` 展开整条 source 链，覆盖连不上 / 超时这类没有错误码的情况
-fn describe_sdk_error<E, R>(error: &aws_sdk_s3::error::SdkError<E, R>) -> SdkErrorText
+pub(super) fn describe_sdk_error<E, R>(error: &aws_sdk_s3::error::SdkError<E, R>) -> SdkErrorText
 where
     aws_sdk_s3::error::SdkError<E, R>: ProvideErrorMetadata + std::error::Error,
 {
@@ -738,6 +742,9 @@ mod tests {
             bucket: Some("bucket".to_string()),
             region: Some("us-east-1".to_string()),
             endpoint: Some(endpoint.to_string()),
+            public_domain: None,
+            path: None,
+            http_domain_confirmed_for: None,
         }
     }
 
@@ -945,6 +952,9 @@ mod tests {
             bucket: Some("bucket".to_string()),
             region: None,
             endpoint: None,
+            public_domain: None,
+            path: None,
+            http_domain_confirmed_for: None,
         };
 
         assert_eq!(config.get_access_key(), Some("op".to_string()));

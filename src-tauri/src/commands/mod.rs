@@ -25,6 +25,7 @@ pub mod qiyu;
 pub mod qiyu_token;
 pub mod s3_compatible;
 pub mod smms;
+pub mod storage_probe;
 pub mod system;
 pub mod utils;
 pub mod webdav_backup;
