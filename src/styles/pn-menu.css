@@ -1,0 +1,89 @@
+/*
+ * 菜单（PnMenu 下拉菜单、PnContextMenu 右键菜单共用）：菜单传送到 body，菜单项又是调用方插槽里的内容，
+ * scoped 样式够不到，统一用不带 scoped 的类名。
+ */
+.pn-menu {
+  z-index: var(--pn-z-popover);
+  display: flex;
+  flex-direction: column;
+  min-width: var(--pn-size-menu-min);
+  max-width: var(--pn-size-menu-max);
+  box-sizing: border-box;
+  padding: var(--pn-space-4);
+  border-radius: var(--pn-radius-lg);
+  background: var(--pn-elevated);
+  box-shadow: var(--pn-e3);
+}
+
+.pn-menu__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--pn-space-8);
+  min-height: var(--pn-size-menu-item);
+  box-sizing: border-box;
+  padding: 0 var(--pn-space-8);
+  border-radius: var(--pn-radius-sm);
+  color: var(--pn-text1);
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pn-menu__item[data-highlighted] { background: var(--pn-menu-sel); }
+.pn-menu__item[data-disabled] { color: var(--pn-disabled); cursor: default; }
+
+/* 带勾选列的项：左侧留 30px 放对勾 */
+.pn-menu__item--indent { padding-left: var(--pn-space-menu-indent); }
+
+.pn-menu__check {
+  position: absolute;
+  left: var(--pn-space-8);
+  display: flex;
+  color: var(--pn-brand-text);
+}
+
+.pn-menu__label { flex: 1; min-width: 0; }
+
+.pn-menu__item--described {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding-top: var(--pn-space-6);
+  padding-bottom: var(--pn-space-6);
+}
+
+.pn-menu__desc {
+  font-size: var(--pn-text-footnote);
+  line-height: var(--pn-leading-footnote);
+  color: var(--pn-text3);
+}
+
+.pn-menu__item--danger { color: var(--pn-danger); }
+
+.pn-menu__hint {
+  flex: none;
+  font-family: var(--pn-font-mono);
+  font-size: var(--pn-text-caption);
+  color: var(--pn-text3);
+}
+
+.pn-menu__value {
+  flex: none;
+  font-size: var(--pn-text-footnote);
+  color: var(--pn-text3);
+}
+
+.pn-menu__chevron { flex: none; color: var(--pn-text3); }
+
+.pn-menu__separator {
+  height: 1px;
+  margin: var(--pn-space-4) var(--pn-space-6);
+  background: var(--pn-border);
+}
+
+.pn-menu__group-label {
+  padding: var(--pn-space-6) var(--pn-space-8) var(--pn-space-2);
+  font-size: var(--pn-text-footnote);
+  color: var(--pn-text3);
+}

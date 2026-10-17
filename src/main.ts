@@ -38,6 +38,7 @@ import './styles/motion.css';
 import './styles/tokens.css';
 import './styles/tokens-extra.css';
 import './styles/pn-base.css';
+import './styles/pn-menu.css';
 import './styles/bottom-bar-buttons.css';
 
 const log = createLogger('Init');
