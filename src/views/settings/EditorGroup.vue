@@ -11,6 +11,7 @@ import PnMenuRadioGroup from '@/components/pn/PnMenuRadioGroup.vue';
 import PnMenuSeparator from '@/components/pn/PnMenuSeparator.vue';
 import EditorCard, { type EditorStatus } from './EditorCard.vue';
 import PortDialog from './PortDialog.vue';
+import { cliView } from './cliCard';
 import SettingsSection from './SettingsSection.vue';
 import { quotePath, useEditorCards } from './useEditorCards';
 
@@ -47,21 +48,8 @@ const obsidianStatus = computed<EditorStatus>(() => {
 });
 
 // ---- 命令行 ----
-const cliStatus = computed<EditorStatus>(() => {
-  const path = cards.cliPath.value;
-  if (!path) return { text: editor.value.cliEnabled ? '已启用' : '尚未启用', tone: editor.value.cliEnabled ? 'normal' : 'muted' };
-  if (!path.supported) return { text: editor.value.cliEnabled ? '已启用 · 当前系统不支持自动加入 PATH，请用完整路径' : '当前系统不支持自动加入 PATH，请用完整路径', tone: 'muted' };
-  if (path.inPath && editor.value.cliEnabled) return { text: path.needsTerminalRestart ? '已加入 PATH · 重新打开终端后生效' : '已加入 PATH', tone: 'normal' };
-  if (path.inPath) return { text: '已加入 PATH · 命令行尚未启用', tone: 'warning' };
-  return { text: '尚未加入 PATH', tone: 'muted' };
-});
-
-const cliOn = computed(() => editor.value.cliEnabled === true && (cards.cliPath.value?.supported === false || cards.cliPath.value?.inPath === true));
-const cliAction = computed(() => {
-  const supported = cards.cliPath.value?.supported !== false;
-  if (cliOn.value) return { label: supported ? '从 PATH 移除' : '停用', busy: cards.cliBusy.value };
-  return { label: supported ? '加入 PATH' : '启用', busy: cards.cliBusy.value };
-});
+const cli = computed(() => cliView(cards.cliPath.value, editor.value.cliEnabled === true));
+const cliAction = computed(() => ({ label: cli.value.label, busy: cards.cliBusy.value }));
 const cliExample = computed(() => {
   const service = cards.hosts.value[0]?.id ?? 'jd';
   const command = cards.cliPath.value?.inPath ? 'picnexus' : exe.value;
@@ -126,11 +114,11 @@ const cliExample = computed(() => {
         row-id="cli"
         mark=">_"
         name="命令行 CLI"
-        :status="cliStatus"
+        :status="cli.status"
         :action="cliAction"
         label="在终端中使用，例如："
         :code="cliExample"
-        @action="cards.setCli(!cliOn)"
+        @action="cards.setCli(cli.turnOn)"
       >
         在命令中用 --service 指定图床
       </EditorCard>
