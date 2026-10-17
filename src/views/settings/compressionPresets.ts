@@ -1,6 +1,6 @@
 // 压缩方案（S02「图片压缩」）：一行说明怎么写、取值范围、新方案叫什么。纯函数，组件与测试共用。
 import { DEFAULT_COMPRESSION_PRESET, type CompressionPreset, type ImageCompressionConfig } from '@/config/types';
-import { FORMAT_LABELS } from '@/utils/compressionPresetText';
+import { describeCompressionPreset, presetSizeText } from '@/utils/compressionPresetText';
 import { formatFileSize } from '@/utils/formatters';
 
 /** 最多几个方案（设计稿「最多 5 个」） */
@@ -14,10 +14,8 @@ export function formatSkipSize(kb: number): string {
 
 /** 方案下面那行说明，如「WebP · 质量 80 · 长边 2560 · 小于 100 KB 不压缩 · 去除 EXIF」 */
 export function describePreset(preset: CompressionPreset): string {
-  const parts = [FORMAT_LABELS[preset.outputFormat] ?? preset.outputFormat, `质量 ${preset.quality}`];
-  if (preset.maxLongSide > 0) parts.push(`长边 ${preset.maxLongSide}`);
-  else if (preset.scalePercent > 0 && preset.scalePercent < 100) parts.push(`缩放 ${preset.scalePercent}%`);
-  else parts.push('不缩放');
+  const parts = [describeCompressionPreset(preset)];
+  if (!presetSizeText(preset)) parts.push('不缩放');
   if (preset.skipIfSmallerKB > 0) parts.push(`小于 ${formatSkipSize(preset.skipIfSmallerKB)} 不压缩`);
   if (preset.stripExif) parts.push('去除 EXIF');
   return parts.join(' · ');

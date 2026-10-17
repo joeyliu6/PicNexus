@@ -13,6 +13,9 @@ describe('compressionPresets', () => {
       .toBe('JPEG · 质量 92 · 不缩放');
     expect(describePreset(preset({ outputFormat: 'original', quality: 80, scalePercent: 50, skipIfSmallerKB: 2048 })))
       .toBe('原格式 · 质量 80 · 缩放 50% · 小于 2 MB 不压缩 · 去除 EXIF');
+    // 长边上限与缩放都设了：压缩时缩放为准，说明只写缩放
+    expect(describePreset(preset({ outputFormat: 'webp', quality: 80, maxLongSide: 2560, scalePercent: 50, skipIfSmallerKB: 0, stripExif: false })))
+      .toBe('WebP · 质量 80 · 缩放 50%');
   });
 
   it('keeps typed numbers in range and never leaves the name empty', () => {

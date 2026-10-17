@@ -8,9 +8,14 @@ export const FORMAT_LABELS: Record<CompressionOutputFormat, string> = {
   jpeg: 'JPEG',
 };
 
+/** 实际生效的尺寸限制：缩放小于 100% 时以缩放为准（同 useImageCompress），否则看长边上限；都没有为 null */
+export function presetSizeText(preset: CompressionPreset): string | null {
+  if (preset.scalePercent > 0 && preset.scalePercent < 100) return `缩放 ${preset.scalePercent}%`;
+  if (preset.maxLongSide > 0) return `长边 ${preset.maxLongSide}`;
+  return null;
+}
+
 export function describeCompressionPreset(preset: CompressionPreset): string {
-  const parts = [FORMAT_LABELS[preset.outputFormat] ?? preset.outputFormat, `质量 ${preset.quality}`];
-  if (preset.maxLongSide > 0) parts.push(`长边 ${preset.maxLongSide}`);
-  if (preset.scalePercent > 0 && preset.scalePercent < 100) parts.push(`缩放 ${preset.scalePercent}%`);
-  return parts.join(' · ');
+  const size = presetSizeText(preset);
+  return [FORMAT_LABELS[preset.outputFormat] ?? preset.outputFormat, `质量 ${preset.quality}`, ...(size ? [size] : [])].join(' · ');
 }
