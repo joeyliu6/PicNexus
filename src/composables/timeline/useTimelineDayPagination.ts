@@ -84,8 +84,11 @@ export interface UseTimelineDayPaginationReturn {
   ensureDaysLoaded(dayKeys: string[]): Promise<void>;
   /** 预取指定 dayKeys 的 aspectRatios（降级模式或 isFullyPreloaded=false 时使用） */
   prefetchDayAspectRatios(dayKeys: string[]): Promise<void>;
-  /** 清空所有缓存并重载 dayStats（history-updated/cleared 时调用） */
-  reloadAll(): Promise<void>;
+  /**
+   * 重载 dayStats（history-updated/cleared 时调用）；张数变了的天退回骨架重取，
+   * changedIds 所在的已加载天原地换新（改用备份、检测结果这类不改张数的变化）
+   */
+  reloadAll(changedIds?: readonly string[]): Promise<void>;
   /** dayStats 降序中比 dayKey 更早的那天的 key（灯箱 prev 跨日） */
   findDayBefore(dayKey: string): string | null;
   /** dayStats 降序中比 dayKey 更新的那天的 key（灯箱 next 跨日） */
@@ -459,8 +462,9 @@ export function useTimelineDayPagination(
    * 全量重载 dayStats，同时尽量保留已加载天的 items 缓存
    * 保留条件：新 dayStats 里存在 + count 未变。count 变了说明该天有新增/删除，
    * 必须降级回 skeleton 让 ensureDaysLoaded 重新拉取 items，否则新增项对用户不可见。
+   * changedIds 所在的天张数没变也得重取（内容变了）：先留着旧的，新的回来再原地替换，不闪骨架。
    */
-  async function reloadAll(): Promise<void> {
+  async function reloadAll(changedIds?: readonly string[]): Promise<void> {
     dayLoadVersion++;
     // aspectRatios cache 里缓存的 count 可能已过期（新增/删除改变了天内数量/顺序），全清最稳
     aspectRatiosVersion++;
@@ -471,6 +475,13 @@ export function useTimelineDayPagination(
       oldCountByKey.set(`${s.year}-${s.month}-${s.day}`, s.count);
     }
     const staleLoaded = loadedDayKeys.value;
+    const changed = new Set(changedIds ?? []);
+    const changedDays = new Set<string>();
+    if (changed.size > 0) {
+      for (const [key, metas] of dayMetaCache) {
+        if (metas.some((meta) => changed.has(meta.id))) changedDays.add(key);
+      }
+    }
 
     await loadDayStats();
 
@@ -486,6 +497,31 @@ export function useTimelineDayPagination(
       if (!kept.has(key)) dayMetaCache.delete(key);
     }
     loadedDayKeys.value = kept;
+
+    const refresh = [...kept].filter((key) => changedDays.has(key));
+    if (refresh.length > 0) await refreshLoadedDays(refresh);
+  }
+
+  /** 已加载的几天原地重取：一条范围查询，只替换这几天的缓存，替换完再触发 groups 重算 */
+  async function refreshLoadedDays(keys: string[]): Promise<void> {
+    const wanted = new Set(keys);
+    const stats = dayStats.value.filter((s) => wanted.has(`${s.year}-${s.month}-${s.day}`));
+    if (stats.length === 0) return;
+    const version = dayLoadVersion;
+    try {
+      const items = await historyDB.getItemsByDayRange(
+        Math.min(...stats.map((s) => s.minTimestamp)),
+        Math.max(...stats.map((s) => s.maxTimestamp)),
+        buildFilter(),
+      );
+      if (version !== dayLoadVersion) return;
+      const buckets = new Map<string, ImageMeta[]>(keys.map((key) => [key, []]));
+      for (const item of items) buckets.get(tsToDayKey(item.timestamp))?.push(item);
+      for (const [key, bucket] of buckets) dayMetaCache.set(key, bucket);
+      loadedDayKeys.value = new Set(loadedDayKeys.value);
+    } catch (e) {
+      if (version === dayLoadVersion) log.error('refreshLoadedDays 失败:', e);
+    }
   }
 
   /**
@@ -536,12 +572,13 @@ export function useTimelineDayPagination(
   });
 
   // 历史记录变更事件
-  // - updated（新增/重试）：走 reloadAll，新 day 会以 skeleton 进入；已加载天保留不闪
+  // - updated（新增/重试/改用备份/检测结果）：走 reloadAll，新 day 会以 skeleton 进入；已加载天保留不闪，
+  //   事件里点名的记录所在的天原地重取
   // - deleted：能命中缓存走增量，命中不到兜底 reloadAll
   // - cleared：reloadAll
   const unlistens: Array<() => void> = [];
   Promise.all([
-    onCacheEventType('history-updated', () => { void reloadAll(); }),
+    onCacheEventType<HistoryEventData>('history-updated', (data) => { void reloadAll(data?.ids); }),
     onCacheEventType<HistoryEventData>('history-deleted', (data) => {
       if (data?.ids && data.ids.length > 0) removeItemsByIds(data.ids);
       else void reloadAll();

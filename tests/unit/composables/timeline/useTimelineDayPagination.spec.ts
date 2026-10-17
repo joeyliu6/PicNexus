@@ -258,6 +258,35 @@ describe('useTimelineDayPagination', () => {
     expect(api.groups.value[0].aspectRatios).toEqual([1.2, 1.8]);
   });
 
+  // 回归：改用备份 / 重新检测 / 补充备份只改那条记录、不改当天张数，reloadAll 曾按「张数没变」
+  // 把整天的旧 meta 原样留着——格子上的 ⚠ 失效、花瓣、悬停「复制」的链接都还是旧的
+  it('refreshes the loaded day holding an updated record in place, even when counts are unchanged', async () => {
+    const dayOne = dayStat(2024, 0, 2, 1);
+    const dayTwo = dayStat(2024, 0, 1, 1);
+    historyDbMock.getDayStats.mockResolvedValue([dayOne, dayTwo]);
+    const { api } = mountPagination();
+    await flushPromisesAndTicks(2);
+
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([
+      makeMeta('switched', localTs(2024, 0, 2, 12)),
+      makeMeta('untouched', localTs(2024, 0, 1, 12)),
+    ]);
+    await api.ensureDaysLoaded(['2024-0-2', '2024-0-1']);
+
+    const onUpdated = cacheEventMock.onCacheEventType.mock.calls.find(([type]) => type === 'history-updated')![1];
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([
+      makeMeta('switched', localTs(2024, 0, 2, 12), { primaryService: 'r2' as ServiceType, primaryUrl: 'https://r2.example.com/switched.jpg' }),
+    ]);
+    onUpdated({ ids: ['switched'] });
+    await flushPromisesAndTicks(4);
+
+    expect(historyDbMock.getItemsByDayRange).toHaveBeenLastCalledWith(dayOne.minTimestamp, dayOne.maxTimestamp, expect.anything());
+    expect(api.dayMetaCache.get('2024-0-2')?.[0].primaryService).toBe('r2');
+    // 原地换新：那一天不退回骨架，别的天不动
+    expect(api.loadedDayKeys.value.has('2024-0-2')).toBe(true);
+    expect(api.dayMetaCache.get('2024-0-1')?.[0].id).toBe('untouched');
+  });
+
   it('reloads when a gallery filter changes, but not for an equal filter object', async () => {
     const query = ref<DayStatsFilter>({ statusFilter: ['dead'] });
     let api!: ReturnType<typeof useTimelineDayPagination>;
