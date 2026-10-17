@@ -37,10 +37,18 @@
 | usePhotoSwipeBridge | PhotoSwipe 灯箱的打开 / 关闭 / 换图，`pswpEl` 供自绘 UI Teleport；`blockKeys` 返回 true 时按键不归灯箱（灯箱里的菜单开着）；长图（高宽比超过 2.5）按窗口宽度从顶部显示、滚轮上下滚动 | `src/composables/history/usePhotoSwipeBridge.ts` |
 | useHistoryViewState | 图库多选：Ctrl·⌘ 单击 / Shift 连选；`selectMany(ids)` 只加不减（全选当前结果用 `historyDB.getIdsByFilter` 查出的全部 id） | `src/composables/history/useHistoryViewState.ts` |
 | useGalleryGrid / useGalleryList / useGalleryActions | 图库页的网格数据、列表分页、批量与单张操作（复制、补充备份、重新检测、移除记录、改用备份的通知） | `src/views/gallery/` |
+| useLinkCheckManager | 链接检测引擎（单例）：一次读完全部检测行（`loadHistoryRows`，`force` 不管 5 分钟缓存）、全量 / 子集检测、暂停 / 继续 / 取消、单条重检、`activeRun`（本轮覆盖哪些链接、何时开始） | `src/composables/link-check/useLinkCheck.ts` |
+| useLinkHealth | 链接健康页状态（单例）：健康模型、页面处在哪种状态、检测进度那句话、单行重试（「仍然失效」） | `src/views/health/useLinkHealth.ts` |
+| useHealthRepair | 修复（改用最快的可访问备份 + 换文档旧链接）、撤销、写不成的文档只重试那几个；文档索引 | `src/views/health/useHealthRepair.ts` |
+| useDocFolders | 文档文件夹：增删记进配置、每次扫描前申请访问权限、逐个扫描 | `src/views/health/useDocFolders.ts` |
+| useSupplementBackup | 补充备份（应用级）：范围在开始时定下，同时 3 张，暂停 / 继续 / 停止，进度给工具卡与传输中心 | `src/views/health/useSupplementBackup.ts` |
+| useHealthRowActions | 清单行与状态栏「⋯」里的动作：重新上传原图、移除失效链接、清理找不回的图片、在图库中查看、导出结果 | `src/views/health/useHealthRowActions.ts` |
+| `healthModel.ts` / `healthCalendar.ts` / `docIndex.ts`（模块） | 纯函数：每张图的状态与原因、改用哪一份、清单分组；一年的日历格子与年份胶囊；文档链接索引与修复计划 | `src/views/health/` |
+| `autoCheck.ts` / `healthBadge.ts`（模块） | 自动检测（到期判定、外壳里装定时器）；侧栏「链接健康」琥珀点的失效张数 | `src/views/health/` |
 | useAnalytics | GA4 P0 生命周期统计 + 在线心跳 | `src/composables/useAnalytics.ts` |
 | useMirrorFallback | 图库详情的备份管理（改用这一份 / 移除这条链接 / 单条重新检测）；`switchPrimary` 返回是否真的换了（已是这一份、写库失败都是 false） | `src/composables/history/useMirrorFallback.ts` |
 | `imageDisplay.ts`（模块） | 不同比例图片怎么占格、怎么画（G13）：`displayKind` / `layoutRatio` / `displayTag`、`imageFormat` / `mayBeTransparent` / `isAnimatedFormat`、灯箱用的 `isLongRatio` | `src/utils/imageDisplay.ts` |
-| `formatCount` | 张数、条数的千分位（「12,483」）；链接检测迁移面板的 `formatNumber` 就是它 | `src/utils/formatters.ts` |
+| `formatCount` | 张数、条数的千分位（「12,483」） | `src/utils/formatters.ts` |
 | PreviewFrame（组件） | 预览框：固定尺寸、图片完整显示且不放大，空白处铺这张图的模糊放大版；透明格式衬棋盘格。衬底用 `ThumbnailImage` 的 `loaded` 事件报回的那个地址，不多发请求 | `src/components/biz/PreviewFrame.vue` |
 
 ## useAnalytics

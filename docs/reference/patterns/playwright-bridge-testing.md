@@ -22,14 +22,11 @@ PicNexus 是 Tauri 桌面应用，核心 UI 跑在 WebView 里。传统 Playwrig
 - 每个阶段的 UI 由哪些 **响应式变量** 控制
 - 哪些变量是 `ref`（可直接赋值），哪些是 `computed`（需要间接驱动）
 
-#### 示例：文档修复功能
+#### 示例：上传队列
 
 ```
-phase: 'idle' | 'scanning' | 'fixing' | 'done'
-scanStage: 'checking' | 'backups' | 'complete'
-
-关键 ref：imageLinks, readyFiles, phase, scanStage
-关键 computed（不可直接赋值）：fileHealthList, groupedRows, bottomStats
+关键 ref：queueItems（每条的 status / serviceProgress）
+关键 computed（不可直接赋值）：会话计数、焦点卡状态
 ```
 
 > **重要**：`computed` 不能直接 `.value = xxx`，必须通过设置它的上游 `ref` 来间接驱动。
@@ -136,62 +133,11 @@ step6-reset-idle.png
 
 ---
 
-## 完整示例：文档修复功能测试
-
-### 桥接代码位置
-
-`src/components/views/link-check/MdRescueInline.vue` — `<script setup>` 末尾
-
-### 需要暴露的状态
-
-| 变量 | 类型 | 用途 |
-|------|------|------|
-| `phase` | ref | 控制阶段切换 |
-| `imageLinks` | ref | 图片链接数据（驱动所有 computed） |
-| `readyFiles` | ref (shallowRef Set) | 标记文件扫描完成 |
-| `scanStage` | ref | 扫描子阶段 |
-| `isCollecting` | ref | 收集中状态 |
-| `fixingProgress` | ref | 修复进度 |
-| `repairReceipt` | ref | 修复结果 |
-| `fileHealthList` | computed | 验证用（只读） |
-| `bottomStats` | computed | 验证用（只读） |
-
-### 测试场景清单
-
-| 场景 | 注入方式 | 验证点 |
-|------|---------|--------|
-| 空状态 | 默认（不注入） | 功能说明文案、拖放区样式 |
-| 扫描中 + 全部正常 | imageLinks 全 valid + scanStage='checking' | 健康文件流水列表 |
-| 扫描完成 + 全部正常 | scanStage='complete' | 「所有图片链接正常」提示 |
-| 扫描完成 + 有异常 | imageLinks 含 invalid + scanStage='complete' | 分组列表、host badge 颜色 |
-| 筛选切换 | 点击芯片 | 列表过渡动画 |
-| 重置 | phase='idle' + 清空数据 | 空状态恢复 |
-
----
-
 ## 推广到其他功能
 
-### 链接检测（HistoryCheckPanel）
-
-```typescript
-if (import.meta.env.DEV) {
-  (window as any).__hcTest = {
-    // 从 useLinkCheckManager 暴露
-    links, isChecking, progress, selectedServiceId,
-  };
-}
-```
-
-### 批量迁移（BatchMigratePanel）
-
-```typescript
-if (import.meta.env.DEV) {
-  (window as any).__bmTest = {
-    // 从 useBatchMigrate 暴露
-    phase, migrateProgress, results,
-  };
-}
-```
+> 新界面（首页、图库、链接健康）的像素基准不再在组件里挂桥接，而是跑真应用 + `tests/e2e/mocks` 的原生接口模拟：
+> 数据经 `E2ESeed` 在页面加载前写进去，后端事件用 `window.__PICNEXUS_E2E_EMIT__` 推（例：`tests/redesign/health.visual.spec.ts` 推链接检测进度）。
+> 桥接只在需要手工探索某个组件状态时临时用。
 
 ### 通用步骤
 

@@ -208,7 +208,7 @@ function classifyModule(file) {
   if (file.includes('/settings/')) return 'settings';
   if (file.includes('/upload') || file.includes('/uploaders/')) return 'upload';
   if (file.includes('/history/')) return 'history';
-  if (file.includes('/link-check/')) return 'link-check';
+  if (file.includes('/link-check/') || file.includes('/views/health/')) return 'link-check';
   if (file.includes('/backup-sync/')) return 'backup-sync';
   if (file.includes('/dialogs/')) return 'dialog';
   if (file.includes('/layout/')) return 'layout';

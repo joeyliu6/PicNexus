@@ -84,13 +84,13 @@ flowchart TD
 ## 图 11：链接检测流程
 
 展示读取与批量检测的完整路径。排查**检测卡住**或**结果不准**时查看。
-> 深度展开（服务感知请求、并发控制、按图片归类、结论卡）见 [链接检测流程](./link-check-flow.md)。
+> 深度展开（服务感知请求、并发控制、健康模型、链接健康页的状态）见 [链接检测流程](./link-check-flow.md)。
 
 > **关键源文件**：`src/composables/link-check/useLinkCheck.ts`、`src/composables/link-check/linkCheckDataBuilder.ts`
 
 ```mermaid
 flowchart TD
-    A[用户进入链接检测页] --> B[loadHistoryRows]
+    A[进入链接健康页 / 自动检测到期] --> B[loadHistoryRows]
     B --> C{TTL 缓存有效?<br/>5 分钟内}
     C -- 是 --> C1[使用缓存数据]
     C -- 否 --> D
@@ -101,7 +101,7 @@ flowchart TD
     K --> L["读完全部批次才一次赋给 checkRows<br/>（读的途中历史被清空 → 作废）"]
 
     %% 执行检测
-    L --> M[用户点结论卡上的「开始检查」]
+    L --> M[「开始检测 / 重新检测」、命令面板或自动检测]
     M --> N{isChecking?}
     N -- 是 --> N1[提示：检测进行中]
     N -- 否 --> O["++checkSessionId<br/>分配唯一 session（防竞态）"]
@@ -116,11 +116,11 @@ flowchart TD
     S --> U[返回 BatchCheckResult]
     U --> V["applyResultsToRows<br/>更新行状态"]
     V --> W["updateHistoryCheckStatus<br/>结果写入 SQLite"]
-    W --> X["结论卡换成新结论<br/>（不弹 toast：卡片已经说了）"]
+    W --> X["状态栏换成新结论<br/>（不弹通知：状态栏已经说了）"]
 
     %% 取消分支
     R -.-> CANCEL{用户停止?}
-    CANCEL -- 是 --> CANCEL1["已完成的结果仍然入库<br/>结论卡给「检查剩下的 N 个」"]
+    CANCEL -- 是 --> CANCEL1["已完成的结果仍然入库"]
 
     style L fill:#e3f2fd,stroke:#1976d2
     style X fill:#e8f5e9,stroke:#2e7d32

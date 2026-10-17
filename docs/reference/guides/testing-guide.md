@@ -32,7 +32,7 @@ Vitest 使用 `happy-dom`，全局 setup 为 `tests/unit/setup.ts`，当前会�
 | utils / formatter / status 计算 | 单元测试 | `tests/unit/utils/formatters.spec.ts` 验证 `formatFileSize`、`formatRelativeTime`；`tests/unit/utils/uploadStatus.spec.ts` 验证成功、失败、上传中、等待中状态判断 |
 | URL、Markdown、路径、布局算法 | 单元测试 | `linkFormatter.spec.ts`、`mdParser.spec.ts`、`pathUtils.spec.ts`、`justifiedLayout.spec.ts` |
 | uploader 或 service 分发逻辑 | 单元测试，必要时 mock Tauri invoke | `uploaderFactory.spec.ts`、`multiServiceUploader.spec.ts`、`historyDatabase.spec.ts` |
-| composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD 与节流更新；`useUploadController.spec.ts` 验证上传会话、图床列表与托盘动作；`useBatchMigrate.spec.ts`、`useLinkCheck.spec.ts` 验证业务状态推进 |
+| composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD 与节流更新；`useUploadController.spec.ts` 验证上传会话、图床列表与托盘动作；`useLinkCheck.spec.ts`、`tests/unit/views/health/*.spec.ts` 验证业务状态推进 |
 | 组件交互 | 组件测试 | `tests/unit/shell/appShell.spec.ts` 验证侧栏导航、跳转事件、`Ctrl+\` 收起侧栏 |
 | 页面多状态 UI | 视觉截图测试 | 新界面：`tests/redesign/home.visual.spec.ts` 跑真应用 + `tests/e2e/mocks`，按设计画板编号覆盖首页 17 个状态；旧页面：`timeline.visual.spec.ts` 覆盖滚动、骨架屏、lightbox 等状态 |
 | mocked 原生边界 | mocked E2E | `tests/e2e/app-smoke.e2e.spec.ts` 验证启动不白屏、主导航、设置保存、文件选择、剪贴板、上传后复制链接、历史页壳层、链接检测页 |

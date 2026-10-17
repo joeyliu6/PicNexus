@@ -105,6 +105,6 @@ async function applyFilter() {
 
 ## 相关文件
 
-- `src/composables/batch-migrate/useBatchMigrate.ts` — 批量迁移管理器
-- `src/components/views/link-check/BatchMigratePanel.vue` — 批量迁移面板 UI
+- `src/views/health/BackupDialog.vue` — 补充备份弹窗：范围固定「仅有 1 份」，只问目标图床（交接说明第 4 节规则 8，按这一模式进一步收窄）
+- `src/views/health/useSupplementBackup.ts` — 补充备份的执行
 - `src/types/batchMigrate.ts` — 类型定义

@@ -19,11 +19,11 @@
 
 ### 目录结构
 
-新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`、图库 `src/views/gallery/GalleryView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
+新界面的页面在 `src/views/<页面>/`（首页 `src/views/home/HomeView.vue`、图库 `src/views/gallery/GalleryView.vue`、链接健康 `src/views/health/HealthView.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。下面是过渡期还在用的旧页面目录。
 
 ```
 src/components/
-├── views/                    # 过渡期旧页（链接检测等）
+├── views/                    # 过渡期旧页（设置）
 │
 ├── settings/                 # 设置面板
 │   ├── SettingsPanel.vue    # 设置主面板

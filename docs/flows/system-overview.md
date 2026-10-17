@@ -16,7 +16,7 @@ flowchart TD
         V1[HomeView<br/>首页·快传]
         V2[GalleryView<br/>图库]
         V4[SettingsView<br/>设置面板]
-        V5[LinkCheckView<br/>链接检测]
+        V5[HealthView<br/>链接健康]
     end
 
     subgraph Layout["外壳 (src/shell/)"]
@@ -232,8 +232,8 @@ flowchart LR
 - [应用生命周期](./app-lifecycle.md) — 启动流程与 Cookie 登录
 - [辅助流程](./auxiliary-flows.md) — 链接检测/压缩/备份摘要
 - [链接检测(深度)](./link-check-flow.md) — 服务感知/并发/策略决策
-- [文档修复](./md-rescue-flow.md) — MD 失效链接检测与修复
-- [批量迁移](./batch-migrate-flow.md) — 批量迁移图片至目标图床
+- [文档修复](./md-rescue-flow.md) — 链接健康的修复：改用备份 + 换文档文件夹里的旧链接
+- [补充备份](./batch-migrate-flow.md) — 仅有 1 份的图片复制到另一个图床
 
 ### 平台/基础设施层流程
 - [Tauri IPC 命令层](./ipc-command-flow.md) — 命令注册、错误映射、事件系统
