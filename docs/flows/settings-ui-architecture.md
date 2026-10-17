@@ -184,14 +184,13 @@ flowchart LR
 
 ## 图 4:设置面板组件清单与职责
 
-展示 `src/components/settings/` 下各面板的职责划分。新增设置项时先判断归属哪个面板,避免新建冗余面板。
+展示 `src/components/settings/` 下各面板的职责划分。新增设置项时先判断归属哪个面板,避免新建冗余面板。图床的连接、凭证与启用不在设置页，在图床页（路由 `/hosts`，`src/views/hosts/`，见 [HANDOFF §4](../design/redesign/handoff/HANDOFF.md)）；设置页的表单从不写图床配置（`useSettingsForm.spec` 有守卫）。
 
 ```mermaid
 flowchart TD
     S[SettingsView 根容器] --> T[Tab 切换]
 
     T --> P1[GeneralSettingsPanel<br/>常规]
-    T --> P2[HostingSettingsPanel<br/>图床]
     T --> P3[BackupSyncPanel<br/>备份同步]
     T --> P4[ImageCompressionPanel<br/>压缩]
     T --> P5[ExternalEditorPanel<br/>编辑器]
@@ -200,9 +199,6 @@ flowchart TD
 
     %% 各面板对应的 config 字段
     P1 --> P1A[config.theme<br/>config.appBehavior<br/>config.linkOutput<br/>config.globalShortcut<br/>config.analytics]
-
-    P2 --> P2A[config.enabledServices<br/>config.availableServices<br/>config.services]
-    P2 --> P2B[BuiltinServiceGroup<br/>TokenServiceGroup<br/>子组件分组]
 
     P3 --> P3A[config.webdav]
     P3 --> P3B[WebDAVConfigCollapsible<br/>子组件]
@@ -224,17 +220,16 @@ flowchart TD
 
 | 字段 | 语义 | 谁写入 |
 |------|------|--------|
-| `config.availableServices` | **真正的图床开关**：控制该图床出不出现在上传界面、托盘、批量迁移目标里 | `ServiceEnableSection.toggleService`（芯片点击）、`useStorageProfiles` 的新建/删除、`useSettingsForm` 的「凭证清空自动移除」 |
-| `config.enabledServices` | 上传界面「本次传到哪几个图床」的勾选快照，恒为 `availableServices` 的子集 | `useServiceSelector`、托盘菜单；`useSettingsForm.saveSettings` 只做收敛裁剪，从不新增 |
-| `config.services.*.enabled` | **已退化为死字段**：`saveSettings` 无条件写 `true`，唯一读取点 `MultiServiceUploader.filterConfiguredServices` 对任何已知服务都不可达。不要依赖它 | — |
+| `config.availableServices` | 「已添加」的一半：图床在这里**并且**免配置或凭证已填，才算已添加（出现在图床页左栏、首页「上传到」、托盘） | 图床页 `hostConfig.connectHost` / `disconnectHost` / `restoreHost`（撤销）；首页一键加免配置图床 `useUploadController.enableNoConfigHost` |
+| `config.enabledServices` | 「启用」= 上传时传到它；图床页的「启用 / 停用」和首页「上传到」的勾选是同一个字段 | `useUploadController.toggleHost`（图床页 `useHosts.toggleEnabled` 也调它）、托盘菜单；连接成功时 `connectHost` 一并启用 |
+| `config.services.*.enabled` | **已退化为死字段**：写入方一律写 `true`，唯一读取点 `MultiServiceUploader.filterConfiguredServices` 对任何已知服务都不可达。不要依赖它 | — |
 
 配套规则：
 
-- **「已配置」与「已启用」是两件事。** 未配置（`healthStatus === 'unconfigured'`）的图床即使在 `availableServices` 里也不会出现在上传界面——首页「上传到」只列 `isServiceAvailable` 为真的图床（`useUploadController` 的 `hosts`），`MultiServiceUploader.filterConfiguredServices` 再挡一道。
-- **新建自定义 S3 / WebDAV profile 会自动写入 `availableServices`**（`useStorageProfiles.enableNewProfile`），与删除时的摘除对称。因此用户建好配置、填全凭证后无需再去芯片手动点亮。
-- **内建图床填完凭证不会自动加回 `availableServices`。** `useSettingsForm` 里那条 watch 只保留「配置变空 → 自动移除」，刻意不做「自动添加」，否则用户主动取消勾选后重填 cookie 会被悄悄加回，违反禁用意图。
-- **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用必须走 `ServiceEnableSection.toggleService`，那是 `publicServiceRiskAccepted` 唯一的置位入口。绕过它自动启用，会让上传时被静默过滤，用户看到「设置里明明启用了却不传」。
-- `availableServices` **不能为空**：`useConfig.saveConfig` 会拒绝保存并 toast，UI 层另有两处预拦截。
+- **判定「已添加 / 启用 / 出问题」只看 `useUploadController().hosts`**，图床页与首页共用这一份，不要各自再拼一遍（托盘菜单在另一个窗口，由 `trayMenu.ts` 的 `isConfiguredService` 自己判断是否已配置，改「已添加」的口径时两处一起改）。
+- **断开 = 清掉凭证并移出两个列表**（通知带撤销，撤销按快照原样恢复，含原来的位置）；WebDAV / 自定义 S3 叫「删除这份」，同时删掉 profile 并 `syncProfileUploaders`。
+- **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用一律先过 `usePublicRiskConfirm().ensureAccepted()`（P11 弹窗），那是 `publicServiceRiskAccepted` 唯一的置位入口；绕过它启用，会让上传时被静默过滤。
+- `availableServices` **可以为空**（一个图床都没添加是正常状态：首页显示「没有图床」，图床页右侧直接是目录）。
 
 ---
 
@@ -287,7 +282,7 @@ interface LinkPrefixItem { name: string; template: string }
 
 默认列表定义在 [src/config/configInterface.ts](../../src/config/configInterface.ts) 的 `DEFAULT_LINK_PREFIXES`，当前包含搜狗图片 / CDN JSON / Jetpack / IPFS Scan 四项。
 
-新增/编辑在 [WeiboLinkPrefixSection.vue](../../src/components/settings/hosting/WeiboLinkPrefixSection.vue) 内联完成（`editingIndex` 标记正在编辑的行，`editingSnapshot` 保存进入编辑前的值以便取消时回滚），不弹独立对话框；用户填写 `name` + `template`，保存后 emit `addPrefix` / `updatePrefix` 到 `useSettingsForm`。
+在图床页微博详情里选择与增删（[HostSettings.vue](../../src/views/hosts/HostSettings.vue) + [HostTemplateList.vue](../../src/views/hosts/HostTemplateList.vue)）：「不加前缀」= `enabled: false`，其余各项对应 `prefixList`；「添加模板…」弹窗填 `name` + `template`，改动即保存。
 
 反向解析（MD 解析器把带前缀的 URL 剥回原始 URL）由 `stripPrefixTemplate()` 完成，[mdParser.ts](../../src/utils/mdParser.ts) 的 `stripKnownPrefixes` 遍历 `prefixList` 尝试匹配。
 
@@ -308,9 +303,9 @@ interface LinkPrefixItem { name: string; template: string }
 | 新增字段迁移老配置报错 | 新字段没在 DEFAULT_CONFIG 加默认值,老 config 读到 undefined | 新增流程 C、D |
 | 样式被硬编码污染 | 违反 CLAUDE.md,用 `docs/design/tokens.md` 里的变量替换 | 图3 |
 | 新加的链接前缀没生效 / 搜狗风格 URL 不对 | template 占位符拼错,或调用方没过 `applyPrefixTemplate` 直接字符串拼接 | 链接前缀数据结构 |
-| 新建的自定义 S3 / WebDAV 在上传界面看不到 | 凭证还没填全（被 `unconfigured` 过滤挡住），填全即出现；若填全仍不显示，检查 `enableNewProfile` 是否写入了 `availableServices` | 图床「启用」的三个字段 |
-| 改了 `services.*.enabled` 却毫无效果 | 该字段已退化为死字段，真正的开关是 `availableServices` | 图床「启用」的三个字段 |
-| 设置页芯片已点亮，上传界面却没勾中该图床 | `availableServices` 与 `enabledServices` 是两层，后者需在上传界面单独勾选 | 图床「启用」的三个字段 |
+| 新建的自定义 S3 / WebDAV 在上传界面看不到 | 还没「测试并连接」成功（草稿不保存），或凭证没填全（被 `unconfigured` 过滤挡住） | 图床「启用」的三个字段 |
+| 改了 `services.*.enabled` 却毫无效果 | 该字段已退化为死字段，启用看 `enabledServices` | 图床「启用」的三个字段 |
+| 图床页左栏有它，上传时却没传 | 它是「停用」（不在 `enabledServices`）；或是公共图床、还没同意风险提示 | 图床「启用」的三个字段 |
 
 ---
 

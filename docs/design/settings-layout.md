@@ -21,11 +21,11 @@
 | **L2** 区块说明 | `.helper-text` | 13px | `--text-muted` | -3px 0 12px 0 | group-label 下方 | "在任何应用中通过快捷键直接触发上传…" |
 | **L3** 行内描述 | `.toggle-row-desc` 等 | 12px | `--text-muted` | 0 | 设置项下方小字 | "系统启动时自动运行 PicNexus" |
 
-> **L3 行内描述**在不同面板中使用不同 class 名（`.toggle-row-desc`、`.settings-row-desc`、`.subsection-hint`、`.config-hint`、`.port-hint`、`.service-section-desc`、`.link-card-desc`），但样式值必须统一为 **12px / --text-muted / line-height 1.4**。
+> **L3 行内描述**在不同面板中使用不同 class 名（`.toggle-row-desc`、`.settings-row-desc`、`.link-card-desc`），但样式值必须统一为 **12px / --text-muted / line-height 1.4**。
 
 ## 折叠卡片公共样式
 
-所有可折叠配置卡片（HostingCard、CollapsibleSettingsCard、ImageCompressionPanel、WebDAVConfigCollapsible 等）共享以下统一类名，定义在 `settings-shared.css`：
+所有可折叠配置卡片（CollapsibleSettingsCard、ImageCompressionPanel、WebDAVConfigCollapsible 等）共享以下统一类名，定义在 `settings-shared.css`：
 
 | 语义 | Class | 说明 |
 |------|-------|------|
@@ -39,13 +39,8 @@
 | 展开图标 | `.expand-icon` | 14px / `--text-muted` |
 | 内容包装 | `.card-content-wrapper` | CSS Grid 展开动画 |
 | 内容区 | `.card-content` | overflow hidden |
-| 卡内子章节 | `.card-subsection` | 上分隔线 + 16px 上外边距/内边距 |
-| 子章节标题 | `.subsection-title` | 13px / 600 / `--text-primary` |
-| 子章节说明 | `.subsection-hint` | 12px / `--text-muted` |
-| 子章节标题行 | `.subsection-title-row` | flex，左「标题+说明」右控件（开关/按钮） |
-| 标题行文字块 | `.subsection-title-text` | flex-column，`flex:1` + `min-width:0` |
 
-> 各组件只需保留自己的**容器类**（如 `.hosting-card`、`.collapsible-card`）和组件特有逻辑。
+> 各组件只需保留自己的**容器类**（如 `.collapsible-card`）和组件特有逻辑。
 
 ## 容器规范
 
@@ -62,35 +57,11 @@
 
 > ❌ **折叠卡片内部禁止再套带边框的卡片。**
 
-`.hosting-card` / `.collapsible-card` 内部的子块一律用**分隔线**划分层级，不画整圈边框。原因是折叠卡与子块背景同为 `--bg-card`，同色套同色时那圈边框只剩噪音没有信息；而外层 `.content-inner` 已有 16px 内边距，子块再叠自己的内边距会让文字比同卡其他控件右移十几像素，看着像个缩进的孤岛。
-
-**卡内开关行的标准写法**（`.card-subsection` + `.subsection-title-row`）：
-
-```html
-<div class="card-subsection">
-  <div class="subsection-title-row">
-    <div class="subsection-title-text">
-      <label class="subsection-title">防止图片互相覆盖</label>
-      <span class="subsection-hint">上传时自动重命名，image.png 会存成……</span>
-    </div>
-    <ToggleSwitch v-model="enabled" />
-  </div>
-</div>
-```
-
-参考实现：`PrivateStorageGroup.vue`（WebDAV 唯一后缀）、`ZhihuSourceSection.vue`、`GithubProxySection.vue`、`WeiboLinkPrefixSection.vue`、`R2ThumbnailProxySection.vue`。
-
-最后一个是**最小骨架**——只有一个开关行、没有展开区，新增同类子章节可以直接照它抄。它单开成组件而不是就地写进 `PrivateStorageGroup.vue`，是因为那边 5 个 S3 图床共用一套数据驱动模板（循环 `PRIVATE_SERVICES`），只有 R2 需要这个开关；而且那个文件有效行已到 442/500，就地塞会顶到硬指标。
-
-> 📏 **口径提醒**：500 行硬指标算的是**有效行**（`eslint.config.mjs` 里 `max-lines` 配了
-> `skipBlankLines: true, skipComments: true`），不是原始行数。`PrivateStorageGroup.vue`
-> 原始 509 行、有效 442 行，**没有超标**——已有两轮代码审查拿原始行数误判成违规。
-> 要核实就跑 `npx eslint <file> --rule '{"max-lines":["error",{"max":1,"skipBlankLines":true,"skipComments":true}]}'`，
-> 它会直接报出有效行数。
+`.collapsible-card` 内部的子块一律用**分隔线**划分层级，不画整圈边框。原因是折叠卡与子块背景同为 `--bg-card`，同色套同色时那圈边框只剩噪音没有信息；而外层 `.content-inner` 已有 16px 内边距，子块再叠自己的内边距会让文字比同卡其他控件右移十几像素，看着像个缩进的孤岛。
 
 ⚠️ **不要在卡内裸用 `.toggle-row`** —— 它自带 `border` + `border-radius` + `background`，只有被 `.toggle-group` 包住时才会被抹掉。裸用就会变成"卡中卡"。`.toggle-row` 的定位是**页面级**设置项（见下方标准结构），不是卡内子项。
 
-**唯一例外**：靠**背景色差**而非边框制造层级的纯展示块，例如 `HostingCard.vue` 的 `.builtin-status`（用 `--bg-secondary`，与卡片底色不同，且无交互控件）。
+**唯一例外**：靠**背景色差**而非边框制造层级的纯展示块（与卡片底色不同，且无交互控件）。
 
 ## 激活态
 

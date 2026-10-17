@@ -1,6 +1,6 @@
 # 敏感字段：密文常驻、明文按需
 
-> 所有密码 / Token / Cookie / 密钥输入框统一遵守的契约。新增敏感字段时照抄这套，别自己发明。
+> 设置页里的密码输入框（`SensitiveField` + `useSensitiveDraft`，目前用在 WebDAV 备份）遵守的契约。图床页的凭证框是另一套（`src/views/hosts/HostSecretField.vue`，按设计稿 P09 / P10：点「查看」显示 30 秒、点「修改…」进入编辑、失焦保存并测试），不走这里。
 
 ## 规则一句话
 
@@ -11,7 +11,7 @@
 | 状态 | 输入框 | label 旁 | 眼睛按钮 |
 |------|--------|---------|---------|
 | 没存过 | 空，显示原始占位文案 | 无 | 禁用 |
-| 存过了、没聚焦 | **32 个圆点**（多行 512 个，自然折行铺满） | 「✓ 已保存」芯片 | 可用 |
+| 存过了、没聚焦 | **32 个圆点** | 「✓ 已保存」芯片 | 可用 |
 | 存过了、**聚焦** | **真值被取出来填进去**（仍遮蔽），可就地改 | 「✓ 已保存」芯片 | 可用 |
 | 失焦、一个字符没动 | 退回圆点，**不写盘** | 「✓ 已保存」芯片 | 可用 |
 | 失焦、改过了 | 退回圆点 | 「✓ **已更新**」约 2 秒 | 可用 |
@@ -121,25 +121,12 @@
 > 除了长度泄露，**WebDAV 那 2 个密码只有密文、不解密拿不到明文长度**，规则一开始就得写"除了这两个"；
 > 而且长度要从三个分组穿到组件里，哪个分组忘了接就静默退回固定值，界面上看不出来。
 
-### 多行为什么不写死换行
-
-多行用 512 个圆点、**不带换行**，交给浏览器自然折行。曾经拼的是「3 行 × 32 个」，
-三行一样长，一看就是生成的。自然折行后宽度跟着框走，框宽变了也不用重算。
-
-placeholder 不是内容、不驱动滚动条，超出可视区的部分直接裁掉，不会冒出滚动条。
-
 ### 个数取「铺满并有富余」，不追求精确
 
-单行 32、多行 512，都远超一屏能显示的量，多出来的部分被裁掉。
+32 个远超一个框能显示的量，多出来的部分被裁掉。
 
-不去算"刚好铺满"是因为算不准：框宽随窗口宽度和 grid 列数变，多行还带
-`resize: vertical`（用户能拖高）。任何精确值都会在某个宽度上露出空白，
+不去算"刚好铺满"是因为算不准：框宽随窗口宽度和 grid 列数变。任何精确值都会在某个宽度上露出空白，
 而空白正是本设计要消灭的那个信号。裁掉的代价是零，露白的代价是又一轮返工。
-
-> ⚠️ 多行铺满依赖调用方在 `input-class` 里给 `word-break: break-all`
-> （见 `CookieServiceGroup` 的 `.cookie-field`）。`•` 的断行属性是 AL，
-> 整串圆点在浏览器眼里是一个不可断的长单词——没有 break-all 就不折行，
-> 512 个会摊成横向溢出的一行。新增 multiline 调用点时记得带上。
 
 ## 不变量：看一眼不等于改一次
 
@@ -151,7 +138,7 @@ placeholder 不是内容、不驱动滚动条，超出可视区的部分直接�
 ### 1. 看（眼睛按钮）走只读展示态 —— 结构性保证
 
 展示态是**独立的只读控件**，绑 `:modelValue` 而非 `v-model`，**且不挂 `@blur`**。
-明文只进 DOM，不进数据流。单行走 `InputText`、多行走 `Textarea`，两条分支都是这个待遇。
+明文只进 DOM，不进数据流。
 
 > ⚠️ 任何「统一给所有分支加 blur 处理」的重构都会重新引入这个缺陷。
 
@@ -192,16 +179,15 @@ const secrets = useSensitiveDraft({
 
 ```vue
 <label>
-  API Token
-  <span v-if="secrets.hasStored('smms.token')" class="saved-chip">
+  密码
+  <span v-if="secrets.hasStored(passwordKey)" class="saved-chip">
     <i class="pi pi-check" aria-hidden="true"></i>已保存
   </span>
 </label>
-<SensitiveField v-bind="secrets.bindingsFor('smms.token', '从 SM.MS 官网获取 API Token')" />
+<SensitiveField v-bind="secrets.bindingsFor(passwordKey, '输入 WebDAV 密码')" />
 ```
 
 `.saved-chip` 在 [settings-shared.css](../../../src/styles/settings-shared.css)，各设置分组都已 import。
-多行字段额外加 `multiline :rows="4"`。
 
 几个已经踩过的坑，`useSensitiveDraft` 里已经处理，别再自己写一遍：
 
@@ -211,7 +197,7 @@ const secrets = useSensitiveDraft({
 
 ## 底下存的是明文还是密文？
 
-**这条契约管的是界面，跟存储形态无关。** 两者都接同一套接口，只是 `reveal` / `commit` 不同。
+**这条契约管的是界面，跟存储形态无关。** 下表是各凭证的存储形态（图床页与设置页共用）。
 
 | 字段 | 存储形态 | reveal |
 |------|---------|--------|

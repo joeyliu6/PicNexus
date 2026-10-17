@@ -349,15 +349,11 @@ export interface UserConfig {
 
 ## 步骤 5: 更新设置界面
 
-> **注意**：项目中**不为每个图床创建单独的 Settings 组件**。设置面板采用分组架构：
-> - `src/components/settings/HostingSettingsPanel.vue` — 图床设置总面板
-> - `src/components/settings/hosting/BuiltinServiceGroup.vue` — 内建图床组（无需配置）
-> - `src/components/settings/hosting/CookieServiceGroup.vue` — Cookie 类图床组
-> - `src/components/settings/hosting/TokenServiceGroup.vue` — Token/API Key 类图床组
-> - `src/components/settings/hosting/PrivateStorageGroup.vue` — 私有存储图床组
->
-> 分组组件是数据驱动的：新增图床通常只是往 `FieldConfig[]` 数组里加几行字段描述，
-> 而不是写新的模板。参考已有图床的写法即可。
+> **注意**：图床的连接与设置在图床页（`src/views/hosts/`），不为每个图床写单独的组件。
+> 新增图床通常只要在 `hostCatalog.ts` 的 `HOST_CATALOG` 里加一条描述（接入方式 `kind` 决定目录分组，
+> 另有字段 `fields`、测试步骤 `steps`、说明文案），图床页的目录、连接表单、详情与测试连接都从这里取。
+> 测试连接按 `kind` 走 `useHostTest.ts` 里对应的检测；对象存储走 Rust `probe_s3_storage`。
+> 设计稿没画的图床照最接近的那张画板做（见 `docs/design/redesign/README.md`「设计没画、开发时补的（图床）」）。
 
 ---
 
@@ -370,8 +366,8 @@ export interface UserConfig {
 | serviceId | 复合 ID `<前缀>:<profileId>`，配 `isXxxId` / `getXxxProfileId` / `makeXxxId` 三件套 | `src/config/serviceTypes.ts` |
 | 配置存放 | `UserConfig` 顶层的 profiles 数组，不放进 `config.services` | `custom_s3_profiles` / `webdav_profiles` |
 | 上传器注册 | 不在 `initializeUploaders()` 静态注册，由 `syncXxxUploaders(profiles)` 按 profile 列表重建 | `src/uploaders/index.ts` |
-| 注册时机 | 应用启动流程 + 设置页保存/加载，两处都要 | `src/main.ts`、`profileServiceSync.ts` |
-| 增删改 | 加进 `useStorageProfiles`，复用默认命名、删除前置校验、编辑器绑定清理 | `src/composables/settings/useStorageProfiles.ts` |
+| 注册时机 | 应用启动流程 + 图床页每次保存，两处都要 | `src/main.ts`、`src/views/hosts/profileServiceSync.ts` |
+| 增删改 | 图床页 `hostConfig.ts`：`blankProfile`（默认命名）、`connectHost`、`disconnectHost`（同时解除编辑器绑定） | `src/views/hosts/hostConfig.ts` |
 | 必填字段 | `getRequiredFields()` 里加分支，上传过滤/健康状态/托盘都从这里取 | `src/constants/serviceRequiredFields.ts` |
 
 > 凡是代码里出现 `isCustomS3Id` 的地方，多实例图床基本都要并排加一条分支。

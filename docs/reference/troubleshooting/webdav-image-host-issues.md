@@ -205,7 +205,7 @@ WebDAV 是唯一被放开明文 HTTP 的链路，但有三条硬拒绝：
 
 **确认会在改地址时自动作废**：授权是针对某个具体地址给的。改了 `url` 或 `publicDomain`，
 `lanHttpConfirmed` 归零、下次测试重新弹框——这也是它唯一的撤销路径
-（见 `useStorageProfiles.updateWebdavProfile`）。
+（见 `src/views/hosts/hostConfig.ts` 的 `writeHostValues`）。
 
 另注意备份链路与图床链路走的是**两套函数**，判据不同：
 
