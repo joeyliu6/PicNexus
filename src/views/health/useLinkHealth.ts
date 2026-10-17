@@ -1,7 +1,7 @@
 // 链接健康的页面状态（单例，交接说明 8.3）：接检测引擎（useLinkCheck）的数据与检测 / 暂停 / 继续 / 取消，
 // 推出健康模型、页面处在哪种状态、检测进度那句话；单行「重试」。修复与撤销在 useHealthRepair。
 
-import { computed, reactive, type ComputedRef } from 'vue';
+import { computed, effectScope, reactive, type ComputedRef, type EffectScope } from 'vue';
 import { refThrottled } from '@vueuse/core';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { useConfigManager } from '@/composables/useConfig';
@@ -46,6 +46,7 @@ export interface CheckProgressView {
 }
 
 let singleton: ReturnType<typeof create> | null = null;
+let singletonScope: EffectScope | null = null;
 
 function create() {
   const linkCheck = useLinkCheckManager();
@@ -151,12 +152,18 @@ function create() {
 }
 
 export function useLinkHealth() {
-  singleton ??= create();
+  // 放进独立的 scope：第一个调用者（外壳里常驻的传输中心）卸载或热更新重挂时，模型的节流 watcher 不能跟着停
+  if (!singleton) {
+    singletonScope = effectScope(true);
+    singleton = singletonScope.run(create)!;
+  }
   return singleton;
 }
 
 /** 测试用：丢掉单例 */
 export function __resetLinkHealthForTests(): void {
+  singletonScope?.stop();
+  singletonScope = null;
   singleton = null;
   retrying.clear();
   stillDead.clear();
