@@ -10,6 +10,11 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   minute: '2-digit',
 });
 
+/** 张数、条数：千分位（「12,483」，交接说明 9） */
+export function formatCount(n: number): string {
+  return n.toLocaleString('zh-CN');
+}
+
 /** 格式化时间戳为本地日期时间字符串 */
 export function formatTime(timestamp: number): string {
   return dateFormatter.format(new Date(timestamp));

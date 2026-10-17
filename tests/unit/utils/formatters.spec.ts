@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   formatCalendarDate,
+  formatCount,
   formatDayHeading,
   formatShortDateTime,
   formatDateCompact,
@@ -10,6 +11,15 @@ import {
   formatSizeChange,
   formatTimestampCompact,
 } from '@/utils/formatters';
+
+// 交接说明 9：大数字千分位（张数、条数）
+describe('formatCount', () => {
+  it('groups thousands', () => {
+    expect(formatCount(12483)).toBe('12,483');
+    expect(formatCount(1_048_576)).toBe('1,048,576');
+    expect(formatCount(7)).toBe('7');
+  });
+});
 
 describe('formatFileSize', () => {
   it('0 字节返回 0 B', () => {

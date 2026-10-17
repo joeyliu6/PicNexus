@@ -29,9 +29,7 @@ export function formatSpeed(bytesPerSec: number): string {
   return `${kb.toFixed(0)} KB/s`;
 }
 
-export function formatNumber(n: number): string {
-  return n.toLocaleString();
-}
+export { formatCount as formatNumber } from '@/utils/formatters';
 
 export function isPublicService(serviceId: string): boolean {
   return PUBLIC_SERVICES.includes(serviceId as ServiceType);

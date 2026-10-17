@@ -20,7 +20,7 @@ import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import { useCopyLink } from '@/composables/useCopyLink';
 import { safeImageUrl } from '@/security/networkPolicy';
 import { openUserExternalUrl } from '@/security/shellOpen';
-import { formatFileSize, formatTimestampFull } from '@/utils/formatters';
+import { formatCount, formatFileSize, formatTimestampFull } from '@/utils/formatters';
 import { getPrimaryImageUrl } from '@/utils/imageUrl';
 import type { LinkFormat } from '@/utils/linkFormatter';
 import type { PetalState } from '@/utils/petals';
@@ -163,7 +163,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         <button type="button" class="lightbox__button lightbox__button--icon" aria-label="关闭" title="关闭  Esc" @click="lightbox.lightboxVisible.value = false">
           <PnIcon name="close" :size="13" :stroke="2" />
         </button>
-        <span v-if="position" class="lightbox__muted">{{ position }} / {{ grid.totalCount.value }}</span>
+        <span v-if="position" class="lightbox__muted">{{ formatCount(position) }} / {{ formatCount(grid.totalCount.value) }}</span>
         <div class="lightbox__spacer" />
         <div v-if="loadFailed && shownHost" class="lightbox__banner">
           <PnIcon name="warning" :size="14" :stroke="2.2" class="lightbox__warn" />

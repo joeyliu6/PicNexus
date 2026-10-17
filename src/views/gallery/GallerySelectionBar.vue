@@ -10,6 +10,7 @@ import PnMenuRadioGroup from '@/components/pn/PnMenuRadioGroup.vue';
 import PnMenuSeparator from '@/components/pn/PnMenuSeparator.vue';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { useUploadController } from '@/composables/upload/useUploadController';
+import { formatCount } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
@@ -27,7 +28,7 @@ const upload = useUploadController();
 const { viewState, historyManager } = props.grid;
 
 const ids = computed(() => viewState.selectedIdList.value);
-const label = computed(() => `已选 ${ids.value.length} 张`);
+const label = computed(() => `已选 ${formatCount(ids.value.length)} 张`);
 const allFavorited = computed(() => ids.value.length > 0 && ids.value.every((id) => historyManager.favoriteSet.value.has(id)));
 
 /** 这次复制用的格式：默认跟设置一致，在下拉里切换只影响这一次 */

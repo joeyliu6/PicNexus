@@ -2,6 +2,7 @@
 // 只做纯计算：按钮上的字、可单独移除的小标签、右上角计数、交给数据库的筛选条件。
 
 import type { DayStatsFilter, GalleryStatusFilter } from '@/services/database/types';
+import { formatCount } from '@/utils/formatters';
 
 export type GalleryTimePreset = 'all' | 'week' | 'month' | 'year';
 
@@ -74,7 +75,7 @@ export function filterButtons(filters: GalleryFilters, hostName: HostName): Filt
 
 export function countText(filters: GalleryFilters, count: number, loading: boolean): string {
   if (loading) return '正在读取…';
-  const n = count.toLocaleString('zh-CN');
+  const n = formatCount(count);
   return hasActiveFilters(filters) ? `找到 ${n} 张` : `共 ${n} 张`;
 }
 
