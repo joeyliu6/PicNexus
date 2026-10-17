@@ -7,6 +7,7 @@ import { getInvokeMock, resetTauriMocks, setupInvokeResponses } from '../helpers
 import { createConfig } from '../factories/configFactory';
 import { DEFAULT_CONFIG } from '@/config/types';
 import SettingsView from '@/components/views/SettingsView.vue';
+import type { SettingsFormData } from '@/composables/settings/settingsFormTypes';
 
 const mockState = vi.hoisted(() => ({
   toastShowConfig: vi.fn(),
@@ -20,10 +21,6 @@ const mockState = vi.hoisted(() => ({
   debouncedSaveSettingsWithStatus: vi.fn(),
   cancelDebouncedSave: vi.fn(),
   clearFormTimers: vi.fn(),
-  addPrefix: vi.fn(),
-  updatePrefix: vi.fn(),
-  removePrefix: vi.fn(),
-  resetToDefaultPrefixes: vi.fn(),
   addCustomS3Profile: vi.fn(),
   deleteCustomS3Profile: vi.fn(),
   updateCustomS3Profile: vi.fn(),
@@ -140,12 +137,7 @@ vi.mock('@/composables/settings/useSettingsForm', () => ({
     debouncedSaveSettingsWithStatus: mockState.debouncedSaveSettingsWithStatus,
     cancelDebouncedSave: mockState.cancelDebouncedSave,
     errorToString: (error: unknown) => error instanceof Error ? error.message : String(error),
-    validateS3Config: vi.fn(() => null),
     clearTimers: mockState.clearFormTimers,
-    addPrefix: mockState.addPrefix,
-    updatePrefix: mockState.updatePrefix,
-    removePrefix: mockState.removePrefix,
-    resetToDefaultPrefixes: mockState.resetToDefaultPrefixes,
     addCustomS3Profile: mockState.addCustomS3Profile,
     deleteCustomS3Profile: mockState.deleteCustomS3Profile,
     updateCustomS3Profile: mockState.updateCustomS3Profile,
@@ -235,33 +227,8 @@ function makeFormData() {
     },
   });
 
-  return ref({
-    weiboCookie: config.services?.weibo?.cookie ?? '',
-    r2: {
-      accountId: 'a'.repeat(32),
-      accessKeyId: 'ak',
-      secretAccessKey: 'sk',
-      bucketName: 'bucket',
-      path: '',
-      publicDomain: 'https://cdn.example.com',
-    },
-    tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
-    aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
-    qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
-    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
-    custom_s3_profiles: config.custom_s3_profiles ?? [],
-    nowcoder: { cookie: '' },
-    zhihu: { cookie: '', sourceParamEnabled: true, sourceParamValue: '172ae18b' },
-    nami: { cookie: '', authToken: '' },
-    bilibili: { cookie: '' },
-    chaoxing: { cookie: '' },
-    smms: { token: 'token' },
-    github: { token: 'ghp_test', owner: 'owner', repo: 'repo', branch: 'main', path: 'images/', cdnConfig: undefined },
-    imgur: { clientId: '' },
+  return ref<SettingsFormData>({
     webdav: { profiles: [], activeId: null },
-    linkPrefixEnabled: true,
-    selectedPrefixIndex: 0,
-    linkPrefixList: config.linkPrefixConfig?.prefixList ?? [],
     analyticsEnabled: true,
     appBehavior: { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true },
     linkOutput: {
@@ -275,7 +242,6 @@ function makeFormData() {
       uploadFromFile: 'CommandOrControl+Shift+O',
     },
     autoUpdateEnabled: true,
-    publicServiceRiskAccepted: false,
     imageCompression: config.imageCompression!,
     editorServer: config.editorServer!,
   });

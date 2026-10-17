@@ -160,34 +160,6 @@
   margin: -3px 0 var(--space-md) 0;
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-lg);
-}
-
-@media (max-width: 768px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.form-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs-sm);
-}
-
-.form-item.span-full {
-  grid-column: 1 / -1;
-}
-
-.form-item label {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-secondary);
-}
-
 /*
  * 「已保存」标记
  *
@@ -420,61 +392,6 @@
   font-size: var(--text-sm);
 }
 
-/* ==================== 卡片内子章节 ==================== */
-
-.card-subsection {
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-lg);
-  margin-top: var(--space-lg);
-}
-
-.subsection-title {
-  display: block;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-  margin-bottom: var(--space-xs);
-}
-
-.subsection-hint {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.4;
-  margin: 0 0 var(--space-md) 0;
-}
-
-/*
- * 子章节标题行：左「标题+说明」，右控件（开关/按钮）
- *
- * Why 三件套 flex:1 + min-width:0 + flex-shrink:0 缺一不可：flex 默认让两侧
- * 一起参与压缩，说明文字一长（尤其夹着 image_20260817_a3f9.png 这种断不开的
- * 长串）就会把右侧固定尺寸控件挤扁——`.toggle-row` 正是这么踩的坑。
- */
-.subsection-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.subsection-title-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-  flex: 1;
-  min-width: 0;
-}
-
-/* 纵向间距交给上面的 gap，避免与基类的 margin-bottom 叠加 */
-.subsection-title-text .subsection-title,
-.subsection-title-text .subsection-hint {
-  margin-bottom: 0;
-}
-
-.subsection-title-row > .p-toggleswitch {
-  flex-shrink: 0;
-}
-
 /* ==================== 开关行（Toggle Row） ==================== */
 /* 适用于"标题+描述"与控件并排的设置项 */
 
@@ -564,7 +481,6 @@
 /* ==================== 表单提示 ==================== */
 /* 适用于字段下方的说明文字，含链接跳转样式 */
 
-.form-hint,
 .field-hint {
   font-size: var(--text-xs);
   color: var(--text-muted);
@@ -572,36 +488,14 @@
   margin-top: var(--space-2xs);
 }
 
-.form-hint a,
 .field-hint a {
   color: var(--primary);
   text-decoration: none;
   transition: color var(--duration-fast) ease;
 }
 
-.form-hint a:hover,
 .field-hint a:hover {
   text-decoration: underline;
-}
-
-/* 收进 label 右侧的说明图标，hover / 键盘聚焦才展开 tooltip
- *
- * 用途：说明长到三行以上时用它替代 .field-hint。长说明摊在字段下方有两个问题——
- * 把后面的字段挤得很远，且视觉上紧贴着下一个 label，容易被读成下一个字段的说明。
- * 短说明仍然用 .field-hint 直接显示，别为了整齐把所有提示都藏起来：
- * 需要照着填的信息藏在 hover 后面，用户根本不会去找。
- */
-.field-info-icon {
-  margin-left: var(--space-xs);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  cursor: help;
-  transition: color var(--duration-fast) ease;
-}
-
-.field-info-icon:hover,
-.field-info-icon:focus-visible {
-  color: var(--primary);
 }
 
 /* ==================== 通用设置行 ==================== */
@@ -655,8 +549,8 @@
 }
 
 /* ==================== 折叠卡片公共样式 ==================== */
-/* 适用于所有可折叠配置卡片（HostingCard、CollapsibleSettingsCard、 */
-/* ImageCompressionPanel、WebDAVConfigCollapsible 等）               */
+/* 适用于所有可折叠配置卡片（CollapsibleSettingsCard、ImageCompressionPanel、 */
+/* WebDAVConfigCollapsible 等）                                       */
 
 .card-header {
   width: 100%;

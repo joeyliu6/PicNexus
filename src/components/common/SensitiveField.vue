@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import InputText from 'primevue/inputtext';
-import Textarea from 'primevue/textarea';
 
 const REVEAL_DURATION_MS = 15_000;
 
@@ -12,34 +11,16 @@ const REVEAL_DURATION_MS = 15_000;
  * 圆点个数就等于密码长度，等于把长度泄露在界面上。这里的圆点是纯装饰，
  * 6 位密码和 64 位 token 长得完全一样。
  *
- * Why 多行要铺满：Cookie 那种 4 行高的框里只放一行圆点，看着像内容被截断了，
- * 用户会以为数据丢了。
- *
- * Why 多行**不写死换行**：曾经拼的是「3 行 × 32 个」，三行一样长，一看就是生成的。
- * 交给浏览器自然折行后，宽度跟着框走，观感自然得多。
- *
- * Why 个数取到明显溢出（单行 32、多行 512）：这两个数是「铺满并有富余」，不是精确
- * 排版。框宽随窗口和 grid 列数变，多行还能被用户拖高（resize: vertical），算得再准
- * 也会在某个宽度上露出空白——而空白正是本设计要消灭的那个信号。
- * placeholder 不是内容、不驱动滚动条，超出可视区的部分直接裁掉，不会冒出滚动条，
- * 所以富余的代价是零。
- *
- * ⚠️ 多行铺满依赖调用方给 `input-class` 带 `word-break: break-all`（见
- * CookieServiceGroup 的 .cookie-field）。`•` 的断行属性是 AL，整串圆点在浏览器眼里
- * 是一个不可断的长单词——没有 break-all 就不折行，512 个会摊成横向溢出的一行。
+ * Why 32 个：铺满并有富余。框宽随窗口变，算得再准也会在某个宽度上露出空白；
+ * placeholder 超出可视区的部分直接裁掉，不会冒出滚动条，富余的代价是零。
  */
-const FAKE_DOTS_SINGLE = '•'.repeat(32);
-const FAKE_DOTS_MULTILINE = '•'.repeat(512);
+const FAKE_DOTS = '•'.repeat(32);
 
 const props = withDefaults(defineProps<{
   modelValue?: string | null;
-  multiline?: boolean;
-  rows?: number;
   placeholder?: string;
   autocomplete?: string;
-  readonly?: boolean;
   disabled?: boolean;
-  inputClass?: string;
   /**
    * 输入框为空、但后台存着密文时置 true
    *
@@ -54,13 +35,9 @@ const props = withDefaults(defineProps<{
   revealStored?: (() => Promise<string>) | null;
 }>(), {
   modelValue: '',
-  multiline: false,
-  rows: 4,
   placeholder: '',
   autocomplete: 'new-password',
-  readonly: false,
   disabled: false,
-  inputClass: '',
   hasStoredValue: false,
   loadingValue: false,
   revealStored: null,
@@ -105,8 +82,8 @@ const toggleLabel = computed(() => isRevealed.value ? '隐藏敏感内容' : '�
 const toggleIcon = computed(() => isRevealed.value ? 'pi pi-eye-slash' : 'pi pi-eye');
 
 const focused = ref(false);
-/** 可编辑输入框（单行/多行只会渲染其中一个），从只读展示态切回来时要把焦点交给它 */
-const editableRef = ref<{ $el?: HTMLInputElement | HTMLTextAreaElement } | null>(null);
+/** 可编辑输入框，从只读展示态切回来时要把焦点交给它 */
+const editableRef = ref<{ $el?: HTMLInputElement } | null>(null);
 
 /**
  * 已存过值、框里又没有草稿、且没在编辑时，用圆点表示「里面有东西」
@@ -124,8 +101,7 @@ const showsFakeDots = computed(() =>
  * 两条信息各自在最相关的时机出现，不互相挤占。
  */
 const effectivePlaceholder = computed(() => {
-  if (!showsFakeDots.value) return props.placeholder;
-  return props.multiline ? FAKE_DOTS_MULTILINE : FAKE_DOTS_SINGLE;
+  return showsFakeDots.value ? FAKE_DOTS : props.placeholder;
 });
 
 function clearRevealTimer(): void {
@@ -197,8 +173,7 @@ function handleFocus(): void {
  * 明文已经在 storedPlaintext 里了，直接随 editStart 交给父组件，不重新解密。
  */
 function switchToEditing(): void {
-  // 真正只读的字段（如纳米那个派生出来的 Auth-Token）没什么可改的，保持只读查看
-  if (props.readonly || props.disabled) return;
+  if (props.disabled) return;
 
   const seen = storedPlaintext.value;
   if (seen === null) return;
@@ -230,40 +205,16 @@ defineExpose({
 <template>
   <div
     class="sensitive-field"
-    :class="{ 'is-multiline': multiline, 'has-fake-dots': showsFakeDots }"
+    :class="{ 'has-fake-dots': showsFakeDots }"
   >
-    <!-- 已保存明文的只读展示态（多行）：不绑 v-model，明文只进 DOM 不进数据流 -->
-    <Textarea
-      v-if="multiline && showingStored"
-      :modelValue="storedPlaintext ?? ''"
-      :rows="rows"
-      readonly
-      :disabled="disabled"
-      :class="['sensitive-control', inputClass]"
-      @mousedown.prevent="switchToEditing"
-      @keydown.esc="conceal"
-    />
-    <Textarea
-      v-else-if="multiline"
-      ref="editableRef"
-      v-model="value"
-      :rows="rows"
-      :placeholder="effectivePlaceholder"
-      :readonly="readonly || loadingValue"
-      :disabled="disabled"
-      :class="['sensitive-control', inputClass, { 'is-concealed': !revealed }]"
-      @focus="handleFocus"
-      @blur="handleBlur"
-      @keydown.esc="conceal"
-    />
-    <!-- 已保存明文的只读展示态（单行）：同样不绑 v-model、不挂 blur -->
+    <!-- 已保存明文的只读展示态：不绑 v-model、不挂 blur，明文只进 DOM 不进数据流 -->
     <InputText
-      v-else-if="showingStored"
+      v-if="showingStored"
       :modelValue="storedPlaintext ?? ''"
       type="text"
       readonly
       :disabled="disabled"
-      :class="['sensitive-control', inputClass]"
+      class="sensitive-control"
       @mousedown.prevent="switchToEditing"
       @keydown.esc="conceal"
     />
@@ -274,9 +225,9 @@ defineExpose({
       :type="revealed ? 'text' : 'password'"
       :placeholder="effectivePlaceholder"
       :autocomplete="autocomplete"
-      :readonly="readonly || loadingValue"
+      :readonly="loadingValue"
       :disabled="disabled"
-      :class="['sensitive-control', inputClass]"
+      class="sensitive-control"
       @focus="handleFocus"
       @blur="handleBlur"
       @keydown.esc="conceal"
@@ -310,15 +261,6 @@ defineExpose({
 .sensitive-control::-ms-reveal,
 .sensitive-control::-ms-clear {
   display: none;
-}
-
-.is-multiline .sensitive-control {
-  min-height: 92px;
-  resize: vertical;
-}
-
-.is-concealed {
-  -webkit-text-security: disc;
 }
 
 /*
@@ -356,11 +298,6 @@ defineExpose({
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-}
-
-.is-multiline .sensitive-toggle {
-  top: var(--space-xs-sm);
-  transform: none;
 }
 
 .sensitive-toggle:hover:not(:disabled),
