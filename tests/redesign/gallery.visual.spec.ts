@@ -22,6 +22,8 @@ interface Pic {
   health?: Partial<Record<string, Health>>;
   fav?: boolean;
   size?: number;
+  /** 透明底（G13 样本：模拟图床画成透明底的图标） */
+  alpha?: boolean;
 }
 
 const PICS: Pic[] = [
@@ -50,13 +52,33 @@ const PICS: Pic[] = [
   { name: 'Kafka-分区示意.png', w: 1800, h: 1000, at: '2023-05-18T10:00', hosts: ['weibo'], health: { weibo: 'dead' }, size: 163_840 },
 ];
 
-function row(pic: Pic, index: number): Record<string, unknown> {
+/**
+ * G13 不同比例：常规、长截图、全景、小图（含细长的徽章）、透明、GIF；最后一张长图只存了 1 份，
+ * 健康角标优先、「长图」让位。这些图的链接放在 /ratio/ 下，测试按真实比例画（见 helpers 的 ratioImageFor）。
+ */
+const RATIO_PICS: Pic[] = [
+  { name: '风景-4比3.jpg', w: 1600, h: 1200, at: '2026-10-16T10:20' },
+  { name: '聊天记录-长截图.png', w: 1080, h: 6048, at: '2026-10-16T10:18' },
+  { name: '全景-海边.jpg', w: 3600, h: 600, at: '2026-10-16T10:16' },
+  { name: 'app-icon.png', w: 48, h: 48, at: '2026-10-16T10:14' },
+  { name: 'logo-透明底.png', w: 512, h: 512, at: '2026-10-16T10:12', alpha: true },
+  { name: '加载动画.gif', w: 480, h: 360, at: '2026-10-16T10:10' },
+  { name: '手机截图.png', w: 1170, h: 2532, at: '2026-10-16T10:08' },
+  { name: 'build-badge.svg', w: 120, h: 20, at: '2026-10-16T10:06' },
+  { name: '横幅-16比9.png', w: 1920, h: 1080, at: '2026-10-16T10:04' },
+  { name: '旧文档-长图.png', w: 1000, h: 4000, at: '2026-10-15T09:00', hosts: ['jd'] },
+];
+
+function row(pic: Pic, index: number, ratio = false): Record<string, unknown> {
   const hosts = pic.hosts ?? ['jd', 'r2'];
   const health = pic.health ?? Object.fromEntries(hosts.map((host) => [host, 'ok' as const]));
   const minutesAgo = (NOW.getTime() - new Date(`${pic.at}+08:00`).getTime()) / 60_000;
   const base = historyRow(index + 1, pic.name, minutesAgo, hosts[0]);
   // 失效的那份放在 /gone/ 下：测试里这些地址一律 404（灯箱「这次没加载出来」G08）
-  const urlOf = (host: string) => `https://mock.cdn/${health[host] === 'dead' ? 'gone/' : ''}${host}/${index + 1}-${pic.w}x${pic.h}.png`;
+  const ext = pic.name.split('.').pop()!.toLowerCase();
+  const urlOf = ratio
+    ? (host: string) => `https://mock.cdn/ratio/${host}/${index + 1}-${pic.w}x${pic.h}${pic.alpha ? '-alpha' : ''}.${ext}`
+    : (host: string) => `https://mock.cdn/${health[host] === 'dead' ? 'gone/' : ''}${host}/${index + 1}-${pic.w}x${pic.h}.png`;
   const results = hosts.map((serviceId) => ({ serviceId, status: 'success', result: { serviceId, fileKey: urlOf(serviceId), url: urlOf(serviceId) } }));
   const status = Object.fromEntries(Object.entries(health).map(([host, state]) => [host, {
     isValid: state === 'ok',
@@ -70,6 +92,7 @@ function row(pic: Pic, index: number): Record<string, unknown> {
     height: pic.h,
     aspect_ratio: pic.w / pic.h,
     file_size: pic.size ?? 400_000,
+    ...(ratio ? { format: ext } : {}),
     results: JSON.stringify(results),
     generated_link: urlOf(hosts[0]),
     link_check_status: Object.keys(status).length ? JSON.stringify(status) : null,
@@ -79,7 +102,8 @@ function row(pic: Pic, index: number): Record<string, unknown> {
   };
 }
 
-const ROWS = PICS.map(row);
+const ROWS = PICS.map((pic, index) => row(pic, index));
+const RATIO_ROWS = RATIO_PICS.map((pic, index) => row(pic, index, true));
 const NO_FAVORITES = ROWS.map((r) => ({ ...r, is_favorited: 0 }));
 
 const HOSTS = {
@@ -111,7 +135,8 @@ async function openGallery(page: Page, seed: E2ESeed): Promise<void> {
 /**
  * 等每张缩略图都有了结果（加载出来，或候选链试完显示「图片加载失败」）：缩略图按页面时钟排队加载，
  * 还没轮到的格子连 <img> 都没有，capture 里「所有图片都 complete」会空转通过。
- * 还没读出图的天、快速滚动时画的是灰色占位块（.grid__slot），也算没到位。
+ * 还没读出图的天、快速滚动时画的是灰色占位块（.grid__slot），也算没到位；
+ * 网格变窄（打开详情）后按 200ms 防抖重排，重排前有格子伸出网格右缘，也算没到位。
  * 读库、404 靠真实时间；每轮再把页面时钟拨 500ms 推动防抖、超时与重试。等不到就让测试失败，不截半途的图。
  */
 async function settleTiles(page: Page): Promise<void> {
@@ -121,8 +146,11 @@ async function settleTiles(page: Page): Promise<void> {
       const img = tile.querySelector('img');
       return !tile.querySelector('.tile__broken') && !(img?.complete && img.classList.contains('tile__img--loaded'));
     }).length);
-    if (placeholders + pending > 0) await page.clock.runFor(500);
-    return placeholders + pending;
+    const overflowing = await page.locator('.grid').evaluateAll((grids) => grids.filter((grid) => [...grid.querySelectorAll<HTMLElement>('.tile')]
+      .some((tile) => tile.getBoundingClientRect().right > grid.getBoundingClientRect().right + 1)).length);
+    const waiting = placeholders + pending + overflowing;
+    if (waiting > 0) await page.clock.runFor(500);
+    return waiting;
   }, { timeout: 20_000, intervals: [100] }).toBe(0);
 }
 
@@ -211,6 +239,33 @@ const STATES: Record<string, GalleryState> = {
     act: async (page) => {
       await gallery(page).getByRole('button', { name: '★ 收藏' }).click();
       await expect(gallery(page).getByText('还没有收藏')).toBeVisible();
+    },
+  },
+  'G13-ratios': { seed: { historyRows: RATIO_ROWS } },
+  // 预览框（详情）：图完整显示，空白处是它自己的模糊放大版
+  'G13-preview-tall': {
+    seed: { historyRows: RATIO_ROWS },
+    act: async (page) => {
+      await tile(page, '手机截图.png').click();
+      await expect(page.locator('.detail')).toContainText('1170 × 2532');
+      await page.mouse.move(0, 0);
+    },
+  },
+  'G13-preview-wide': {
+    seed: { historyRows: RATIO_ROWS },
+    act: async (page) => {
+      await tile(page, '全景-海边.jpg').click();
+      await expect(page.locator('.detail')).toContainText('3600 × 600');
+      await page.mouse.move(0, 0);
+    },
+  },
+  // 灯箱里的长图：按窗口宽度（不超过原尺寸）从顶部显示
+  'G13-lightbox-long': {
+    seed: { historyRows: RATIO_ROWS },
+    act: async (page) => {
+      await tile(page, '聊天记录-长截图.png').dblclick();
+      await expect(page.locator('.lightbox-chrome')).toContainText('聊天记录-长截图.png');
+      await page.mouse.move(0, 0);
     },
   },
   'G12-loading': {

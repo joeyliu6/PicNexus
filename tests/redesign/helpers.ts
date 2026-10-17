@@ -34,6 +34,32 @@ function imageFor(url: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="640" height="420" fill="url(#g)"/><circle cx="470" cy="120" r="64" fill="rgba(255,255,255,.35)"/><path d="M0 330 150 200l90 74 90-104 310 166v84H0z" fill="rgba(15,23,42,.30)"/></svg>`;
 }
 
+/**
+ * 路径里带 /ratio/ 的链接按文件名里的「宽x高」画（G13 不同比例）：高宽比超过 2 的画成一页长截图（白底、一行行内容），
+ * 文件名带 -alpha 的画成透明底的花瓣图标，其余是同款渐变风景。
+ */
+function ratioImageFor(url: string): string | null {
+  const match = /\/ratio\/.*-(\d+)x(\d+)(-alpha)?\.\w+$/.exec(url);
+  if (!match) return null;
+  const [w, h] = [Number(match[1]), Number(match[2])];
+  const open = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+  if (match[3]) {
+    const size = Math.min(w, h) * 0.8;
+    const scale = size / 136;
+    const petals = '<path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z"/><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z"/><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z"/><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z"/>';
+    return `${open}<g fill="#4D63F0" transform="translate(${(w - size) / 2 + 4 * scale} ${(h - size) / 2 + 4 * scale}) scale(${scale})">${petals}</g></svg>`;
+  }
+  if (h > w * 2) {
+    const lines = Array.from({ length: Math.floor(h / (w * 0.3)) }, (_, i) => {
+      const y = w * 0.12 + i * w * 0.3;
+      return `<rect x="${w * 0.1}" y="${y}" width="${w * (i % 3 === 0 ? 0.8 : 0.55)}" height="${w * 0.05}" rx="${w * 0.02}" fill="#D5DBE5"/><rect x="${w * 0.1}" y="${y + w * 0.09}" width="${w * 0.8}" height="${w * 0.14}" rx="${w * 0.03}" fill="${i % 2 ? '#EEF4EE' : '#E8EEF8'}"/>`;
+    }).join('');
+    return `${open}<rect width="${w}" height="${h}" fill="#FFFFFF"/>${lines}</svg>`;
+  }
+  const r = Math.min(w, h);
+  return `${open}<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs><rect width="${w}" height="${h}" fill="url(#g)"/><circle cx="${w * 0.72}" cy="${h * 0.3}" r="${r * 0.15}" fill="rgba(255,255,255,.4)"/><path d="M0 ${h * 0.8} ${w * 0.25} ${h * 0.5} ${w * 0.4} ${h * 0.65} ${w * 0.55} ${h * 0.42} ${w} ${h * 0.82}V${h}H0z" fill="rgba(15,23,42,.3)"/></svg>`;
+}
+
 async function fulfillExternal(route: Route): Promise<void> {
   const request = route.request();
   // 路径里带 /gone/ 的链接当作图床上已经没了（失效的「复制时使用」那份）
@@ -42,7 +68,7 @@ async function fulfillExternal(route: Route): Promise<void> {
     return;
   }
   if (request.resourceType() === 'image' || (request.headers().accept ?? '').includes('image/')) {
-    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageFor(request.url()) });
+    await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: ratioImageFor(request.url()) ?? imageFor(request.url()) });
     return;
   }
   await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{}' });
