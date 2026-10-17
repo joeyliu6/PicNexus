@@ -91,18 +91,18 @@ export function restoreCheckStatus(rows: LinkCheckRow[], items: HistoryItem[]): 
     if (!item?.linkCheckStatus?.[row.serviceId]) continue;
 
     const saved = item.linkCheckStatus[row.serviceId];
+    // 'pending' 是历史遗留状态（检测还在排队时落的库）：当作没检测过，与图库「失效」筛选、侧栏琥珀点的 SQL 同一口径
+    if (saved.errorType === 'pending') continue;
     row.checkResult = {
       link: row.url,
       is_valid: saved.isValid,
       status_code: saved.statusCode,
-      // 'pending' 是历史遗留状态，运行态不再使用，退化成 'network'
-      error_type: saved.errorType === 'pending' ? 'network' : saved.errorType,
+      error_type: saved.errorType,
       response_time: saved.responseTime,
       error: saved.error,
       // 防盗链命中必须从持久化字段恢复，否则微博/B站等会从「可疑」错落成「失效」
       browser_might_work: saved.browserMightWork === true,
     };
-    // 0 是遗留的 'pending' 记录，没有真实检查时间
     if (saved.lastCheckTime > 0) row.checkedAt = saved.lastCheckTime;
   }
 }

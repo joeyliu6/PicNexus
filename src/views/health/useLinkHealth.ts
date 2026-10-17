@@ -8,12 +8,12 @@ import { useConfigManager } from '@/composables/useConfig';
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';
-import { buildHealthImages, deadImages, isDead, summarize, type HealthImage, type HealthSummary } from './healthModel';
+import { buildHealthImages, copyStatus, deadImages, isDead, summarize, type HealthImage, type HealthSummary } from './healthModel';
 
 const log = createLogger('LinkHealth');
 
 /** 状态栏的几种状态（HealthScreen.dc.html） */
-export type HealthPageState = 'loading' | 'never' | 'checking' | 'paused' | 'fixing' | 'problems' | 'good';
+export type HealthPageState = 'loading' | 'error' | 'never' | 'checking' | 'paused' | 'fixing' | 'problems' | 'good';
 
 /** 检测中模型最多每 300ms 重算一次：几万条结果边查边进来，逐条重算会拖慢界面 */
 const CHECKING_REBUILD_MS = 300;
@@ -68,7 +68,7 @@ function create() {
   const state = computed<HealthPageState>(() => {
     if (running.value) return linkCheck.isPaused.value ? 'paused' : 'checking';
     if (repairState.running) return 'fixing';
-    if (!linkCheck.loaded.value) return 'loading';
+    if (!linkCheck.loaded.value) return linkCheck.loadError.value && !linkCheck.isLoading.value ? 'error' : 'loading';
     if (!summary.value.everChecked) return 'never';
     return summary.value.dead > 0 ? 'problems' : 'good';
   });
@@ -121,9 +121,9 @@ function create() {
     } finally {
       retrying.delete(id);
     }
+    // 直接看刚落定的结果（模型 300ms 才重算一次，几份结果先后到达时可能还没进模型）
     const after = linkCheck.checkRows.value.find((r) => r.historyId === id && r.serviceId === image.copyHost)?.checkResult;
-    const now = images.value.find((i) => i.id === id);
-    if (now && before && isDead(before) && now.copies[0]?.status === before && after) {
+    if (before && isDead(before) && after && copyStatus(after) === before) {
       stillDead.add(id);
       setTimeout(() => stillDead.delete(id), STILL_DEAD_MS);
     }

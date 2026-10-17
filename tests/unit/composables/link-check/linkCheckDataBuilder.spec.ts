@@ -238,7 +238,7 @@ describe('restoreCheckStatus', () => {
     expect(rows[0].checkedAt).toBe(1234);
   });
 
-  it("errorType 'pending' 转换为 'network'", () => {
+  it("遗留的 'pending' 当作没检测过（与图库「失效」筛选同一口径，不算失效）", () => {
     const items: HistoryItem[] = [{
       id: 'h1',
       timestamp: 0,
@@ -256,7 +256,7 @@ describe('restoreCheckStatus', () => {
     }];
 
     restoreCheckStatus(rows, items);
-    expect(rows[0].checkResult!.error_type).toBe('network');
+    expect(rows[0].checkResult).toBeUndefined();
   });
 
   it('无匹配 item 时 checkResult 不变（仍为 undefined）', () => {

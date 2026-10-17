@@ -1,6 +1,6 @@
 // 自动检测：开着、距上次检测满 N 天才到期；从没检测过不自动开始
 import { describe, expect, it } from 'vitest';
-import { autoCheckSettings, isAutoCheckDue, latestCheckedAt, nextCheckAt } from '@/views/health/autoCheck';
+import { autoCheckSettings, isAutoCheckDue, lastFullCheckAt, nextCheckAt } from '@/views/health/autoCheck';
 
 const DAY = 86_400_000;
 
@@ -23,8 +23,9 @@ describe('autoCheck', () => {
     expect(nextCheckAt({ enabled: true, intervalDays: 1 }, null)).toBeNull();
   });
 
-  it('上次检测 = 全部结果里最新的一条', () => {
-    expect(latestCheckedAt([{ checkedAt: 3 }, {}, { checkedAt: 9 }, { checkedAt: 4 }])).toBe(9);
-    expect(latestCheckedAt([{}])).toBeNull();
+  it('上一次全量检测 = 全部结果里最旧的一条：单行重试只刷新几份，不推迟自动检测', () => {
+    const r = { link: '' };
+    expect(lastFullCheckAt([{ checkedAt: 3, checkResult: r }, {}, { checkedAt: 9, checkResult: r }, { checkedAt: 4, checkResult: r }])).toBe(3);
+    expect(lastFullCheckAt([{}])).toBeNull();
   });
 });

@@ -31,12 +31,14 @@ function makeEngine(rows: LinkCheckRow[]) {
     activeRun: shallowRef<{ keys: Set<string>; startedAt: number } | null>(null),
     progress: ref<BatchCheckProgress | null>(null),
     loaded: ref(true),
+    isLoading: ref(false),
+    loadError: ref<string | null>(null),
     recheckSingle: vi.fn(),
   };
   return engine.state as {
     checkRows: typeof checkRows; isChecking: { value: boolean }; isPaused: { value: boolean }; progressSource: { value: string | null };
     activeRun: { value: { keys: Set<string>; startedAt: number } | null }; progress: { value: BatchCheckProgress | null };
-    loaded: { value: boolean }; recheckSingle: ReturnType<typeof vi.fn>;
+    loaded: { value: boolean }; loadError: { value: string | null }; recheckSingle: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -54,6 +56,13 @@ describe('useLinkHealth', () => {
     expect(health.state.value).toBe('problems');
     e.checkRows.value = [row('a', 'weibo', ok)];
     expect(health.state.value).toBe('good');
+  });
+
+  it('读取失败：不是一直空着，而是「未能读取检测记录」+ 重试', () => {
+    const e = makeEngine([]);
+    e.loaded.value = false;
+    e.loadError.value = 'database unavailable';
+    expect(useLinkHealth().state.value).toBe('error');
   });
 
   it('检测中 / 已暂停 / 修复中优先', () => {

@@ -135,11 +135,25 @@ export function useHealthRowActions(index: () => DocIndex) {
     const dead = image.copies.filter((c) => isDead(c.status));
     if (dead.length === 0) return;
     const whole = dead.length === image.copies.length;
-    const lines = [
-      whole ? `「${image.name}」的每一份链接都已失效，移除后这条记录一并删除。` : `将移除「${image.name}」失效的 ${dead.length} 个链接。`,
-      docs ? `它在 ${formatCount(docs)} 个文档中仍有引用，移除后「文档修复」无法替换这些旧链接。` : '',
-      '图床上的文件不受影响，移除后无法撤销。',
-    ];
+    const docsLine = docs ? `它在 ${formatCount(docs)} 个文档中仍有引用，移除后「文档修复」无法替换这些旧链接。` : '';
+    if (whole) {
+      // 每一份都失效：整条记录移除，与「清理找不回的图片」、图库「移除记录」一样可以撤销（原样放回）
+      const ok = await confirm(`「${image.name}」的每一份链接都已失效，移除后这条记录一并删除。${docsLine}图床上的文件不受影响，可在通知里撤销。`, {
+        header: '移除失效链接？',
+        acceptLabel: '移除',
+        acceptClass: 'p-button-danger',
+      });
+      if (!ok) return;
+      const removed = await historyManager.removeRecords([id]);
+      if (removed.length === 0) return;
+      await health.ensureLoaded({ force: true });
+      toast.withAction('success', '已移除记录', image.name, {
+        label: '撤销',
+        run: () => { void historyManager.restoreRecords(removed).then(() => health.ensureLoaded({ force: true })); },
+      }, { countdown: true });
+      return;
+    }
+    const lines = [`将移除「${image.name}」失效的 ${dead.length} 个链接。`, docsLine, '图床上的文件不受影响，移除后无法撤销。'];
     const report = await historyManager.bulkDeleteHistoryResults(
       dead.map((c) => ({ historyId: id, serviceId: c.host })),
       { header: '移除失效链接？', message: lines.filter(Boolean).join(''), acceptLabel: '移除' },

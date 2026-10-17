@@ -31,6 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   start: [];
+  reload: [];
   recheck: [];
   recheckDead: [];
   repair: [];
@@ -74,7 +75,10 @@ const busy = computed(() => props.state === 'checking' || props.state === 'pause
     </div>
     <div class="health-status__spacer" />
 
-    <template v-if="state === 'never'">
+    <template v-if="state === 'error'">
+      <PnButton size="md" @click="emit('reload')">重试</PnButton>
+    </template>
+    <template v-else-if="state === 'never'">
       <PnButton variant="primary" size="md" :disabled="total === 0" @click="emit('start')">开始检测</PnButton>
     </template>
     <template v-else-if="state === 'checking'">
@@ -89,7 +93,7 @@ const busy = computed(() => props.state === 'checking' || props.state === 'pause
       <PnButton v-if="fixable > 0" variant="primary" size="md" @click="emit('repair')">修复 {{ formatCount(fixable) }} 张</PnButton>
     </template>
 
-    <PnMenu v-if="!busy && state !== 'loading'" :width="280">
+    <PnMenu v-if="!busy && state !== 'loading' && state !== 'error'" :width="280">
       <template #trigger>
         <button type="button" class="health-status__more" aria-label="更多" aria-haspopup="menu">
           <PnIcon name="more" :size="15" :stroke="2" />

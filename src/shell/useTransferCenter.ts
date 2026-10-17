@@ -10,8 +10,8 @@ import { useSupplementBackup } from '@/views/health/useSupplementBackup';
 const open = ref(false);
 /** 在传输中心里手动「清除」过的已完成上传（不影响首页的「最近上传」） */
 const clearedSessionIds = reactive(new Set<string>());
-/** 结束了的链接检测（「链接检测 · N 个链接」）；清除后不再显示 */
-const finishedChecks = reactive<Array<{ id: number; links: number }>>([]);
+/** 结束了的链接检测：查完了几个链接、是不是中途取消的；清除后不再显示 */
+const finishedChecks = reactive<Array<{ id: number; links: number; cancelled: boolean }>>([]);
 let checkSeq = 0;
 let watchingChecks = false;
 
@@ -20,13 +20,16 @@ export function useTransferCenter() {
   const linkCheck = useLinkCheckManager();
   const backup = useSupplementBackup();
 
-  // 检测结束（含取消）记一条「已完成」：本轮覆盖的链接数
+  // 检测结束记一条「已完成」：实际查完的链接数；没查完就结束的是中途取消
   if (!watchingChecks) {
     watchingChecks = true;
     let runLinks = 0;
     watch(linkCheck.activeRun, (run, previous) => {
       if (run) runLinks = run.keys.size;
-      else if (previous && runLinks > 0) finishedChecks.push({ id: ++checkSeq, links: runLinks });
+      else if (previous && runLinks > 0) {
+        const checked = Math.min(linkCheck.progress.value?.checked ?? 0, runLinks);
+        finishedChecks.push({ id: ++checkSeq, links: checked, cancelled: checked < runLinks });
+      }
     });
   }
 

@@ -26,6 +26,8 @@ const props = defineProps<{
   dayLabel: string | null;
   showFilters: boolean;
   narrow: boolean;
+  /** 修复中：不给「显示其余 N 张」（L10） */
+  fixing: boolean;
   hostName: (id: string) => string;
   shortHostName: (id: string) => string;
   config: UserConfig;
@@ -142,7 +144,7 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
         <span class="dead-list__count">{{ formatCount(group.images.length) }} 张</span>
         <div class="dead-list__spacer" />
         <button
-          v-if="group.images.length > visible(group).length"
+          v-if="!fixing && group.images.length > visible(group).length"
           type="button"
           class="dead-list__more"
           @click="extra[group.key] = (extra[group.key] ?? 0) + MORE_ROWS"

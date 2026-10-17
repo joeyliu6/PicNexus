@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 链接健康（HealthScreen.dc.html，交接说明 8.3）：标题行 → 状态栏 → 上传日历 → 三张工具卡 → 全部失效图片。
 // 没有二级页面；文档修复、补充备份是弹窗。这里只接线：数据与动作在 useLinkHealth / useHealthRepair / useHealthRowActions。
-import { computed, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
+import { computed, onActivated, onDeactivated, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import UploadCalendar from '@/components/biz/UploadCalendar.vue';
 import YearPills from '@/components/biz/YearPills.vue';
@@ -16,7 +16,7 @@ import HealthDeadList, { type YearFilter } from './HealthDeadList.vue';
 import HealthStatusBar from './HealthStatusBar.vue';
 import HealthToolCards from './HealthToolCards.vue';
 import { buildCalendar, countByDay, countByYear, defaultYear, yearPills } from './healthCalendar';
-import { deadGroups, fullDate, isDead, NO_FILTERS, type DeadFilters } from './healthModel';
+import { backupScope, deadGroups, fullDate, isDead, NO_FILTERS, type DeadFilters } from './healthModel';
 import { statusText } from './healthStatus';
 import RepairDialog from './RepairDialog.vue';
 import { useDocFolders } from './useDocFolders';
@@ -90,23 +90,29 @@ function pickDay(key: string): void {
   day.value = day.value === key ? null : key;
 }
 
+const busy = computed(() => state.value === 'checking' || state.value === 'paused');
+/** 筛选按钮藏起来（检测中、窄窗口）时，原因 / 图床 / 年份三个筛选也不生效：看不见的条件不该卡住清单 */
+const showFilters = computed(() => !busy.value && !narrow.value);
 const filters = computed<DeadFilters>(() => ({
   ...NO_FILTERS,
-  reason: reason.value === 'all' ? null : reason.value as DeadFilters['reason'],
-  host: host.value === 'all' ? null : host.value,
-  year: listYear.value === 'all' ? null : listYear.value === 'sync' ? shownYear.value : listYear.value,
+  ...(showFilters.value ? {
+    reason: reason.value === 'all' ? null : reason.value as DeadFilters['reason'],
+    host: host.value === 'all' ? null : host.value,
+    year: listYear.value === 'all' ? null : listYear.value === 'sync' ? shownYear.value : listYear.value,
+  } : {}),
   day: day.value,
 }));
 const pool = computed(() => images.value.filter((i) => i.state === 'fixable' || i.state === 'unfixable' || i.state === 'limited'));
 const groups = computed(() => deadGroups(pool.value, filters.value, getDayKey).filter((g) => !onlyUnfixable.value || g.key === 'unfixable'));
-const busy = computed(() => state.value === 'checking' || state.value === 'paused');
 const showList = computed(() => ['problems', 'checking', 'paused', 'fixing'].includes(state.value)
   && (summary.value.dead > 0 || (reason.value === 'limited' && summary.value.limited > 0)));
 const listCount = computed(() => `${formatCount(groups.value.reduce((n, g) => n + g.images.length, 0))} 张`);
+/** 日期标签由日期键直接算（不看眼前是哪一年的日历）：换了年份，标签照样在、照样能移除 */
 const dayLabel = computed(() => {
-  const cell = day.value ? calendar.value.weeks.flat().find((c) => c?.key === day.value) : null;
   if (onlyUnfixable.value) return '无可用备份';
-  return cell ? fullDate(cell.date) : null;
+  if (!day.value) return null;
+  const [y, m, d] = day.value.split('-').map(Number);
+  return fullDate(new Date(y, m, d).getTime());
 });
 
 function clearChip(): void {
@@ -158,21 +164,23 @@ const backupTargets = computed<BackupTarget[]>(() => {
   const counts = new Map<string, number>();
   const holds = new Map<string, number>();
   for (const image of images.value) {
-    for (const c of image.copies) counts.set(c.host, (counts.get(c.host) ?? 0) + 1);
-    const only = image.singleCopy ? image.copies.find((c) => !isDead(c.status)) : undefined;
-    if (only) holds.set(only.host, (holds.get(only.host) ?? 0) + 1);
+    for (const c of image.copies) {
+      if (!isDead(c.status)) counts.set(c.host, (counts.get(c.host) ?? 0) + 1);
+      // 「仅 1 份」的图在这个图床上已有一份（哪怕失效了）：补充备份不会再往这里传（记录里已有这个图床），算作「在它上面」
+      if (image.singleCopy) holds.set(c.host, (holds.get(c.host) ?? 0) + 1);
+    }
   }
   return upload.hosts.value.map((h) => ({
     id: h.id,
     name: h.name,
     count: counts.get(h.id) ?? 0,
     holds: holds.get(h.id) ?? 0,
-    blocked: h.warning ? (h.cookieLogin ? '登录已过期，暂不可选' : `${h.warning}，暂不可选`) : null,
+    blocked: h.warning ? (h.cookieLogin ? '登录已过期，暂不可选' : '暂不可用，请在图床页检查配置') : null,
   }));
 });
 
 function startBackup(hostId: string): void {
-  const ids = images.value.filter((i) => i.singleCopy && !i.copies.some((c) => c.host === hostId && !isDead(c.status))).map((i) => i.id);
+  const ids = backupScope(images.value, hostId).map((i) => i.id);
   void backup.start(hostId, ids);
 }
 
@@ -185,7 +193,7 @@ function enter(): void {
   void health.ensureLoaded();
   if (!repairState.running) void docFolders.scan();
 }
-onMounted(enter);
+// 页面在 KeepAlive 里：第一次挂载也会触发 onActivated，不另挂 onMounted（免得文档文件夹扫两遍）
 onActivated(enter);
 onDeactivated(() => {
   clearTimeout(midnight);
@@ -211,6 +219,7 @@ onDeactivated(() => {
           :auto-check-value="autoCheck.value.value"
           :auto-check-label="autoCheck.label.value"
           @start="health.check()"
+          @reload="health.ensureLoaded({ force: true })"
           @recheck="health.check()"
           @recheck-dead="health.check('dead')"
           @repair="repair.repair(dead.filter((i) => i.state === 'fixable').map((i) => i.id))"
@@ -251,8 +260,9 @@ onDeactivated(() => {
         :title="busy ? '已发现的失效图片' : '全部失效图片'"
         :count="listCount"
         :day-label="dayLabel"
-        :show-filters="!busy && !narrow"
+        :show-filters="showFilters"
         :narrow="narrow"
+        :fixing="state === 'fixing'"
         :host-name="health.hostName"
         :short-host-name="health.shortHostName"
         :config="health.config.value"

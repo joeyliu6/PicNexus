@@ -1,4 +1,4 @@
-// MD 文档救援 — 严格 UTF-8 文本读写
+// 文档修复 — 严格 UTF-8 文本读写
 //
 // Why：plugin-fs 的 readTextFile 内部用非 fatal 的 TextDecoder，GBK 等非 UTF-8 字节会被
 // 静默替换成 U+FFFD（`�`）。修复流程读进来是乱码、写回去就把乱码固化进用户原文件，
@@ -7,13 +7,10 @@
 
 import { readFile, writeTextFile } from '@tauri-apps/plugin-fs';
 
-/** 非 UTF-8 文件的统一提示文案（failedFiles 列表与 toast 共用） */
-export const NON_UTF8_ERROR_MESSAGE = '编码不受支持（非 UTF-8），已跳过以免写回乱码';
-
-/** 文件不是合法 UTF-8，禁止读写。调用方据此把文件计入失败而非继续处理 */
+/** 文件不是合法 UTF-8，禁止读写。调用方据此把文件计入失败而非继续处理（说法见 docFiles.describeDocError） */
 export class NonUtf8FileError extends Error {
   constructor() {
-    super(NON_UTF8_ERROR_MESSAGE);
+    super('编码不受支持（非 UTF-8），已跳过以免写回乱码');
     this.name = 'NonUtf8FileError';
   }
 }
@@ -21,7 +18,7 @@ export class NonUtf8FileError extends Error {
 /** U+FEFF，用转义写法避免源码里出现不可见字符 */
 const UTF8_BOM = '\uFEFF';
 
-export interface MdTextFile {
+interface MdTextFile {
   /** 已剥离 BOM 的文本内容 */
   content: string;
   /** 原文件是否带 UTF-8 BOM，写回时需要补回，避免静默改变文件字节 */
@@ -56,9 +53,4 @@ export async function writeUtf8TextFile(
   hasBom: boolean,
 ): Promise<void> {
   await writeTextFile(path, hasBom ? UTF8_BOM + content : content);
-}
-
-/** 把读取异常转成给用户看的一句话（NonUtf8FileError 直接用它自己的文案，不带 `Error:` 前缀） */
-export function describeReadError(err: unknown): string {
-  return err instanceof NonUtf8FileError ? err.message : String(err);
 }

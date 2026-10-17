@@ -442,12 +442,11 @@
   /* 详情链接旁的「复制」宽 52 */
   --pn-size-detail-copy: 52px;
 
-  /* 链接健康（HealthScreen.dc.html）：状态栏行高 40、内部间距 10；琥珀点 7、转圈 15、暂停符号 13；细进度条 120 */
+  /* 链接健康（HealthScreen.dc.html）：状态栏行高 40、内部间距 10；琥珀点 7、转圈 15；细进度条 120 */
   --pn-size-health-status: 40px;
   --pn-space-health-status-gap: 10px;
   --pn-size-health-dot: 7px;
   --pn-size-health-spinner: 15px;
-  --pn-size-health-pause: 13px;
   --pn-size-health-progress: 120px;
   /* 上传日历：面板内边距 18 24 22（窄窗口 14 16 16）、行间 14；年份胶囊高 28、圆角 14、左右 11（窄 8）、数字间距 5 */
   --pn-space-calendar-pad: 18px 24px 22px;
@@ -496,10 +495,6 @@
   --pn-radius-dead-chip: 12px;
   --pn-space-dead-chip: 0 4px 0 10px;
   --pn-space-dead-filter: 0 8px 0 10px;
-  /* 三个菜单宽：状态栏「⋯」280、行「⋯」250、年份 200 */
-  --pn-size-health-card-menu: 280px;
-  --pn-size-health-row-menu: 250px;
-  --pn-size-health-year-menu: 200px;
   /* 两个弹窗里的列表：文件夹行 40（左 14、右 6）、「添加文件夹…」38、文档 / 图床行至少 44；图床图标底板 28、圆角 7；单选圈 18 */
   --pn-size-doc-folder-row: 40px;
   --pn-space-doc-folder-row: 0 6px 0 14px;

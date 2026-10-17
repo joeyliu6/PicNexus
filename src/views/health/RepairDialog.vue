@@ -21,6 +21,8 @@ const emit = defineEmits<{ add: []; remove: [path: string]; repair: []; openDoc:
 
 const dead = computed(() => props.problems.reduce((n, p) => n + p.dead, 0));
 const fixable = computed(() => props.problems.reduce((n, p) => n + p.fixable, 0));
+/** 还有文件夹在读：不急着说「没有失效图片」 */
+const reading = computed(() => props.folders.some((f) => f.status === 'scanning'));
 
 function folderMeta(folder: DocFolder): string {
   if (folder.status === 'scanning') return '正在读取…';
@@ -71,7 +73,7 @@ function repair(): void {
           </div>
         </div>
       </div>
-      <span v-else class="repair-dialog__note">文档中没有失效图片</span>
+      <span v-else class="repair-dialog__note">{{ reading ? '正在读取文档…' : '文档中没有失效图片' }}</span>
     </div>
 
     <span v-if="problems.length" class="repair-dialog__note">

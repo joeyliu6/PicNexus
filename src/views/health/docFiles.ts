@@ -108,7 +108,7 @@ async function pruneBackups(folder: string): Promise<void> {
   try {
     const base = await join(folder, BACKUP_DIR_NAME);
     const dirs = (await readDir(base))
-      .filter((e) => e.isDirectory && /^\d{8}_\d{6}$/.test(e.name))
+      .filter((e) => e.isDirectory && /^\d{8}_\d{6}(_\d{3})?$/.test(e.name))
       .map((e) => e.name)
       .sort();
     await Promise.allSettled(dirs.slice(0, Math.max(0, dirs.length - KEEP_BACKUPS)).map(async (dir) => remove(await join(base, dir), { recursive: true })));
@@ -121,7 +121,8 @@ async function pruneBackups(folder: string): Promise<void> {
 export async function writeDocs(writes: readonly DocWrite[], now: Date = new Date()): Promise<WriteOutcome> {
   const outcome: WriteOutcome = { written: [], failed: [] };
   if (writes.length === 0) return outcome;
-  const stamp = formatTimestampCompact(now);
+  // 精确到毫秒：同一秒里连着修两次（两行「改用」引用了同一个文档），第二次的备份不能盖掉第一次的原文
+  const stamp = `${formatTimestampCompact(now)}_${String(now.getMilliseconds()).padStart(3, '0')}`;
   const backupDirs = new Map<string, string>();
   for (const write of writes) {
     try {

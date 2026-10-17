@@ -140,13 +140,16 @@ export interface HealthSummary {
   lostForGood: number;
   /** 有没有任何一份检测过：没有就是「尚未检测」 */
   everChecked: boolean;
-  /** 全部检测结果里最新的一次 */
-  lastCheckedAt: number | null;
+  /**
+   * 上一次全量检测：全部检测结果里最旧的那条的时间（每轮全量检测会把每一份都查一遍）。
+   * 不取最新的一条：单行「重试」、「仅重新检测失效图片」只查几份，不该让「上次检测」与自动检测的计时归零
+   */
+  lastFullCheckAt: number | null;
   links: number;
 }
 
 export function summarize(images: readonly HealthImage[]): HealthSummary {
-  const s: HealthSummary = { total: images.length, dead: 0, fixable: 0, unfixable: 0, limited: 0, singleCopy: 0, lostForGood: 0, everChecked: false, lastCheckedAt: null, links: 0 };
+  const s: HealthSummary = { total: images.length, dead: 0, fixable: 0, unfixable: 0, limited: 0, singleCopy: 0, lostForGood: 0, everChecked: false, lastFullCheckAt: null, links: 0 };
   for (const image of images) {
     if (image.state === 'fixable') s.fixable++;
     if (image.state === 'unfixable') s.unfixable++;
@@ -157,7 +160,7 @@ export function summarize(images: readonly HealthImage[]): HealthSummary {
       s.links++;
       const at = copy.row.checkedAt;
       if (copy.row.checkResult) s.everChecked = true;
-      if (at !== undefined && (s.lastCheckedAt === null || at > s.lastCheckedAt)) s.lastCheckedAt = at;
+      if (copy.row.checkResult && at !== undefined && (s.lastFullCheckAt === null || at < s.lastFullCheckAt)) s.lastFullCheckAt = at;
     }
   }
   s.dead = s.fixable + s.unfixable;
@@ -261,6 +264,14 @@ export function problemSubline(summary: HealthSummary, dead: readonly HealthImag
     `${formatCount(summary.fixable)} 张可用备份修复`,
     summary.limited > 0 ? `另有 ${formatCount(summary.limited)} 张可能受限` : '',
   ].filter(Boolean).join(' · ');
+}
+
+/**
+ * 补充备份到 hostId 的范围：「仅有 1 份」、且这个图床上还没有它的任何一份。
+ * 已有一份失效的也不算：记录里已有这个图床，迁移管线会按「目标上已有」跳过，补不上
+ */
+export function backupScope(images: readonly HealthImage[], hostId: string): HealthImage[] {
+  return images.filter((image) => image.singleCopy && !image.copies.some((c) => c.host === hostId));
 }
 
 /** 缩略图先试能打开的那份：正常 > 受限 > 尚未检测 > 失效（「图片已不存在」最后） */

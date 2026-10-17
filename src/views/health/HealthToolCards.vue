@@ -43,8 +43,9 @@ const docCard = computed(() => {
   const problems = props.docProblems;
   const dead = problems.reduce((n, p) => n + p.dead, 0);
   const fixable = problems.reduce((n, p) => n + p.fixable, 0);
+  if (state.value === 'loading') return { num: '', desc: '', button: '' };
   if (folderPaths.value.length === 0) return { num: '', desc: '添加文档文件夹，失效图片可在文档中一键替换', button: '添加文件夹…' };
-  if (state.value === 'fixing') return { num: `${formatCount(repairState.docCount || problems.length)} 个文档`, desc: '正在更新，修改前已自动备份原文件', button: '' };
+  if (state.value === 'fixing' && repairState.docCount > 0) return { num: `${formatCount(repairState.docCount)} 个文档`, desc: '正在更新，修改前已自动备份原文件', button: '' };
   if (repairState.lastDocs) {
     return { num: `${formatCount(repairState.lastDocs.docs)} 个文档已更新`, desc: `共替换 ${formatCount(repairState.lastDocs.places)} 处旧链接，可撤销`, button: '查看…' };
   }
@@ -80,6 +81,8 @@ const backupCard = computed(() => {
   }
   if (s.phase === 'paused') return { num: progressNum, desc: cat('已暂停 · 复制到', targetName.value), button: '继续', progress };
   const single = summary.value.singleCopy;
+  // 读取中数字都是 0：不写「每张图片至少保存在 2 个图床」这类结论（会先闪一下好消息）
+  if (state.value === 'loading') return { num: '', desc: '', button: '' };
   if (s.phase === 'done' && s.failed.length) return { num: '已完成', desc: `${formatCount(s.failed.length)} 张未能备份`, button: '重试' };
   // 刚备份完、没有「仅 1 份」的了才说「每张至少 2 个图床」；还剩（那 1 份就在目标图床上）照平常的样子
   if (s.phase === 'done' && single === 0) return { num: '已完成', desc: '每张图片至少保存在 2 个图床', button: '' };
@@ -99,8 +102,10 @@ function onBackupAction(): void {
 
 // ---- 第三张 ----
 
-const showLost = computed(() => summary.value.dead > 0 && state.value !== 'never' && state.value !== 'loading');
-const nextCheck = computed(() => nextCheckAt(autoCheck.settings.value, summary.value.lastCheckedAt));
+/** 有找不回的图才显示这张卡（失效的全都能修时不写「0 张」，换回自动检测） */
+const showLost = computed(() => summary.value.unfixable > 0 && state.value !== 'never' && state.value !== 'loading');
+const loading = computed(() => state.value === 'loading');
+const nextCheck = computed(() => nextCheckAt(autoCheck.settings.value, summary.value.lastFullCheckAt));
 const autoMenuModel = computed({ get: () => autoCheck.value.value, set: (v: string) => { void autoCheck.set(v); } });
 
 function turnOnAuto(): void {
@@ -125,7 +130,14 @@ function turnOnAuto(): void {
     </ToolCard>
 
     <ToolCard
-      v-if="showLost"
+      v-if="loading"
+      title="自动检测"
+      art="auto"
+      desc=""
+      :narrow="narrow"
+    />
+    <ToolCard
+      v-else-if="showLost"
       title="找不回的图片"
       art="lost"
       :num="`${formatCount(summary.unfixable)} 张`"
@@ -133,7 +145,7 @@ function turnOnAuto(): void {
       desc="所有副本均已失效，可重新上传原图"
       :narrow="narrow"
     >
-      <template v-if="summary.unfixable > 0" #action>
+      <template #action>
         <PnButton size="sm" @click="emit('showLost')">查看</PnButton>
       </template>
     </ToolCard>
@@ -174,4 +186,7 @@ function turnOnAuto(): void {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--pn-space-12);
 }
+
+/* 工具卡按钮左右 12（设计稿；PnButton 小号默认 10） */
+.health-cards .pn-button { padding: 0 var(--pn-space-12); }
 </style>

@@ -1,9 +1,9 @@
 // 状态栏那一行：每种状态的标题与说明照 HealthScreen.dc.html 的 SB 表
 import { describe, expect, it } from 'vitest';
-import { statusText, type StatusInput } from '@/views/health/healthStatus';
+import { checkedAgo, statusText, type StatusInput } from '@/views/health/healthStatus';
 import type { HealthSummary } from '@/views/health/healthModel';
 
-const summary: HealthSummary = { total: 12_483, dead: 21, fixable: 15, unfixable: 6, limited: 13, singleCopy: 0, lostForGood: 4, everChecked: true, lastCheckedAt: Date.now() - 3 * 86_400_000, links: 25_714 };
+const summary: HealthSummary = { total: 12_483, dead: 21, fixable: 15, unfixable: 6, limited: 13, singleCopy: 0, lostForGood: 4, everChecked: true, lastFullCheckAt: Date.now() - 3 * 86_400_000, links: 25_714 };
 const base: StatusInput = {
   state: 'problems',
   summary,
@@ -37,6 +37,17 @@ describe('statusText', () => {
 
   it('有失效 / 全部正常', () => {
     expect(statusText(base).title).toBe('21 张图片失效');
-    expect(statusText({ ...base, state: 'good' })).toEqual({ title: '全部正常', sub: '12,483 张图片均可访问 · 上次检测：3 天前' });
+    expect(statusText({ ...base, state: 'good', summary: { ...summary, limited: 0 } })).toEqual({ title: '全部正常', sub: '12,483 张图片均可访问 · 上次检测：3 天前' });
+  });
+
+  it('全部正常但有可能受限的：单独说一句', () => {
+    expect(statusText({ ...base, state: 'good' }).sub).toBe('12,483 张图片均可访问 · 另有 13 张可能受限 · 上次检测：3 天前');
+  });
+
+  it('上次检测：一周以内说「N 天前」，更早写日期', () => {
+    const now = new Date(2026, 9, 16, 10).getTime();
+    expect(checkedAgo(now - 30_000, now)).toBe('刚刚');
+    expect(checkedAgo(now - 3 * 3_600_000, now)).toBe('3 小时前');
+    expect(checkedAgo(new Date(2026, 9, 9, 9).getTime(), now)).toBe('10月9日');
   });
 });

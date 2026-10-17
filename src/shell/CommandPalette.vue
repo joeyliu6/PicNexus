@@ -10,6 +10,7 @@ import PnIcon from '@/components/pn/PnIcon.vue';
 import type { HistoryItem } from '@/config/types';
 import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
+import { repairState } from '@/views/health/useLinkHealth';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
 import { useCopyLink } from '@/composables/useCopyLink';
 import { useThemeManager } from '@/composables/useTheme';
@@ -75,9 +76,9 @@ async function run(entry: CommandEntry, alt: boolean): Promise<void> {
   else if (target.action === 'pick') void upload.pickAndUpload();
   else if (target.action === 'url') { await router.push('/home'); urlDialog.show(); }
   else if (target.action === 'check') {
-    // 直接开始检测，并到链接健康页看进度（正在检测时只跳过去）
+    // 直接开始检测，并到链接健康页看进度（正在检测或修复时只跳过去）
     await router.push('/health');
-    if (!linkCheck.isChecking.value) void linkCheck.checkAllHistoryLinks();
+    if (!linkCheck.isChecking.value && !repairState.running) void linkCheck.checkAllHistoryLinks();
   }
   else if (target.action === 'theme') await theme.setTheme(theme.effectiveTheme.value === 'dark' ? 'light' : 'dark');
 }

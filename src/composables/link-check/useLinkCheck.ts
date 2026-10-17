@@ -785,6 +785,8 @@ export function useLinkCheckManager() {
     progress,
     checkRows,
     activeRun,
+    /** 读取检测记录失败的原因；读成功后清空 */
+    loadError,
     // 方法
     loadHistoryRows,
     checkAllHistoryLinks,

@@ -149,8 +149,9 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
         {{ cat('补充备份到', backupName) }} · {{ formatCount(backup.state.succeeded.length) }} 张
       </span>
       <span v-for="check in transfer.finishedChecks" :key="check.id" class="transfer-center__done-line">
-        <PnIcon name="check" :size="13" :stroke="2.4" class="transfer-center__success" />
-        链接检测 · {{ formatCount(check.links) }} 个链接
+        <PnIcon :name="check.cancelled ? 'close' : 'check'" :size="13" :stroke="2.4" :class="check.cancelled ? 'transfer-center__muted-icon' : 'transfer-center__success'" />
+        <template v-if="check.cancelled">链接检测已取消 · 已查 {{ formatCount(check.links) }} 个链接</template>
+        <template v-else>链接检测 · {{ formatCount(check.links) }} 个链接</template>
       </span>
     </div>
 
@@ -301,5 +302,6 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
 
 .transfer-center__success { flex: none; color: var(--pn-success); }
 .transfer-center__danger { flex: none; color: var(--pn-danger); }
+.transfer-center__muted-icon { flex: none; color: var(--pn-text3); }
 .transfer-center__empty { margin: 0; font-size: var(--pn-text-footnote); color: var(--pn-text3); }
 </style>

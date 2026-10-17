@@ -18,7 +18,7 @@ export interface BackupTarget {
   count: number;
   /** 不可选的原因（「登录已过期，暂不可选」）；可选时为空 */
   blocked: string | null;
-  /** 「仅有 1 份」的图里，那 1 份就在这个图床上的张数（选它等于什么都不复制） */
+  /** 「仅有 1 份」的图里，在这个图床上已有一份（含失效的那份）的张数：选它时这些会被跳过 */
   holds: number;
 }
 
@@ -40,7 +40,11 @@ watch(open, (isOpen) => {
   picked.value = best?.id ?? '';
 }, { immediate: true });
 
-const estimate = computed(() => minutesText(props.total * BACKUP_SECONDS_PER_IMAGE));
+/** 预计时间按选中的图床真正要复制的张数算（那 1 份已在它上面的会被跳过） */
+const estimate = computed(() => {
+  const holds = props.targets.find((t) => t.id === picked.value)?.holds ?? 0;
+  return minutesText(Math.max(0, props.total - holds) * BACKUP_SECONDS_PER_IMAGE);
+});
 
 function start(): void {
   if (!picked.value) return;

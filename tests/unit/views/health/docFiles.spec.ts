@@ -22,9 +22,9 @@ describe('writeDocs', () => {
 
     const outcome = await writeDocs([write('C:/docs/blog/a.md')], STAMP);
 
-    expect(fs.copyFile).toHaveBeenCalledWith('C:/docs/blog/a.md', 'C:/docs/.picnexus-backup/20261017_093005/blog/a.md');
+    expect(fs.copyFile).toHaveBeenCalledWith('C:/docs/blog/a.md', 'C:/docs/.picnexus-backup/20261017_093005_000/blog/a.md');
     expect(fs.writeTextFile).toHaveBeenCalledWith('C:/docs/blog/a.md', `![](${NEW})`);
-    expect(outcome.written).toEqual([{ path: 'C:/docs/blog/a.md', backup: 'C:/docs/.picnexus-backup/20261017_093005/blog/a.md', content: `![](${NEW})`, places: 1 }]);
+    expect(outcome.written).toEqual([{ path: 'C:/docs/blog/a.md', backup: 'C:/docs/.picnexus-backup/20261017_093005_000/blog/a.md', content: `![](${NEW})`, places: 1 }]);
     expect(outcome.failed).toEqual([]);
   });
 
@@ -53,6 +53,16 @@ describe('writeDocs', () => {
     const outcome = await writeDocs([write('C:/docs/code.md')], STAMP);
     expect(fs.copyFile).not.toHaveBeenCalled();
     expect(outcome.written).toEqual([]);
+  });
+
+  it('同一秒里先后两次修复：备份目录精确到毫秒，第二次不盖掉第一次的原文', async () => {
+    const fs = getFsMocks();
+    fs.readFile.mockResolvedValue(utf8Bytes(`![](${OLD})`));
+    const first = await writeDocs([write('C:/docs/a.md')], new Date(2026, 9, 17, 9, 30, 5, 100));
+    fs.readFile.mockResolvedValue(utf8Bytes(`![](${OLD})
+![](${OLD})`));
+    const second = await writeDocs([write('C:/docs/a.md')], new Date(2026, 9, 17, 9, 30, 5, 900));
+    expect(first.written[0].backup).not.toBe(second.written[0].backup);
   });
 
   it('Windows verbatim 路径也算得出相对路径；算不出时退回 hash 前缀，同名文件备份互不覆盖', async () => {

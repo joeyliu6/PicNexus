@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CheckLinkResult, LinkCheckRow } from '@/types/linkCheck';
 import { getDayKey } from '@/utils/formatters';
 import {
-  backupLine, buildHealthImages, concentration, copyStatus, deadGroups, deadImages, minutesText,
+  backupLine, backupScope, buildHealthImages, concentration, copyStatus, deadGroups, deadImages, minutesText,
   NO_FILTERS, problemSubline, reasonLine, summarize,
 } from '@/views/health/healthModel';
 
@@ -134,8 +134,20 @@ describe('buildHealthImages', () => {
   });
 });
 
+describe('backupScope', () => {
+  it('仅有 1 份、且目标图床上还没有任何一份（失效的那份也算已有，补不上）', () => {
+    const images = buildHealthImages([
+      primary('a', 'jd', ok(), { uploadedAt: 3 }),
+      primary('b', 'jd', ok(), { uploadedAt: 2 }), row('b', 'weibo', http(404), { uploadedAt: 2 }),
+      primary('c', 'jd', ok(), { uploadedAt: 1 }), row('c', 'r2', ok(), { uploadedAt: 1 }),
+    ]);
+    expect(backupScope(images, 'weibo').map((i) => i.id)).toEqual(['a']);
+    expect(backupScope(images, 'r2').map((i) => i.id)).toEqual(['a', 'b']);
+  });
+});
+
 describe('summarize', () => {
-  it('失效 = 可改用 + 无可用；可能受限单独计数；上次检测取最新的一次', () => {
+  it('失效 = 可改用 + 无可用；可能受限单独计数；上次全量检测取最旧的一条结果', () => {
     const images = buildHealthImages([
       primary('a', 'weibo', http(404), { uploadedAt: 3, checkedAt: 5 }), row('a', 'jd', ok(), { uploadedAt: 3, checkedAt: 7 }),
       primary('b', 'weibo', timeout, { uploadedAt: 2, checkedAt: 6 }),
@@ -143,7 +155,7 @@ describe('summarize', () => {
     ]);
     const s = summarize(images);
     expect([s.total, s.dead, s.fixable, s.unfixable, s.limited]).toEqual([3, 2, 1, 1, 1]);
-    expect(s.lastCheckedAt).toBe(7);
+    expect(s.lastFullCheckAt).toBe(4);
     expect(s.everChecked).toBe(true);
     expect(s.links).toBe(4);
   });
@@ -151,7 +163,7 @@ describe('summarize', () => {
   it('一份都没检测过就是尚未检测', () => {
     const s = summarize(buildHealthImages([primary('a', 'weibo')]));
     expect(s.everChecked).toBe(false);
-    expect(s.lastCheckedAt).toBeNull();
+    expect(s.lastFullCheckAt).toBeNull();
   });
 });
 

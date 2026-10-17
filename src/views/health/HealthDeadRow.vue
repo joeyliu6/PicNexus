@@ -13,7 +13,7 @@ import { getCopiesThumbnailCandidates } from '@/composables/image/useThumbCache'
 import type { UserConfig } from '@/config/types';
 import { joinCjk as cat } from '@/utils/cjkSpacing';
 import { formatCount } from '@/utils/formatters';
-import { backupLine, fullDate, reasonLine, thumbCopies, type HealthImage } from './healthModel';
+import { backupLine, fullDate, isDead, reasonLine, thumbCopies, type HealthImage } from './healthModel';
 
 const props = defineProps<{
   image: HealthImage;
@@ -39,6 +39,9 @@ const emit = defineEmits<{
   openBrowser: [];
   removeDead: [];
 }>();
+
+/** 「可能受限」的行没有失效的那份：菜单里不放「移除失效链接…」 */
+const hasDead = computed(() => props.image.copies.some((c) => isDead(c.status)));
 
 const thumbs = computed(() => getCopiesThumbnailCandidates(thumbCopies(props.image), props.config));
 
@@ -94,8 +97,10 @@ const docsText = computed(() => {
       <PnMenuItem @select="emit('reupload')">重新上传原图…</PnMenuItem>
       <PnMenuItem @select="emit('locate')">在图库中查看</PnMenuItem>
       <PnMenuItem @select="emit('openBrowser')">在浏览器打开</PnMenuItem>
-      <PnMenuSeparator />
-      <PnMenuItem danger description="执行前将提示文档中可能仍有引用" @select="emit('removeDead')">移除失效链接…</PnMenuItem>
+      <template v-if="hasDead">
+        <PnMenuSeparator />
+        <PnMenuItem danger description="执行前将提示文档中可能仍有引用" @select="emit('removeDead')">移除失效链接…</PnMenuItem>
+      </template>
     </PnMenu>
     <span v-if="!last" class="dead-row__divider" aria-hidden="true" />
   </div>
@@ -199,4 +204,7 @@ const docsText = computed(() => {
   height: 1px;
   background: var(--pn-border);
 }
+
+/* 行内按钮左右 12（设计稿；PnButton 小号默认 10） */
+.dead-row__action .pn-button { padding: 0 var(--pn-space-12); }
 </style>

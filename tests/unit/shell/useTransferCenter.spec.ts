@@ -30,14 +30,24 @@ describe('useTransferCenter', () => {
 
   it('检测结束记一条「链接检测 · N 个链接」，清除后不再显示；补充备份完成的那条一起清掉', async () => {
     const activeRun = shallowRef<{ keys: Set<string>; startedAt: number } | null>(null);
-    m.linkCheck = { isChecking: ref(false), activeRun, progress: ref(null) };
+    const progress = ref<{ checked: number; total: number; current_url: string } | null>(null);
+    m.linkCheck = { isChecking: ref(false), activeRun, progress };
     m.backup = { state: reactive({ phase: 'done', processed: 4, total: 4 }), clearFinished: vi.fn() };
     const transfer = await fresh();
     activeRun.value = { keys: new Set(['a', 'b', 'c']), startedAt: 0 };
     await nextTick();
+    progress.value = { checked: 3, total: 3, current_url: '' };
     activeRun.value = null;
     await nextTick();
-    expect(transfer.finishedChecks).toEqual([{ id: 1, links: 3 }]);
+    expect(transfer.finishedChecks).toEqual([{ id: 1, links: 3, cancelled: false }]);
+
+    // 中途取消：记实际查完的数，并标成取消
+    activeRun.value = { keys: new Set(['a', 'b', 'c', 'd']), startedAt: 1 };
+    await nextTick();
+    progress.value = { checked: 1, total: 4, current_url: '' };
+    activeRun.value = null;
+    await nextTick();
+    expect(transfer.finishedChecks[1]).toEqual({ id: 2, links: 1, cancelled: true });
     expect(transfer.hasFinished.value).toBe(true);
     transfer.clearFinished();
     expect(transfer.finishedChecks).toEqual([]);
