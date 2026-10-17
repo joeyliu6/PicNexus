@@ -114,7 +114,7 @@ function finishRename(): void {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--pn-space-2);
+  gap: var(--pn-space-host-text-gap);
   min-width: 0;
 }
 

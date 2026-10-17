@@ -8,14 +8,12 @@ import type { HostUsage } from '@/services/database/HostUsageQuery';
 const props = defineProps<{ usage: HostUsage | null }>();
 const emit = defineEmits<{ showDead: [] }>();
 
-const BAR_MAX = 44;
-const BAR_MIN = 3;
-
+// 柱高按柱区高度（--pn-size-host-bars）的百分比给，最矮 --pn-size-host-bar-min：尺寸只在令牌里写一处
 const bars = computed(() => {
   const days = props.usage?.last14 ?? new Array<number>(14).fill(0);
   const max = Math.max(1, ...days);
   return days.map((v, i) => ({
-    height: `${Math.max(BAR_MIN, Math.round((BAR_MAX * v) / max))}px`,
+    height: `max(var(--pn-size-host-bar-min), ${Math.round((100 * v) / max)}%)`,
     kind: v === 0 ? 'empty' : i === days.length - 1 ? 'today' : 'past',
   }));
 });

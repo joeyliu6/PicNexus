@@ -221,7 +221,7 @@ function tabIndexOf(row: HostRow, index: number): number {
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  line-height: 1.35;
+  line-height: var(--pn-leading-host-row);
 }
 
 .hosts-list__name {

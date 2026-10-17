@@ -532,6 +532,9 @@
   --pn-space-host-row-gap: 10px;
   --pn-size-host-plate: 30px;
   --pn-size-host-glyph: 17px;
+  /* 左栏行里名字与第二行的行高 1.35；详情头部与目录卡片里名字与说明之间 3 */
+  --pn-leading-host-row: 1.35;
+  --pn-space-host-text-gap: 3px;
   /* 详情：限宽 720、内边距 4 32 24、块间距 18；头部图标块 48（圆角 12、图标 28）；状态标签高 22（内边距 0 9 0 8、圆角 11） */
   --pn-size-host-detail: 720px;
   --pn-space-host-detail: 4px 32px 24px;
@@ -580,6 +583,10 @@
   --pn-space-login-note: 10px 12px;
   --pn-space-login-actions: 14px;
   --pn-size-login-foot: 44px;
+  --pn-leading-login: 1.45;
+  /* 小窗标题栏：标题左 14；macOS 让出红绿灯（左 14 + 三个 12 + 间距 8×2 + 右 14）= 80 */
+  --pn-space-login-title-x: 14px;
+  --pn-space-login-title-mac-x: 80px;
   /* 确认框里等宽的那一行（P12 的地址）：内边距 8 10 */
   --pn-space-code-x: 10px;
 }
