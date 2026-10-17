@@ -41,6 +41,7 @@ export const ICONS = {
   viewGrid: [rect(3, 3, 7, 7, 1.5), rect(14, 3, 7, 7, 1.5), rect(3, 14, 7, 7, 1.5), rect(14, 14, 7, 7, 1.5)],
   viewList: [p('M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01')],
   // 空状态（GalleryScreen.dc.html）
+  imageGone: [rect(3, 3, 18, 18, 3), p('m3 3 18 18')],
   emptyGallery: [p('M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3ZM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM21 15l-5-5L5 21')],
   noResults: [p('M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-3.5-3.5M8 11h6')],
   info: [circle(12, 12, 9), p('M12 8v5M12 16h.01')],

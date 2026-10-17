@@ -85,7 +85,7 @@
 }
 
 .lightbox__menu-row[data-highlighted] { background: var(--pn-lightbox-menu-active); }
-.lightbox__menu-row[data-disabled] { opacity: 0.6; }
+/* 正在看的那一份不可选，但照常显示（G08：失效的那行不变淡，只是状态写成琥珀色） */
 
 .lightbox__plate {
   display: flex;

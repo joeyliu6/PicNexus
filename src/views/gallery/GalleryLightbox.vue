@@ -73,6 +73,17 @@ const rawImageSrc = computed(() => {
 const imageSrc = computed(() => safeImageUrl(rawImageSrc.value, hosts.value) ?? '');
 const mediumSrc = computed(() => (item.value && !viewHost.value ? safeImageUrl(thumbCache.getMediumImageUrl(item.value), hosts.value) ?? '' : ''));
 
+/** 「换个图床」菜单开着：Esc 只关菜单、方向键在菜单里走，不归灯箱 */
+const menuOpen = ref(false);
+
+/** 菜单一打开就停在第一份能看的上（G08：直接按 Enter 就能换过去） */
+function focusFirstHost(event: Event): void {
+  event.preventDefault();
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLElement>('.lightbox__menu .lightbox__menu-row:not([data-disabled])')?.focus();
+  });
+}
+
 const { pswpEl, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
   visible: lightbox.lightboxVisible,
   imageSrc,
@@ -86,6 +97,7 @@ const { pswpEl, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
   onNavigate: (direction) => { void lightbox.handleLightboxNavigate(direction); },
   onLoadError: () => { loadFailed.value = true; },
   onLoadSuccess: () => { loadFailed.value = false; },
+  blockKeys: () => menuOpen.value,
 });
 
 function navigate(direction: 'prev' | 'next'): void {
@@ -168,14 +180,14 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         <div v-if="loadFailed && shownHost" class="lightbox__banner">
           <PnIcon name="warning" :size="14" :stroke="2.2" class="lightbox__warn" />
           <span>{{ name(shownHost) }}链接已失效，可切换图床查看</span>
-          <DropdownMenuRoot :modal="false">
+          <DropdownMenuRoot v-model:open="menuOpen" :modal="false">
             <DropdownMenuTrigger as-child>
               <button type="button" class="lightbox__chip" aria-haspopup="menu">
                 换个图床
                 <PnIcon name="chevronDown" :size="12" :stroke="1.8" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent class="lightbox__menu" align="center" :side-offset="12" :collision-padding="8">
+            <DropdownMenuContent class="lightbox__menu" align="center" :side-offset="12" :collision-padding="8" @open-auto-focus="focusFirstHost">
               <DropdownMenuItem
                 v-for="row in rows"
                 :key="row.id"
@@ -205,7 +217,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       </button>
 
       <div v-if="loadFailed && shownHost" class="lightbox__failed">
-        <PnIcon name="emptyGallery" :size="40" :stroke="1.3" />
+        <PnIcon name="imageGone" :size="40" :stroke="1.3" />
         <span>{{ name(shownHost) }}上的图片已不存在</span>
       </div>
       <div v-else-if="isLoading" class="lightbox__spinner" role="status" aria-label="图片加载中" />

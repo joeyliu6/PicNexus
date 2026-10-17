@@ -119,6 +119,7 @@ function mountHarness(options: {
   onNavigate?: (direction: 'prev' | 'next') => void;
   onLoadError?: () => void;
   onLoadSuccess?: () => void;
+  blockKeys?: (event: KeyboardEvent) => boolean;
 } = {}) {
   const visible = ref(options.visible ?? false);
   const hasPrev = ref(options.hasPrev ?? false);
@@ -143,6 +144,7 @@ function mountHarness(options: {
         onLoadError: options.onLoadError,
         onLoadSuccess: options.onLoadSuccess,
         resolveCloseTargetMode: options.resolveCloseTargetMode,
+        blockKeys: options.blockKeys,
       });
       return () => h('div');
     },
@@ -354,6 +356,39 @@ describe('usePhotoSwipeBridge navigation and source filters', () => {
     vi.useFakeTimers();
     pswpInstances.length = 0;
     document.body.innerHTML = '';
+  });
+
+  // 回归：灯箱里的「换个图床」菜单开着时按 Esc——PhotoSwipe 在 document 上处理 Esc、不看 defaultPrevented，
+  // 菜单和灯箱一起关；方向键也在菜单里走的同时翻了图
+  it('leaves the keys to an open menu inside the lightbox', async () => {
+    let menuOpen = true;
+    const onNavigate = vi.fn();
+    const harness = mountHarness({ hasNext: true, onNavigate, blockKeys: () => menuOpen });
+    harness.visible.value = true;
+    await nextTick();
+    await nextTick();
+
+    const pswp = pswpInstances[0];
+    const blocked = { originalEvent: new KeyboardEvent('keydown', { key: 'Escape' }), preventDefault: vi.fn() };
+    pswp.emit('keydown', blocked);
+    expect(blocked.preventDefault).toHaveBeenCalled();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    // PhotoSwipe 自己在 document 上对所有方向键都 preventDefault（防页面滚动）：不能因此不翻页
+    menuOpen = false;
+    const arrow = new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true });
+    arrow.preventDefault();
+    window.dispatchEvent(arrow);
+    expect(onNavigate).toHaveBeenCalledWith('next');
+    onNavigate.mockClear();
+
+    const free = { originalEvent: new KeyboardEvent('keydown', { key: 'Escape' }), preventDefault: vi.fn() };
+    pswp.emit('keydown', free);
+    expect(free.preventDefault).not.toHaveBeenCalled();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(onNavigate).toHaveBeenCalledWith('next');
+    harness.wrapper.unmount();
   });
 
   // 交接说明 8.2：← → 切换，滚轮缩放——滚轮整个交给 PhotoSwipe，不拿来翻页

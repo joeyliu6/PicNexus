@@ -83,6 +83,11 @@ export interface PhotoSwipeBridgeOptions {
   hasPrev: Ref<boolean>;
   /** 是否有下一张 */
   hasNext: Ref<boolean>;
+  /**
+   * 返回 true 时这次按键不归灯箱：如灯箱里的菜单开着，Esc 只关菜单、方向键在菜单里走。
+   * PhotoSwipe 在 document 上处理 Esc 且不看 defaultPrevented，只能用它自己的 keydown 事件拦下
+   */
+  blockKeys?: (event: KeyboardEvent) => boolean;
 }
 
 /** FLIP 动画源元素的最小宽度阈值（px），低于此值降级为 fade */
@@ -408,7 +413,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   // ── 键盘导航（PhotoSwipe 原生仅处理 Esc） ──────
 
   function handleKeydown(e: KeyboardEvent) {
-    if (!pswp) return;
+    // 不看 defaultPrevented：PhotoSwipe 自己对所有方向键都 preventDefault（防页面滚动）
+    if (!pswp || options.blockKeys?.(e)) return;
     if (e.key === 'ArrowLeft' && options.hasPrev.value) {
       e.preventDefault();
       setSwitchDirection('prev');
@@ -475,6 +481,11 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       // 悬浮预览 object-fit:contain → 不裁剪；小缩略图 object-fit:cover → 裁剪
       data.thumbCropped = !el.classList.contains('global-thumb-hover-preview');
       return el;
+    });
+
+    // 灯箱里的菜单开着：这次按键不交给 PhotoSwipe（见 blockKeys）
+    pswp.on('keydown', (e) => {
+      if (options.blockKeys?.(e.originalEvent)) e.preventDefault();
     });
 
     // 关闭事件 → 同步回 Vue
