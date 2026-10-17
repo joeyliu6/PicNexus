@@ -23,6 +23,9 @@ export async function emit<T>(event: string, payload?: T): Promise<void> {
   }
 }
 
+/** 测试在页面里推一条后端事件（如链接检测的进度）：`window.__PICNEXUS_E2E_EMIT__('link-check://progress', …)` */
+(globalThis as { __PICNEXUS_E2E_EMIT__?: typeof emit }).__PICNEXUS_E2E_EMIT__ = emit;
+
 export async function once<T>(event: string, handler: (event: { event: string; payload: T }) => void): Promise<UnlistenFn> {
   const unlisten = await listen<T>(event, (payload) => {
     handler(payload);

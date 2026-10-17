@@ -12,6 +12,10 @@ export function mockObjectName(fileName: string): string {
 
 function applyOverride<T>(override: InvokeOverride, args: unknown): Promise<T> {
   if (override.hang) return new Promise<T>(() => undefined);
+  if (override.byArg) {
+    const value = String((args as Record<string, unknown> | undefined)?.[override.byArg.key] ?? '');
+    if (value in override.byArg.results) return Promise.resolve(override.byArg.results[value] as T);
+  }
   const filePath = String((args as { filePath?: unknown } | undefined)?.filePath ?? '');
   const name = filePath.split(/[\\/]/).pop() || 'image.png';
   const fails = override.failFor ? override.failFor.includes(name) : Boolean(override.error);

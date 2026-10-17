@@ -52,7 +52,9 @@ export default class Database {
   }
 
   async select<T = unknown[]>(query: string, bindValues: Bind = []): Promise<T> {
-    if (globalThis.__PICNEXUS_E2E_SEED__?.sqlHangDayStats && /GROUP BY year/.test(query)) return new Promise<T>(() => {});
+    const seed = globalThis.__PICNEXUS_E2E_SEED__;
+    if (seed?.sqlHangDayStats && /GROUP BY year/.test(query)) return new Promise<T>(() => {});
+    if (seed?.sqlHangFor && bindValues.includes(seed.sqlHangFor)) return new Promise<T>(() => {});
     const statement = this.raw.prepare(toSqlite(query));
     try {
       statement.bind(bindable(bindValues));

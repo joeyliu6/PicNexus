@@ -118,7 +118,7 @@ test.describe('PicNexus Tauri smoke', () => {
     await expect(page.locator('.gallery')).toBeVisible();
 
     await navItem(page, '链接健康').click();
-    await expect(page.locator('.link-check-view')).toBeVisible();
+    await expect(page.locator('.health')).toBeVisible();
 
     await navItem(page, '图床').click();
     await expect(page.locator('.settings-layout')).toBeVisible();
@@ -231,12 +231,13 @@ test.describe('PicNexus Tauri smoke', () => {
     await expect(failure.locator('.pn-toast__glyph--error')).toBeVisible();
   });
 
-  test('link check page loads with monitor controls available', async ({ page }) => {
+  test('链接健康 loads its status bar on mocked SQLite', async ({ page }) => {
     await openApp(page);
     await navItem(page, '链接健康').click();
 
-    await expect(page.locator('.link-check-view')).toBeVisible();
-    await expect(page.locator('.link-check-view .lc-tab')).toHaveCount(3);
-    await expect(page.locator('.link-check-view button').first()).toBeEnabled();
+    // 默认环境没有图片：尚未检测，「开始检测」置灰
+    await expect(page.locator('.health-status')).toContainText('尚未检测');
+    await expect(page.locator('.health-status').getByRole('button', { name: '开始检测' })).toBeDisabled();
+    await expect(page.locator('.health .tool-card')).toHaveCount(3);
   });
 });

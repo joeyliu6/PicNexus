@@ -21,6 +21,8 @@ export interface InvokeOverride {
   urlPrefix?: string;
   /** 只让这些文件名失败（配合 error），其余照常 */
   failFor?: string[];
+  /** 按某个参数的取值分别返回（如 scan_md_folder 按 dir 给不同文件夹的扫描结果）；没列到的走 result */
+  byArg?: { key: string; results: Record<string, unknown> };
 }
 
 /**
@@ -36,6 +38,12 @@ export interface E2ESeed {
   dialogOpenResult?: string[] | string | null;
   /** 图库按天统计的查询一直不返回（冷启动骨架 G12） */
   sqlHangDayStats?: boolean;
+  /** 绑定参数里带这个值的查询一直不返回（摆出「修复到一半」：读到这张图的记录时停住） */
+  sqlHangFor?: string;
+  /** 内存文件表的初始内容（文档文件夹里的 Markdown） */
+  files?: Record<string, string>;
+  /** 写这些文件时以给定消息失败一次（文档写不成） */
+  failWriteTextFile?: Record<string, string>;
 }
 
 interface E2EState {
@@ -80,10 +88,11 @@ export function getState(): E2EState {
     calls: [],
     files: {
       '/mock/appdata/.settings.dat': JSON.stringify({ config: { ...DEFAULT_CONFIG, ...seed.config } }),
+      ...seed.files,
     },
     clipboardText: '',
     dialogOpenResult: seed.dialogOpenResult ?? null,
-    failWriteTextFile: {},
+    failWriteTextFile: { ...seed.failWriteTextFile },
     historyRows: seed.historyRows ?? [],
     invokeOverrides: seed.invokeOverrides ?? {},
   };
