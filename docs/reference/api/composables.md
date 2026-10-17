@@ -30,7 +30,7 @@
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
 | useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
 | useVirtualTimeline | 图库网格的虚拟滚动（按天分组的等高行布局） | `src/composables/timeline/useVirtualTimeline.ts` |
-| useTimelineJump | 图库刻度条跳到某年某月；跳转中再来的请求只留最后一个，落地后接着跳 | `src/composables/timeline/useTimelineJump.ts` |
+| useTimelineJump | 图库刻度条跳到某年某月（只给年份时跳这一年最新的月）；跳转中再来的请求只留最后一个，落地后接着跳 | `src/composables/timeline/useTimelineJump.ts` |
 | useTimelineLightbox | 图库网格里打开的灯箱：按天翻页（日内快翻 + 跨日按需加载，打开前先把那一天读进来）；当前图与 ±1 预热都过 `safeImageUrl` | `src/composables/timeline/useTimelineLightbox.ts` |
 | useListLightbox / useGalleryLightbox | 列表里打开的灯箱按列表眼前的顺序翻页（「3 / 21」是第几行）；`useGalleryLightbox` 按打开的地方在网格 / 列表两份之间二选一，灯箱组件只认它 | `src/views/gallery/` |
 | useImagePreload | 图库滚动预热下一屏；只预热候选链里第一条通过 `safeImageUrl` 的地址 | `src/composables/timeline/useImagePreload.ts` |

@@ -61,8 +61,6 @@ interface HarnessOverrides {
   scrollContainer?: HTMLElement | null;
   groups?: PhotoGroup[];
   isCalculating?: boolean;
-  totalHeight?: number;
-  viewportHeight?: number;
   layoutResult?: { groupLayouts: GroupLayoutInfo[] } | null;
   timePeriodStats?: Array<{ year: number; month: number }>;
   loadedDayKeys?: Set<string>;
@@ -78,8 +76,6 @@ function mountHarness(overrides: HarnessOverrides = {}) {
   );
   const groupsRef = ref<PhotoGroup[]>(overrides.groups ?? []);
   const isCalculating = ref(overrides.isCalculating ?? false);
-  const totalHeight = ref(overrides.totalHeight ?? 5000);
-  const viewportHeight = ref(overrides.viewportHeight ?? 800);
   const layoutResult = ref<{ groupLayouts: GroupLayoutInfo[] } | null>(
     overrides.layoutResult === undefined ? { groupLayouts: [] } : overrides.layoutResult,
   );
@@ -89,8 +85,6 @@ function mountHarness(overrides: HarnessOverrides = {}) {
   const hasLoadedStats = ref(overrides.hasLoadedStats ?? true);
 
   const fns = {
-    scrollToProgress: vi.fn(),
-    scrollToItem: vi.fn(),
     forceUpdateVisibleArea: vi.fn(),
     jumpToMonth: vi.fn().mockResolvedValue(true),
     ensureDaysLoaded: vi.fn().mockResolvedValue(undefined),
@@ -109,12 +103,8 @@ function mountHarness(overrides: HarnessOverrides = {}) {
         scrollContainer,
         groups: computed(() => groupsRef.value),
         isCalculating,
-        totalHeight,
-        viewportHeight,
         layoutResult: layoutResult as Ref<{ groupLayouts: GroupLayoutInfo[] } | null>,
         timePeriodStats: computed(() => statsRef.value),
-        scrollToProgress: fns.scrollToProgress,
-        scrollToItem: fns.scrollToItem,
         forceUpdateVisibleArea: fns.forceUpdateVisibleArea,
         jumpToMonth: fns.jumpToMonth,
         ensureDaysLoaded: fns.ensureDaysLoaded,
@@ -413,105 +403,52 @@ describe('useTimelineJump - handleJumpToPeriod', () => {
 
 // ─── handleJumpToYear ────────────────────────────────────
 
+// 刻度条上年份写在它各月之上，代表这一年最近的部分：跳到这一年最新的那个月（月内最新的一天）
 describe('useTimelineJump - handleJumpToYear', () => {
-  it('scrolls to the first item of the earliest loaded group of that year', async () => {
-    const meta = createImageMeta({ id: 'img-early' });
+  it('lands on the latest day of the latest month of that year', async () => {
+    const container = makeScrollContainer();
     const h = mountHarness({
+      scrollContainer: container,
       groups: [
+        createPhotoGroup({ year: 2025, month: 1, day: 3, items: [createImageMeta()] }),
         createPhotoGroup({ year: 2024, month: 5, day: 9, items: [createImageMeta()] }),
-        createPhotoGroup({ year: 2024, month: 0, day: 1, items: [meta] }),
+        createPhotoGroup({ year: 2024, month: 0, day: 1, items: [createImageMeta()] }),
       ],
+      timePeriodStats: [{ year: 2025, month: 1 }, { year: 2024, month: 5 }, { year: 2024, month: 0 }],
+      layoutResult: { groupLayouts: [makeLayout('2025-1-3', 0), makeLayout('2024-5-9', 600), makeLayout('2024-0-1', 1200)] },
     });
 
     await settle(h.api().handleJumpToYear(2024));
 
-    // groups 按时间降序，年内最早的一天是数组末尾那个
-    expect(h.fns.scrollToItem).toHaveBeenCalledWith('img-early');
+    expect(h.fns.jumpToMonth).toHaveBeenCalledWith(2024, 5);
+    expect(container.scrollTop).toBe(600);
     expect(h.api().isJumping.value).toBe(false);
   });
 
-  // 骨架天没有 items，只能按布局位置换算进度滚过去
-  it('scrolls by layout progress when the earliest group is still a skeleton', async () => {
-    const h = mountHarness({
-      groups: [createPhotoGroup({ year: 2024, month: 0, day: 1 })],
-      totalHeight: 5000,
-      viewportHeight: 1000,
-      layoutResult: { groupLayouts: [makeLayout('2024-0-1', 2000)] },
-    });
-
-    await settle(h.api().handleJumpToYear(2024));
-
-    expect(h.fns.scrollToItem).not.toHaveBeenCalled();
-    expect(h.fns.scrollToProgress).toHaveBeenCalledWith(2000 / 4000, true);
-  });
-
-  it('does not scroll by progress when everything already fits on screen', async () => {
-    const h = mountHarness({
-      groups: [createPhotoGroup({ year: 2024, month: 0, day: 1 })],
-      totalHeight: 500,
-      viewportHeight: 1000,
-      layoutResult: { groupLayouts: [makeLayout('2024-0-1', 100)] },
-    });
-
-    await settle(h.api().handleJumpToYear(2024));
-
-    expect(h.fns.scrollToProgress).not.toHaveBeenCalled();
-  });
-
-  it('clears the jumping flag even when there is no layout to aim at', async () => {
-    const h = mountHarness({
-      groups: [createPhotoGroup({ year: 2024, month: 0, day: 1 })],
-      layoutResult: null,
-    });
-
-    await settle(h.api().handleJumpToYear(2024));
-
-    expect(h.fns.scrollToProgress).not.toHaveBeenCalled();
-    expect(h.api().isJumping.value).toBe(false);
-  });
-
-  // 跨年跳到尚未加载的区域时转交 handleJumpToPeriod
-  it('delegates to the period jump when the year has no loaded groups', async () => {
-    const h = mountHarness({
-      groups: [createPhotoGroup({ year: 2024, month: 0, day: 1 })],
-      timePeriodStats: [
-        { year: 2022, month: 8 },
-        { year: 2022, month: 3 },
-      ],
-      layoutResult: { groupLayouts: [] },
-    });
-
-    await settle(h.api().handleJumpToYear(2022));
-
-    // stats 按时间降序，该年最早的月份在末尾
-    expect(h.fns.jumpToMonth).toHaveBeenCalledWith(2022, 3);
-  });
-
-  it('does nothing when the year is absent from the period stats too', async () => {
+  it('does nothing when the year is absent from the period stats', async () => {
     const h = mountHarness({ groups: [], timePeriodStats: [{ year: 2024, month: 0 }] });
 
     await settle(h.api().handleJumpToYear(2019));
 
     expect(h.fns.jumpToMonth).not.toHaveBeenCalled();
-    expect(h.fns.scrollToItem).not.toHaveBeenCalled();
   });
 
   // 月份跳转还没落地时拖到了年份刻度：等它落地再跳那一年
   it('runs a year request made during a month jump after it lands', async () => {
-    const meta = createImageMeta({ id: 'img-2023' });
     const h = mountHarness({
       groups: [
         createPhotoGroup({ year: 2024, month: 0, day: 1, items: [createImageMeta()] }),
-        createPhotoGroup({ year: 2023, month: 5, day: 1, items: [meta] }),
+        createPhotoGroup({ year: 2023, month: 5, day: 1, items: [createImageMeta()] }),
       ],
+      timePeriodStats: [{ year: 2024, month: 0 }, { year: 2023, month: 5 }],
       layoutResult: { groupLayouts: [makeLayout('2024-0-1', 0), makeLayout('2023-5-1', 600)] },
     });
 
     const month = h.api().handleJumpToPeriod(2024, 0);
     const yearJump = h.api().handleJumpToYear(2023);
-    expect(h.fns.scrollToItem).not.toHaveBeenCalled();
+    expect(h.fns.jumpToMonth).toHaveBeenCalledTimes(1);
 
     await settle(Promise.all([month, yearJump]).then(() => undefined));
-    expect(h.fns.scrollToItem).toHaveBeenCalledWith('img-2023');
+    expect(h.fns.jumpToMonth).toHaveBeenLastCalledWith(2023, 5);
   });
 });

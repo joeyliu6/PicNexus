@@ -25,19 +25,11 @@ interface UseTimelineJumpOptions {
   groups: ComputedRef<PhotoGroup[]>;
   /** 布局是否正在计算中 */
   isCalculating: Ref<boolean>;
-  /** 虚拟滚动总高度 */
-  totalHeight: Ref<number>;
-  /** 视口高度 */
-  viewportHeight: Ref<number>;
   /** 布局结果（含 groupLayouts） */
   layoutResult: Ref<{ groupLayouts: GroupLayoutInfo[] } | null>;
   /** 时间段统计（新的在前） */
   timePeriodStats: ComputedRef<Array<{ year: number; month: number }>>;
 
-  /** 按进度滚动 */
-  scrollToProgress: (progress: number, force?: boolean) => void;
-  /** 按元素 ID 滚动 */
-  scrollToItem: (id: string, behavior?: ScrollBehavior) => void;
   /** 强制刷新可见区域 */
   forceUpdateVisibleArea: () => void;
   /** 跳转到月份（仅做存在性校验） */
@@ -60,18 +52,17 @@ interface UseTimelineJumpOptions {
   resumeScrollAnchor?: () => void;
 }
 
-/** 一次跳转请求：month 缺省 = 跳整年；day 缺省 = 该月最新一天 */
+/** 一次跳转请求：day 缺省 = 该月最新一天 */
 interface JumpTarget {
   year: number;
-  month?: number;
+  month: number;
   day?: number;
 }
 
 export function useTimelineJump(options: UseTimelineJumpOptions) {
   const {
     scrollContainer, groups, isCalculating,
-    totalHeight, viewportHeight, layoutResult, timePeriodStats,
-    scrollToProgress, scrollToItem,
+    layoutResult, timePeriodStats,
     forceUpdateVisibleArea, jumpToMonth, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys,
     isFullyPreloaded, hasLoadedStats,
     forceNormalMode,
@@ -113,7 +104,7 @@ export function useTimelineJump(options: UseTimelineJumpOptions) {
     const next = pending;
     pending = null;
     if (!next || (next.year === landed.year && next.month === landed.month && next.day === landed.day)) return;
-    await (next.month === undefined ? handleJumpToYear(next.year) : handleJumpToPeriod(next.year, next.month, next.day));
+    await handleJumpToPeriod(next.year, next.month, next.day);
   }
 
   /**
@@ -196,33 +187,11 @@ export function useTimelineJump(options: UseTimelineJumpOptions) {
     }
   }
 
-  /** 跳转到指定年份：已加载的直接滚到该年最早一天，没加载的转给 handleJumpToPeriod */
+  /** 跳转到指定年份：刻度条上年份写在它各月之上，代表这一年最近的部分，所以跳到这一年最新的那个月 */
   async function handleJumpToYear(year: number): Promise<void> {
-    if (deferIfJumping({ year })) return;
-
-    const yearGroups = groups.value.filter(g => g.year === year);
-
-    if (yearGroups.length > 0) {
-      const firstGroup = yearGroups[yearGroups.length - 1];
-      if (firstGroup.items.length > 0) {
-        scrollToItem(firstGroup.items[0].id);
-      } else if (layoutResult.value) {
-        // skeleton 天：直接定位到该分组的布局位置
-        const groupLayout = layoutResult.value.groupLayouts.find(gl => gl.groupId === firstGroup.id);
-        if (groupLayout && totalHeight.value > viewportHeight.value) {
-          const maxScroll = totalHeight.value - viewportHeight.value;
-          scrollToProgress(groupLayout.headerY / maxScroll, true);
-        }
-      }
-    } else {
-      // 跨年跳转到未加载区域：走 handleJumpToPeriod
-      const periods = timePeriodStats.value;
-      const yearPeriods = periods.filter(p => p.year === year);
-      if (yearPeriods.length > 0) {
-        const earliestPeriod = yearPeriods[yearPeriods.length - 1];
-        await handleJumpToPeriod(year, earliestPeriod.month);
-      }
-    }
+    // timePeriodStats 按时间降序：这一年的第一项就是最新的月
+    const latest = timePeriodStats.value.find(p => p.year === year);
+    if (latest) await handleJumpToPeriod(year, latest.month);
   }
 
   return {
