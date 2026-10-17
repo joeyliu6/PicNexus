@@ -353,7 +353,7 @@ export interface UserConfig {
 > 新增图床通常只要在 `hostCatalog.ts` 的 `HOST_CATALOG` 里加一条描述（接入方式 `kind` 决定目录分组，
 > 另有字段 `fields`、测试步骤 `steps`、说明文案），图床页的目录、连接表单、详情与测试连接都从这里取。
 > 测试连接按 `kind` 走 `useHostTest.ts` 里对应的检测；对象存储走 Rust `probe_s3_storage`。
-> 设计稿没画的图床照最接近的那张画板做（见 `docs/design/redesign/README.md`「设计没画、开发时补的（图床）」）。
+> 设计稿没画的图床照最接近的那张画板做（见 `docs/design/redesign/decisions/hosts.md`）。
 
 ---
 

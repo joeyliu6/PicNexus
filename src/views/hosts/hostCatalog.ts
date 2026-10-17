@@ -1,5 +1,5 @@
 // 图床描述表（HostsScreen.dc.html）：每种图床怎么接入、目录里怎么写、详情头部说明、表单有哪些格、测试验到哪几步。
-// 目录、连接表单、详情设置区、测试连接都从这一份数据出发；设计稿没画的图床照最接近的画法补（见 docs/design/redesign/README.md「设计没画、开发时补的（图床）」）。
+// 目录、连接表单、详情设置区、测试连接都从这一份数据出发；设计稿没画的图床照最接近的画法补（见 docs/design/redesign/decisions/hosts.md）。
 
 import { isCustomS3Id, isWebDAVId } from '@/config/types';
 
