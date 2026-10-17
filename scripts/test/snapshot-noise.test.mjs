@@ -22,7 +22,13 @@ function chunk(type, data) {
   return Buffer.concat([head, data, crc]);
 }
 
-/** 按指定的行过滤方式编码一张 RGBA PNG（与被测的解码器各写各的，互相印证） */
+/**
+ * 按指定的行过滤方式编码一张 RGBA PNG（与被测的解码器各写各的，互相印证）
+ * @param {number} width
+ * @param {number} height
+ * @param {number[] | Uint8Array} pixels
+ * @param {(y: number) => number} [filterOf]
+ */
 function encodePng(width, height, pixels, filterOf = () => 0) {
   const channels = 4;
   const stride = width * channels;

@@ -125,7 +125,7 @@ function git(args, options = {}) {
 function main(argv) {
   const restore = argv.includes('--restore');
   const spec = argv.find((arg) => !arg.startsWith('--')) ?? 'tests/redesign';
-  const changed = git(['diff', '--name-only', '--', spec], { encoding: 'utf8' })
+  const changed = String(git(['diff', '--name-only', '--', spec], { encoding: 'utf8' }))
     .split('\n')
     .map((line) => line.trim())
     .filter((file) => file.endsWith('.png'));
