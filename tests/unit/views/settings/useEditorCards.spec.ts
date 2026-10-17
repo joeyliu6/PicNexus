@@ -18,7 +18,7 @@ vi.mock('@/composables/upload/useUploadController', () => ({
   useUploadController: () => ({ hosts: computed(() => [{ id: 'jd', name: '京东' }, { id: 'qiyu', name: '七鱼' }]) }),
 }));
 
-import { useEditorCards } from '@/views/settings/useEditorCards';
+import { isValidPort, useEditorCards } from '@/views/settings/useEditorCards';
 
 beforeEach(() => {
   resetTauriMocks();
@@ -92,4 +92,14 @@ describe('useEditorCards', () => {
   });
 });
 
-
+describe('isValidPort', () => {
+  it('只收 1024–65535 的整数（系统保留端口、小数、超范围都不收）', () => {
+    expect(isValidPort(36677)).toBe(true);
+    expect(isValidPort(1024)).toBe(true);
+    expect(isValidPort(65535)).toBe(true);
+    expect(isValidPort(1023)).toBe(false);
+    expect(isValidPort(65536)).toBe(false);
+    expect(isValidPort(3667.5)).toBe(false);
+    expect(isValidPort(Number.NaN)).toBe(false);
+  });
+});
