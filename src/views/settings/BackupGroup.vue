@@ -9,7 +9,7 @@ import PnIcon from '@/components/pn/PnIcon.vue';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
 import type { BackupPasswordConfirmPayload, BackupPasswordDialogMode } from '@/components/dialogs/backupPasswordDialogTypes';
 import { changeBackupPassword, hasBackupPassword, WrongPasswordError, type PasswordChange } from '@/composables/backup-sync/backupPassword';
-import { exportConfigFile, exportHistoryFile, importConfig, importHistory, pickBackupFile } from '@/composables/backup-sync/backupFiles';
+import { exportConfigFile, exportHistoryFile, importConfig, importHistory, pickBackupFile, UNRECOGNIZED_FILE } from '@/composables/backup-sync/backupFiles';
 import { loadSyncRecords } from '@/composables/backup-sync/syncRecords';
 import { useConfirm } from '@/composables/useConfirm';
 import { useToast } from '@/composables/useToast';
@@ -173,7 +173,9 @@ async function importFile(): Promise<void> {
     toast.success(`已导入 ${formatCount(result.added)} 条上传记录`, `现在共 ${formatCount(result.total)} 条${skipped}`);
   } catch (error) {
     if (error instanceof Error && error.message === 'user_cancelled') return;
-    toast.error('未能导入', `${getErrorMessage(error)}`);
+    const reason = getErrorMessage(error);
+    // 认不出的文件那句已经写了怎么办，其余原因后面接处理办法
+    toast.error('未能导入', reason === UNRECOGNIZED_FILE ? reason : `${reason || '文件读取失败'}，请检查文件后重试`);
   } finally {
     await refresh();
   }

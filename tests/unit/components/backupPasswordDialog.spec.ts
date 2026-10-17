@@ -50,8 +50,20 @@ describe('BackupPasswordDialog', () => {
     expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'change', currentPassword: 'Old12345', newPassword: 'New12345', confirmPassword: 'New12345' }]);
     (wrapper.vm as unknown as { onPasswordFailed: () => void }).onPasswordFailed();
     await nextTick();
-    expect(body().textContent).toContain('密码不正确');
+    expect(body().textContent).toContain('密码不正确，请重新输入');
     expect(input('backup-password-current').value).toBe('');
+  });
+
+  it('修改：新密码不合要求时在新密码下说明原因（这一模式不画强度条）', async () => {
+    mountDialog('change');
+    await nextTick();
+    await type('backup-password-current', 'Old12345');
+    await type('backup-password-new', 'short1');
+    await type('backup-password-confirm', 'short1');
+    expect(button('修改')!.disabled).toBe(true);
+    expect(body().textContent).toContain('密码长度至少 8 位');
+    await type('backup-password-new', 'longenough');
+    expect(body().textContent).toContain('密码必须包含至少一个数字');
   });
 
   it('关闭：危险按钮写动作「关闭密码」', async () => {

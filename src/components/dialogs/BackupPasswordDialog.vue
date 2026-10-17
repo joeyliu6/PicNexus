@@ -56,6 +56,8 @@ const rules = computed(() => [
   { text: '特殊符号', met: /[^a-zA-Z0-9]/.test(next.value) },
 ]);
 const strength = computed(() => rules.value.filter((r) => r.met).length);
+/** 修改模式不画强度条：新密码不合要求时在它下面说原因，免得「修改」变灰却不知为何 */
+const newHint = computed(() => (props.mode === 'change' && next.value ? validateBackupPassword(next.value).message : ''));
 const matches = computed(() => !!confirmNext.value && confirmNext.value === next.value);
 const confirmMessage = computed(() => {
   if (!confirmNext.value) return null;
@@ -113,7 +115,7 @@ function onPasswordFailed(): void {
   loading.value = false;
   current.value = '';
   if (props.mode !== 'restore') {
-    currentError.value = '密码不正确';
+    currentError.value = '密码不正确，请重新输入';
     return;
   }
   failedAttempts.value += 1;
@@ -159,7 +161,7 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
         @enter="submit"
       />
       <template v-if="settingNew">
-        <PasswordField id="backup-password-new" v-model="next" label="新密码" autocomplete="new-password" @enter="submit" />
+        <PasswordField id="backup-password-new" v-model="next" label="新密码" autocomplete="new-password" :message="newHint" @enter="submit" />
         <PasswordField
           id="backup-password-confirm"
           v-model="confirmNext"
