@@ -2,7 +2,7 @@
 // 图床页左栏（HostsScreen.dc.html、P01 / P14）：标题「图床」+「＋」；只列已添加的图床，有问题的 → 已启用的 → 停用的。
 // 正常时不打标记；停用的整行变淡、第二行「已停用」；有问题的第二行琥珀 ⚠ + 原因。
 // 悬停一行右侧浮出「启用 / 停用」；右键菜单同一个动作；键盘 ↑↓ 换行、空格切换、Enter 打开。
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import HostIcon from '@/components/biz/HostIcon.vue';
 import PnContextMenu from '@/components/pn/PnContextMenu.vue';
 import PnContextMenuItem from '@/components/pn/PnContextMenuItem.vue';
@@ -23,11 +23,23 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [id: string]; add: []; toggle: [id: string] }>();
 
+// 指针在清单里时先不重排：点「停用」后那一行若立刻挪走，浮出的按钮会落到另一个图床上，再点一下就停错了。
+// 离开清单再按「有问题 → 已启用 → 停用」排好。
+const frozenOrder = ref<string[] | null>(null);
+const shownRows = computed(() => {
+  const order = frozenOrder.value;
+  if (!order) return props.rows;
+  const rank = (id: string) => { const i = order.indexOf(id); return i === -1 ? order.length : i; };
+  return [...props.rows].sort((a, b) => rank(a.id) - rank(b.id));
+});
+function freezeOrder(): void { frozenOrder.value = props.rows.map((r) => r.id); }
+function releaseOrder(): void { frozenOrder.value = null; }
+
 // 按行号记：v-for 在插槽里，普通的 ref 数组顺序跟排序后的行对不上
 const rowRefs = ref<Array<HTMLElement | null>>([]);
 
 function focusRow(index: number): void {
-  const clamped = Math.max(0, Math.min(props.rows.length - 1, index));
+  const clamped = Math.max(0, Math.min(shownRows.value.length - 1, index));
   void nextTick(() => rowRefs.value[clamped]?.focus());
 }
 
@@ -35,7 +47,7 @@ function onKeydown(event: KeyboardEvent, index: number, row: HostRow): void {
   if (event.key === 'ArrowDown') { event.preventDefault(); focusRow(index + 1); }
   else if (event.key === 'ArrowUp') { event.preventDefault(); focusRow(index - 1); }
   else if (event.key === 'Home') { event.preventDefault(); focusRow(0); }
-  else if (event.key === 'End') { event.preventDefault(); focusRow(props.rows.length - 1); }
+  else if (event.key === 'End') { event.preventDefault(); focusRow(shownRows.value.length - 1); }
   else if (event.key === ' ') { event.preventDefault(); emit('toggle', row.id); }
   else if (event.key === 'Enter') { event.preventDefault(); emit('select', row.id); }
 }
@@ -67,8 +79,8 @@ function tabIndexOf(row: HostRow, index: number): number {
         <WindowControls />
       </template>
     </div>
-    <div class="hosts-list__rows" role="listbox" aria-label="已连接的图床">
-      <PnContextMenu v-for="(row, index) in rows" :key="row.id">
+    <div class="hosts-list__rows" role="listbox" aria-label="已连接的图床" @pointerenter="freezeOrder" @pointerleave="releaseOrder">
+      <PnContextMenu v-for="(row, index) in shownRows" :key="row.id">
         <template #trigger>
           <div
             :ref="(el) => { rowRefs[index] = el as HTMLElement | null; }"

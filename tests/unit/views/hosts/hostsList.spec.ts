@@ -35,4 +35,16 @@ describe('HostsList', () => {
     expect(wrapper.emitted('select')).toEqual([['a']]);
     wrapper.unmount();
   });
+
+  it('指针在清单里时不重排（免得按钮落到另一个图床上），离开后再排', async () => {
+    const wrapper = mountList([row('a'), row('b')]);
+    const list = wrapper.get('[role="listbox"]');
+    await list.trigger('pointerenter');
+    // 停用了 a：父组件给的顺序变成 b、a
+    await wrapper.setProps({ rows: [row('b'), row('a', false)] });
+    expect(wrapper.findAll('[role="option"]').map((o) => o.text())).toEqual([expect.stringContaining('a'), expect.stringContaining('b')]);
+    await list.trigger('pointerleave');
+    expect(wrapper.findAll('[role="option"]')[0].text()).toContain('b');
+    wrapper.unmount();
+  });
 });
