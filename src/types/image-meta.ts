@@ -35,6 +35,13 @@ export interface ImageMeta {
    */
   aspectRatio: number;
 
+  /** 原图宽高（像素）：小图按原尺寸显示、角标写原尺寸（G13，见 utils/imageDisplay） */
+  width?: number;
+  height?: number;
+
+  /** 上传时的扩展名（小写）：透明格式衬棋盘格、GIF 停在第一帧 */
+  format?: string;
+
   // ==================== 缩略图必需字段 ====================
 
   /** 主力图床服务 ID */

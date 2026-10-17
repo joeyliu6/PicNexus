@@ -88,6 +88,23 @@ describe('useTimelineLayout', () => {
     expect(layout!.totalHeight).toBeGreaterThan(24);
   });
 
+  // G13：滚动截图裁成 1:2.5、图标放进方格；与骨架天的预取比例同一个值，加载时格子不跳
+  it('gives long screenshots and small icons the cells of the picture-ratio rules', () => {
+    const shot = { ...makeMeta('shot', 1080 / 6048), width: 1080, height: 6048 };
+    const icon = { ...makeMeta('icon', 1), width: 48, height: 48 };
+    const pano = { ...makeMeta('pano', 6), width: 6000, height: 1000 };
+    const { api } = mountLayout([makeGroup({ items: [shot, icon, pano], isSkeleton: false })], 2000);
+
+    const cells = api.calculateFullLayout()!.allRows.flatMap(({ row }) => row.items);
+    const ratioOf = (id: string) => {
+      const cell = cells.find((item) => item.id === id)!;
+      return cell.width / cell.height;
+    };
+    expect(ratioOf('shot')).toBeCloseTo(0.4, 6);
+    expect(ratioOf('icon')).toBeCloseTo(1, 6);
+    expect(ratioOf('pano')).toBeCloseTo(4, 6);
+  });
+
   it('uses precise aspect ratios for skeleton day slots when available', () => {
     const { api } = mountLayout([
       makeGroup({

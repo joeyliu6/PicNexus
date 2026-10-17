@@ -20,6 +20,7 @@ import {
   type GroupLayoutResult,
 } from '@/utils/justifiedLayout';
 import type { ImageMeta } from '@/types/image-meta';
+import { layoutRatio } from '@/utils/imageDisplay';
 import type { PhotoGroup, VirtualTimelineOptions } from './types';
 import { DEFAULT_OPTIONS } from './types';
 
@@ -93,11 +94,9 @@ export function useTimelineLayout(
   }
   const skeletonLayoutCache = new Map<string, CachedSkeletonLayout>();
 
+  /** 按格子的比例排（G13：长图、全景、小图换算过，与骨架天预取的比例同一个值） */
   function toLayoutItems(items: ImageMeta[]): LayoutItem[] {
-    return items.map((meta) => ({
-      id: meta.id,
-      aspectRatio: meta.aspectRatio && meta.aspectRatio > 0 ? meta.aspectRatio : 1,
-    }));
+    return items.map((meta) => ({ id: meta.id, aspectRatio: layoutRatio(meta) }));
   }
 
   /**

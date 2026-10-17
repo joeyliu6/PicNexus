@@ -10,6 +10,7 @@ import type { CopyLinkHealth, ImageMeta } from '@/types/image-meta';
 import { extractMirrorServices } from '@/types/image-meta';
 import type { DayStats, DayStatsFilter, ServiceType } from './types';
 import type { HistoryItem } from '@/config/types';
+import { LONG_IMAGE_RATIO, SMALL_IMAGE_SIDE, WIDE_IMAGE_RATIO, layoutRatio } from '@/utils/imageDisplay';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('TimelineQuery');
@@ -24,6 +25,9 @@ interface MetaRow {
   results: string;
   is_favorited: number;
   copy_link_health: CopyLinkHealth;
+  width: number | null;
+  height: number | null;
+  format: string | null;
 }
 
 function escapeLikePattern(s: string): string {
@@ -42,6 +46,18 @@ const COPY_LINK_HEALTH_SQL = `CASE
   WHEN ${copyLinkField('isValid')} = 1 THEN 'ok'
   WHEN ${copyLinkField('browserMightWork')} = 1 THEN 'limited'
   ELSE 'dead'
+END`;
+
+/**
+ * 格子的宽高比，与 utils/imageDisplay 的 layoutRatio 同一套规则（G13）：按天汇总只能在 SQL 里算。
+ * 两边是否一致由 galleryFilters.spec 在真的 SQLite 上对照。
+ */
+const LAYOUT_RATIO_SQL = `CASE
+  WHEN width > 0 AND height > 0 AND min(width, height) < ${SMALL_IMAGE_SIDE} THEN 1.0
+  WHEN aspect_ratio > 0 AND aspect_ratio < ${1 / LONG_IMAGE_RATIO} THEN ${1 / LONG_IMAGE_RATIO}
+  WHEN aspect_ratio > ${WIDE_IMAGE_RATIO} THEN ${WIDE_IMAGE_RATIO}.0
+  WHEN aspect_ratio > 0 THEN aspect_ratio
+  ELSE 1.0
 END`;
 
 /**
@@ -93,6 +109,9 @@ function rowToImageMeta(row: MetaRow): ImageMeta {
     timestamp: row.timestamp,
     localFileName: row.local_file_name || '',
     aspectRatio: row.aspect_ratio || 1.0,
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    format: row.format ?? undefined,
     primaryService: row.primary_service as ServiceType,
     primaryUrl: row.generated_link,
     primaryFileKey,
@@ -105,7 +124,7 @@ function rowToImageMeta(row: MetaRow): ImageMeta {
 /**
  * 按日聚合统计（时间轴首屏骨架数据）
  *
- * 返回每天的 count + aspectRatioSum，前端据此估算骨架天占位高度。
+ * 返回每天的 count + aspectRatioSum（格子比例之和，见 LAYOUT_RATIO_SQL），前端据此估算骨架天占位高度。
  */
 export async function getDayStatsQuery(db: Database, filter?: DayStatsFilter): Promise<DayStats[]> {
   const params: (string | number)[] = [];
@@ -124,7 +143,7 @@ export async function getDayStatsQuery(db: Database, filter?: DayStatsFilter): P
       CAST(strftime('%m', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) - 1 as month,
       CAST(strftime('%d', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) as day,
       COUNT(*) as count,
-      SUM(COALESCE(aspect_ratio, 1.0)) as aspect_ratio_sum,
+      SUM(${LAYOUT_RATIO_SQL}) as aspect_ratio_sum,
       MIN(timestamp) as min_timestamp,
       MAX(timestamp) as max_timestamp
     FROM history_items
@@ -166,7 +185,7 @@ export async function getItemsByDayRangeQuery(
 
   const t0 = performance.now();
   const rows = await db.select<MetaRow[]>(
-    `SELECT id, timestamp, local_file_name, aspect_ratio,
+    `SELECT id, timestamp, local_file_name, aspect_ratio, width, height, format,
             primary_service, generated_link, results, is_favorited,
             ${COPY_LINK_HEALTH_SQL} AS copy_link_health
      FROM history_items
@@ -190,10 +209,8 @@ export interface GalleryListSort {
   descending: boolean;
 }
 
-/** 列表一行：网格那套 meta 再加「尺寸 · 大小」 */
+/** 列表一行：网格那套 meta 再加「大小」 */
 export interface GalleryListRow extends ImageMeta {
-  width?: number;
-  height?: number;
   fileSize?: number;
 }
 
@@ -218,10 +235,9 @@ export async function getListPageQuery(
   const direction = sort.descending ? 'DESC' : 'ASC';
   params.push(limit, offset);
 
-  const rows = await db.select<Array<MetaRow & { width: number | null; height: number | null; file_size: number | null }>>(
-    `SELECT id, timestamp, local_file_name, aspect_ratio,
-            primary_service, generated_link, results, is_favorited,
-            width, height, file_size,
+  const rows = await db.select<Array<MetaRow & { file_size: number | null }>>(
+    `SELECT id, timestamp, local_file_name, aspect_ratio, width, height, format,
+            primary_service, generated_link, results, is_favorited, file_size,
             ${COPY_LINK_HEALTH_SQL} AS copy_link_health
      FROM history_items
      ${where}
@@ -230,26 +246,30 @@ export async function getListPageQuery(
     params,
   );
 
-  return rows.map((row) => ({
-    ...rowToImageMeta(row),
-    width: row.width ?? undefined,
-    height: row.height ?? undefined,
-    fileSize: row.file_size ?? undefined,
-  }));
+  return rows.map((row) => ({ ...rowToImageMeta(row), fileSize: row.file_size ?? undefined }));
 }
 
 /** aspect_ratio 预取记录（骨架 justifiedLayout 的输入 + 增量更新按 id 定位） */
 export interface AspectRatioRow {
   id: string;
   timestamp: number;
+  /** 格子的宽高比（G13 换算后，与真图排版同一个值，见 utils/imageDisplay 的 layoutRatio） */
   aspectRatio: number;
 }
+
+type RatioRow = { id: string; timestamp: number; aspect_ratio: number | null; width: number | null; height: number | null };
+
+const toAspectRatioRow = (r: RatioRow): AspectRatioRow => ({
+  id: r.id,
+  timestamp: r.timestamp,
+  aspectRatio: layoutRatio({ aspectRatio: r.aspect_ratio ?? 1.0, width: r.width, height: r.height }),
+});
 
 /**
  * 按时间戳闭区间只拉 aspect_ratio 列（skeleton 天预取，供按真实比例跑 justifiedLayout）
  *
  * 相比 getItemsByDayRangeQuery:
- * - 只取 id + timestamp + aspect_ratio 三列（不拉 results JSON，查询快 3-5 倍）
+ * - 只取 id + timestamp + aspect_ratio + 宽高（不拉 results JSON，查询快 3-5 倍）
  * - 不做 ImageMeta 组装，直接返回原始值
  * - filter 条件与 getItemsByDayRange 完全一致，保证顺序与真图 layout 同序
  * - id 用于增量删除场景的精准移除
@@ -264,17 +284,17 @@ export async function getDayAspectRatiosByRangeQuery(
   const conditions: string[] = ['timestamp >= $1', 'timestamp <= $2'];
   appendFilterClause(filter, conditions, params);
 
-  const rows = await db.select<Array<{ id: string; timestamp: number; aspect_ratio: number }>>(
+  const rows = await db.select<RatioRow[]>(
     // 和 getItemsByDayRangeQuery 必须完全同序（包括 timestamp 相等时的 tiebreaker），
     // 否则 skeleton 按比例 layout 与真图 layout 位置不一致，图片加载时会闪一下
-    `SELECT id, timestamp, aspect_ratio
+    `SELECT id, timestamp, aspect_ratio, width, height
      FROM history_items
      WHERE ${conditions.join(' AND ')}
      ORDER BY timestamp DESC, id DESC`,
     params,
   );
 
-  return rows.map(r => ({ id: r.id, timestamp: r.timestamp, aspectRatio: r.aspect_ratio ?? 1.0 }));
+  return rows.map(toAspectRatioRow);
 }
 
 /**
@@ -294,15 +314,15 @@ export async function getAllAspectRatiosQuery(
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const rows = await db.select<Array<{ id: string; timestamp: number; aspect_ratio: number }>>(
-    `SELECT id, timestamp, aspect_ratio
+  const rows = await db.select<RatioRow[]>(
+    `SELECT id, timestamp, aspect_ratio, width, height
      FROM history_items
      ${where}
      ORDER BY timestamp DESC, id DESC`,
     params,
   );
 
-  return rows.map(r => ({ id: r.id, timestamp: r.timestamp, aspectRatio: r.aspect_ratio ?? 1.0 }));
+  return rows.map(toAspectRatioRow);
 }
 
 /** 当前筛选下的全部 id，新的在前（G04「Ctrl/⌘ A 全选当前结果」：不只是已经加载出来的那几天） */

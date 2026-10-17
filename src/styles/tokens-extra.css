@@ -40,6 +40,9 @@
   /* 白色浮起按钮的悬停：设计稿未画，取次按钮的悬停色 */
   --pn-btn-soft-hover: #F5F5F5;
   --pn-seg-track: #EFEFEF;
+  /* 透明图片底下的棋盘格（ImageRatios.dc.html），深色模式同步变暗 */
+  --pn-checker-a: #FFFFFF;
+  --pn-checker-b: #EDEDED;
 }
 
 [data-theme="dark"] {
@@ -74,6 +77,8 @@
   /* 深色「越靠上越亮」：浮起按钮 #36363A 悬停再亮一级 */
   --pn-btn-soft-hover: #3E3E42;
   --pn-seg-track: #2A2A2D;
+  --pn-checker-a: #2A2A2D;
+  --pn-checker-b: #333337;
 }
 
 :root {
@@ -335,6 +340,15 @@
   --pn-space-tile-petals-bottom: 9px;
   /* 选中的图在自己的格子里缩小到 86%，不向外扩边 */
   --pn-scale-tile-selected: 0.86;
+  /* 不同比例图片的格子（ImageRatios.dc.html）：说明角标高 18、圆角 5（离边与左右内距 6）；长图底部 34% 渐隐 */
+  --pn-size-tile-tag: 18px;
+  --pn-radius-tile-tag: 5px;
+  --pn-media-fade-long: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(0, 0, 0, 0.28));
+  --pn-size-tile-fade: 34%;
+  /* 透明图片底下的棋盘格：每格 16，第二层错开 8（两色随主题，见 --pn-checker-a / -b） */
+  --pn-size-checker: 16px;
+  --pn-checker: linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%), linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%);
+  --pn-checker-position: 0 0, 8px 8px;
 
   /* 焦点卡「+N」展开的图床列表（CopyMulti.dc.html ②）：外宽 330 含浮层内边距 8 */
   --pn-size-copy-more: 314px;
