@@ -631,6 +631,18 @@
   /* 「上传到」菜单按钮高 24、左右 6；端口输入框宽 72 */
   --pn-size-settings-picker: 24px;
   --pn-size-settings-port: 72px;
+  /* 云同步 / 备份密码卡：头部间距 14、图标块 36（圆角 10）；同步内容行内边距 8 16 8 66（与标题对齐）；手动备份行高 46；最近操作行高 40 */
+  --pn-space-cloud-head-gap: 14px;
+  /* 更新卡片：发布说明行距 3；公众号二维码 180 */
+  --pn-space-update-notes: 3px;
+  --pn-size-wechat-qr: 180px;
+  /* 刷新横幅内边距 10 10 10 14 */
+  --pn-space-settings-banner: 10px 10px 10px 14px;
+  --pn-size-settings-badge: 36px;
+  --pn-space-settings-cloud-item: 8px 16px 8px 66px;
+  --pn-space-settings-password: 14px 16px;
+  --pn-size-settings-link-row: 46px;
+  --pn-size-settings-log-row: 40px;
   /* 备份密码强度框：内边距 10 12、圆角 10；四段条高 4、圆角 2 */
   --pn-space-backup-strength: 10px 12px;
   --pn-size-backup-strength-bar: 4px;

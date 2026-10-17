@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getRelaunchMock, getUpdaterCheckMock } from '../helpers/tauriMock';
-import { useAutoUpdate } from '@/composables/useAutoUpdate';
+import { setUpdateInstallGate, useAutoUpdate } from '@/composables/useAutoUpdate';
 
 const mockCheck = getUpdaterCheckMock();
 const mockRelaunch = getRelaunchMock();
@@ -115,10 +115,11 @@ describe('useAutoUpdate - checkForUpdate', () => {
   });
 });
 
-describe('useAutoUpdate - downloadAndInstall', () => {
+describe('useAutoUpdate - 下载与安装', () => {
   beforeEach(() => {
     mockCheck.mockReset();
     mockRelaunch.mockReset();
+    setUpdateInstallGate(async () => {});
     const api = useAutoUpdate();
     api.status.value = 'idle';
     api.updateInfo.value = null;
@@ -127,113 +128,119 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     api.pendingUpdateAvailable.value = false;
   });
 
+  /** 下载按事件走完：Started(total) → Progress… → Finished */
+  function downloadWith(total: number | undefined, chunks: number[]) {
+    return vi.fn(async (cb: any) => {
+      cb({ event: 'Started', data: total ? { contentLength: total } : {} });
+      for (const chunk of chunks) cb({ event: 'Progress', data: { chunkLength: chunk } });
+      cb({ event: 'Finished' });
+    });
+  }
+
+  async function found(update: any) {
+    mockCheck.mockResolvedValue(update);
+    const api = useAutoUpdate();
+    await api.checkForUpdate();
+    return api;
+  }
+
   it('无 pendingUpdate → 什么都不做', async () => {
     const api = useAutoUpdate();
     await api.downloadAndInstall();
     expect(api.status.value).toBe('idle');
   });
 
-  it('下载成功后进入 install-pending，等待用户手动重启', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi.fn(async (cb: any) => {
-      cb({ event: 'Started', data: { contentLength: 1000 } });
-      cb({ event: 'Progress', data: { chunkLength: 400 } });
-      cb({ event: 'Progress', data: { chunkLength: 600 } });
-      cb({ event: 'Finished' });
-    });
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockResolvedValue(undefined as any);
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
+  it('下载完接着安装，进入 install-pending 等用户手动重启（不自动 relaunch）', async () => {
+    const update = makeUpdate({ download: downloadWith(1000, [400, 600]), install: vi.fn().mockResolvedValue(undefined) });
+    const api = await found(update);
     await api.downloadAndInstall();
+    expect(update.install).toHaveBeenCalledTimes(1);
     expect(api.status.value).toBe('install-pending');
-    expect(api.hasAvailableUpdate.value).toBe(true);
     expect(api.downloadProgress.value).toBe(100);
+    expect(api.downloadedBytes.value).toBe(1000);
+    expect(api.totalBytes.value).toBe(1000);
     expect(mockRelaunch).not.toHaveBeenCalled();
   });
 
-  it('Finished 事件当场进入 installing（Windows 上进程随后被 exit(0) 杀掉，停在这一态）', async () => {
-    const update = makeUpdate();
-    const api = useAutoUpdate();
-    // Why 快照而不是在回调里 expect：downloadAndInstall 的 await 包在 try/catch 里，
-    // 回调内断言失败会被当成下载异常吞掉，测试转而以 status='error' 的形式误报。
-    let statusAtFinished: string | undefined;
-    update.downloadAndInstall = vi.fn(async (cb: any) => {
-      cb({ event: 'Started', data: { contentLength: 100 } });
-      cb({ event: 'Finished' });
-      statusAtFinished = api.status.value;
-    });
-    mockCheck.mockResolvedValue(update);
-    await api.checkForUpdate();
+  it('安装开始时进入 installing（Windows 上 install() 以 exit(0) 收尾，停在这一态）', async () => {
+    let statusAtInstall: string | undefined;
+    const update = makeUpdate({ download: downloadWith(100, [100]) });
+    const api = await found(update);
+    update.install = vi.fn(async () => { statusAtInstall = api.status.value; });
     await api.downloadAndInstall();
+    expect(statusAtInstall).toBe('installing');
+  });
 
-    // Windows 走不到 await 之后，UI 就停在 installing —— 这是用户在窗口消失前看到的最后一态
-    expect(statusAtFinished).toBe('installing');
-    // macOS / Linux 的 install() 会正常返回，继续升级为 install-pending
+  it('安装前等进行中的上传传完（交接说明 8.5）', async () => {
+    let release!: () => void;
+    setUpdateInstallGate(() => new Promise<void>((resolve) => { release = resolve; }));
+    const update = makeUpdate({ download: downloadWith(100, [100]), install: vi.fn().mockResolvedValue(undefined) });
+    const api = await found(update);
+    const done = api.downloadAndInstall();
+    await vi.waitFor(() => expect(api.waitingForUploads.value).toBe(true));
+    expect(api.status.value).toBe('installing');
+    expect(update.install).not.toHaveBeenCalled();
+    release();
+    await done;
+    expect(update.install).toHaveBeenCalled();
+    expect(api.waitingForUploads.value).toBe(false);
+  });
+
+  it('下载中「取消」：回到发现新版本，下完不安装；再点「立即更新」直接安装，不重复下载', async () => {
+    let finish!: () => void;
+    const update = makeUpdate({
+      download: vi.fn((cb: any) => new Promise<void>((resolve) => {
+        cb({ event: 'Started', data: { contentLength: 100 } });
+        finish = () => { cb({ event: 'Finished' }); resolve(); };
+      })),
+      install: vi.fn().mockResolvedValue(undefined),
+    });
+    const api = await found(update);
+    const first = api.downloadAndInstall();
+    expect(api.status.value).toBe('downloading');
+    api.cancelDownload();
+    expect(api.status.value).toBe('available');
+    finish();
+    await first;
+    expect(update.install).not.toHaveBeenCalled();
+    expect(api.status.value).toBe('available');
+
+    await api.downloadAndInstall();
+    expect(update.download).toHaveBeenCalledTimes(1);
+    expect(update.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('取消后在下载结束前再点「立即更新」：接着显示同一次下载，不重新下', async () => {
+    let finish!: () => void;
+    const update = makeUpdate({
+      download: vi.fn(() => new Promise<void>((resolve) => { finish = resolve; })),
+      install: vi.fn().mockResolvedValue(undefined),
+    });
+    const api = await found(update);
+    const first = api.downloadAndInstall();
+    api.cancelDownload();
+    const second = api.downloadAndInstall();
+    expect(api.status.value).toBe('downloading');
+    finish();
+    await Promise.all([first, second]);
+    expect(update.download).toHaveBeenCalledTimes(1);
     expect(api.status.value).toBe('install-pending');
   });
 
-  it('installing 时再次点下载按钮不会触发二次 downloadAndInstall', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi.fn(async () => {});
-    mockCheck.mockResolvedValue(update);
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
-
+  it('installing / install-pending 时再点不会再装一次', async () => {
+    const update = makeUpdate({ download: downloadWith(100, [100]), install: vi.fn().mockResolvedValue(undefined) });
+    const api = await found(update);
+    await api.downloadAndInstall();
+    await api.downloadAndInstall();
     api.status.value = 'installing';
     await api.downloadAndInstall();
-    expect(update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(update.download).toHaveBeenCalledTimes(1);
+    expect(update.install).toHaveBeenCalledTimes(1);
   });
 
-  it('下载过程中按 contentLength 计算中途进度', async () => {
-    const update = makeUpdate();
-    const api = useAutoUpdate();
-    update.downloadAndInstall = vi.fn(async (cb: any) => {
-      cb({ event: 'Started', data: { contentLength: 1000 } });
-      cb({ event: 'Progress', data: { chunkLength: 400 } });
-      expect(api.downloadProgress.value).toBe(40);
-      cb({ event: 'Finished' });
-    });
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockResolvedValue(undefined as any);
-    await api.checkForUpdate();
-    await api.downloadAndInstall();
-    expect(api.downloadProgress.value).toBe(100);
-  });
-
-  it('安装完成后不会自动 relaunch，也不会写入错误提示', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi.fn(async (cb: any) => {
-      cb({ event: 'Started', data: { contentLength: 100 } });
-      cb({ event: 'Finished' });
-    });
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockRejectedValue(new Error('perm'));
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
-    await api.downloadAndInstall();
-    expect(api.status.value).toBe('install-pending');
-    expect(api.errorMessage.value).toBe('');
-    expect(mockRelaunch).not.toHaveBeenCalled();
-  });
-
-  it('install-pending 时再次点下载按钮不会触发二次 downloadAndInstall', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi.fn(async (cb: any) => {
-      cb({ event: 'Started', data: { contentLength: 100 } });
-      cb({ event: 'Finished' });
-    });
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockRejectedValue(new Error('perm'));
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
-    await api.downloadAndInstall();
-    expect(api.status.value).toBe('install-pending');
-    await api.downloadAndInstall(); // 守卫拦截
-    expect(update.downloadAndInstall).toHaveBeenCalledTimes(1);
-  });
-
-  it('retryRelaunch 仅在 install-pending 时生效', async () => {
+  it('retryRelaunch 仅在 install-pending 时生效，并先等上传传完', async () => {
+    const gate = vi.fn().mockResolvedValue(undefined);
+    setUpdateInstallGate(gate);
     const api = useAutoUpdate();
     api.status.value = 'idle';
     await api.retryRelaunch();
@@ -242,69 +249,44 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     api.status.value = 'install-pending';
     mockRelaunch.mockResolvedValue(undefined as any);
     await api.retryRelaunch();
+    expect(gate).toHaveBeenCalled();
     expect(mockRelaunch).toHaveBeenCalledTimes(1);
   });
 
-  it('retryDownload 复用 pendingUpdate 重试，不再发起 check', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('net'))
-      .mockResolvedValueOnce(undefined as any);
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockResolvedValue(undefined as any);
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
-    await api.downloadAndInstall();
-    expect(api.status.value).toBe('error');
-    expect(api.pendingUpdateAvailable.value).toBe(true);
-
-    await api.retryDownload();
-    expect(update.downloadAndInstall).toHaveBeenCalledTimes(2);
-    expect(mockCheck).toHaveBeenCalledTimes(1); // 没有再次 check
-    expect(api.status.value).toBe('install-pending');
-  });
-
-  it('下载失败 → status=error', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi.fn().mockRejectedValue(new Error('net'));
-    mockCheck.mockResolvedValue(update);
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
+  it('下载失败 → error；retryDownload 复用 pendingUpdate 重试，不再发起 check', async () => {
+    const update = makeUpdate({
+      download: vi.fn().mockRejectedValueOnce(new Error('net')).mockResolvedValueOnce(undefined),
+      install: vi.fn().mockResolvedValue(undefined),
+    });
+    const api = await found(update);
     await api.downloadAndInstall();
     expect(api.status.value).toBe('error');
     expect(api.errorMessage.value).toBe('net');
+    expect(api.pendingUpdateAvailable.value).toBe(true);
+
+    await api.retryDownload();
+    expect(update.download).toHaveBeenCalledTimes(2);
+    expect(mockCheck).toHaveBeenCalledTimes(1);
+    expect(api.status.value).toBe('install-pending');
   });
 
-  it('正在下载时重入立即返回', async () => {
-    const update = makeUpdate();
-    let resolveDl!: () => void;
-    update.downloadAndInstall = vi.fn(() => new Promise<void>(r => { resolveDl = r; }));
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockResolvedValue(undefined as any);
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
-    const p1 = api.downloadAndInstall();
-    const p2 = api.downloadAndInstall();
-    await p2;
-    expect(update.downloadAndInstall).toHaveBeenCalledTimes(1);
-    resolveDl();
-    await p1;
+  it('安装失败 → error，重试时直接再装（包已下好）', async () => {
+    const update = makeUpdate({
+      download: downloadWith(100, [100]),
+      install: vi.fn().mockRejectedValueOnce(new Error('os error 5')).mockResolvedValueOnce(undefined),
+    });
+    const api = await found(update);
+    await api.downloadAndInstall();
+    expect(api.status.value).toBe('error');
+    await api.retryDownload();
+    expect(update.download).toHaveBeenCalledTimes(1);
+    expect(api.status.value).toBe('install-pending');
   });
 
   it('contentLength 缺失时进度不更新（但下载仍完成）', async () => {
-    const update = makeUpdate();
-    update.downloadAndInstall = vi.fn(async (cb: any) => {
-      cb({ event: 'Started', data: {} }); // 无 contentLength
-      cb({ event: 'Progress', data: { chunkLength: 100 } });
-      cb({ event: 'Finished' });
-    });
-    mockCheck.mockResolvedValue(update);
-    mockRelaunch.mockResolvedValue(undefined as any);
-    const api = useAutoUpdate();
-    await api.checkForUpdate();
+    const update = makeUpdate({ download: downloadWith(undefined, [100]), install: vi.fn().mockResolvedValue(undefined) });
+    const api = await found(update);
     await api.downloadAndInstall();
-    // Finished 仍设 100
     expect(api.downloadProgress.value).toBe(100);
   });
 });
