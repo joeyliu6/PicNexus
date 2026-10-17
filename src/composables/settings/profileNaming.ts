@@ -2,7 +2,7 @@
 //
 // Why 单独一个模块：备份 WebDAV（`config.webdav`）和图床 profile（`custom_s3_profiles` /
 // `webdav_profiles`）是两套互不相干的编辑逻辑，却共用同一条命名规则。各写一份的下场
-// 已经发生过——`useStorageProfiles` 把撞名修掉了，`useWebDAVProfileEditor` 还留着旧的
+// 已经发生过——图床 profile 那边把撞名修掉了，`useWebDAVProfileEditor` 还留着旧的
 // `length + 1`，同一个 bug 在仓库里活了两份。
 
 /**

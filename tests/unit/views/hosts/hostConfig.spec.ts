@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
 import {
-  blankProfile, addProfile, connectHost, disconnectHost, firstMissingField, readHostValues, renameProfile, restoreHost,
+  blankProfile, addProfile, connectHost, migrateLegacyCustomS3, disconnectHost, firstMissingField, readHostValues, renameProfile, restoreHost,
   snapshotHost, writeHostValue, writeHostValues,
 } from '@/views/hosts/hostConfig';
 
@@ -36,9 +36,9 @@ describe('hostConfig', () => {
     expect(renameProfile(config, hostId, '家里 NAS').webdav_profiles?.[0].name).toBe('家里 NAS');
   });
 
-  it('新建多份图床的名字不重名', () => {
-    expect(blankProfile('webdav', 'x', ['WebDAV', 'WebDAV 2']).name).toBe('WebDAV 3');
-    expect(blankProfile('s3', 'x', []).name).toBe('S3 兼容存储');
+  it('新建多份图床的名字不重名（现存最大序号 + 1）', () => {
+    expect(blankProfile('webdav', 'x', ['WebDAV 1', 'WebDAV 3']).name).toBe('WebDAV 4');
+    expect(blankProfile('s3', 'x', []).name).toBe('S3 兼容存储 1');
   });
 
   it('断开：去掉已添加 / 启用、清凭证、复制固定退回；撤销原样放回', () => {
@@ -80,5 +80,18 @@ describe('hostConfig', () => {
     const next = writeHostValues(base(), 'r2', { bucketName: 'new', publicDomain: 'https://x.example' });
     expect(next.services?.r2).toMatchObject({ bucketName: 'new', publicDomain: 'https://x.example', accessKeyId: 'ak' });
     expect(next.services?.github).toEqual(base().services?.github);
+  });
+
+  it('很早的单份「自定义 S3」搬成一份 profile，已添加 / 启用里的旧 id 换成新 id；没有要搬的不动', () => {
+    const config = base();
+    (config.services as Record<string, unknown>).custom_s3 = { endpoint: 'https://s3.example.com', accessKeyId: 'a', secretAccessKey: 's', region: 'r', bucket: 'b' };
+    config.availableServices = ['jd', 'custom_s3'];
+    config.enabledServices = ['custom_s3'];
+    const next = migrateLegacyCustomS3(config, 'p1')!;
+    expect(next.custom_s3_profiles).toEqual([expect.objectContaining({ id: 'p1', name: '自定义 S3', endpoint: 'https://s3.example.com', bucket: 'b' })]);
+    expect(next.availableServices).toEqual(['jd', 'custom_s3:p1']);
+    expect(next.enabledServices).toEqual(['custom_s3:p1']);
+    expect((next.services as Record<string, unknown>).custom_s3).toBeUndefined();
+    expect(migrateLegacyCustomS3(base(), 'p2')).toBeNull();
   });
 });

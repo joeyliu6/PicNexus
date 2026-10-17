@@ -82,7 +82,7 @@ export interface WeiboServiceConfig extends BaseServiceConfig {
  *
  * Why 存主机名而不是布尔值：**域名一改，确认自动失效**，不需要在每个能改域名的地方
  * 都补一段作废逻辑。对照 `WebDAVStorageProfile.lanHttpConfirmed`——那个布尔值就得靠
- * `useStorageProfiles.ts` 里手写的"地址变了就置 false"兜着，漏一处就会留下过期的放行。
+ * 图床页 `hostConfig.writeHostValues` 里手写的"地址变了就置 false"兜着，漏一处就会留下过期的放行。
  *
  * 判据：`normalizeHost(new URL(publicDomain).hostname) === httpDomainConfirmedFor`。
  */
@@ -446,7 +446,7 @@ export interface WebDAVStorageProfile {
    * - **缺省即未确认**：`undefined` / `false` 一律当没确认，不存在第三态。
    * - **只放开 fake-ip 一档**：确证公网、链路本地在确认后依然硬拒绝（Rust 侧 `LanHttpConsent`）。
    * - **改地址即作废**：确认是针对某个具体地址给的，`url` 一变就重置回 false，
-   *   见 `useStorageProfiles.updateWebdavProfile`。
+   *   见图床页的 `hostConfig.writeHostValues`。
    */
   lanHttpConfirmed?: boolean;
 

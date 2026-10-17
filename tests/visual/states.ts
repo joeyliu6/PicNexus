@@ -34,8 +34,6 @@ export const VISUAL_STATES = {
   settings: [
     'default',
     'custom-template',
-    'connection-testing',
-    'error',
     'dark-theme',
   ],
   dialogs: [

@@ -54,9 +54,8 @@ export const WEBDAV_REQUIRED_FIELDS = ['url', 'username', 'passwordEncrypted', '
  * 必须在 `SERVICE_REQUIRED_FIELDS` 里卡住，否则又会退回「设置页看着正常、一传就报
  * ErrInvalidAccessKeyID」——那正是这个缺陷潜伏至今的形态。
  *
- * ⚠️ 设置页「测试连接」也读这张表，但它**不代表测试连接只验 REST**：2026-08-20 起
- * `test_upyun_connection` 会 REST + S3 各验一次，缺 S3 凭证由 Rust 侧报（措辞里带
- * 「去哪儿生成」，比这里的字段名报错有用得多）。理由写在 `s3ConfigValidation.ts`。
+ * 图床页的「测试连接」不读这张表：又拍云由 Rust 侧 `test_upyun_connection` 把 REST 与 S3 两套凭证各验一次，
+ * 缺哪一把由它报（措辞里带「去哪儿生成」）。
  *
  * 详见 `docs/audits/upyun-audit-2026-08-19.md`。
  */

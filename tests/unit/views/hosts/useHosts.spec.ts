@@ -35,7 +35,7 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => ({ withAction: m.with
 vi.mock('@/composables/upload/useUploadController', () => ({
   useUploadController: () => ({ hosts: computed(() => m.hosts!.value), toggleHost: m.toggleHost, refreshHosts: async () => recomputeHosts() }),
 }));
-vi.mock('@/composables/settings/profileServiceSync', () => ({ syncProfileUploaders: vi.fn() }));
+vi.mock('@/views/hosts/profileServiceSync', () => ({ syncProfileUploaders: vi.fn() }));
 vi.mock('@/composables/service/useServiceHealth', () => ({ useServiceHealth: () => ({ markVerified: vi.fn(), markTestFailed: vi.fn() }) }));
 vi.mock('@/composables/service/useServiceAvailability', () => ({ probeBuiltinServiceAvailability: vi.fn(), useServiceAvailability: () => ({ jdAvailable: { value: true }, qiyuAvailable: { value: true } }) }));
 vi.mock('@/security/crypto', () => ({ secureStorage: { encrypt: async (v: string) => `enc(${v})`, decrypt: async (v: string) => v.replace(/^enc\((.*)\)$/, '$1') } }));
@@ -99,7 +99,7 @@ describe('useHosts', () => {
 
     m.invoke.mockResolvedValueOnce(PASS);
     await hosts.connect();
-    expect(m.disk!.custom_s3_profiles?.[0]).toMatchObject({ name: 'S3 兼容存储', endpoint: 'https://s3.example.com', bucket: 'b' });
+    expect(m.disk!.custom_s3_profiles?.[0]).toMatchObject({ name: 'S3 兼容存储 1', endpoint: 'https://s3.example.com', bucket: 'b' });
     expect(m.disk!.availableServices).toContain(id);
     expect(m.disk!.enabledServices).toContain(id);
     expect(hosts.selectedId.value).toBe(id);

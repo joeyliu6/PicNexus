@@ -11,8 +11,8 @@ import { useCookieLogin } from '@/composables/useCookieLogin';
 import { usePublicRiskConfirm } from '@/composables/usePublicRiskConfirm';
 import { useToast } from '@/composables/useToast';
 import { useUploadController } from '@/composables/upload/useUploadController';
-import { needsHttpDomainConsent } from '@/composables/settings/s3ConfigValidation';
-import { syncProfileUploaders } from '@/composables/settings/profileServiceSync';
+import { needsHttpDomainConsent } from './s3ConfigValidation';
+import { syncProfileUploaders } from './profileServiceSync';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { secureStorage } from '@/security/crypto';
 import { normalizeHost } from '@/security/networkPolicy';
@@ -21,7 +21,7 @@ import { joinCjk } from '@/utils/cjkSpacing';
 import { createLogger } from '@/utils/logger';
 import { describeHost, type HostDescriptor } from './hostCatalog';
 import {
-  addProfile, blankProfile, connectHost, disconnectHost, firstMissingField, hostRecord, readHostValues, renameProfile,
+  addProfile, blankProfile, connectHost, disconnectHost, firstMissingField, hostRecord, migrateLegacyCustomS3, readHostValues, renameProfile,
   restoreHost, snapshotHost, writeHostValues, type HostValues,
 } from './hostConfig';
 import { buildHostRows } from './hostList';
@@ -88,6 +88,8 @@ function create() {
 
   async function reload(): Promise<void> {
     config.value = (await readFreshConfig()) ?? structuredClone(DEFAULT_CONFIG);
+    const migrated = migrateLegacyCustomS3(config.value, newProfileId());
+    if (migrated) await patchConfig((c) => migrateLegacyCustomS3(c, newProfileId()) ?? c);
     await upload.refreshHosts();
     // 选中的图床被别处删了（托盘、云同步）：退回第一个；一个都没有时右侧直接是目录
     if (pane.value === 'detail' && (!selectedId.value || !addedIds.value.has(selectedId.value))) {

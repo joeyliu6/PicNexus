@@ -15,7 +15,7 @@ vi.mock('@/uploaders', () => ({
 }));
 
 const { filterOrphanProfileServices, syncProfileUploaders } = await import(
-  '@/composables/settings/profileServiceSync'
+  '@/views/hosts/profileServiceSync'
 );
 
 function makeProfiles(customS3Ids: string[] = [], webdavIds: string[] = []) {

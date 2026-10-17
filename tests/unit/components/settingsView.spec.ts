@@ -82,6 +82,7 @@ vi.mock('@/utils/webdav', () => ({
 
 vi.mock('@/composables/useConfig', () => ({
   useConfigManager: () => ({
+    config: { value: { custom_s3_profiles: [], webdav_profiles: [] } },
     setupCookieListener: mockState.setupCookieListener,
     openCookieWebView: mockState.openCookieWebView,
     testWebDAVConnection: mockState.testWebDAVConnection,
@@ -154,30 +155,9 @@ vi.mock('@/composables/settings/useSettingsForm', () => ({
   }),
 }));
 
-vi.mock('@/composables/settings/useConnectionTest', () => ({
-  useConnectionTest: () => ({
-    qiyuAvailable: ref(true),
-    jdAvailable: ref(true),
-    isCheckingQiyu: ref(false),
-    isCheckingJd: ref(false),
-    testingConnections: ref({}),
-    activeSession: ref(null),
-    visibleRefreshingServiceIds: ref([]),
-    isBatchTesting: ref(false),
-    batchTestProgress: ref({ done: 0, total: 0 }),
-    batchTestCompletionKey: ref(''),
-    handleServiceTest: mockState.handleServiceTest,
-    handleBuiltinCheck: mockState.handleBuiltinCheck,
-    testAllConfiguredServices: mockState.testAllConfiguredServices,
-    cancelBatchTest: mockState.cancelBatchTest,
-  }),
-}));
-
-vi.mock('@/composables/settings/useEditorIntegration', () => ({
-  useEditorIntegration: () => ({
-    applyEditorServer: mockState.applyEditorServer,
-    clearTimer: mockState.clearEditorTimer,
-  }),
+// 编辑器服务改走应用级的 editorSync：设置页只把刚改的编辑器选项交给它下发
+vi.mock('@/composables/settings/editorSync', () => ({
+  applyEditorConfig: mockState.applyEditorServer,
 }));
 
 const GeneralSettingsPanelStub = defineComponent({
@@ -210,38 +190,6 @@ const AdvancedSettingsPanelStub = defineComponent({
       <button class="update-compression" @click="$emit('update:image-compression', { ...imageCompression, enabled: !imageCompression?.enabled })">compression</button>
       <button class="advanced-save" @click="$emit('save')">save</button>
       <button class="advanced-go-hosting" @click="$emit('navigate-hosting')">hosting</button>
-    </section>
-  `,
-});
-
-const HostingSettingsPanelStub = defineComponent({
-  name: 'HostingSettingsPanel',
-  props: ['availableServices', 'serviceConfigStatus', 'testingConnections', 'targetCardId', 'cookieFormData'],
-  emits: [
-    'update:available-services',
-    'accept-public-service-risk',
-    'test-private',
-    'test-token',
-    'test-cookie',
-    'check-builtin',
-    'test-all',
-    'save',
-    'card-navigated',
-    'scroll-to-service',
-    'add-custom-s3',
-  ],
-  template: `
-    <section data-testid="hosting-panel" :data-services="availableServices.join(',')" :data-target-card="targetCardId || ''">
-      <button class="disable-r2" @click="$emit('update:available-services', ['jd'])">disable r2</button>
-      <button class="enable-r2" @click="$emit('update:available-services', ['jd', 'r2'])">enable r2</button>
-      <button class="accept-public-risk" @click="$emit('accept-public-service-risk')">accept risk</button>
-      <button class="test-r2" @click="$emit('test-private', 'r2')">test r2</button>
-      <button class="test-smms" @click="$emit('test-token', 'smms')">test smms</button>
-      <button class="test-weibo" @click="$emit('test-cookie', 'weibo')">test weibo</button>
-      <button class="check-jd" @click="$emit('check-builtin', 'jd')">check jd</button>
-      <button class="test-all" @click="$emit('test-all')">test all</button>
-      <button class="add-custom-s3" @click="$emit('add-custom-s3')">add custom s3</button>
-      <button class="hosting-save" @click="$emit('save')">save</button>
     </section>
   `,
 });
@@ -333,17 +281,16 @@ function makeFormData() {
   });
 }
 
-// 图床已是独立页面：路由 /hosts 以 fixedTab='hosting' 复用 SettingsView，设置页自己的导航里没有「图床」
+// 图床是独立页面（src/views/hosts），设置页只负责从「高级」里跳过去
 function makeRouter() {
   const Blank = { template: '<div />' };
   return createRouter({ history: createMemoryHistory(), routes: [{ path: '/settings', component: Blank }, { path: '/hosts', component: Blank }] });
 }
 
-async function mountSettings(provide: Record<string, unknown> = {}, props: { fixedTab?: 'hosting' } = {}) {
+async function mountSettings(provide: Record<string, unknown> = {}) {
   const router = makeRouter();
   await router.push('/settings');
   const wrapper = shallowMountWithDefaults(SettingsView, {
-    props,
     global: {
       plugins: [router],
       provide: {
@@ -354,7 +301,6 @@ async function mountSettings(provide: Record<string, unknown> = {}, props: { fix
       stubs: {
         GeneralSettingsPanel: GeneralSettingsPanelStub,
         AdvancedSettingsPanel: AdvancedSettingsPanelStub,
-        HostingSettingsPanel: HostingSettingsPanelStub,
         BackupSyncPanel: BackupSyncPanelStub,
         AboutUpdatePanel: AboutUpdatePanelStub,
       },
@@ -364,8 +310,6 @@ async function mountSettings(provide: Record<string, unknown> = {}, props: { fix
   await flushPromisesAndTicks(3);
   return Object.assign(wrapper, { router });
 }
-
-const mountHosts = (provide: Record<string, unknown> = {}) => mountSettings(provide, { fixedTab: 'hosting' });
 
 beforeEach(() => {
   resetTauriMocks();
@@ -386,7 +330,7 @@ beforeEach(() => {
   mockState.saveSettings.mockResolvedValue(true);
   mockState.addCustomS3Profile.mockReturnValue('custom_s3:new-profile');
   mockState.resetToDefaultSettings.mockResolvedValue(true);
-  mockState.applyEditorServer.mockResolvedValue(undefined);
+  mockState.applyEditorServer.mockImplementation(async (editorServer: unknown) => ({ ok: true, editorServer }));
   mockState.setupCookieListener.mockResolvedValue(mockState.cookieUnlisten);
   mockState.confirm.mockResolvedValue(true);
   mockState.testWebDAVConnection.mockResolvedValue({ success: true, message: '连接成功' });
@@ -431,60 +375,6 @@ describe('SettingsView page interactions', () => {
   // 其他 cookie 服务在 formData 里是 `{ cookie }` 对象，只有微博是扁平字符串 weiboCookie。
   // 曾经就地拼 `{ cookie: formData.weiboCookie }` 传下去——子组件按引用改的是那个临时对象里
   // 的字符串副本，formData 纹丝不动，保存时读回旧值，手动编辑的微博 Cookie 被静默丢弃。
-  it('routes Weibo cookie edits back into formData', async () => {
-    const wrapper = await mountHosts();
-
-    const panel = wrapper.findComponent(HostingSettingsPanelStub);
-    const cookieFormData = panel.props('cookieFormData') as { weibo: { cookie: string } };
-
-    expect(cookieFormData.weibo.cookie).toBe('');
-
-    cookieFormData.weibo.cookie = 'SUB=edited-by-hand';
-
-    expect(mockState.formData.value.weiboCookie).toBe('SUB=edited-by-hand');
-    // 反向判据：读回来也得是新值，否则重渲染时输入框会跳回旧内容
-    expect(
-      (panel.props('cookieFormData') as { weibo: { cookie: string } }).weibo.cookie,
-    ).toBe('SUB=edited-by-hand');
-  });
-
-  it('opens the hosts page on a target service card from navigation section', async () => {
-    const settingsTargetSection = ref<string | null>('r2');
-    const wrapper = await mountHosts({ settingsTargetSection });
-
-    const hostingPanel = wrapper.get('[data-testid="hosting-panel"]');
-    expect(hostingPanel.attributes('data-target-card')).toBe('r2');
-    expect(settingsTargetSection.value).toBeNull();
-    expect(wrapper.find('.nav-item').exists()).toBe(false);
-  });
-
-  it('enables and disables hosting services and saves through the page handler', async () => {
-    const wrapper = await mountHosts();
-
-    expect(wrapper.get('[data-testid="hosting-panel"]').attributes('data-services')).toBe('jd,r2');
-
-    await wrapper.get('.disable-r2').trigger('click');
-    await flushPromisesAndTicks();
-    expect(mockState.availableServices.value).toEqual(['jd']);
-    expect(mockState.debouncedSaveSettings).toHaveBeenCalledTimes(1);
-
-    await wrapper.get('.enable-r2').trigger('click');
-    await flushPromisesAndTicks();
-    expect(mockState.availableServices.value).toEqual(['jd', 'r2']);
-
-    await wrapper.get('.hosting-save').trigger('click');
-    expect(mockState.debouncedSaveSettings).toHaveBeenCalledTimes(3);
-  });
-
-  it('records public service risk acknowledgement from hosting settings', async () => {
-    const wrapper = await mountHosts();
-
-    await wrapper.get('.accept-public-risk').trigger('click');
-
-    expect(mockState.formData.value.publicServiceRiskAccepted).toBe(true);
-    expect(mockState.debouncedSaveSettings).not.toHaveBeenCalled();
-  });
-
   it('saves compression changes from the advanced tab', async () => {
     const wrapper = await mountSettings();
 
@@ -497,32 +387,6 @@ describe('SettingsView page interactions', () => {
 
     await wrapper.get('.advanced-save').trigger('click');
     expect(mockState.debouncedSaveSettingsWithStatus).toHaveBeenCalledTimes(2);
-  });
-
-  it('runs private, token, cookie, builtin, and batch connection tests from hosting', async () => {
-    const wrapper = await mountHosts();
-
-    await wrapper.get('.test-r2').trigger('click');
-    await wrapper.get('.test-smms').trigger('click');
-    await wrapper.get('.test-weibo').trigger('click');
-    await wrapper.get('.check-jd').trigger('click');
-    await wrapper.get('.test-all').trigger('click');
-
-    expect(mockState.handleServiceTest).toHaveBeenCalledWith('r2');
-    expect(mockState.handleServiceTest).toHaveBeenCalledWith('smms');
-    expect(mockState.handleServiceTest).toHaveBeenCalledWith('weibo');
-    expect(mockState.handleBuiltinCheck).toHaveBeenCalledWith('jd');
-    expect(mockState.testAllConfiguredServices).toHaveBeenCalled();
-  });
-
-  it('targets the newly created custom S3 card after adding a profile', async () => {
-    const wrapper = await mountHosts();
-
-    await wrapper.get('.add-custom-s3').trigger('click');
-    await flushPromisesAndTicks();
-
-    expect(mockState.addCustomS3Profile).toHaveBeenCalledTimes(1);
-    expect(wrapper.get('[data-testid="hosting-panel"]').attributes('data-target-card')).toBe('custom_s3:new-profile');
   });
 
   it('tests WebDAV from backup settings and persists the connection status', async () => {

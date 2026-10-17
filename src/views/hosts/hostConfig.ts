@@ -6,6 +6,7 @@ import {
   makeCustomS3Id, makeWebDAVId,
   type CustomS3Profile, type UserConfig, type WebDAVStorageProfile,
 } from '@/config/types';
+import { nextProfileName } from '@/composables/settings/profileNaming';
 import { describeHost } from './hostCatalog';
 
 /** 一个图床在表单里的值（键 = HostField.key） */
@@ -114,11 +115,9 @@ function isRequiredField(hostId: string, key: string): boolean {
   return descriptor.kind === 'cookie' || descriptor.kind === 'token';
 }
 
-/** 多份图床新建时的空白一份（名字默认「WebDAV」「S3 兼容存储」，重名时加序号） */
+/** 多份图床新建时的空白一份（名字「WebDAV 1」「S3 兼容存储 1」，序号照 nextProfileName：现存最大序号 + 1） */
 export function blankProfile(kind: 'webdav' | 's3', id: string, existingNames: readonly string[]): WebDAVStorageProfile | CustomS3Profile {
-  const base = kind === 'webdav' ? 'WebDAV' : 'S3 兼容存储';
-  let name = base;
-  for (let n = 2; existingNames.includes(name); n++) name = `${base} ${n}`;
+  const name = nextProfileName([...existingNames], kind === 'webdav' ? 'WebDAV' : 'S3 兼容存储');
   if (kind === 'webdav') {
     return {
       id, name, url: '', username: '', passwordEncrypted: '', remotePath: 'images/', publicDomain: '',
@@ -251,4 +250,29 @@ export function restoreHost(config: UserConfig, snap: HostSnapshot): UserConfig 
     };
   }
   return next;
+}
+
+/**
+ * 很早的版本只有一份「自定义 S3」（services.custom_s3）。还留着它、又没有多份配置时，搬成一份 profile，
+ * 已添加 / 启用里的旧 id 换成新的复合 id。没有要搬的返回 null。
+ */
+export function migrateLegacyCustomS3(config: UserConfig, newId: string): UserConfig | null {
+  const legacy = (config.services as Record<string, ServiceRecord | undefined> | undefined)?.custom_s3;
+  if (!legacy || (config.custom_s3_profiles?.length ?? 0) > 0) return null;
+  const services = { ...(config.services ?? {}) } as Record<string, ServiceRecord>;
+  delete services.custom_s3;
+  const next: UserConfig = { ...config, services: services as UserConfig['services'] };
+  if (!str(legacy.endpoint) && !str(legacy.accessKeyId)) return next;
+  const hostId = makeCustomS3Id(newId);
+  const swap = (list: string[] | undefined) => (list ?? []).map((id) => (id === 'custom_s3' ? hostId : id));
+  return {
+    ...next,
+    custom_s3_profiles: [{
+      id: newId, name: '自定义 S3', endpoint: str(legacy.endpoint), accessKeyId: str(legacy.accessKeyId),
+      secretAccessKey: str(legacy.secretAccessKey), region: str(legacy.region), bucket: str(legacy.bucket),
+      path: str(legacy.path), publicDomain: str(legacy.publicDomain),
+    }],
+    availableServices: swap(next.availableServices),
+    enabledServices: swap(next.enabledServices),
+  };
 }

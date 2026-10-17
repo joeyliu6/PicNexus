@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 设置视图 - 逻辑已拆分至 composables/settings/
-// 本组件仅负责：tab 导航、事件编排、面板 props 传递
+// 本组件仅负责：tab 导航、事件编排、面板 props 传递。图床在独立的图床页（src/views/hosts），这里不再有图床的任何字段。
 
-import { ref, watch, inject, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue';
+import { computed, ref, watch, inject, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -14,20 +14,18 @@ import { useConfigManager } from '@/composables/useConfig';
 import { useHistoryManager } from '@/composables/history/useHistory';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { useSettingsForm } from '@/composables/settings/useSettingsForm';
-import { useConnectionTest } from '@/composables/settings/useConnectionTest';
-import { useEditorIntegration } from '@/composables/settings/useEditorIntegration';
+import { applyEditorConfig } from '@/composables/settings/editorSync';
 import { useSettingsReset } from '@/composables/settings/useSettingsReset';
 import { useSettingsActions } from '@/composables/settings/useSettingsActions';
 import { useAutoUpdate } from '@/composables/useAutoUpdate';
 
-import HostingSettingsPanel from '@/components/settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '@/components/settings/GeneralSettingsPanel.vue';
 import AdvancedSettingsPanel from '@/components/settings/AdvancedSettingsPanel.vue';
 import BackupSyncPanel from '@/components/settings/BackupSyncPanel.vue';
 import AboutUpdatePanel from '@/components/settings/AboutUpdatePanel.vue';
 
 import { readFreshConfig } from '@/store/instances';
-import type { ServiceType, ImageCompressionConfig, EditorServerConfig } from '@/config/types';
+import type { ImageCompressionConfig, EditorServerConfig } from '@/config/types';
 
 const { currentTheme } = useThemeManager();
 const configManager = useConfigManager();
@@ -38,49 +36,22 @@ const { hasAvailableUpdate } = useAutoUpdate();
 // ---- Composables ----
 
 const {
-  formData, isSettingsReady, availableServices, serviceNames, serviceConfigStatus,
+  formData, isSettingsReady,
   loadSettings, reloadFieldSecrets, saveSettings, debouncedSaveSettings, debouncedSaveSettingsWithStatus,
-  cancelDebouncedSave, errorToString, validateS3Config, clearTimers: clearFormTimers,
+  cancelDebouncedSave, errorToString, clearTimers: clearFormTimers,
   resetToDefaultSettings,
-  addPrefix, updatePrefix, removePrefix, resetToDefaultPrefixes,
-  addCustomS3Profile, deleteCustomS3Profile, updateCustomS3Profile,
-  addWebdavProfile, deleteWebdavProfile, updateWebdavProfile,
   addWebDAVProfile, deleteWebDAVProfile, switchWebDAVProfile,
 } = useSettingsForm();
 
 /**
- * 微博 Cookie 的读写通道
- *
- * Why 需要这么一个东西：其他 cookie 服务在 formData 里都是 `{ cookie: string }` 对象，
- * 只有微博是一个扁平字符串 `weiboCookie`。给 CookieServiceGroup 传参时曾就地拼一个
- * `{ cookie: formData.weiboCookie }` 字面量——每次渲染都新建，而且里面装的是字符串的
- * **副本**。子组件按引用改 `cookieFormData.weibo.cookie`，改的是这个临时对象，
- * `formData.weiboCookie` 纹丝不动，保存时读到的还是旧值：手动编辑的微博 Cookie 会被静默丢弃。
- *
- * 换成一个身份稳定、带 getter/setter 的通道，读写就都落到 formData 上了。
+ * 编辑器服务按设置页刚改的选项立即下发（图床凭证由 editorSync 从配置里取）；
+ * 开启时可能补了一个 authToken，收回表单里，随表单一起保存，免得每次换一个
  */
-const weiboCookieField = {
-  get cookie(): string {
-    return formData.value.weiboCookie;
-  },
-  set cookie(value: string) {
-    formData.value.weiboCookie = value;
-  },
-};
-
-const {
-  qiyuAvailable, jdAvailable, isCheckingQiyu, isCheckingJd,
-  testingConnections, activeSession, visibleRefreshingServiceIds,
-  isBatchTesting, batchTestProgress, batchTestCompletionKey,
-  handleServiceTest, handleBuiltinCheck, testAllConfiguredServices, cancelBatchTest,
-} = useConnectionTest({
-  formData, serviceNames,
-  errorToString, validateS3Config, updateWebdavProfile, saveSettings,
-});
-
-const { applyEditorServer, clearTimer: clearEditorTimer } = useEditorIntegration({
-  formData, isSettingsReady, errorToString,
-});
+async function applyEditorServer(cfg: EditorServerConfig, options: { force?: boolean } = {}): Promise<boolean> {
+  const { ok, editorServer } = await applyEditorConfig(cfg, options);
+  if (editorServer.authToken !== formData.value.editorServer.authToken) formData.value.editorServer = editorServer;
+  return ok;
+}
 
 const { isResettingDefaults, handleResetDefaults } = useSettingsReset({
   formData,
@@ -97,55 +68,33 @@ const {
   handleAnalyticsToggle, handleClearAppCache, handleWebDAVTest,
 } = useSettingsActions({ formData, saveSettings, cancelDebouncedSave });
 
+// 编辑器服务的图床下拉要列出多份图床（只读，取自配置）
+const customS3Profiles = computed(() => configManager.config.value.custom_s3_profiles ?? []);
+const webdavProfiles = computed(() => configManager.config.value.webdav_profiles ?? []);
+
 // ---- 导航 ----
 
-type SettingsTab = 'general' | 'hosting' | 'advanced' | 'backup' | 'about';
+type SettingsTab = 'general' | 'advanced' | 'backup' | 'about';
 
-// 界面重构过渡期：图床已是独立页面（路由 /hosts 以 fixedTab='hosting' 复用本组件），
-// 设置页自己的导航里不再出现「图床」。图床页按新设计重写后删除 fixedTab。
-const props = defineProps<{ fixedTab?: SettingsTab }>();
 const router = useRouter();
-const activeTab = ref<SettingsTab>(props.fixedTab ?? 'general');
+const activeTab = ref<SettingsTab>('general');
 const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTargetTab');
-const settingsTargetSection = inject<import('vue').Ref<string | null>>('settingsTargetSection');
-const targetCardId = ref<string | null>(null);
-
-const applyHostingTargetSection = () => {
-  const section = settingsTargetSection?.value;
-  if (!section || props.fixedTab !== 'hosting') return;
-
-  const pendingTab = settingsTargetTab?.value;
-  if (pendingTab && pendingTab !== 'hosting') return;
-  if (!pendingTab && activeTab.value !== 'hosting') return;
-
-  settingsTargetSection.value = null;
-  targetCardId.value = section;
-};
 
 const applyTargetTab = () => {
-  if (props.fixedTab || !settingsTargetTab?.value) {
-    applyHostingTargetSection();
-    return;
-  }
+  if (!settingsTargetTab?.value) return;
   const val = settingsTargetTab.value;
   settingsTargetTab.value = null;
   if (val === 'compression' || val === 'editor') { activeTab.value = 'advanced'; return; }
-  const validTabs: SettingsTab[] = ['general', 'hosting', 'advanced', 'backup', 'about'];
+  const validTabs: SettingsTab[] = ['general', 'advanced', 'backup', 'about'];
   if (validTabs.includes(val as SettingsTab)) activeTab.value = val as SettingsTab;
-  applyHostingTargetSection();
 };
 
-onActivated(() => {
-  applyTargetTab();
-  applyHostingTargetSection();
-});
-onDeactivated(() => { clearFormTimers(); clearEditorTimer(); });
+onActivated(applyTargetTab);
+onDeactivated(() => { clearFormTimers(); });
 if (settingsTargetTab) { watch(settingsTargetTab, (val) => { if (val) applyTargetTab(); }); }
-if (settingsTargetSection) { watch(settingsTargetSection, (val) => { if (val) applyHostingTargetSection(); }); }
 
 // ---- UI 状态 ----
 
-const cookieUnlisten = ref<UnlistenFn | null>(null);
 const compressionSyncUnlisten = ref<UnlistenFn | null>(null);
 const appVersion = ref('');
 const executablePath = ref('');
@@ -159,16 +108,6 @@ const navGroups = [{
   ]
 }];
 
-// ---- 事件处理 ----
-
-function handleAddCustomS3Profile() {
-  targetCardId.value = addCustomS3Profile();
-}
-
-function handleAddWebdavProfile() {
-  targetCardId.value = addWebdavProfile();
-}
-
 // ---- 生命周期 ----
 
 onMounted(async () => {
@@ -177,7 +116,6 @@ onMounted(async () => {
   executablePath.value = await invoke<string>('get_executable_path').catch(() => '');
 
   await loadSettings();
-  await applyEditorServer(formData.value.editorServer, { force: true });
 
   const { listen } = await import('@tauri-apps/api/event');
   const myLabel = getCurrentWebview().label;
@@ -186,21 +124,8 @@ onMounted(async () => {
     //   被磁盘旧值覆盖（emit→listen 同窗口仍走 IPC，期间用户可能已输入新值）
     if (event.payload?.source === myLabel) return;
     // 走 readFreshConfig：事件来自别的 webview（托盘也写配置），本窗口缓存此刻是陈旧的。
-    // 眼下 App.vue 的同名监听会顺手作废共享缓存，直接 get 也碰巧读得到新值——
-    // 但那是别人的副作用，不是这里的保证。按缓存契约各自读盘，别赌监听顺序。
     const updated = await readFreshConfig();
     if (updated?.imageCompression) formData.value.imageCompression = { ...updated.imageCompression };
-  });
-
-  // 新 Cookie 由应用级的 useCookieLogin 统一保存（设置页没打开过也要能存上）；
-  // 这里只把表单里的值同步过来，免得之后保存表单时用旧 Cookie 把新的覆盖掉
-  cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
-    if (sid === 'weibo') {
-      formData.value.weiboCookie = cookie;
-    } else if (sid === 'nowcoder' || sid === 'zhihu' || sid === 'nami'
-      || sid === 'bilibili' || sid === 'chaoxing') {
-      formData.value[sid].cookie = cookie;
-    }
   });
 
   isSettingsReady.value = true;
@@ -208,16 +133,14 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cancelDebouncedSave();
-  clearEditorTimer();
   saveSettings().catch(() => {});
-  cookieUnlisten.value?.();
   compressionSyncUnlisten.value?.();
 });
 </script>
 
 <template>
   <div class="settings-layout">
-    <div v-if="!fixedTab" class="settings-sidebar">
+    <div class="settings-sidebar">
       <div class="sidebar-title">{{ UI_COPY.navigation.settings.title }}</div>
       <nav class="nav-list">
         <div v-for="(group, idx) in navGroups" :key="idx" class="nav-group">
@@ -277,57 +200,11 @@ onUnmounted(() => {
         <AdvancedSettingsPanel
           :image-compression="formData.imageCompression" :editor-server="formData.editorServer"
           :executable-path="executablePath"
-          :custom-s3-profiles="formData.custom_s3_profiles" :webdav-profiles="formData.webdav_profiles"
+          :custom-s3-profiles="customS3Profiles" :webdav-profiles="webdavProfiles"
           @update:image-compression="(v: ImageCompressionConfig) => { formData.imageCompression = v; debouncedSaveSettingsWithStatus(); }"
           @update:editor-server="async (v: EditorServerConfig) => { formData.editorServer = v; await applyEditorServer(v); debouncedSaveSettingsWithStatus(); }"
           @navigate-hosting="router.push('/hosts')"
           @save="debouncedSaveSettingsWithStatus"
-        />
-      </div>
-
-      <div v-if="activeTab === 'hosting'" class="settings-section">
-        <HostingSettingsPanel
-          :private-form-data="{ r2: formData.r2, tencent: formData.tencent, aliyun: formData.aliyun, qiniu: formData.qiniu, upyun: formData.upyun }"
-          :custom-s3-profiles="formData.custom_s3_profiles"
-          :webdav-profiles="formData.webdav_profiles"
-          :cookie-form-data="{ weibo: weiboCookieField, zhihu: formData.zhihu, nowcoder: formData.nowcoder, nami: formData.nami, bilibili: formData.bilibili, chaoxing: formData.chaoxing }"
-          :token-form-data="{ smms: formData.smms, github: formData.github, imgur: formData.imgur }"
-          :testing-connections="testingConnections"
-          :jd-available="jdAvailable" :qiyu-available="qiyuAvailable"
-          :is-checking-jd="isCheckingJd" :is-checking-qiyu="isCheckingQiyu"
-          :link-prefix-enabled="formData.linkPrefixEnabled"
-          :prefix-list="formData.linkPrefixList"
-          :selected-prefix-index="formData.selectedPrefixIndex"
-          :github-cdn-config="formData.github.cdnConfig"
-          :target-card-id="targetCardId"
-          :is-batch-testing="isBatchTesting"
-          :batch-test-progress="batchTestProgress"
-          :batch-test-completion-key="batchTestCompletionKey"
-          :service-check-session="activeSession"
-          :refreshing-service-ids="visibleRefreshingServiceIds"
-          :service-names="serviceNames"
-          :available-services="availableServices"
-          :service-config-status="serviceConfigStatus"
-          :public-service-risk-accepted="formData.publicServiceRiskAccepted"
-          @update:available-services="(v) => { availableServices = v; debouncedSaveSettings(); }"
-          @accept-public-service-risk="formData.publicServiceRiskAccepted = true"
-          @card-navigated="targetCardId = null"
-          @test-all="testAllConfiguredServices"
-          @cancel-batch-test="cancelBatchTest"
-          @scroll-to-service="(id) => { targetCardId = id; }"
-          @save="debouncedSaveSettings"
-          @test-private="handleServiceTest" @test-token="handleServiceTest" @test-cookie="handleServiceTest"
-          @check-builtin="handleBuiltinCheck"
-          @login-cookie="(id) => configManager.openCookieWebView(id as ServiceType)"
-          @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; debouncedSaveSettings(); }"
-          @update:selected-prefix-index="(v) => { formData.selectedPrefixIndex = v; debouncedSaveSettings(); }"
-          @update:github-cdn-config="(v) => { formData.github.cdnConfig = v; }"
-          @add-prefix="addPrefix"
-          @update-prefix="({ index, item }) => updatePrefix(index, item)"
-          @remove-prefix="removePrefix"
-          @reset-to-default="resetToDefaultPrefixes"
-          @add-custom-s3="handleAddCustomS3Profile" @delete-custom-s3="deleteCustomS3Profile" @update-custom-s3="updateCustomS3Profile"
-          @add-webdav="handleAddWebdavProfile" @delete-webdav="deleteWebdavProfile" @update-webdav="updateWebdavProfile"
         />
       </div>
 

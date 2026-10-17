@@ -2,7 +2,6 @@
 import { computed, nextTick, onMounted, provide, ref } from 'vue';
 import ReloadBanner from '@/components/common/ReloadBanner.vue';
 import GeneralSettingsPanel from '@/components/settings/GeneralSettingsPanel.vue';
-import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSection.vue';
 import DataItemCard from '@/components/settings/backup-sync/DataItemCard.vue';
 import WebDAVConfigCollapsible from '@/components/settings/backup-sync/WebDAVConfigCollapsible.vue';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
@@ -12,8 +11,6 @@ import PnConfirmHost from '@/components/pn/PnConfirmHost.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useOnboarding } from '@/composables/useOnboarding';
 import type { ProfileSyncRecord, ThemeMode, WebDAVConfig } from '@/config/types';
-import type { ServiceHealthStatus } from '@/types/serviceHealth';
-import type { ServiceCheckSession } from '@/types/serviceCheck';
 import type { LinkFormat } from '@/utils/linkFormatter';
 
 type VisualPage = 'backup-sync' | 'settings' | 'dialogs';
@@ -155,48 +152,6 @@ onMounted(async () => {
 
 const themeMode = ref<ThemeMode>(isDark ? 'dark' : 'light');
 const settingsLinkFormat = computed<LinkFormat>(() => state === 'custom-template' ? 'custom' : 'markdown');
-const healthMap = computed<Record<string, ServiceHealthStatus>>(() => ({
-  jd: state === 'error' ? 'error' : 'verified',
-  qiyu: state === 'connection-testing' ? 'pending' : 'verified',
-  weibo: state === 'error' ? 'error' : 'pending',
-  r2: 'verified',
-  github: 'pending',
-  smms: 'unconfigured',
-  zhihu: 'unconfigured',
-  nami: 'unconfigured',
-  bilibili: 'unconfigured',
-  chaoxing: 'unconfigured',
-  nowcoder: 'unconfigured',
-  tencent: 'unconfigured',
-  aliyun: 'unconfigured',
-  qiniu: 'unconfigured',
-  upyun: 'unconfigured',
-  imgur: 'unconfigured',
-}));
-const tooltipMap = Object.fromEntries(Object.keys(healthMap.value).map((id) => [id, null])) as Record<string, string | null>;
-const serviceNames = Object.fromEntries(Object.keys(healthMap.value).map((id) => [id, id.toUpperCase()]));
-const testingConnections = computed((): Record<string, boolean> => state === 'connection-testing' ? { jd: true, qiyu: true } : {});
-const serviceSession = computed<ServiceCheckSession | null>(() => {
-  if (state !== 'connection-testing') return null;
-  return {
-    mode: 'batch',
-    startedAt: Date.now(),
-    targetIds: ['jd', 'qiyu', 'weibo', 'r2'],
-    refreshingIds: ['jd', 'qiyu'],
-    runningIds: ['qiyu'],
-    completedIds: ['jd'],
-    baselineStatuses: healthMap.value,
-    resultStatuses: { jd: 'verified' },
-    summarySkeletonStatuses: ['verified', 'error', 'pending', 'unconfigured'],
-    summarySnapshot: {
-      verified: '2 checked',
-      error: '1 failed',
-      pending: '1 pending',
-      unconfigured: '4 unconfigured',
-      counts: { verified: 2, error: 1, pending: 1, unconfigured: 4 },
-    },
-  };
-});
 </script>
 
 <template>
@@ -351,7 +306,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
             <button class="nav-item"><i class="pi pi-database"></i><span>Backup</span></button>
           </div>
           <div class="settings-content">
-            <div v-if="state === 'default' || state === 'dark-theme'" class="settings-section">
+            <div class="settings-section">
               <GeneralSettingsPanel
                 :current-theme="themeMode"
                 :auto-start="false"
@@ -366,27 +321,6 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
                 shortcut-upload-clipboard="Ctrl+Shift+V"
                 shortcut-upload-from-file="Ctrl+Shift+U"
                 @update:current-theme="themeMode = $event"
-              />
-            </div>
-            <div v-else class="settings-section">
-              <div class="section-header">
-                <h2>Hosting status</h2>
-                <p class="section-desc">Visual fixture for service connection status.</p>
-              </div>
-              <div v-if="state === 'error'" class="visual-error-banner"><i class="pi pi-exclamation-triangle"></i><span>Connection failed for Weibo and JD. Check tokens or cookies before uploading.</span></div>
-              <ServiceEnableSection
-                :health-status-map="healthMap"
-                :health-tooltip-map="tooltipMap"
-                :is-batch-testing="state === 'connection-testing'"
-                :batch-test-progress="state === 'connection-testing' ? { current: 2, total: 4, currentService: 'qiyu' } : null"
-                :service-check-session="serviceSession"
-                :refreshing-service-ids="state === 'connection-testing' ? new Set(['jd', 'qiyu']) : new Set()"
-                :testing-connections="testingConnections"
-                :is-checking-jd="state === 'connection-testing'"
-                :is-checking-qiyu="state === 'connection-testing'"
-                :available-services="['jd', 'qiyu', 'weibo', 'r2', 'github']"
-                :service-names="serviceNames"
-                :public-service-risk-accepted="false"
               />
             </div>
           </div>

@@ -119,39 +119,32 @@ describe('P1-1 回归：Store.get() 返回值与缓存解耦', () => {
 
 describe('P1-1 回归：useSettingsForm 保存失败后正确回滚到磁盘真值', () => {
   it('磁盘写入失败时，表单与缓存都不会停留在编辑值上空转', async () => {
-    const onDisk = createConfig({
-      availableServices: ['jd', 'weibo'],
-      services: { weibo: { enabled: true, cookie: 'SUB=on-disk' } },
-    });
+    const onDisk = createConfig({ linkOutput: { defaultFormat: 'url', customTemplate: '{url}', autoCopy: true } });
     files.set(SHARED_DISK_PATH, JSON.stringify({ config: onDisk }));
 
     const api = useSettingsForm();
     await api.loadSettings();
-    expect(api.formData.value.weiboCookie).toBe('SUB=on-disk');
-    expect(api.availableServices.value).toEqual(['jd', 'weibo']);
+    expect(api.formData.value.linkOutput.autoCopy).toBe(true);
 
     writeShouldFail = true;
-    api.formData.value.weiboCookie = 'SUB=edited';
-    api.availableServices.value = ['jd'];
+    api.formData.value.linkOutput.autoCopy = false;
     await expect(api.saveSettings({ trackAdvancedStatus: true })).resolves.toBe(false);
 
     // 磁盘真值没变（写入根本没成功过）
     const disk = JSON.parse(files.get(SHARED_DISK_PATH)!).config;
-    expect(disk.services.weibo.cookie).toBe('SUB=on-disk');
+    expect(disk.linkOutput.autoCopy).toBe(true);
 
     // 失败提示确实弹出了，不是静默失败
     expect(mockState.toastShowConfig).toHaveBeenCalledWith('error', expect.any(Object));
     expect(api.advancedSaveState.value.status).toBe('error');
     expect(api.advancedSaveState.value.message).toContain('拒绝访问');
 
-    // 核心断言（已反转）：回滚后表单 + 可用服务列表都显示磁盘真值，不再停在编辑值上
-    expect(api.formData.value.weiboCookie).toBe('SUB=on-disk');
-    expect(api.availableServices.value).toEqual(['jd', 'weibo']);
+    // 核心断言（已反转）：回滚后表单显示磁盘真值，不再停在编辑值上
+    expect(api.formData.value.linkOutput.autoCopy).toBe(true);
 
     // 缓存也没有被就地改写污染：独立再读一次 configStore，拿到的同样是磁盘真值
     const cached = await configStore.get<typeof onDisk>('config');
-    expect(cached!.services.weibo?.cookie).toBe('SUB=on-disk');
-    expect(cached!.availableServices).toEqual(['jd', 'weibo']);
+    expect(cached!.linkOutput?.autoCopy).toBe(true);
 
     api.clearTimers();
   });

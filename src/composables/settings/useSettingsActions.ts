@@ -1,6 +1,6 @@
 // 设置页的副作用动作集：主题、系统行为开关、统计开关、缓存清理、备份 WebDAV 测试。
 // 这些动作的共性是「改 formData 之外还要碰系统状态或后端」，且都要处理失败回滚/提示；
-// 纯表单读写仍归 useSettingsForm，图床连接测试归 useConnectionTest。
+// 纯表单读写仍归 useSettingsForm；图床的测试连接在图床页（src/views/hosts/useHostTest.ts）。
 
 import { ref, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';

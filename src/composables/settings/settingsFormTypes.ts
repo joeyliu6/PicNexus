@@ -3,14 +3,14 @@ import type {
   HttpDomainConfirmable,
   EditorServerConfig,
   ImageCompressionConfig,
-  LinkPrefixItem,
   UserConfig,
   WebDAVProfile,
   WebDAVStorageProfile,
 } from '@/config/types';
 
 /**
- * 设置页 formData 中会被子 composable 读取的最小字段集。
+ * 编辑器服务（Typora / Obsidian / CLI）下发凭证时读的那份数据：各图床凭证 + 编辑器选项。
+ * 由 editorSync 从磁盘配置拼出来（图床凭证归图床页管，设置页的表单里没有）。
  */
 export interface SettingsFormShape {
   weiboCookie: string;
@@ -32,16 +32,14 @@ export interface SettingsFormShape {
   editorServer: EditorServerConfig;
 }
 
-export interface SettingsFormData extends SettingsFormShape {
+/** 设置页的表单（不含图床：图床的凭证、启用状态、链接前缀由图床页读写） */
+export interface SettingsFormData {
   webdav: { profiles: WebDAVProfile[]; activeId: string | null };
-  linkPrefixEnabled: boolean;
-  selectedPrefixIndex: number;
-  linkPrefixList: LinkPrefixItem[];
   analyticsEnabled: boolean;
   appBehavior: NonNullable<UserConfig['appBehavior']>;
   linkOutput: NonNullable<UserConfig['linkOutput']>;
   globalShortcut: NonNullable<UserConfig['globalShortcut']>;
   autoUpdateEnabled: boolean;
-  publicServiceRiskAccepted: boolean;
   imageCompression: ImageCompressionConfig;
+  editorServer: EditorServerConfig;
 }
