@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PnIcon from '@/components/pn/PnIcon.vue';
 import { ref, computed, watch, onMounted, onBeforeUnmount, toRef } from 'vue';
 import type { CompressionPreset } from '@/config/types';
 import { useImageZoom } from '@/composables/image/useImageZoom';
@@ -157,7 +158,7 @@ onBeforeUnmount(() => {
                   @mousedown.stop="onSliderDown"
                   :style="{ cursor: 'ew-resize' }"
                 >
-                  <i class="pi pi-arrows-h" />
+                  <PnIcon name="arrowsH" :size="14" :stroke="2" />
                 </div>
               </div>
 
@@ -177,7 +178,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="cpd-footer-right">
               <button v-if="status === 'done' || status === 'error'" class="cpd-btn outline" @click="retrySelect">
-                <i class="pi pi-image" />
+                <PnIcon name="gallery" :size="14" />
                 换一张
               </button>
               <button class="cpd-btn primary" @click="close">关闭</button>
@@ -450,10 +451,6 @@ onBeforeUnmount(() => {
 .cpd-btn.outline:hover {
   background: var(--hover-overlay);
   border-color: var(--text-muted);
-}
-
-.cpd-btn.outline .pi {
-  font-size: var(--text-xs);
 }
 
 .cpd-btn.ghost {

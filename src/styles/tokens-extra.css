@@ -611,6 +611,11 @@
   --pn-size-settings-row: 48px;
   --pn-space-settings-row: 10px 16px;
   --pn-leading-settings-note: 18px;
+  /* 压缩方案行：内边距 8 10 8 16；「编辑」高 26 */
+  --pn-space-settings-preset-row: 8px 10px 8px 16px;
+  --pn-size-settings-preset-edit: 26px;
+  /* 自定义模板对话框里的占位符按钮：高 22（同快捷键标签） */
+  --pn-size-settings-token: 22px;
   /* 外观三卡：预览高 96、内边距 14 12、条间距 7（标题条 8 高 60% 宽、卡片 28 高、说明条 6 高 40% 宽，圆角 2 / 5）；选中描边 2 + 2 */
   --pn-size-theme-preview: 96px;
   --pn-space-theme-preview: 14px 12px;

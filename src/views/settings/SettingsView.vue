@@ -12,6 +12,7 @@ import { useAutoUpdate } from '@/composables/useAutoUpdate';
 import { createLogger } from '@/utils/logger';
 import GeneralGroup from './GeneralGroup.vue';
 import SettingsNav from './SettingsNav.vue';
+import UploadGroup from './UploadGroup.vue';
 import { SETTING_ROWS, SETTINGS_GROUPS, groupForTab, rowForSection, type SettingsGroupId } from './settingsGroups';
 import { useSettingsConfig } from './useSettingsConfig';
 import { useSettingsEffects } from './settingsEffects';
@@ -92,6 +93,7 @@ watch(() => [targetTab?.value, targetSection?.value], () => { if (active.value) 
             <span class="settings__sub">{{ group.sub }}</span>
           </div>
           <GeneralGroup v-if="groupId === 'general'" />
+          <UploadGroup v-else-if="groupId === 'upload'" />
         </div>
       </div>
     </section>

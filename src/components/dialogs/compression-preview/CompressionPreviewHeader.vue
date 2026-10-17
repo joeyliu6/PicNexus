@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PnIcon from '@/components/pn/PnIcon.vue';
 interface Props {
   /** 是否显示文件名胶囊（对应 status === 'done' && result 的条件） */
   showFilename: boolean;
@@ -19,7 +20,7 @@ const emit = defineEmits<{
       <span v-if="showFilename" class="cpd-filename" v-tooltip.top="fileName">{{ fileName }}</span>
     </div>
     <button class="cpd-close" @click="emit('close')" v-tooltip.bottom="'关闭 (Esc)'">
-      <i class="pi pi-times" />
+      <PnIcon name="close" :size="14" />
     </button>
   </div>
 </template>

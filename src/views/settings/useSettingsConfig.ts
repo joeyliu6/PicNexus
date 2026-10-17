@@ -1,7 +1,7 @@
 // 设置页读写配置的唯一入口：每改一项都读磁盘上的最新配置、只改这一项、保存。
 // 不握一份表单副本——副本整份回写会用旧值盖掉图床页、托盘、云同步刚写进去的东西；图床字段这里从来不碰。
 // 保存成功在改动的那一行闪「已保存」（交接说明第 4 节规则 10）；失败红色通知，界面回到磁盘上的值。
-import { reactive, readonly, ref, toRaw } from 'vue';
+import { computed, reactive, ref, toRaw } from 'vue';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
@@ -15,6 +15,8 @@ const log = createLogger('SettingsConfig');
 export const SAVED_FLASH_MS = 1500;
 
 const config = ref<UserConfig>(structuredClone(DEFAULT_CONFIG));
+/** 对外只读（改动一律走 patch）：只给 getter，类型不做深只读，免得每处读取都要转换 */
+const view = computed(() => config.value);
 const saved = reactive(new Set<string>());
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 let queue: Promise<unknown> = Promise.resolve();
@@ -60,7 +62,7 @@ function patch(rowId: string | null, mutate: (draft: UserConfig) => void): Promi
 export function useSettingsConfig() {
   return {
     /** 磁盘上的配置（只读；改动一律走 patch） */
-    config: readonly(config),
+    config: view,
     reload,
     patch,
     flashSaved,

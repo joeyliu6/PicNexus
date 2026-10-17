@@ -72,6 +72,8 @@ export const ICONS = {
   cloud: [p('M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z')],
   cloudDownload: [p('M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z'), p('M12 11v6M9 14l3 3 3-3')],
   shield: [p('M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z')],
+  // 压缩预览左右对比的拖柄（设计未画，与箭头同一笔画）
+  arrowsH: [p('M8 7l-5 5 5 5M16 7l5 5-5 5M3 12h18')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

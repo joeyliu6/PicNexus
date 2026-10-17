@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PnIcon from '@/components/pn/PnIcon.vue';
 import type { CompressionStatus } from '@/composables/image/useCompressionTask';
 
 interface Props {
@@ -18,7 +19,7 @@ const emit = defineEmits<{
   <!-- 加载状态 -->
   <div v-if="status === 'compressing'" class="cpd-state">
     <div class="cpd-loading-ring">
-      <i class="pi pi-spin pi-spinner" />
+      <svg class="cpd-spinner" width="24" height="24" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" /><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="10 37.7" stroke-linecap="round" /></svg>
     </div>
     <span class="cpd-state-text">{{ fileName ? '压缩中...' : '选择图片...' }}</span>
     <span v-if="fileName" class="cpd-state-hint">{{ fileName }}</span>
@@ -27,12 +28,12 @@ const emit = defineEmits<{
   <!-- 错误状态 -->
   <div v-else-if="status === 'error'" class="cpd-state">
     <div class="cpd-error-icon">
-      <i class="pi pi-times-circle" />
+      <PnIcon name="failRound" :size="24" />
     </div>
     <span class="cpd-state-text error">压缩失败</span>
     <span class="cpd-state-hint">{{ errorMsg }}</span>
     <button class="cpd-retry-btn" @click="emit('retry')">
-      <i class="pi pi-refresh" />
+      <PnIcon name="recheck" :size="14" />
       重新选择
     </button>
   </div>
@@ -58,12 +59,10 @@ const emit = defineEmits<{
   justify-content: center;
   border-radius: 50%;
   background: var(--primary-alpha-8);
-}
-
-.cpd-loading-ring .pi {
-  font-size: var(--text-2xl);
   color: var(--primary);
 }
+
+.cpd-spinner { animation: k-spin var(--duration-spinner) linear infinite; }
 
 .cpd-error-icon {
   width: 56px;
@@ -73,10 +72,6 @@ const emit = defineEmits<{
   justify-content: center;
   border-radius: 50%;
   background: var(--error-soft);
-}
-
-.cpd-error-icon .pi {
-  font-size: var(--text-2xl);
   color: var(--error);
 }
 

@@ -126,6 +126,8 @@ export interface AppBehaviorConfig {
   minimizeToTrayOnStart: boolean;
   /** 关闭按钮最小化到托盘（false = 直接退出） */
   closeToTray: boolean;
+  /** 自动上传剪贴板：剪贴板里出现新图片就上传；不设 = 关 */
+  autoUploadClipboard?: boolean;
 }
 
 /**

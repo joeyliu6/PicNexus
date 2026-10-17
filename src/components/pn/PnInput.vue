@@ -30,7 +30,7 @@ withDefaults(defineProps<{
 defineEmits<{ blur: [event: FocusEvent]; focus: [event: FocusEvent]; keydown: [event: KeyboardEvent] }>();
 
 const inputRef = ref<HTMLInputElement>();
-defineExpose({ focus: () => inputRef.value?.focus(), select: () => inputRef.value?.select() });
+defineExpose({ focus: () => inputRef.value?.focus(), select: () => inputRef.value?.select(), element: () => inputRef.value ?? null });
 </script>
 
 <template>

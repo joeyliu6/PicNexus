@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PnIcon from '@/components/pn/PnIcon.vue';
 import type { CompressResult } from '@/composables/image/useCompressionTask';
 
 interface Props {
@@ -19,7 +20,7 @@ defineProps<Props>();
   <div class="cpd-info-bar">
     <div class="cpd-info-left">
       <span class="cpd-size-badge original">{{ formatSize(result.originalSize) }}</span>
-      <i class="pi pi-arrow-right cpd-arrow" />
+      <PnIcon name="arrowRight" class="cpd-arrow" :size="12" />
       <span class="cpd-size-badge compressed">{{ formatSize(result.compressedSize) }}</span>
       <span class="cpd-ratio-badge" :class="isLarger ? 'larger' : 'saved'">
         {{ isLarger ? '体积增大' : `节省 ${saved}%` }}
