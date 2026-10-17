@@ -10,10 +10,14 @@ import { openTrustedExternalUrl } from '@/security/shellOpen';
 import { formatRelativeTime } from '@/utils/formatters';
 import { formatUpdateFailure } from '@/utils/updateFailureMessage';
 import { downloadSize, releaseNotes, updateFailureTitle } from './updateText';
+import { useCloudSync } from './useCloudSync';
 
 const RELEASES_URL = 'https://github.com/joeyliu6/PicNexus/releases/latest';
 
 const update = useAutoUpdate();
+// 每页最多一个主按钮：页顶刷新横幅的「刷新」在时，这里的按钮退成次要按钮
+const cloud = useCloudSync();
+const bannerShown = computed(() => cloud.needsReload.value !== null);
 const toast = useToast();
 
 type Tone = 'plain' | 'brand' | 'success' | 'danger';
@@ -116,7 +120,7 @@ const view = computed<View>(() => {
       <PnButton
         v-for="button in view.buttons"
         :key="button.label"
-        :variant="button.primary ? 'primary' : 'secondary'"
+        :variant="button.primary && !bannerShown ? 'primary' : 'secondary'"
         size="md"
         @click="button.run"
       >
