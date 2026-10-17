@@ -44,6 +44,8 @@ export interface ConfirmAsyncOptions {
   acceptLabel?: string;
   rejectLabel?: string;
   acceptClass?: string;
+  /** 正文下面等宽显示的一行（地址、路径） */
+  code?: string;
 }
 
 /** 三态确认结果 */
@@ -80,6 +82,7 @@ interface RequireOptions {
   icon?: string;
   acceptClass?: string;
   clearOptOut?: { checked: boolean };
+  code?: string;
 }
 
 function require(options: RequireOptions) {
@@ -89,6 +92,7 @@ function require(options: RequireOptions) {
     acceptLabel: options.acceptLabel,
     rejectLabel: options.rejectLabel,
     clearOptOut: options.clearOptOut,
+    code: options.code,
     ...resolveConfirmTone(options.icon, options.acceptClass),
   });
 }
@@ -165,6 +169,7 @@ export function useConfirm() {
       acceptLabel: opts.acceptLabel || confirmDefaults.acceptLabel,
       rejectLabel: opts.rejectLabel || confirmDefaults.rejectLabel,
       acceptClass: opts.acceptClass,
+      code: opts.code,
     });
     return result === 'accept';
   };

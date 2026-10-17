@@ -29,6 +29,7 @@ const icon = computed(() => (request.value?.tone === 'brand' ? 'info' : 'warning
     :icon="icon"
   >
     <span class="pn-confirm__message">{{ request.message }}</span>
+    <span v-if="request.code" class="pn-confirm__code">{{ request.code }}</span>
     <PnCheckbox v-if="request.clearOptOut" v-model="request.clearOptOut.checked">
       本次运行内不再提示（重启后恢复）
     </PnCheckbox>
@@ -45,4 +46,14 @@ const icon = computed(() => (request.value?.tone === 'brand' ? 'info' : 'warning
 
 <style>
 .pn-confirm__message { white-space: pre-line; }
+
+/* HostsScreen.dc.html 的 P12：浅灰底、圆角 8、内边距 8/10、12px 等宽 */
+.pn-confirm__code {
+  padding: var(--pn-space-8) var(--pn-space-code-x);
+  border-radius: var(--pn-radius-md);
+  background: var(--pn-subtle);
+  font-family: var(--pn-font-mono);
+  font-size: var(--pn-text-mono);
+  overflow-wrap: anywhere;
+}
 </style>

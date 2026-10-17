@@ -16,6 +16,8 @@ export interface ConfirmRequestOptions {
   danger: boolean;
   /** 「本次运行内不再提示」勾选框的状态容器；不传不显示 */
   clearOptOut?: { checked: boolean };
+  /** 正文下面单独一行等宽显示的内容（P12 明文 HTTP 确认里的地址） */
+  code?: string;
 }
 
 export interface ConfirmRequest extends ConfirmRequestOptions {
