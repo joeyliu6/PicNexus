@@ -38,6 +38,11 @@ const props = defineProps<{
   confirmedHttpHosts?: ReadonlySet<string>;
 }>();
 
+const emit = defineEmits<{
+  /** 显示出来的那一张（候选链可能换过地址；已过安全过滤）：预览框的模糊衬底用同一个地址 */
+  loaded: [src: string];
+}>();
+
 const currentSrcIndex = ref(0);
 const currentSrc = ref('');
 const isError = ref(false);
@@ -147,6 +152,7 @@ const handleLoad = () => {
   }
   reportThumbnailUrlLoaded(currentSrc.value);
   isLoading.value = false;
+  emit('loaded', currentSrc.value);
 };
 
 onMounted(() => {

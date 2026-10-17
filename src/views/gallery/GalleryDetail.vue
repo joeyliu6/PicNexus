@@ -5,7 +5,7 @@
 // 「移除记录」只放在底部。
 import { computed, ref, watch } from 'vue';
 import LinkBlock from '@/components/biz/LinkBlock.vue';
-import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
+import PreviewFrame from '@/components/biz/PreviewFrame.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import PnMenu from '@/components/pn/PnMenu.vue';
@@ -78,15 +78,6 @@ const meta = computed(() => {
 });
 
 const thumbs = computed(() => (item.value ? getThumbnailCandidates(item.value, config.value) : []));
-/** 预览按原比例放进 300 × 188（详情宽 340 减两侧 20），与设计稿一样整张露出、不裁切 */
-const PREVIEW = { width: 300, height: 188 } as const;
-const previewSize = computed(() => {
-  const it = item.value;
-  const ratio = it?.width && it.height ? it.width / it.height : (it?.aspectRatio ?? 1);
-  return ratio > PREVIEW.width / PREVIEW.height
-    ? { width: PREVIEW.width, height: Math.round(PREVIEW.width / ratio) }
-    : { width: Math.round(PREVIEW.height * ratio), height: PREVIEW.height };
-});
 const favorited = computed(() => historyManager.favoriteSet.value.has(props.itemId));
 
 const linkItem = computed(() => (item.value && source.value
@@ -154,9 +145,10 @@ async function removeRecord(): Promise<void> {
     <template v-if="item">
       <div class="detail__head">
         <button type="button" class="detail__preview" aria-label="查看大图" @click="openLightbox">
-          <span class="detail__image" :style="{ width: `${previewSize.width}px`, height: `${previewSize.height}px` }">
-            <ThumbnailImage v-if="thumbs.length" :srcs="thumbs" :alt="item.localFileName" :confirmed-http-hosts="grid.confirmedHttpHosts.value" />
-          </span>
+          <PreviewFrame
+            v-if="thumbs.length" :srcs="thumbs" :name="item.localFileName" :format="item.format" :ratio="item.aspectRatio"
+            :natural-width="item.width" :confirmed-http-hosts="grid.confirmedHttpHosts.value"
+          />
         </button>
         <div class="detail__title-row">
           <div class="detail__title">
@@ -260,12 +252,6 @@ async function removeRecord(): Promise<void> {
   border-radius: var(--pn-radius-lg);
   background: var(--pn-subtle);
   cursor: zoom-in;
-}
-
-.detail__image {
-  display: flex;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px var(--pn-hairline);
 }
 
 .detail__title-row { display: flex; align-items: flex-start; gap: var(--pn-space-8); }

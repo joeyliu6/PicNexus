@@ -427,6 +427,10 @@
   /* 图库详情（G05–G07）：宽 340，预览区高 188 */
   --pn-size-gallery-detail: 340px;
   --pn-size-detail-preview: 188px;
+  /* 预览框（详情、首页焦点卡）：图片完整显示，空白处铺这张图的模糊放大版——外扩 20、模糊 18、不透明度 0.9（ImageRatios.dc.html） */
+  --pn-preview-fill-inset: -20px;
+  --pn-preview-fill-blur: blur(18px);
+  --pn-preview-fill-opacity: 0.9;
   /* 详情里的链接块：上下 7，最多三行（54） */
   --pn-space-link-compact-y: 7px;
   --pn-size-link-compact-max: 54px;

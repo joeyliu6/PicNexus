@@ -7,7 +7,7 @@ import { computed, ref, watch } from 'vue';
 import HostIcon from '@/components/biz/HostIcon.vue';
 import LinkBlock from '@/components/biz/LinkBlock.vue';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
-import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
+import PreviewFrame from '@/components/biz/PreviewFrame.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import PnMenu from '@/components/pn/PnMenu.vue';
@@ -129,7 +129,10 @@ function copyHost(hostId: string) {
 <template>
   <section class="focus-card" :aria-label="failedAll ? '上传失败' : linkReady ? '刚刚上传' : '正在上传'">
     <button type="button" class="focus-card__thumb" title="在图库中查看" :disabled="!linkReady" @click="emit('openInGallery')">
-      <ThumbnailImage v-if="linkReady" :srcs="thumbSrcs" :alt="item.fileName" image-class="focus-card__img" :confirmed-http-hosts="confirmedHttpHosts" />
+      <PreviewFrame
+        v-if="linkReady" :srcs="thumbSrcs" :name="item.fileName" :ratio="meta ? meta.width / meta.height : undefined"
+        :natural-width="meta?.width" :confirmed-http-hosts="confirmedHttpHosts"
+      />
       <span v-else class="focus-card__placeholder"><PnIcon name="gallery" :size="28" :stroke="1.4" /></span>
       <span v-if="!linkReady && !failedAll" class="focus-card__progress"><span :style="{ width: `${Math.max(...hostRows.map((h) => h.progress), 4)}%` }" /></span>
     </button>
@@ -278,7 +281,6 @@ function copyHost(hostId: string) {
 }
 
 .focus-card__thumb:disabled { cursor: default; }
-.focus-card__thumb :deep(.focus-card__img) { object-fit: contain; }
 
 .focus-card__placeholder {
   display: flex;
