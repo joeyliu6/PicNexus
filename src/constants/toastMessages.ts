@@ -281,9 +281,9 @@ export const TOAST_MESSAGES = {
       summary: '测试失败',
       detail: error
     }),
+    // 交接说明 8.7：登录成功小窗自动关闭，主窗口通知「已登录 微博」
     cookieUpdated: (serviceName: string): ToastMessageConfig => ({
-      summary: 'Cookie 已更新',
-      detail: `${serviceName} Cookie 已自动填充并保存！`
+      summary: `已登录 ${serviceName}`,
     }),
     cookieInvalid: {
       summary: 'Cookie 无效',

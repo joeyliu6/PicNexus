@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { joinCjk } from '@/utils/cjkSpacing';
 
 const params = new URLSearchParams(window.location.search);
 const name = params.get('name') || '';
@@ -6,7 +7,8 @@ const theme = params.get('theme') === 'light' ? 'light' : 'dark';
 
 const serviceName = document.getElementById('serviceName');
 if (serviceName) {
-  serviceName.textContent = name;
+  // CookieWindow.dc.html 的标题：「微博登录」
+  serviceName.textContent = joinCjk(name, '登录');
 }
 
 // class 名沿用全项目的 `<主题>-theme` 约定（见 useLoginTheme.ts / preload-theme.js），

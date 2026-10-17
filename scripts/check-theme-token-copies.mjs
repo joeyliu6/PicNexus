@@ -21,10 +21,6 @@
  *   2. `kind: 'declarations'`：副本块里写的是真实属性（如 `background-color: #131316`），
  *      需要用 `map` 声明"这条属性抄的是哪个令牌"。
  *
- * ── 不适合放进来的 ──
- * `login-titlebar.html` 自成一套配色（`#111827` 等），它不是"主题令牌的副本"而是
- * 独立调色板，硬塞进来只会逼出一堆假映射。它的问题（含 `html.light` 类名不合约定）
- * 已单独记在 docs/TODO.md。
  */
 
 import fs from 'node:fs';
@@ -63,6 +59,14 @@ const COPIES = [
   {
     file: 'login-webview.html',
     why: '登录 WebView 首屏在 Vue 挂载前渲染，app.css 未加载，只能就地重定义同名变量兜住骨架屏',
+    blocks: [
+      { selector: ':root', theme: 'dark', kind: 'custom-properties' },
+      { selector: ':root.light-theme', theme: 'light', kind: 'custom-properties' },
+    ],
+  },
+  {
+    file: 'login-titlebar.html',
+    why: 'Cookie 登录小窗的标题栏是独立页面（不走 Vue 入口），拿不到 tokens.css，就地重定义侧栏底色与正文色',
     blocks: [
       { selector: ':root', theme: 'dark', kind: 'custom-properties' },
       { selector: ':root.light-theme', theme: 'light', kind: 'custom-properties' },

@@ -56,6 +56,9 @@ export interface CookieProvider {
 /** 登录页默认窗口尺寸（桌面版网站） */
 export const DEFAULT_LOGIN_WINDOW_SIZE: LoginWindowSize = { width: 1300, height: 800 };
 
+/** 准备页的小窗尺寸（CookieWindow.dc.html，P16）；点「开始登录」后放大到上面这个 / 各家的 loginWindowSize */
+export const LOGIN_PREP_WINDOW_SIZE: LoginWindowSize = { width: 520, height: 600 };
+
 /**
  * 所有支持自动获取 Cookie 的服务配置
  *

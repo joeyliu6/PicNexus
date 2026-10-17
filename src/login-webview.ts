@@ -1,11 +1,9 @@
 // 登录窗口 Vue 应用入口
 import { createApp } from 'vue';
-import PrimeVue from 'primevue/config';
-import { PicNexusPreset } from '@/theme/preset';
 import LoginPanel from '@/components/login/LoginPanel.vue';
-import { COOKIE_PROVIDERS, type CookieProvider } from '@/config/cookieProviders';
+import { COOKIE_PROVIDERS, DEFAULT_LOGIN_WINDOW_SIZE, type CookieProvider } from '@/config/cookieProviders';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { initLoginTheme } from '@/composables/useLoginTheme';
 import { createLogger } from '@/utils/logger';
 import { getErrorMessage } from '@/types/errors';
@@ -13,11 +11,10 @@ import { getErrorMessage } from '@/types/errors';
 const appWindow = getCurrentWindow();
 const log = createLogger('LoginWebview');
 
-// 引入样式（顺序重要）
-import 'primeicons/primeicons.css';
-import './styles/app.css';
-import './theme/dark-theme.css';
-import './theme/light-theme.css';
+// 准备页用新界面的令牌与基础样式（CookieWindow.dc.html）
+import './styles/tokens.css';
+import './styles/tokens-extra.css';
+import './styles/pn-base.css';
 
 // 解析 URL 参数获取服务类型
 const urlParams = new URLSearchParams(window.location.search);
@@ -84,6 +81,15 @@ async function handleStartLogin() {
     // 等待 Rust 端 NavigationCompleted handler 注册完成后再跳转
     await readyPromise;
 
+    // 准备页是 520×600 的小窗（P16），网站自己的登录页排不下：先放大到它要的尺寸再跳过去
+    const size = provider.loginWindowSize ?? DEFAULT_LOGIN_WINDOW_SIZE;
+    try {
+      await appWindow.setSize(new LogicalSize(size.width, size.height));
+      await appWindow.center();
+    } catch (error) {
+      log.warn('登录窗口放大失败，按原尺寸继续', error);
+    }
+
     // 跳转到登录页面（DOM 将被第三方网站接管）
     window.location.href = provider.loginUrl;
   } catch (error) {
@@ -125,21 +131,6 @@ async function bootstrap() {
     provider,
     onStartLogin: handleStartLogin,
     onClose: handleClose
-  });
-
-  // 配置 PrimeVue
-  app.use(PrimeVue, {
-    theme: {
-      preset: PicNexusPreset,
-      options: {
-        darkModeSelector: '.dark-theme',
-        cssLayer: {
-          name: 'primevue',
-          order: 'reset, primevue, app'
-        }
-      }
-    },
-    ripple: true
   });
 
   // 挂载应用

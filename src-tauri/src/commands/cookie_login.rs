@@ -74,7 +74,7 @@ struct CookieUpdatedPayload {
 }
 
 /// 打开多 Webview 登录窗口
-/// 窗口结构：标题栏 Webview (36px) + 内容区 Webview
+/// 窗口结构：标题栏 Webview (40px，CookieWindow.dc.html) + 内容区 Webview
 #[tauri::command]
 pub async fn open_login_window(
     app: tauri::AppHandle,
@@ -112,7 +112,7 @@ pub async fn open_login_window(
         return Ok(());
     }
 
-    let titlebar_height: f64 = 36.0;
+    let titlebar_height: f64 = 40.0;
 
     // 创建无边框窗口
     let window = tauri::window::WindowBuilder::new(&app, "login-window")

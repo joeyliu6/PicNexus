@@ -33,6 +33,8 @@ describe('initLoginTheme', () => {
     mockMatchMedia(false);
     expect(await initLoginTheme()).toBe('light');
     expect(document.documentElement.classList.contains('light-theme')).toBe(true);
+    // --pn-* 令牌按 data-theme 切换（Cookie 登录小窗的准备页用新界面的令牌）
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('theme=light 固定 light', async () => {

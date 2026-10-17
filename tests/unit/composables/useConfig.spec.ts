@@ -76,7 +76,7 @@ vi.mock('@/config/cookieProviders', () => ({
     return providers[id] ?? null;
   },
   validateCookie: (_cookie: string, _validation: unknown) => true,
-  DEFAULT_LOGIN_WINDOW_SIZE: { width: 800, height: 600 },
+  LOGIN_PREP_WINDOW_SIZE: { width: 520, height: 600 },
 }));
 
 const { useConfigManager } = await import('@/composables/useConfig');
@@ -376,7 +376,8 @@ describe('useConfigManager', () => {
       const { openCookieWebView } = useConfigManager();
       await openCookieWebView('weibo');
 
-      expect(mockedInvoke).toHaveBeenCalledWith('open_login_window', expect.objectContaining({ serviceId: 'weibo' }));
+      // 先开准备页的小窗（P16 520×600），点「开始登录」后才放大到网站登录页的尺寸
+      expect(mockedInvoke).toHaveBeenCalledWith('open_login_window', expect.objectContaining({ serviceId: 'weibo', width: 520, height: 600 }));
       expect(toastShowConfigMock).toHaveBeenCalledWith('error', {
         summary: '失败',
         detail: '创建登录窗口失败: 已存在同名窗口',

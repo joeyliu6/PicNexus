@@ -1,196 +1,120 @@
+<script setup lang="ts">
+// Cookie 登录小窗的准备页（CookieWindow.dc.html，P16）：图标、「登录微博」、一句说明、隐私说明、取消 / 开始登录；
+// 底部一行「此处将显示微博官方登录页」。点「开始登录」后整页换成网站自己的登录页，登录成功窗口自动关闭。
+import HostIcon from '@/components/biz/HostIcon.vue';
+import PnButton from '@/components/pn/PnButton.vue';
+import PnIcon from '@/components/pn/PnIcon.vue';
+import type { CookieProvider } from '@/config/cookieProviders';
+import { joinCjk } from '@/utils/cjkSpacing';
+
+defineProps<{ provider: CookieProvider }>();
+
+defineEmits<{ startLogin: []; close: [] }>();
+</script>
+
 <template>
-  <div class="login-container">
-    <!-- 主内容区 -->
-    <div class="content-area">
-      <div class="dialog-body">
-        <!-- 图标 -->
-        <div class="icon-container">
-          <i class="pi pi-shield"></i>
-        </div>
-
-        <!-- 标题与描述 -->
-        <h2 class="dialog-title">准备登录 {{ provider.name }}</h2>
-        <p class="dialog-desc">
-          点击下方按钮将在本窗口加载 {{ provider.name }} 登录页面。登录成功后自动获取
-          Cookie 以便进行图片上传。
-        </p>
-
-        <!-- 安全提示 -->
-        <div class="security-tip">
-          <div class="tip-header">
-            <i class="pi pi-info-circle"></i>
-            <span>安全提示</span>
-          </div>
-          <p class="tip-text">
-            PicNexus 仅获取必要 Cookie，绝不保存您的账号密码。
-          </p>
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="actions">
-          <Button
-            label="开始登录"
-            icon="pi pi-sign-in"
-            class="btn-primary"
-            @click="$emit('startLogin')"
-          />
-          <Button
-            label="取消"
-            outlined
-            class="btn-cancel"
-            @click="$emit('close')"
-          />
-        </div>
+  <div class="login-panel">
+    <div class="login-panel__body">
+      <span class="login-panel__icon"><HostIcon :host="provider.serviceId" :name="provider.name" :size="37" /></span>
+      <h1 class="login-panel__title">{{ joinCjk('登录', provider.name) }}</h1>
+      <p class="login-panel__desc">{{ joinCjk('将在此窗口打开', provider.name, '官方登录页，登录成功后自动关闭。') }}</p>
+      <div class="login-panel__note">
+        <PnIcon name="shieldCheck" :size="15" :stroke="1.8" class="login-panel__shield" />
+        <span>仅读取上传所需的 Cookie，不保存账号与密码。</span>
+      </div>
+      <div class="login-panel__actions">
+        <PnButton variant="secondary" @click="$emit('close')">取消</PnButton>
+        <PnButton variant="primary" @click="$emit('startLogin')">开始登录</PnButton>
       </div>
     </div>
-
+    <div class="login-panel__foot">{{ joinCjk('此处将显示', provider.name, '官方登录页') }}</div>
   </div>
 </template>
 
-<script setup lang="ts">
-import Button from 'primevue/button';
-import type { CookieProvider } from '@/config/cookieProviders';
-
-defineProps<{
-  provider: CookieProvider;
-}>();
-
-defineEmits<{
-  startLogin: [];
-  close: [];
-}>();
-</script>
-
 <style scoped>
-.login-container {
+.login-panel {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--bg-app);
-  color: var(--text-main);
-  user-select: none;
+  box-sizing: border-box;
   overflow: hidden;
+  background: var(--pn-canvas);
+  color: var(--pn-text1);
+  font-family: var(--pn-font-ui);
+  font-size: var(--pn-text-body);
+  line-height: 1.45;
+  user-select: none;
 }
 
-/* 主内容区 */
-.content-area {
+.login-panel__body {
+  display: flex;
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2xl) var(--space-xl);
-  overflow-y: auto;
-}
-
-.dialog-body {
-  display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100%;
-  max-width: 340px;
+  justify-content: center;
+  gap: var(--pn-space-12);
+  padding: 0 var(--pn-space-login-x);
+  text-align: center;
 }
 
-/* 图标 */
-.icon-container {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border-subtle);
-  background: var(--bg-card);
+.login-panel__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-lg-xl);
+  width: var(--pn-size-login-icon);
+  height: var(--pn-size-login-icon);
+  border-radius: var(--pn-radius-xl);
+  background: var(--pn-subtle);
+  box-shadow: 0 0 0 1px var(--pn-hairline);
+  color: var(--pn-text2);
 }
 
-.icon-container i {
-  font-size: var(--text-2xl);
-  color: var(--primary);
+.login-panel__title {
+  margin: var(--pn-space-6) 0 0;
+  font-size: var(--pn-text-title);
+  font-weight: var(--pn-weight-semibold);
+  line-height: var(--pn-leading-title);
+  letter-spacing: var(--pn-tracking-title);
 }
 
-/* 标题 */
-.dialog-title {
-  font-size: var(--text-lg-xl);
-  font-weight: var(--weight-semibold);
-  color: var(--text-main);
-  margin: 0 0 var(--space-sm-md);
-  text-align: center;
-}
-
-.dialog-desc {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  line-height: 1.7;
-  text-align: center;
-  margin: 0 0 var(--space-lg-xl);
-}
-
-/* 安全提示 */
-.security-tip {
-  width: 100%;
-  background: var(--primary-alpha-6);
-  border: 1px solid var(--primary-alpha-15);
-  border-radius: var(--radius-md);
-  padding: var(--space-md) var(--space-md-lg);
-  margin-bottom: var(--space-xl);
-}
-
-.tip-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-  margin-bottom: var(--space-xs-sm);
-}
-
-.tip-header i {
-  font-size: var(--text-sm);
-  color: var(--primary);
-}
-
-.tip-header span {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  color: var(--primary);
-}
-
-.tip-text {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.5;
+.login-panel__desc {
   margin: 0;
+  color: var(--pn-text2);
 }
 
-/* 按钮 */
-.actions {
+.login-panel__note {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-sm-md);
-  width: 100%;
+  align-items: flex-start;
+  gap: var(--pn-space-8);
+  margin-top: var(--pn-space-8);
+  padding: var(--pn-space-login-note);
+  border-radius: var(--pn-radius-lg);
+  background: var(--pn-subtle);
+  color: var(--pn-text2);
+  font-size: var(--pn-text-footnote);
+  text-align: left;
 }
 
-:deep(.btn-primary.p-button) {
-  width: 100%;
-  height: 40px;
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
+.login-panel__shield {
+  flex: none;
+  margin-top: var(--pn-space-1);
+  color: var(--pn-success);
+}
+
+.login-panel__actions {
+  display: flex;
+  gap: var(--pn-space-8);
+  margin-top: var(--pn-space-login-actions);
+}
+
+.login-panel__foot {
+  display: flex;
+  flex: none;
+  align-items: center;
   justify-content: center;
+  height: var(--pn-size-login-foot);
+  border-top: 1px solid var(--pn-border);
+  color: var(--pn-text3);
+  font-size: var(--pn-text-footnote);
 }
-
-:deep(.btn-cancel.p-button) {
-  width: 100%;
-  height: 38px;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  justify-content: center;
-  border-color: var(--border-subtle);
-  color: var(--text-muted);
-}
-
-:deep(.btn-cancel.p-button:hover) {
-  border-color: var(--text-muted);
-  background: var(--hover-overlay-subtle);
-}
-
 </style>

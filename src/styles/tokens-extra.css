@@ -574,6 +574,12 @@
   --pn-space-catalog-hint: 12px 14px;
   /* 窄窗口「‹ 图床」：高 28、内边距 0 8 0 4、左 12 */
   --pn-space-host-back: 0 8px 0 4px;
+  /* Cookie 登录小窗准备页（CookieWindow.dc.html，P16）：窗口 520×600；左右 48；图标块 56；隐私说明内边距 10 12；按钮行上方 14；底部一行 44 */
+  --pn-space-login-x: 48px;
+  --pn-size-login-icon: 56px;
+  --pn-space-login-note: 10px 12px;
+  --pn-space-login-actions: 14px;
+  --pn-size-login-foot: 44px;
   /* 确认框里等宽的那一行（P12 的地址）：内边距 8 10 */
   --pn-space-code-x: 10px;
 }

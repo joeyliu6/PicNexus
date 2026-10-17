@@ -19,11 +19,12 @@ import {
   DEFAULT_LINK_PREFIXES,
   cloneDefaultPrefixes,
 } from '@/config/types';
-import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '@/config/cookieProviders';
+import { getCookieProvider, validateCookie, LOGIN_PREP_WINDOW_SIZE } from '@/config/cookieProviders';
 import { getErrorMessage } from '@/types/errors';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '@/constants';
 import { registerProfileNameSource } from '@/constants/serviceNames';
+import { joinCjk } from '@/utils/cjkSpacing';
 import { createLogger } from '@/utils/logger';
 import { extractNamiAuthToken } from '@/utils/namiAuthToken';
 
@@ -359,7 +360,8 @@ export function useConfigManager() {
       // 检测当前主题
       const isLight = document.documentElement.classList.contains('light-theme');
       const theme = isLight ? 'light' : 'dark';
-      const loginSize = provider.loginWindowSize ?? DEFAULT_LOGIN_WINDOW_SIZE;
+      // 先开准备页的小窗（CookieWindow.dc.html 520×600）；点「开始登录」后窗口按网站需要放大（login-webview.ts）
+      const loginSize = LOGIN_PREP_WINDOW_SIZE;
 
       // 通过 Rust 命令创建多 Webview 登录窗口
       await invoke('open_login_window', {
@@ -454,13 +456,9 @@ export function useConfigManager() {
           const serviceName = provider?.name || serviceId;
           log.warn(`${serviceName} 自动获取超时`);
           toast.showConfig('warn', {
-            summary: '自动获取超时',
-            // 两条后路都必须是真实存在的入口：卡片上的「自动获取」按钮，和同一张卡片的
-            // Cookie 手动粘贴框。原文案指向「获取 Cookie」按钮——那个按钮全项目都不存在
-            // （LoginPanel 只有「开始登录」「取消」），而且超时这一刻登录窗口早已被第三方
-            // 网站接管，PicNexus 自己的按钮一个都不在。
-            detail: `${serviceName}未在 60 秒内完成登录，已停止自动抓取
-可重新点击「自动获取」重试，或把 Cookie 手动粘贴到卡片上的输入框`,
+            summary: joinCjk(serviceName, '登录超时'),
+            // 超时这一刻小窗里是第三方网站，PicNexus 自己的按钮都不在：处理办法指向图床页上真实存在的两个入口
+            detail: '未在 60 秒内完成登录。请在图床页重新登录，或用「手动粘贴」填入 Cookie',
             life: 8000
           });
         });
