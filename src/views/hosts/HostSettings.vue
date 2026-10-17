@@ -10,6 +10,7 @@ import {
   type GithubCdnConfig, type LinkPrefixConfig, type UserConfig,
 } from '@/config/types';
 import { secureStorage } from '@/security/crypto';
+import { isIpv4Address, isLoopbackHost, isPrivateOrReservedHost, normalizeHost } from '@/security/networkPolicy';
 import { applyPrefixTemplate } from '@/utils/linkPrefixTemplate';
 import { advancedSummary, type HostDescriptor } from './hostCatalog';
 import { findWebdav, hostRecord } from './hostConfig';
@@ -35,22 +36,40 @@ const config = hosts.config;
 const showAdvanced = ref(false);
 const fieldsRef = ref<InstanceType<typeof HostFields> | null>(null);
 
-const invalidField = computed(() => (props.test.phase === 'fail' ? props.test.field : undefined));
+const invalidField = computed(() => (props.test.phase === 'fail' && !props.test.edited ? props.test.field : undefined));
 const invalidReason = computed(() => (props.test.phase === 'fail' ? props.test.reason : undefined));
 const basicFields = computed(() => props.descriptor.fields.filter((f) => !f.advanced));
 const advancedFields = computed(() => props.descriptor.fields.filter((f) => f.advanced));
 const hasAdvanced = computed(() => advancedFields.value.length > 0 || props.descriptor.kind === 'webdav');
-// 测试指到的字段收在高级选项里时自动展开，免得红框藏起来
-const advancedOpen = computed(() => showAdvanced.value || advancedFields.value.some((f) => f.key === invalidField.value));
+// 测试指到的字段收在高级选项里时自动展开，免得红框藏起来；改过那一格后也保持展开，免得边改边收起
+const failedField = computed(() => (props.test.phase === 'fail' ? props.test.field : undefined));
+const advancedOpen = computed(() => showAdvanced.value || advancedFields.value.some((f) => f.key === failedField.value));
 
-/** 「HTTP · 已允许」：WebDAV 的明文地址（局域网放行或已确认），对象存储已确认过的明文公开域名 */
+/** 写成 IP 的局域网 / 本机地址：后端不用确认直接放行 */
+function isLanLiteral(value: string): boolean {
+  try {
+    const { hostname } = new URL(value.trim());
+    const host = normalizeHost(hostname);
+    return isLoopbackHost(host) || ((isIpv4Address(host) || host.includes(':')) && isPrivateOrReservedHost(host));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 「HTTP · 已允许」只标后端真会放行的明文地址。WebDAV：写成 IP 的局域网地址、P12 确认过的、
+ * 已连接且最近一次没测失败的（连上前测过）；没确认的主机名不标。对象存储：确认过的公开域名。
+ */
 const httpAllowed = computed(() => {
   const set = new Set<string>();
   const record = props.draft ? props.values : hostRecord(config.value, props.hostId) as Record<string, string>;
-  const isHttp = (v: unknown) => typeof v === 'string' && /^http:\/\//i.test(v.trim());
+  const isHttp = (v: unknown): v is string => typeof v === 'string' && /^http:\/\//i.test(v.trim());
   if (props.descriptor.kind === 'webdav') {
-    if (isHttp(props.values.url)) set.add('url');
-    if (isHttp(props.values.publicDomain)) set.add('publicDomain');
+    const confirmed = String(record.lanHttpConfirmed) === 'true' || (!props.draft && props.test.phase !== 'fail');
+    for (const key of ['url', 'publicDomain']) {
+      const value = props.values[key];
+      if (isHttp(value) && (confirmed || isLanLiteral(value))) set.add(key);
+    }
   } else if (isHttp(props.values.publicDomain) && record.httpDomainConfirmedFor) {
     set.add('publicDomain');
   }

@@ -419,7 +419,7 @@ export function normalizeHost(hostname: string): string {
   return hostname.trim().replace(/^\[/, '').replace(/\]$/, '').replace(/\.$/, '').toLowerCase();
 }
 
-function isIpv4Address(value: string): boolean {
+export function isIpv4Address(value: string): boolean {
   const parts = value.split('.');
   return parts.length === 4 && parts.every((part) => {
     if (!/^\d+$/.test(part)) return false;

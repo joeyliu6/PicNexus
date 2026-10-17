@@ -15,10 +15,11 @@ import { needsHttpDomainConsent } from './s3ConfigValidation';
 import { syncProfileUploaders } from './profileServiceSync';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { secureStorage } from '@/security/crypto';
-import { normalizeHost } from '@/security/networkPolicy';
+import { isIpv4Address, normalizeHost } from '@/security/networkPolicy';
 import { readFreshConfig } from '@/store/instances';
 import { joinCjk } from '@/utils/cjkSpacing';
 import { createLogger } from '@/utils/logger';
+import { getErrorMessage } from '@/types/errors';
 import { describeHost, type HostDescriptor } from './hostCatalog';
 import {
   addProfile, blankProfile, connectHost, disconnectHost, firstMissingField, hostRecord, migrateLegacyCustomS3, readHostValues, renameProfile,
@@ -60,6 +61,23 @@ function originOf(url: string): string {
   } catch {
     return url.trim();
   }
+}
+
+/**
+ * WebDAV 要放行的地址（P12 代码框）：明文 HTTP、写的是主机名的那几个。写成 IP 的局域网地址后端直接放行，
+ * 要确认的只有判不出在不在局域网的主机名。一次确认对这份配置的两个地址都生效，所以都列出来。
+ */
+function lanConsentOrigins(record: Record<string, unknown>): string {
+  const origins = [record.url, record.publicDomain].flatMap((value) => {
+    if (typeof value !== 'string' || !/^http:\/\//i.test(value.trim())) return [];
+    try {
+      const { hostname, origin } = new URL(value.trim());
+      return isIpv4Address(hostname) || hostname.startsWith('[') ? [] : [origin];
+    } catch {
+      return [];
+    }
+  });
+  return [...new Set(origins)].join('\n') || originOf(String(record.url));
 }
 
 function create() {
@@ -106,6 +124,8 @@ function create() {
       await configManager.saveConfig(next, true);
     } catch (error) {
       log.warn('保存图床配置失败', error);
+      // 红 = 刚才的操作失败了：改动没写进去，界面不能装作已保存
+      toast.error('未能保存', `${getErrorMessage(error) || '配置文件写入失败'}，请重试`);
       return false;
     }
     config.value = next;
@@ -224,7 +244,7 @@ function create() {
   async function confirmLanHttp(hostId: string, record: Record<string, unknown>): Promise<boolean> {
     const ok = await confirm(HTTP_CONSENT_COPY.message, {
       header: HTTP_CONSENT_COPY.header, acceptLabel: HTTP_CONSENT_COPY.acceptLabel, rejectLabel: HTTP_CONSENT_COPY.rejectLabel,
-      acceptClass: 'p-button-warning', code: originOf(String(record.url)),
+      acceptClass: 'p-button-warning', code: lanConsentOrigins(record),
     });
     if (!ok) return false;
     record.lanHttpConfirmed = true;
@@ -312,7 +332,7 @@ function create() {
     const missing = firstMissingField(current.hostId, current.values);
     if (missing) {
       const label = descriptor.fields.find((f) => f.key === missing)?.label ?? missing;
-      markMissing(current.hostId, missing, `请填写${label.match(/^[A-Za-z]/) ? ' ' : ''}${label}`);
+      tester.markFailed(current.hostId, { phase: 'fail', step: 'credentials', field: missing, reason: joinCjk('请填写', label), passed: [], missing: true });
       return;
     }
     if (descriptor.publicRisk && !(await risk.ensureAccepted())) return;
@@ -321,10 +341,6 @@ function create() {
       if (state?.phase !== 'ok') return;
     }
     await commitConnect(descriptor, current);
-  }
-
-  function markMissing(hostId: string, field: string, reason: string): void {
-    tester.markFailed(hostId, { phase: 'fail', step: 'credentials', field, reason, passed: [] });
   }
 
   /** Cookie 图床：打开登录小窗；登录成功后（没连上的先连上）自动检测一次 */

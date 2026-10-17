@@ -11,6 +11,8 @@ const m = vi.hoisted(() => ({
   ensureAccepted: vi.fn(),
   toggleHost: vi.fn(),
   withAction: vi.fn(),
+  toastError: vi.fn(),
+  saveFails: false,
   login: vi.fn(),
 }));
 
@@ -19,7 +21,7 @@ const services = () => m.disk!.services as unknown as Services;
 
 function recomputeHosts() {
   const c = m.disk!;
-  const configured = (id: string) => id === 'jd' || id.startsWith('custom_s3:') || (id === 'r2' && !!services().r2?.secretAccessKey) || (id === 'weibo' && !!services().weibo?.cookie);
+  const configured = (id: string) => id === 'jd' || id.startsWith('custom_s3:') || id.startsWith('webdav:') || (id === 'r2' && !!services().r2?.secretAccessKey) || (id === 'weibo' && !!services().weibo?.cookie);
   m.hosts!.value = (c.availableServices ?? []).filter(configured)
     .map((id) => ({ id, name: id, selected: (c.enabledServices ?? []).includes(id), warning: null }));
 }
@@ -27,11 +29,18 @@ function recomputeHosts() {
 vi.mock('@tauri-apps/api/core', () => ({ invoke: m.invoke }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) }));
 vi.mock('@/store/instances', () => ({ readFreshConfig: async () => structuredClone(m.disk) }));
-vi.mock('@/composables/useConfig', () => ({ useConfigManager: () => ({ saveConfig: async (c: UserConfig) => { m.disk = structuredClone(c); } }) }));
+vi.mock('@/composables/useConfig', () => ({
+  useConfigManager: () => ({
+    saveConfig: async (c: UserConfig) => {
+      if (m.saveFails) throw new Error('磁盘已满');
+      m.disk = structuredClone(c);
+    },
+  }),
+}));
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ confirm: m.confirm }) }));
 vi.mock('@/composables/usePublicRiskConfirm', () => ({ usePublicRiskConfirm: () => ({ ensureAccepted: m.ensureAccepted }) }));
 vi.mock('@/composables/useCookieLogin', () => ({ useCookieLogin: () => ({ login: m.login }) }));
-vi.mock('@/composables/useToast', () => ({ useToast: () => ({ withAction: m.withAction }) }));
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ withAction: m.withAction, error: m.toastError }) }));
 vi.mock('@/composables/upload/useUploadController', () => ({
   useUploadController: () => ({ hosts: computed(() => m.hosts!.value), toggleHost: m.toggleHost, refreshHosts: async () => recomputeHosts() }),
 }));
@@ -59,6 +68,7 @@ beforeEach(() => {
   recomputeHosts();
   m.ensureAccepted.mockResolvedValue(true);
   m.confirm.mockResolvedValue(true);
+  m.saveFails = false;
 });
 
 describe('useHosts', () => {
@@ -82,13 +92,23 @@ describe('useHosts', () => {
     expect(hosts.tester.stateOf('r2').phase).toBe('ok');
   });
 
+  it('保存失败：红色通知写原因 + 处理办法，不测、不当作已保存', async () => {
+    const hosts = useHosts();
+    await hosts.enter();
+    m.saveFails = true;
+    await hosts.saveField('r2', 'bucketName', 'new-bucket');
+    expect(m.toastError).toHaveBeenCalledWith('未能保存', '磁盘已满，请重试');
+    expect(m.invoke).not.toHaveBeenCalled();
+    expect(hosts.config.value.services?.r2?.bucketName).toBe('b');
+  });
+
   it('测试并连接：缺必填项标红不测；测不过不连；测过了加进已添加并启用、选中它', async () => {
     const hosts = useHosts();
     await hosts.enter();
     hosts.openConnect('s3');
     const id = hosts.draft.value!.hostId;
     await hosts.connect();
-    expect(hosts.tester.stateOf(id)).toMatchObject({ phase: 'fail', field: 'endpoint', reason: '请填写 Endpoint' });
+    expect(hosts.tester.stateOf(id)).toMatchObject({ phase: 'fail', field: 'endpoint', reason: '请填写 Endpoint', missing: true });
     expect(m.invoke).not.toHaveBeenCalled();
 
     for (const [k, v] of Object.entries({ endpoint: 'https://s3.example.com', accessKeyId: 'a', secretAccessKey: 's', region: 'r', bucket: 'b' })) hosts.setDraftValue(k, v);
@@ -131,6 +151,23 @@ describe('useHosts', () => {
     await hosts.test('r2');
     expect(services().r2.httpDomainConfirmedFor).toBe('img.example.com');
     expect(m.invoke).toHaveBeenCalledWith('probe_s3_storage', expect.objectContaining({ config: expect.objectContaining({ httpDomainConfirmedFor: 'img.example.com' }) }));
+  });
+
+  it('WebDAV 判不出局域网：P12 列出要放行的地址（写成 IP 的局域网地址不用确认，不列）', async () => {
+    m.disk!.webdav_profiles = [{
+      id: 'nas', name: '家里 NAS', url: 'http://192.168.1.20:5005/dav', username: 'u', passwordEncrypted: 'enc(p)',
+      remotePath: '/', publicDomain: 'http://nas.lumen.home:5005/picnexus', publicUrlTemplate: '{domain}/{path}', uniqueFileName: true,
+    }] as UserConfig['webdav_profiles'];
+    m.disk!.availableServices = ['jd', 'r2', 'webdav:nas'];
+    recomputeHosts();
+    m.invoke
+      .mockRejectedValueOnce({ type: 'WEBDAV_LAN_HTTP_UNCONFIRMED', data: { message: 'fake-ip' } })
+      .mockResolvedValueOnce({ success: true, message: '', failedStep: null, field: null });
+    const hosts = useHosts();
+    await hosts.enter();
+    await hosts.test('webdav:nas');
+    expect(m.confirm).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ code: 'http://nas.lumen.home:5005' }));
+    expect(m.disk!.webdav_profiles![0].lanHttpConfirmed).toBe(true);
   });
 
   it('断开：去掉、清凭证、通知带撤销；撤销原样放回并选中它', async () => {

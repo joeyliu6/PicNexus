@@ -55,5 +55,6 @@ const icon = computed(() => (request.value?.tone === 'brand' ? 'info' : 'warning
   font-family: var(--pn-font-mono);
   font-size: var(--pn-text-mono);
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 </style>
