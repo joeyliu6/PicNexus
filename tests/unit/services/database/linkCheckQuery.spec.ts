@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  getLinkCheckInvalidQuery,
-  getLinkCheckRestStreamQuery,
+  getLinkCheckStreamQuery,
   batchUpdateLinkCheckStatusQuery,
 } from '@/services/database/LinkCheckQuery';
 
@@ -12,42 +11,24 @@ function makeDb(): any {
   };
 }
 
-describe('getLinkCheckInvalidQuery', () => {
-  let db: ReturnType<typeof makeDb>;
-
-  beforeEach(() => { db = makeDb(); });
-
-  it('SQL 包含未检测 summary / invalidLinks / uncheckedLinks 判断', async () => {
-    await getLinkCheckInvalidQuery(db);
-    const sql = db.select.mock.calls[0][0];
-    expect(sql).toContain('link_check_summary IS NULL');
-    expect(sql).toContain('invalidLinks');
-    expect(sql).toContain('uncheckedLinks');
-    expect(sql).toContain('ORDER BY timestamp DESC, id DESC');
-  });
-});
-
-describe('getLinkCheckRestStreamQuery', () => {
+describe('getLinkCheckStreamQuery', () => {
   let db: ReturnType<typeof makeDb>;
 
   beforeEach(() => { db = makeDb(); });
 
   it('空结果立即结束', async () => {
     db.select.mockResolvedValue([]);
-    const gen = getLinkCheckRestStreamQuery(db, new Set());
+    const gen = getLinkCheckStreamQuery(db);
     const result = await gen.next();
     expect(result.done).toBe(true);
     expect(db.select.mock.calls[0][0]).toContain('ORDER BY timestamp DESC, id DESC');
   });
 
-  it('过滤已加载 id 后 yield 剩余', async () => {
-    db.select.mockResolvedValueOnce([
-      { id: 'a' } as any,
-      { id: 'b' } as any,
-    ]).mockResolvedValueOnce([]);
-    const gen = getLinkCheckRestStreamQuery(db, new Set(['a']), 2);
-    const { value } = await gen.next();
-    expect(value).toEqual([{ id: 'b' }]);
+  it('读出时间列：日历按上传时间分天', async () => {
+    db.select.mockResolvedValueOnce([{ id: 'a', timestamp: 5 } as any]);
+    const { value } = await getLinkCheckStreamQuery(db, 2).next();
+    expect(value).toEqual([{ id: 'a', timestamp: 5 }]);
+    expect(db.select.mock.calls[0][0]).toContain('timestamp');
   });
 
   it('用上一批最后一行的 (timestamp, id) 作为下一批游标，而不是 OFFSET', async () => {
@@ -58,7 +39,7 @@ describe('getLinkCheckRestStreamQuery', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    const gen = getLinkCheckRestStreamQuery(db, new Set(), 2);
+    const gen = getLinkCheckStreamQuery(db, 2);
     for await (const _rows of gen) { /* 跑到流结束 */ }
 
     // 首批没有游标，只带 limit
@@ -70,22 +51,6 @@ describe('getLinkCheckRestStreamQuery', () => {
     expect(params).toEqual([200, 'b', 2]);
   });
 
-  it('游标推进不依赖被过滤掉的行——已加载的行仍要参与定位', async () => {
-    // 末行 'b' 已在 loadedIds 里，不会被 yield，但它仍是分页位置的锚点。
-    // 若拿被过滤后的数组取末行，游标会倒退回 'a'，下一批就会重复 'b'。
-    db.select
-      .mockResolvedValueOnce([
-        { id: 'a', timestamp: 300 } as any,
-        { id: 'b', timestamp: 200 } as any,
-      ])
-      .mockResolvedValueOnce([]);
-
-    const gen = getLinkCheckRestStreamQuery(db, new Set(['b']), 2);
-    for await (const _rows of gen) { /* 跑到流结束 */ }
-
-    expect(db.select.mock.calls[1][1]).toEqual([200, 'b', 2]);
-  });
-
   it('满一批后继续下一批', async () => {
     const batch1 = Array.from({ length: 2 }, (_, i) => ({ id: `b${i}` } as any));
     const batch2 = Array.from({ length: 2 }, (_, i) => ({ id: `c${i}` } as any));
@@ -93,7 +58,7 @@ describe('getLinkCheckRestStreamQuery', () => {
       .mockResolvedValueOnce(batch1)
       .mockResolvedValueOnce(batch2)
       .mockResolvedValueOnce([]);
-    const gen = getLinkCheckRestStreamQuery(db, new Set(), 2);
+    const gen = getLinkCheckStreamQuery(db, 2);
     const results: any[] = [];
     for await (const rows of gen) results.push(rows);
     expect(results).toHaveLength(2);

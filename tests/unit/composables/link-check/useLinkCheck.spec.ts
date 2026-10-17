@@ -21,6 +21,7 @@ const {
   historyDBBatchUpdateLinkCheckStatusMock,
   historyDBGetLinkCheckContextByIdsMock,
   onCacheEventMock,
+  historyDBStreamMock,
 } = vi.hoisted(() => ({
   toastWarnMock: vi.fn(),
   toastInfoMock: vi.fn(),
@@ -33,6 +34,7 @@ const {
   historyDBBatchUpdateLinkCheckStatusMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetLinkCheckContextByIdsMock: vi.fn().mockResolvedValue(new Map()),
   onCacheEventMock: vi.fn().mockResolvedValue(() => void 0),
+  historyDBStreamMock: vi.fn(async function* (): AsyncGenerator<unknown[]> { /* 空流 */ }),
 }));
 const invokeMock = getInvokeMock();
 const listenMock = getListenMock();
@@ -57,8 +59,7 @@ vi.mock('@/services/database', () => ({
     update: historyDBUpdateMock,
     batchUpdateLinkCheckStatus: historyDBBatchUpdateLinkCheckStatusMock,
     getLinkCheckContextByIds: historyDBGetLinkCheckContextByIdsMock,
-    getLinkCheckInvalid: vi.fn().mockResolvedValue([]),
-    getLinkCheckRestStream: vi.fn(async function* () { /* 空流 */ }),
+    getLinkCheckStream: historyDBStreamMock,
   },
 }));
 
@@ -108,6 +109,7 @@ function makeRow(overrides: Partial<LinkCheckRow> = {}): LinkCheckRow {
     historyId: 'h1',
     serviceId: 'r2',
     fileName: 'a.jpg',
+    uploadedAt: 0,
     url: 'https://r2.example.com/a.jpg',
     rawUrl: 'https://r2.example.com/a.jpg',
     ...overrides,
@@ -412,6 +414,42 @@ describe('useLinkCheckManager.checkAllHistoryLinks', () => {
     expect(m.loadError.value).toBe('database unavailable');
     expect(toastErrorMock).toHaveBeenCalledWith('加载历史检测数据失败', 'database unavailable');
     expect(m.isLoading.value).toBe(false);
+  });
+});
+
+describe('useLinkCheckManager.loadHistoryRows', () => {
+  function liteRow(id: string) {
+    return {
+      id,
+      timestamp: 1_700_000_000_000,
+      local_file_name: `${id}.jpg`,
+      primary_service: 'r2',
+      results: JSON.stringify([{ serviceId: 'r2', status: 'success', result: { serviceId: 'r2', fileKey: id, url: `https://r2.example/${id}.jpg` } }]),
+      link_check_status: null,
+    };
+  }
+
+  // 链接健康的总数、日历都要全量：读到一半就交出去，状态栏会先闪错的张数
+  it('读完全部批次才一次交出，期间不出现半截的行', async () => {
+    let releaseSecond!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseSecond = resolve; });
+    historyDBStreamMock.mockImplementationOnce(async function* () {
+      yield [liteRow('a')];
+      await gate;
+      yield [liteRow('b')];
+    });
+    const m = await freshManager();
+
+    const loading = m.loadHistoryRows();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(m.checkRows.value).toHaveLength(0);
+    expect(m.loaded.value).toBe(false);
+
+    releaseSecond();
+    await loading;
+    expect(m.checkRows.value.map((r) => r.historyId)).toEqual(['a', 'b']);
+    expect(m.checkRows.value[0].uploadedAt).toBe(1_700_000_000_000);
+    expect(m.loaded.value).toBe(true);
   });
 });
 

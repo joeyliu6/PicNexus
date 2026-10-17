@@ -37,13 +37,13 @@ describe('exportCsv', () => {
   it('检测时间取这条结果查出来的时间；没有就留空', () => {
     const checked: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'a.jpg',
-      url: 'https://r2.example.com/a.jpg', rawUrl: 'https://r2.example.com/a.jpg',
+      url: 'https://r2.example.com/a.jpg', rawUrl: 'https://r2.example.com/a.jpg', uploadedAt: 0,
       checkResult: { link: 'https://r2.example.com/a.jpg', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false },
       checkedAt: new Date(2026, 9, 14, 8, 5, 9).getTime(),
     };
     const unchecked: LinkCheckRow = {
       historyId: 'h2', serviceId: 'r2', fileName: 'b.jpg',
-      url: 'https://r2.example.com/b.jpg', rawUrl: 'https://r2.example.com/b.jpg',
+      url: 'https://r2.example.com/b.jpg', rawUrl: 'https://r2.example.com/b.jpg', uploadedAt: 0,
     };
 
     const [, first, second] = exportCsv([checked, unchecked]).split('\n');
@@ -55,7 +55,7 @@ describe('exportCsv', () => {
   it('有效链接状态为"有效"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'https://r2.example.com/img.jpg',
         is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false,
@@ -68,7 +68,7 @@ describe('exportCsv', () => {
   it('超时链接状态为"超时"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'https://r2.example.com/img.jpg',
         is_valid: false, error_type: 'timeout', browser_might_work: false,
@@ -81,7 +81,7 @@ describe('exportCsv', () => {
   it('失效链接状态为"失效"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'https://r2.example.com/img.jpg',
         is_valid: false, error_type: 'http_4xx', browser_might_work: false,
@@ -94,7 +94,7 @@ describe('exportCsv', () => {
   it('可疑链接状态为"疑似异常"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'https://r2.example.com/img.jpg',
         is_valid: false, error_type: 'suspicious', browser_might_work: false,
@@ -109,7 +109,7 @@ describe('exportCsv', () => {
     // 而真相是本机出站策略拦的，改成 https 就能用。
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'http://old.example.com/img.jpg', rawUrl: 'http://old.example.com/img.jpg',
+      url: 'http://old.example.com/img.jpg', rawUrl: 'http://old.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'http://old.example.com/img.jpg',
         is_valid: false, error_type: 'blocked',
@@ -127,7 +127,7 @@ describe('exportCsv', () => {
     // 导出写「失效」会让读表的人把能正常看的图当死链批量删掉。
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://cdn.example.com/img.jpg', rawUrl: 'https://cdn.example.com/img.jpg',
+      url: 'https://cdn.example.com/img.jpg', rawUrl: 'https://cdn.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'https://cdn.example.com/img.jpg',
         is_valid: false, status_code: 301, error_type: 'redirect',
@@ -143,7 +143,7 @@ describe('exportCsv', () => {
   it('未检测时状态为"未检测"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
     };
     const csv = exportCsv([row]);
     expect(csv).toContain('未检测');
@@ -154,7 +154,7 @@ describe('exportCsv', () => {
     // 导出若只读 checkResult，用户会以为导出坏了。
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'http://old.example.com/img.jpg', rawUrl: 'http://old.example.com/img.jpg',
+      url: 'http://old.example.com/img.jpg', rawUrl: 'http://old.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'http://old.example.com/img.jpg',
         is_valid: true, status_code: 200, response_time: 30,
@@ -179,7 +179,7 @@ describe('exportCsv', () => {
   it('未重检的行仍导出 checkResult', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
       checkResult: {
         link: 'https://r2.example.com/img.jpg',
         is_valid: true, status_code: 200, response_time: 30,
@@ -196,7 +196,7 @@ describe('exportCsv', () => {
   it('文件名和 URL 被双引号包裹', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'my photo.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
     };
     const csv = exportCsv([row]);
     expect(csv).toContain('"my photo.jpg"');
@@ -206,7 +206,7 @@ describe('exportCsv', () => {
   it('行号从 1 开始', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
     };
     const csv = exportCsv([row]);
     const dataLine = csv.split('\n')[1];
@@ -221,7 +221,7 @@ describe('exportCsv', () => {
   it('[BUG-8 回归] 文件名内嵌的引号被 RFC 4180 加倍转义', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'She said "hi".jpg',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
     };
     const csv = exportCsv([row]);
     // 内嵌的 " 必须被加倍成 ""，整个字段仍包在双引号里
@@ -231,7 +231,7 @@ describe('exportCsv', () => {
   it('[BUG-8 回归] 文件名以 = 开头时前置撇号防 Excel 公式注入', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: '=cmd|"/c calc"!A1',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0,
     };
     const csv = exportCsv([row]);
     // 前置 ' 退化为纯文本，避免 Excel 把它当公式执行
@@ -241,7 +241,7 @@ describe('exportCsv', () => {
   it('多行时行号递增', () => {
     const makeRow = (n: number): LinkCheckRow => ({
       historyId: `h${n}`, serviceId: 'r2', fileName: `img${n}.jpg`,
-      url: `https://r2.example.com/img${n}.jpg`, rawUrl: `https://r2.example.com/img${n}.jpg`,
+      url: `https://r2.example.com/img${n}.jpg`, rawUrl: `https://r2.example.com/img${n}.jpg`, uploadedAt: 0,
     });
     const csv = exportCsv([makeRow(1), makeRow(2), makeRow(3)]);
     const lines = csv.split('\n');

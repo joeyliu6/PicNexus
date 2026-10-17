@@ -43,10 +43,10 @@ const isChecking = ref(false);
 const isPaused = ref(false);
 const isLoading = ref(false);
 const loadError = ref<string | null>(null);
-/** Phase 2 后台加载中标志：Phase 1 结束后为 true，Phase 2 全部到达后为 false */
+/** 旧链接检测页的两段式加载标志；读取已改成一次读完，恒为 false（旧页面删除时一起删） */
 const isPhase2Loading = ref(false);
-/** Phase 2 耗时（ms）：用于 UI 侧判断是否跳过动画（<300ms 则跳过） */
-const phase2Duration = ref(0);
+/** 至少完整读过一次（之后的重读期间仍保留上一次的行） */
+const loaded = ref(false);
 const progress: Ref<BatchCheckProgress | null> = ref(null);
 /** 进度来源标识：区分是链接检测还是文档修复在跑，防止 UI 串扰 */
 const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
@@ -157,8 +157,6 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 // TTL 缓存：避免反复切换页面时重复加载
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let lastLoadTime = 0;
-/** 首次加载骨架屏最小可见时长，防止加载太快一闪而过 */
-const MIN_SKELETON_MS = 400;
 
 /**
  * recheckSingle 的节奏（ms）：转圈至少 SPIN_MIN，免得一闪而过；结果先在原位停 RESULT_SHOW，
@@ -175,10 +173,8 @@ onCacheEvent((p) => {
     lastLoadTime = 0;
     // 历史被清空时，必须丢弃正在跑的批量结果——否则 finally 里的 applyResultsToRows
     // 会把这一批 result 重新塞回空的 checkRows，造成「幽灵行」与对已删 historyId 的写库
-    if (progressUnlisten) {
-      ++historyClearedGeneration; // 触发 useLinkCheckManager 内部「结果整体作废」守卫
-      void invoke('cancel_batch_check').catch(() => undefined);
-    }
+    ++historyClearedGeneration; // 在途的批量结果与正在进行的读取一律作废
+    if (progressUnlisten) void invoke('cancel_batch_check').catch(() => undefined);
   } else if (p.type === 'history-deleted') {
     // 载荷形状：{ type, timestamp, data: { ids, source } }——ids 在 data 里，不在顶层。
     // 不按 source 过滤本窗口自发事件：历史页与检测页同处一个窗口，
@@ -315,9 +311,10 @@ export function useLinkCheckManager() {
   }
 
   /**
-   * 两阶段加载历史链接，实现"时间差"策略：
-   * Phase 1：优先加载失效/未检测链接（默认标签页内容），用户秒看到数据
-   * Phase 2：后台静默加载剩余记录，切换标签时数据已就绪
+   * 读全部历史链接（一次读完再交出去）
+   *
+   * Why 不再「先读有问题的、后台再读其余」：链接健康页的总数、日历、「仅 1 份」都要全量才对，
+   * 半截数据会让状态栏先闪一下「全部正常」或错的张数。几万条一次读完也只要一两秒。
    */
   async function loadHistoryRows(options: { allowDuringCheck?: boolean } = {}): Promise<void> {
     if (loadHistoryRowsPromise) return loadHistoryRowsPromise;
@@ -331,65 +328,36 @@ export function useLinkCheckManager() {
   async function doLoadHistoryRows(options: { allowDuringCheck?: boolean } = {}): Promise<void> {
     if (isChecking.value && !options.allowDuringCheck) return;
 
-    // TTL 缓存：5 分钟内重复进入直接跳过
-    if (checkRows.value.length > 0 && Date.now() - lastLoadTime < CACHE_TTL_MS && !isPhase2Loading.value) {
-      return;
-    }
+    // TTL 缓存：5 分钟内重复进入直接跳过（history 事件会把 lastLoadTime 清零）
+    if (checkRows.value.length > 0 && Date.now() - lastLoadTime < CACHE_TTL_MS) return;
 
-    const isFirstLoad = checkRows.value.length === 0;
-    const skeletonStart = isFirstLoad ? Date.now() : 0;
     isLoading.value = true;
     loadError.value = null;
+    const myClearedGeneration = historyClearedGeneration;
 
     try {
       await historyDB.open();
       const config = await loadConfig();
-
-      // Phase 1：快速加载有问题的记录（失效 + 未检测）
-      const invalidLiteRows = await historyDB.getLinkCheckInvalid();
-      const invalidItems = invalidLiteRows.map(liteRowToItem);
-      const { rows: invalidRows } = buildCheckItemsSync(invalidItems, config);
-      restoreCheckStatus(invalidRows, invalidItems);
-
-      // 先等骨架屏显示满 MIN_SKELETON_MS，再赋值 checkRows 触发 stats 刷新
-      // （骨架屏依赖 stats.total === 0，一旦赋值即失效）
-      if (isFirstLoad) {
-        const remaining = MIN_SKELETON_MS - (Date.now() - skeletonStart);
-        if (remaining > 0) await new Promise<void>(r => setTimeout(r, remaining));
-      }
-
-      checkRows.value = invalidRows;
-      rebuildRowIndex();
-      isLoading.value = false; // 提前结束 loading，用户已看到失效数据
-
-      // Phase 2：后台静默加载剩余记录
-      // 先收集所有批次到临时数组，避免每批都 [...checkRows, ...batch] 导致 O(n²) 复制
-      isPhase2Loading.value = true;
-      const phase2Start = Date.now();
-      const loadedIds = new Set(invalidLiteRows.map((r) => r.id));
-      const pendingRows: LinkCheckRow[] = [];
-      for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000)) {
+      const rows: LinkCheckRow[] = [];
+      for await (const batch of historyDB.getLinkCheckStream(2000)) {
         const batchItems = batch.map(liteRowToItem);
-        const { rows } = buildCheckItemsSync(batchItems, config);
-        restoreCheckStatus(rows, batchItems);
-        pendingRows.push(...rows);
+        const built = buildCheckItemsSync(batchItems, config).rows;
+        restoreCheckStatus(built, batchItems);
+        rows.push(...built);
         await yieldToMain();
       }
-      if (pendingRows.length > 0) {
-        checkRows.value = [...checkRows.value, ...pendingRows];
-        rebuildRowIndex();
-      }
-      phase2Duration.value = Date.now() - phase2Start;
-      isPhase2Loading.value = false;
-
+      // 读的途中历史被清空：读到的都是已删的记录，交出去就是幽灵行
+      if (historyClearedGeneration !== myClearedGeneration) return;
+      checkRows.value = rows;
+      rebuildRowIndex();
       lastLoadTime = Date.now();
+      loaded.value = true;
     } catch (err) {
       log.error('加载历史检测数据失败', err);
       loadError.value = errorMessage(err);
       toast.error('加载历史检测数据失败', loadError.value);
     } finally {
       isLoading.value = false;
-      isPhase2Loading.value = false;
     }
   }
 
@@ -412,7 +380,7 @@ export function useLinkCheckManager() {
     progressSource.value = 'monitor';
 
     try {
-      // 确保 Phase 2 已完成，避免只检测到首批问题链接。
+      // 先确保读到了全部记录
       await loadHistoryRows({ allowDuringCheck: true });
 
       const rows = checkRows.value;
@@ -895,11 +863,13 @@ export function useLinkCheckManager() {
 
   /** 页面离开时：启动空闲计时，到期释放数据 */
   function onViewDeactivated(): void {
-    if (isChecking.value || isPhase2Loading.value || progressUnlisten || activeRecheckCount > 0) return; // 检测/Phase2加载/复检动画进行中，不清理
+    if (isChecking.value || isLoading.value || progressUnlisten || activeRecheckCount > 0) return; // 检测 / 读取 / 复检动画进行中，不清理
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       if (!isChecking.value) {
         checkRows.value = [];
+        rebuildRowIndex();
+        loaded.value = false;
         lastLoadTime = 0; // 清除缓存，下次进入重新加载
         log.info('空闲超时，已释放检测数据');
       }
@@ -913,7 +883,7 @@ export function useLinkCheckManager() {
     isPaused,
     isLoading,
     isPhase2Loading,
-    phase2Duration,
+    loaded,
     progress,
     progressSource,
     checkRows,

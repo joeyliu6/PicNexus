@@ -78,6 +78,7 @@ function row(idx: number, serviceId: string, kind?: 'valid' | 'invalid' | 'timeo
     historyId: `history-${idx}`,
     serviceId,
     url: `https://img.example/${idx}/${serviceId}.jpg`,
+    uploadedAt: 0,
     rawUrl: `https://img.example/${idx}/${serviceId}.jpg`,
     fileName: `gallery-shot-${idx.toString().padStart(2, '0')}.jpg`,
     isPrimary: primary,

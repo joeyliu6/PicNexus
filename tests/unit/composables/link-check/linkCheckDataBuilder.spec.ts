@@ -24,6 +24,7 @@ describe('liteRowToItem', () => {
   it('results 为 JSON 字符串时自动解析', () => {
     const row: LinkCheckLiteRow = {
       id: '1',
+      timestamp: 0,
       local_file_name: 'a.jpg',
       primary_service: 'r2',
       results: JSON.stringify([{ serviceId: 'r2', status: 'success' }]),
@@ -37,6 +38,7 @@ describe('liteRowToItem', () => {
     const parsed = [{ serviceId: 'r2', status: 'success' }];
     const row = {
       id: '1',
+      timestamp: 0,
       local_file_name: 'a.jpg',
       primary_service: 'r2',
       results: parsed as unknown as string,
@@ -50,6 +52,7 @@ describe('liteRowToItem', () => {
     const status = { r2: { isValid: true, lastCheckTime: 0, errorType: 'success' } };
     const row: LinkCheckLiteRow = {
       id: '2',
+      timestamp: 0,
       local_file_name: 'b.jpg',
       primary_service: 'r2',
       results: '[]',
@@ -62,6 +65,7 @@ describe('liteRowToItem', () => {
   it('link_check_status 为 null 时 linkCheckStatus 为 undefined', () => {
     const row: LinkCheckLiteRow = {
       id: '3',
+      timestamp: 0,
       local_file_name: 'c.jpg',
       primary_service: 'r2',
       results: '[]',
@@ -74,6 +78,7 @@ describe('liteRowToItem', () => {
   it('基础字段映射正确', () => {
     const row: LinkCheckLiteRow = {
       id: 'id-x',
+      timestamp: 1_700_000_000_000,
       local_file_name: 'photo.png',
       primary_service: 'github',
       results: '[]',
@@ -83,7 +88,7 @@ describe('liteRowToItem', () => {
     expect(item.id).toBe('id-x');
     expect(item.localFileName).toBe('photo.png');
     expect(item.primaryService).toBe('github');
-    expect(item.timestamp).toBe(0);
+    expect(item.timestamp).toBe(1_700_000_000_000);
     expect(item.generatedLink).toBe('');
   });
 });
@@ -157,6 +162,14 @@ describe('buildCheckItemsSync', () => {
     ]);
   });
 
+  it('每行带上这张图的上传时间（日历按它分天）', () => {
+    const item = makeItem({
+      timestamp: 1_684_713_600_000,
+      results: [{ serviceId: 'r2', status: 'success', result: { serviceId: 'r2', fileKey: 'k', url: 'https://r2.example.com/a.jpg' } }],
+    });
+    expect(buildCheckItemsSync([item], EMPTY_CONFIG).rows[0].uploadedAt).toBe(1_684_713_600_000);
+  });
+
   it('多个图床结果各自生成独立行', () => {
     const item = makeItem({
       results: [
@@ -192,7 +205,7 @@ describe('restoreCheckStatus', () => {
     }];
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'r2', url: 'https://r2.example.com/x.jpg',
-      rawUrl: 'https://r2.example.com/x.jpg', fileName: 'x.jpg',
+      rawUrl: 'https://r2.example.com/x.jpg', uploadedAt: 0, fileName: 'x.jpg',
     }];
 
     restoreCheckStatus(rows, items);
@@ -217,7 +230,7 @@ describe('restoreCheckStatus', () => {
     }];
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'r2', url: 'https://r2.example.com/x.jpg',
-      rawUrl: 'https://r2.example.com/x.jpg', fileName: 'x.jpg',
+      rawUrl: 'https://r2.example.com/x.jpg', uploadedAt: 0, fileName: 'x.jpg',
     }];
 
     restoreCheckStatus(rows, items);
@@ -239,7 +252,7 @@ describe('restoreCheckStatus', () => {
     }];
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'r2', url: 'https://r2.example.com/x.jpg',
-      rawUrl: 'https://r2.example.com/x.jpg', fileName: 'x.jpg',
+      rawUrl: 'https://r2.example.com/x.jpg', uploadedAt: 0, fileName: 'x.jpg',
     }];
 
     restoreCheckStatus(rows, items);
@@ -249,7 +262,7 @@ describe('restoreCheckStatus', () => {
   it('无匹配 item 时 checkResult 不变（仍为 undefined）', () => {
     const rows: LinkCheckRow[] = [{
       historyId: 'no-such-id', serviceId: 'r2',
-      url: 'https://r2.example.com/x.jpg', rawUrl: 'https://r2.example.com/x.jpg', fileName: 'x.jpg',
+      url: 'https://r2.example.com/x.jpg', rawUrl: 'https://r2.example.com/x.jpg', uploadedAt: 0, fileName: 'x.jpg',
     }];
     restoreCheckStatus(rows, []);
     expect(rows[0].checkResult).toBeUndefined();
@@ -262,7 +275,7 @@ describe('applyResultsToRows', () => {
   it('按 url + historyId 匹配并设置 checkResult', () => {
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'r2',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0, fileName: 'img.jpg',
     }];
     const results = [{
       link: 'https://r2.example.com/img.jpg',
@@ -282,7 +295,7 @@ describe('applyResultsToRows', () => {
   it('写入结果时记下检查时间', () => {
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'r2',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0, fileName: 'img.jpg',
     }];
     const results = [{
       link: 'https://r2.example.com/img.jpg',
@@ -300,7 +313,7 @@ describe('applyResultsToRows', () => {
   it('serviceId 不匹配时不设置 checkResult', () => {
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'github',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'other.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0, fileName: 'other.jpg',
     }];
     const results = [{
       link: 'https://r2.example.com/img.jpg',
@@ -318,7 +331,7 @@ describe('applyResultsToRows', () => {
   it('historyId 不匹配时不设置 checkResult', () => {
     const rows: LinkCheckRow[] = [{
       historyId: 'h2', serviceId: 'r2',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0, fileName: 'img.jpg',
     }];
     const results = [{
       link: 'https://r2.example.com/img.jpg',
@@ -337,11 +350,11 @@ describe('applyResultsToRows', () => {
     const rows: LinkCheckRow[] = [
       {
         historyId: 'h1', serviceId: 'r2',
-        url: 'https://cdn.example.com/shared.jpg', rawUrl: 'https://cdn.example.com/shared.jpg', fileName: 'img.jpg',
+        url: 'https://cdn.example.com/shared.jpg', rawUrl: 'https://cdn.example.com/shared.jpg', uploadedAt: 0, fileName: 'img.jpg',
       },
       {
         historyId: 'h1', serviceId: 'github',
-        url: 'https://cdn.example.com/shared.jpg', rawUrl: 'https://cdn.example.com/shared.jpg', fileName: 'img.jpg',
+        url: 'https://cdn.example.com/shared.jpg', rawUrl: 'https://cdn.example.com/shared.jpg', uploadedAt: 0, fileName: 'img.jpg',
       },
     ];
     const results = [{
@@ -362,7 +375,7 @@ describe('applyResultsToRows', () => {
   it('空 results 时不修改 rows', () => {
     const rows: LinkCheckRow[] = [{
       historyId: 'h1', serviceId: 'r2',
-      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', uploadedAt: 0, fileName: 'img.jpg',
     }];
     applyResultsToRows(rows, []);
     expect(rows[0].checkResult).toBeUndefined();

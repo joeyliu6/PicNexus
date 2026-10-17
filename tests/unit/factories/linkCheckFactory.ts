@@ -56,6 +56,7 @@ export function createLinkCheckRow(overrides: Partial<LinkCheckRow> = {}): LinkC
     url,
     rawUrl: overrides.rawUrl ?? url,
     fileName: overrides.fileName ?? `image-${linkCheckSequence}.jpg`,
+    uploadedAt: overrides.uploadedAt ?? 0,
     fallbackUrl: overrides.fallbackUrl,
     isPrimary: overrides.isPrimary,
     fileKey: overrides.fileKey,
@@ -88,6 +89,7 @@ export function createLinkCheckLiteRow(
 
   return {
     id,
+    timestamp: overrides.timestamp ?? 0,
     local_file_name: overrides.local_file_name ?? `${id}.jpg`,
     primary_service: overrides.primary_service ?? serviceId,
     results: overrides.results ?? JSON.stringify([createHistoryResult({

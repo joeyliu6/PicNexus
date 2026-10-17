@@ -27,7 +27,7 @@ export function liteRowToItem(row: LinkCheckLiteRow): HistoryItem {
 
   return {
     id: row.id,
-    timestamp: 0,
+    timestamp: row.timestamp,
     localFileName: row.local_file_name,
     primaryService: row.primary_service as ServiceType,
     results: parsedResults,
@@ -72,6 +72,7 @@ export function buildCheckItemsSync(
         url: finalUrl,
         rawUrl,
         fileName: item.localFileName,
+        uploadedAt: item.timestamp,
         fallbackUrl,
         isPrimary: result.serviceId === item.primaryService,
         fileKey: result.result.fileKey,

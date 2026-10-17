@@ -2,6 +2,8 @@ import type { HistoryItem, ServiceType } from '@/config/types';
 
 export interface LinkCheckLiteRow {
   id: string;
+  /** 上传时间（毫秒） */
+  timestamp: number;
   local_file_name: string;
   primary_service: string;
   results: string;

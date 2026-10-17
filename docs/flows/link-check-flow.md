@@ -468,7 +468,7 @@ flowchart TD
 
 ## 相关文档
 
-- [辅助功能流程 图 11](./auxiliary-flows.md#图-11链接检测流程) — 基础检测主流程（两阶段加载、进度监听、取消分支）
+- [辅助功能流程 图 11](./auxiliary-flows.md#图-11链接检测流程) — 基础检测主流程（读取、进度监听、取消分支）
 - [链接检测性能优化](../reference/patterns/link-check-large-dataset.md) — 5 万条记录场景的优化方案
 - [文档修复流程](./md-rescue-flow.md) — 复用 `checkUrls` 的文档修复功能
 - [批量迁移流程](./batch-migrate-flow.md) — 复用链接检测结果的迁移功能

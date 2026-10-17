@@ -26,8 +26,7 @@ import {
 } from './DataTransformer';
 import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavoriteIdListQuery } from './FavoriteService';
 import {
-  getLinkCheckInvalidQuery,
-  getLinkCheckRestStreamQuery,
+  getLinkCheckStreamQuery,
   batchUpdateLinkCheckStatusQuery,
   getLinkCheckContextByIdsQuery,
 } from './LinkCheckQuery';
@@ -895,17 +894,10 @@ class HistoryDatabase {
   // 链接检测专用轻量查询（委托 LinkCheckQuery）
   // ============================================
 
-  async getLinkCheckInvalid(): Promise<LinkCheckLiteRow[]> {
+  /** 链接检测用的轻量行：全部记录，新到旧，分批 */
+  async *getLinkCheckStream(batchSize = 2000): AsyncGenerator<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
-    return getLinkCheckInvalidQuery(db);
-  }
-
-  async *getLinkCheckRestStream(
-    loadedIds: Set<string>,
-    batchSize = 2000,
-  ): AsyncGenerator<LinkCheckLiteRow[]> {
-    const db = await this.connection.getDb();
-    yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize);
+    yield* getLinkCheckStreamQuery(db, batchSize);
   }
 
   async batchUpdateLinkCheckStatus(

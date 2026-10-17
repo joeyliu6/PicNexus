@@ -83,7 +83,7 @@ flowchart TD
 
 ## 图 11：链接检测流程
 
-展示两阶段加载和批量检测的完整路径。排查**检测卡住**或**结果不准**时查看。
+展示读取与批量检测的完整路径。排查**检测卡住**或**结果不准**时查看。
 > 深度展开（服务感知请求、并发控制、按图片归类、结论卡）见 [链接检测流程](./link-check-flow.md)。
 
 > **关键源文件**：`src/composables/link-check/useLinkCheck.ts`、`src/composables/link-check/linkCheckDataBuilder.ts`
@@ -95,18 +95,10 @@ flowchart TD
     C -- 是 --> C1[使用缓存数据]
     C -- 否 --> D
 
-    %% Phase 1
-    D["Phase 1：快速加载问题链接"]
-    D --> E["historyDB.getLinkCheckInvalid<br/>失效 + 未检测"]
-    E --> F["buildCheckItemsSync<br/>构建检测行"]
-    F --> G["restoreCheckStatus<br/>恢复上次检测状态"]
-    G --> H["checkRows = invalidRows<br/>isLoading = false（用户已看到数据）"]
-
-    %% Phase 2
-    H --> I["Phase 2：后台静默加载"]
-    I --> J["historyDB.getLinkCheckRestStream<br/>流式加载剩余记录（每批 2000）"]
-    J --> K["yieldToMain 让出主线程<br/>防止长任务阻塞 UI"]
-    K --> L["checkRows 追加剩余数据"]
+    D["historyDB.getLinkCheckStream<br/>全部记录，新到旧，每批 2000"]
+    D --> F["buildCheckItemsSync + restoreCheckStatus<br/>构建检测行、恢复上次结果（行带上传时间）"]
+    F --> K["yieldToMain 让出主线程"]
+    K --> L["读完全部批次才一次赋给 checkRows<br/>（读的途中历史被清空 → 作废）"]
 
     %% 执行检测
     L --> M[用户点结论卡上的「开始检查」]
@@ -130,7 +122,7 @@ flowchart TD
     R -.-> CANCEL{用户停止?}
     CANCEL -- 是 --> CANCEL1["已完成的结果仍然入库<br/>结论卡给「检查剩下的 N 个」"]
 
-    style H fill:#e3f2fd,stroke:#1976d2
+    style L fill:#e3f2fd,stroke:#1976d2
     style X fill:#e8f5e9,stroke:#2e7d32
     style CANCEL1 fill:#fff3e0,stroke:#ef6c00
 ```

@@ -81,6 +81,8 @@ export interface LinkCheckRow {
   url: string;
   rawUrl: string;
   fileName: string;
+  /** 这张图的上传时间（毫秒）：链接健康的日历与年份筛选按它的本地日期算 */
+  uploadedAt: number;
   fallbackUrl?: string;
   /** 这一份是不是主链接（用户复制出去、写进文档的那条） */
   isPrimary?: boolean;
