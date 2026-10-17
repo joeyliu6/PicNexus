@@ -21,6 +21,7 @@ import { useVisibleDayBuffer } from '@/composables/timeline/useVisibleDayBuffer'
 import { useScrollAnchor } from '@/composables/timeline/useScrollAnchor';
 import { useVirtualTimeline } from '@/composables/timeline/useVirtualTimeline';
 import { confirmedHttpHostsKey } from '@/security/networkPolicy';
+import { historyDB } from '@/services/database';
 
 /** GalleryScreen.dc.html：行高 150、格间距 6；日期标题 34 + 与首行间距 6；两天之间 18 + 6 */
 export const GALLERY_GRID = { targetRowHeight: 150, gap: 6, headerHeight: 40, groupGap: 24, overscan: 3 } as const;
@@ -169,9 +170,9 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     viewState.handleSelectClick(id, event, allLoadedMetas.value.map((m) => m.id));
   }
 
-  /** Ctrl·⌘ A：全选当前结果里已加载的图 */
-  function selectAllLoaded(): void {
-    for (const meta of allLoadedMetas.value) viewState.select(meta.id);
+  /** Ctrl·⌘ A：全选当前结果（按当前筛选查出全部，不只是已经加载出来的几天；列表视图同一份结果） */
+  async function selectAll(): Promise<void> {
+    viewState.selectMany(await historyDB.getIdsByFilter(filter.value));
   }
 
   // 统计（年月刻度用）在页面第一次显示时加载；内部幂等
@@ -208,7 +209,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     lightbox,
     onScroll,
     toggleSelect,
-    selectAllLoaded,
+    selectAll,
   };
 }
 

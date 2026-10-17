@@ -212,7 +212,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   }
   if (mod && key === 'a') {
     event.preventDefault();
-    grid.selectAllLoaded();
+    void grid.selectAll();
     return;
   }
   if (view.value !== 'grid') return;

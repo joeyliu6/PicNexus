@@ -304,3 +304,16 @@ export async function getAllAspectRatiosQuery(
 
   return rows.map(r => ({ id: r.id, timestamp: r.timestamp, aspectRatio: r.aspect_ratio ?? 1.0 }));
 }
+
+/** 当前筛选下的全部 id，新的在前（G04「Ctrl/⌘ A 全选当前结果」：不只是已经加载出来的那几天） */
+export async function getIdsQuery(db: Database, filter: DayStatsFilter | undefined): Promise<string[]> {
+  const params: (string | number)[] = [];
+  const conditions: string[] = [];
+  appendFilterClause(filter, conditions, params);
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const rows = await db.select<Array<{ id: string }>>(
+    `SELECT id FROM history_items ${where} ORDER BY timestamp DESC, id DESC`,
+    params,
+  );
+  return rows.map((row) => row.id);
+}

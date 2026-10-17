@@ -16,9 +16,11 @@ export function useHistoryViewState() {
     selectAnchor.value = result.anchor;
   }
 
-  function select(id: string): void {
-    if (selectedIds.value.has(id)) return;
-    selectedIds.value = new Set(selectedIds.value).add(id);
+  /** 一次选中这些（已选的保留）：Ctrl·⌘ A 全选当前结果 */
+  function selectMany(ids: readonly string[]): void {
+    const next = new Set(selectedIds.value);
+    for (const id of ids) next.add(id);
+    selectedIds.value = next;
   }
 
   function clearSelection(): void {
@@ -28,6 +30,6 @@ export function useHistoryViewState() {
 
   return {
     hasSelection, selectedIdList,
-    handleSelectClick, select, clearSelection,
+    handleSelectClick, selectMany, clearSelection,
   };
 }

@@ -27,12 +27,11 @@ describe('useHistoryViewState', () => {
     expect(state.selectedIdList.value).toEqual(['c']);
   });
 
-  // Ctrl·⌘ A 逐张 select：已选的不能被反选掉
-  it('select only adds', () => {
+  // Ctrl·⌘ A 全选当前结果：已选的不能被反选掉
+  it('selectMany only adds', () => {
     const state = useHistoryViewState();
-    state.select('a');
-    state.select('a');
-    state.select('b');
-    expect(state.selectedIdList.value).toEqual(['a', 'b']);
+    state.handleSelectClick('d', click(), ORDER);
+    state.selectMany(['a', 'b', 'd']);
+    expect(state.selectedIdList.value).toEqual(['d', 'a', 'b']);
   });
 });

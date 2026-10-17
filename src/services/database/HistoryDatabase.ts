@@ -46,6 +46,7 @@ import {
   getDayAspectRatiosByRangeQuery,
   getAllAspectRatiosQuery,
   getListPageQuery,
+  getIdsQuery,
   type AspectRatioRow,
   type GalleryListRow,
   type GalleryListSort,
@@ -728,6 +729,12 @@ class HistoryDatabase {
   async getListPage(filter: DayStatsFilter | undefined, sort: GalleryListSort, offset: number, limit: number): Promise<GalleryListRow[]> {
     const db = await this.dbForFilter(filter);
     return getListPageQuery(db, filter, sort, offset, limit);
+  }
+
+  /** 图库当前筛选下的全部 id（Ctrl/⌘ A 全选当前结果） */
+  async getIdsByFilter(filter: DayStatsFilter | undefined): Promise<string[]> {
+    const db = await this.dbForFilter(filter);
+    return getIdsQuery(db, filter);
   }
 
   /** 按时间戳闭区间只拉 aspect_ratio 列（跳转前懒加载预取降级路径） */

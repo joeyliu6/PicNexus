@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
-import { getDayStatsQuery, getItemsByDayRangeQuery, getListPageQuery } from '@/services/database/TimelineQueryService';
+import { getDayStatsQuery, getIdsQuery, getItemsByDayRangeQuery, getListPageQuery } from '@/services/database/TimelineQueryService';
 import type { DayStatsFilter } from '@/services/database/types';
 
 // 图库的筛选（交接说明 8.2：图床 / 收藏 / 状态 / 时间）直接跑在真的 SQLite 上：
@@ -116,5 +116,13 @@ describe.skipIf(!sqlite)('gallery list pages on the real SQLite', () => {
   it('carries the size and dimensions the list shows', async () => {
     const [row] = await getListPageQuery(db as never, {}, { key: 'time', descending: true }, 0, 1);
     expect(row).toMatchObject({ id: 'ok', width: 1200, height: 800, fileSize: 1000, copyLinkHealth: 'ok' });
+  });
+});
+
+// G04「Ctrl/⌘ A 全选当前结果」：结果里所有的图，不只是已经加载出来的那几天
+describe.skipIf(!sqlite)('selecting every result on the real SQLite', () => {
+  it('lists the ids of every image the filters keep, newest first', async () => {
+    expect(await getIdsQuery(db as never, {})).toEqual(['ok', 'dead', 'limited', 'unchecked', 'pending', 'nas-dead']);
+    expect(await getIdsQuery(db as never, { statusFilter: ['dead'] })).toEqual(['dead', 'nas-dead']);
   });
 });
