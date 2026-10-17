@@ -2,7 +2,7 @@
 // 云端配置同步：上传 / 覆盖下载 / 双向同步（合并语义只由「同步」提供）
 
 import type { WebDAVProfile, UserConfig } from '@/config/types';
-import { isValidUserConfig } from '@/config/types';
+import { DEFAULT_CONFIG, isValidUserConfig } from '@/config/types';
 import { configStore } from '@/store/instances';
 import { secureStorage, isPasswordEncryptedData } from '@/security/crypto';
 import { TOAST_MESSAGES } from '@/constants';
@@ -162,9 +162,15 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
           // Why: 首次使用/配置缺失场景下 currentConfig 为 null，若仅在 currentConfig 存在时保存，
           // 云端合法配置会被静默丢弃，随后 step 2 读不到本地配置抛"无法读取本地配置"
           if (currentConfig) {
+            // 文档文件夹是本机路径，换一台电脑多半不存在：合并时留本机的
             const mergedConfig: UserConfig = {
               ...importedConfig,
               webdav: currentConfig.webdav,
+              linkHealth: {
+                ...DEFAULT_CONFIG.linkHealth!,
+                ...importedConfig.linkHealth,
+                docFolders: currentConfig.linkHealth?.docFolders ?? [],
+              },
             };
             await configStore.set('config', mergedConfig);
             await configStore.save();

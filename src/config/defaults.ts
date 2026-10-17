@@ -170,7 +170,11 @@ export const DEFAULT_CONFIG: UserConfig = {
     enabled: false,
     activePresetId: 'default',
     presets: [{ ...DEFAULT_COMPRESSION_PRESET }],
-  }
+  },
+  linkHealth: {
+    docFolders: [],
+    autoCheck: { enabled: true, intervalDays: 7 },
+  },
 };
 
 /**

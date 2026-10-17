@@ -157,6 +157,16 @@ export interface LinkOutputConfig {
 }
 
 /**
+ * 链接健康配置（交接说明 8.3）
+ */
+export interface LinkHealthConfig {
+  /** 文档文件夹：修复时一并替换其中 Markdown 文档里的旧链接（本机路径，云同步时保留本机的这一份） */
+  docFolders: string[];
+  /** 自动检测：开着且距上次检测满 intervalDays 天，在后台跑一次全量检测 */
+  autoCheck: { enabled: boolean; intervalDays: number };
+}
+
+/**
  * 编辑器兼容 Server 支持的图床类型（简化子集）
  * 与 Rust 侧 ServerUploadConfig 枚举保持一致（serde tag = "type"）
  */
@@ -272,4 +282,7 @@ export interface UserConfig {
 
   /** MD 文档救援图床优先级（serviceId 列表，空数组 = 不限） */
   mdRescueHostPreference?: string[];
+
+  /** 链接健康：文档文件夹与自动检测 */
+  linkHealth?: LinkHealthConfig;
 }

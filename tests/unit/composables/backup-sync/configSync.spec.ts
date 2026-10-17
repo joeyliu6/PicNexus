@@ -272,11 +272,27 @@ describe('createConfigSyncOps', () => {
 
     await ops.syncConfig(profile);
 
-    expect(configStoreSetMock).toHaveBeenCalledWith('config', {
+    expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({
       webdav: { url: 'https://local.example.com' },
       fromCloud: true,
-    });
+    }));
     expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
+  });
+
+  // 文档文件夹是本机路径：同步一次就换成另一台电脑的路径，链接健康页会列出一串「文件夹不存在」
+  it('keeps the local document folders and takes the cloud auto-check setting when syncConfig merges', async () => {
+    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({
+      linkHealth: { docFolders: ['/Users/other/Notes'], autoCheck: { enabled: false, intervalDays: 30 } },
+    }));
+    configStoreGetMock
+      .mockResolvedValueOnce({ linkHealth: { docFolders: ['D:\Notes'], autoCheck: { enabled: true, intervalDays: 7 } } })
+      .mockResolvedValueOnce({});
+
+    await createConfigSyncOps(makeDeps()).syncConfig(profile);
+
+    expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({
+      linkHealth: { docFolders: ['D:\Notes'], autoCheck: { enabled: false, intervalDays: 30 } },
+    }));
   });
 
   it('marks syncConfig as partial when upload fails after cloud data has already been merged locally', async () => {
@@ -298,10 +314,10 @@ describe('createConfigSyncOps', () => {
 
     await ops.syncConfig(profile);
 
-    expect(configStoreSetMock).toHaveBeenCalledWith('config', {
+    expect(configStoreSetMock).toHaveBeenCalledWith('config', expect.objectContaining({
       webdav: { url: 'https://local.example.com' },
       remoteFlag: true,
-    });
+    }));
     expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'partial', 'PUT_FAILED');
     expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'PUT_FAILED', profile);
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
