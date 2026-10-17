@@ -212,6 +212,8 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
 
   async function openLightbox(meta: ImageMeta): Promise<void> {
     const dayKey = tsToDayKey(meta.timestamp);
+    // 那一天还没加载：先读回来再定位，否则会被当成「第 0 张」，← → 跳过同一天的其余图
+    if (!loadedDayKeys.value.has(dayKey)) await ensureDaysLoaded([dayKey]);
     const dayItems = dayMetaCache.get(dayKey) ?? [];
     const idx = dayItems.findIndex(m => m.id === meta.id);
 

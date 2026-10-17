@@ -162,6 +162,17 @@ describe('useTimelineLightbox', () => {
     await expect(Promise.resolve(resolveAdjacentUrl('next'))).resolves.toBeNull();
   });
 
+  // 那一天还没加载（比如从别处直接打开）：先把那天读回来再定位，不能当成「第 0 张」，否则 ← → 会跳过同一天的其余图
+  it('loads the day of the opened image first when it is not loaded yet', async () => {
+    const { api, dayTwoItems, ensureDaysLoaded } = mountLightbox();
+
+    await api.openLightbox(dayTwoItems[0]);
+
+    expect(ensureDaysLoaded).toHaveBeenCalledWith(['2024-0-1']);
+    expect(api.lightboxItem.value?.id).toBe('day-two-new');
+    expect(api.lightboxHasPrev.value).toBe(true);
+  });
+
   it('navigates within a loaded day before requesting the older day', async () => {
     const { api, dayOneItems, detailCache, scrollToItem } = mountLightbox();
     await api.openLightbox(dayOneItems[0]);
