@@ -32,7 +32,7 @@ test('connecting a WebDAV host switches the right side to its detail', async ({ 
   await fill('[id$="-publicDomain"]', 'https://img.example.com');
   await page.getByRole('button', { name: '测试并连接' }).click();
   // 先失败一次：指到密码那一格，留在连接表单
-  await expect(page.locator('.host-detail').getByRole('alert')).toContainText('密码 无效');
+  await expect(page.locator('.host-detail').getByRole('alert')).toContainText('密码无效');
 
   await page.getByRole('button', { name: '修改密码' }).click();
   await page.keyboard.type('secret');
