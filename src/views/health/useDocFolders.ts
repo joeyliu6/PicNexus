@@ -22,9 +22,9 @@ export interface DocFolder {
   docs: ScannedDoc[];
 }
 
+/** Rust scan_md_folder 的返回（只取用得到的字段） */
 interface RustScanResult {
   files: ScannedDoc[];
-  cancelled: boolean;
 }
 
 const folders = ref<DocFolder[]>([]);

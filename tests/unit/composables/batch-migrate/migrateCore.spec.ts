@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
-import { extractErrorMessage, markStatusFailed, MAX_CONCURRENT, migrateOneItem, processBatch } from '@/composables/batch-migrate/migrateCore';
+import { extractErrorMessage, markStatusFailed, migrateOneItem } from '@/composables/batch-migrate/migrateCore';
 import { historyDB } from '@/services/database';
 import type { MigrateItemStatus } from '@/types/batchMigrate';
 import type { HistoryItem, UserConfig } from '@/config/types';
@@ -571,58 +571,5 @@ describe('markStatusFailed', () => {
       { serviceId: 'weibo', message: 'b' },
     ] as any);
     expect(status.error).toContain('；');
-  });
-});
-
-describe('MAX_CONCURRENT', () => {
-  it('固定为 3（并行上传后每图床峰值并发 = MAX_CONCURRENT）', () => {
-    expect(MAX_CONCURRENT).toBe(3);
-  });
-});
-
-describe('processBatch cancellation', () => {
-  it('取消时队列中尚未开始的项目也会计入 skipped 回调', async () => {
-    const statuses: MigrateItemStatus[] = [
-      { historyId: '1', fileName: 'a.png', status: 'pending', serviceResults: {} },
-      { historyId: '2', fileName: 'b.png', status: 'pending', serviceResults: {} },
-    ];
-    const done: MigrateItemStatus[] = [];
-
-    await processBatch(
-      [{ id: '1' }, { id: '2' }] as any,
-      statuses,
-      ['r2'],
-      {} as any,
-      {} as any,
-      ref(true),
-      ref(false),
-      ref({ startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 2, totalBytes: 0 }),
-      status => done.push({ ...status }),
-    );
-
-    expect(done).toHaveLength(2);
-    expect(done.every(status => status.status === 'skipped' && status.skipReason === 'not-attempted')).toBe(true);
-  });
-
-  it('leaves paused items pending and does not count them as done', async () => {
-    const statuses: MigrateItemStatus[] = [
-      { historyId: '1', fileName: 'a.png', status: 'pending', serviceResults: { r2: 'pending' } },
-    ];
-    const done = vi.fn();
-
-    await processBatch(
-      [{ id: '1' }] as any,
-      statuses,
-      ['r2'],
-      {} as any,
-      {} as any,
-      ref(false),
-      ref(true),
-      ref({ startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 1, totalBytes: 0 }),
-      done,
-    );
-
-    expect(statuses[0].status).toBe('pending');
-    expect(done).not.toHaveBeenCalled();
   });
 });

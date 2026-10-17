@@ -70,7 +70,6 @@ const APP_COMMANDS: &[&str] = &[
     "strip_exif_only",
     "read_image_as_base64",
     "scan_md_folder",
-    "cancel_md_scan",
     "get_or_create_secure_key",
     "set_secure_key",
     "open_log_dir",

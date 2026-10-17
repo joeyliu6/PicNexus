@@ -22,21 +22,3 @@ export async function notifyMigrationPersisted(ids: string[]): Promise<void> {
   // emitCacheEvent 内部已吞异常，广播失败不会中断迁移
   await emitHistoryUpdated(ids);
 }
-
-/**
- * 攒 id 的缓冲区：迁移主循环每条成功就 add，一个 chunk 处理完（以及收尾）flush 一次。
- * 把「什么时候发」和「发给谁」留在调用方，「发多少次」的节流责任收在这里。
- */
-export function createMigrationRefreshBuffer() {
-  const pending = new Set<string>();
-  return {
-    add(id: string): void { pending.add(id); },
-    /** 发出并清空；不 await——广播不该拖慢下一个 chunk 的处理 */
-    flush(): void {
-      if (pending.size === 0) return;
-      const ids = [...pending];
-      pending.clear();
-      void notifyMigrationPersisted(ids);
-    },
-  };
-}

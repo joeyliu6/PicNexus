@@ -16,7 +16,7 @@ import { collectLayoutReport } from './layoutProbe';
  * 它同样跑在 layout-webkit 上，所以顺带验证了探针本身在 WebKit 下的行为一致。
  */
 
-const HOST_STATE = { page: 'link-check', state: 'empty' } as const;
+const HOST_STATE = { page: 'settings', state: 'default' } as const;
 
 /** 往页面里塞一棵受控的探测树，避免依赖任何业务组件的当前实现 */
 async function mountFixture(page: import('@playwright/test').Page, html: string): Promise<void> {

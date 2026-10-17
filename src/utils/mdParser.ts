@@ -1,12 +1,9 @@
-// Markdown 文件图片链接解析器
+// Markdown 文档里的图片链接：替换（文档修复写回）与剥前缀（认出加了代理前缀的旧链接）。
+// 提取链接在 Rust 侧（md_scanner.rs 的 scan_md_folder），这里的围栏 / 行内代码规则与它保持一致。
 
-import type { MdImageLink } from '@/types/linkCheck';
 import type { UserConfig } from '@/config/types';
 import { DEFAULT_LINK_PREFIXES } from '@/config/types';
 import { stripPrefixTemplate } from './linkPrefixTemplate';
-
-/** HTML img 标签: <img src="url" ... /> */
-const HTML_IMG_REGEX = /<img[^>]+src=["']([^"']+)["'][^>]*\/?>/gi;
 
 /**
  * 围栏代码块首行正则（捕获 3+ 连续反引号或波浪号）
@@ -19,24 +16,6 @@ const FENCE_REGEX = /^ {0,3}(`{3,}|~{3,})/;
 
 /** 行内代码（支持单、双、三反引号） */
 const INLINE_CODE_REGEX = /(`{1,3})(?:(?!\1).)+\1/g;
-
-/**
- * 将行内代码替换为等长空格，防止代码中的图片语法被匹配
- */
-function stripInlineCode(line: string): string {
-  return line.replace(INLINE_CODE_REGEX, (m) => ' '.repeat(m.length));
-}
-
-/**
- * 检测行的 Markdown 上下文类型
- */
-function detectContext(line: string): 'normal' | 'blockquote' | 'table' {
-  const trimmed = line.trimStart();
-  if (trimmed.startsWith('>')) return 'blockquote';
-  // 简单判断表格行：以 | 开头或包含至少两个 |
-  if (trimmed.startsWith('|') || (trimmed.match(/\|/g)?.length ?? 0) >= 2) return 'table';
-  return 'normal';
-}
 
 interface MarkdownImageMatch {
   start: number;
@@ -166,140 +145,6 @@ function parseMarkdownImageMatches(line: string): MarkdownImageMatch[] {
 }
 
 /**
- * 从 Markdown 内容中提取所有图片链接
- * 默认跳过围栏代码块和行内代码中的链接；
- * 传入 `{ includeCodeBlocks: true }` 时一并提取代码块内的图片链接。
- */
-export function extractImageLinks(
-  content: string,
-  options?: { includeCodeBlocks?: boolean },
-): MdImageLink[] {
-  const includeCodeBlocks = options?.includeCodeBlocks ?? false;
-  const results: MdImageLink[] = [];
-  const seenUrls = new Set<string>();
-  const lines = content.split('\n');
-
-  // 当前打开的围栏：{ 开头字符, 反引号/波浪数 }；null 表示未在围栏内
-  // 仅同字符 + 反引号数 ≥ open 时才关闭，避免 ``` 与 ~~~ 串扰和嵌套误判
-  let fenceOpen: { char: string; len: number } | null = null;
-
-  // 逐行扫描，以便获取准确的行号
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const lineNumber = i + 1;
-
-    if (!includeCodeBlocks) {
-      const fenceMatch = FENCE_REGEX.exec(line);
-      if (fenceMatch) {
-        const seq = fenceMatch[1];
-        const char = seq[0];
-        const len = seq.length;
-        // close fence 尾部必须只有空白（CommonMark 4.5），否则仍视为围栏内字面量
-        const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
-        if (fenceOpen === null) {
-          fenceOpen = { char, len };
-          continue;
-        }
-        if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
-          fenceOpen = null;
-          continue;
-        }
-        // 同字符长度不足 / 不同字符 / 尾部带 info string：落到下方"仍在围栏内"分支被跳过
-      }
-      // 当前仍在围栏内 → 跳过（含上方未关闭成功的 fence 行字面量）
-      if (fenceOpen !== null) continue;
-    }
-
-    // 代码块模式下直接用原始行，否则剥离行内代码后再匹配
-    const stripped = includeCodeBlocks ? line : stripInlineCode(line);
-    const context = detectContext(line);
-
-    // Markdown 图片语法
-    let match: RegExpExecArray | null;
-    for (const mdMatch of parseMarkdownImageMatches(stripped)) {
-      const url = mdMatch.url.trim();
-      if (isValidImageUrl(url) && !seenUrls.has(url)) {
-        seenUrls.add(url);
-        // 从原始行提取 originalText（保持原文不变）
-        const originalText = line.substring(mdMatch.start, mdMatch.end);
-        results.push({
-          originalText,
-          url,
-          altText: mdMatch.alt || '',
-          lineNumber,
-          syntax: 'markdown',
-          context,
-        });
-      }
-    }
-
-    // HTML img 标签
-    HTML_IMG_REGEX.lastIndex = 0;
-    while ((match = HTML_IMG_REGEX.exec(stripped)) !== null) {
-      const url = match[1].trim();
-      if (isValidImageUrl(url) && !seenUrls.has(url)) {
-        seenUrls.add(url);
-        const originalText = line.substring(match.index, match.index + match[0].length);
-        results.push({
-          originalText,
-          url,
-          altText: '',
-          lineNumber,
-          syntax: 'html',
-          context,
-        });
-      }
-    }
-  }
-
-  return results;
-}
-
-/**
- * 明确"不是图片"的文件扩展名黑名单（小写，不带点）
- * 用于过滤徽章/代理服务 URL 中嵌套的 .js/.css 等资源路径被误识为图片
- * 未列出的扩展名（包括图床 ID 无扩展 URL）一律放行
- */
-const NON_IMAGE_EXTENSIONS = new Set([
-  // 脚本/样式/源码
-  'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'css', 'scss', 'sass', 'less',
-  // 标记/数据
-  'html', 'htm', 'xml', 'json', 'yaml', 'yml', 'toml', 'csv',
-  // 文档
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'markdown',
-  // 归档
-  'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
-  // 可执行/安装包
-  'exe', 'dmg', 'msi', 'deb', 'rpm', 'apk', 'ipa',
-  // 音视频
-  'mp4', 'webm', 'mkv', 'avi', 'mov', 'mp3', 'wav', 'ogg', 'flac', 'aac',
-]);
-
-/** 提取 URL path 末段的扩展名（小写），无扩展或 dotfile 返回 null */
-function getUrlPathExtension(url: string): string | null {
-  // 去掉 query / fragment 再取最后一段
-  const pathOnly = url.split('?')[0].split('#')[0];
-  const lastSeg = pathOnly.split('/').pop() || '';
-  const dotIdx = lastSeg.lastIndexOf('.');
-  // dotIdx<=0 覆盖了"无扩展"与".htaccess"这种纯 dotfile
-  if (dotIdx <= 0) return null;
-  return lastSeg.slice(dotIdx + 1).toLowerCase();
-}
-
-/**
- * 判断是否为有效的图片 URL（过滤 data:、相对路径、非图片扩展名等）
- */
-function isValidImageUrl(url: string): boolean {
-  if (!url) return false;
-  if (url.startsWith('data:')) return false;
-  if (url.startsWith('#')) return false;
-  if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
-  const ext = getUrlPathExtension(url);
-  if (ext !== null && NON_IMAGE_EXTENSIONS.has(ext)) return false;
-  return true;
-}
-
-/**
  * 剥离已知的链接前缀（搜狗/cdnjson/Jetpack/IPFS Scan 等）
  * 用于从 MD 中的 URL 反向匹配数据库中的原始 URL
  */
@@ -315,84 +160,50 @@ export function stripKnownPrefixes(url: string, config: UserConfig): string {
 }
 
 /**
- * 智能截断 URL，保留域名和文件名，中间用省略号替代
- * 例: https://cdn.example.com/very/long/path/image.png → https://cdn.example.com/.../image.png
- */
-export function smartTruncateUrl(url: string, maxLen = 60): string {
-  if (url.length <= maxLen) return url;
-  try {
-    const u = new URL(url);
-    const pathParts = u.pathname.split('/').filter(Boolean);
-    const fileName = pathParts.pop() || '';
-    const suffix = fileName + u.search + u.hash;
-
-    // 域名 + 文件名仍超长时，退化为尾部截断
-    if (u.origin.length + suffix.length + 5 > maxLen) {
-      return url.slice(0, maxLen - 3) + '...';
-    }
-    return `${u.origin}/.../` + suffix;
-  } catch {
-    return url.slice(0, maxLen - 3) + '...';
-  }
-}
-
-/**
  * 在 Markdown 内容中替换图片链接
  *
  * 严格只替换图片语法（![alt](url) / <img src="url">）中的 URL：
- * - 跳过围栏代码块内容（与 extractImageLinks 同步跟踪 fence 状态）
+ * - 跳过围栏代码块内容（与 Rust 侧 scan_md_folder 的提取同一套 fence 规则）
  * - 跳过行内代码 spans
  * - 普通链接 [text](url)、正文里出现的裸 URL、注释均不会被改写
  * - 使用 callback 形式替换，newUrl 中的 `$&` / `$1` 不会被当作反向引用
  */
-export function replaceImageLinks(
-  content: string,
-  replacements: Map<string, string>,
-  options?: { includeCodeBlocks?: boolean },
-): string {
+export function replaceImageLinks(content: string, replacements: Map<string, string>): string {
   if (replacements.size === 0) return content;
 
-  const includeCodeBlocks = options?.includeCodeBlocks ?? false;
   const lines = content.split('\n');
   let fenceOpen: { char: string; len: number } | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
-    if (!includeCodeBlocks) {
-      // 围栏跟踪（与 extractImageLinks 的 fence 状态机完全一致）
-      const fenceMatch = FENCE_REGEX.exec(line);
-      if (fenceMatch) {
-        const seq = fenceMatch[1];
-        const char = seq[0];
-        const len = seq.length;
-        const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
-        if (fenceOpen === null) {
-          fenceOpen = { char, len };
-          continue;
-        }
-        if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
-          fenceOpen = null;
-          continue;
-        }
+    // 围栏跟踪（CommonMark：同字符、数量不少于开头、尾部只有空白才算关闭）
+    const fenceMatch = FENCE_REGEX.exec(line);
+    if (fenceMatch) {
+      const seq = fenceMatch[1];
+      const char = seq[0];
+      const len = seq.length;
+      const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
+      if (fenceOpen === null) {
+        fenceOpen = { char, len };
+        continue;
       }
-      if (fenceOpen !== null) continue;
+      if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
+        fenceOpen = null;
+        continue;
+      }
     }
+    if (fenceOpen !== null) continue;
 
-    lines[i] = replaceInLine(line, replacements, { includeInlineCode: includeCodeBlocks });
+    lines[i] = replaceInLine(line, replacements);
   }
 
   return lines.join('\n');
 }
 
 /** 单行内：仅在图片语法中替换 URL，跳过行内代码 */
-function replaceInLine(
-  line: string,
-  replacements: Map<string, string>,
-  options?: { includeInlineCode?: boolean },
-): string {
+function replaceInLine(line: string, replacements: Map<string, string>): string {
   // 先定位行内代码 spans；图片语法命中时若 offset 落在 span 内则不替换
-  const codeSpans = options?.includeInlineCode ? [] : locateInlineCode(line);
+  const codeSpans = locateInlineCode(line);
   const inCode = (pos: number) => codeSpans.some((s) => pos >= s.start && pos < s.end);
 
   let result = line;
@@ -406,7 +217,7 @@ function replaceInLine(
   }
 
   // HTML 替换后偏移量变了，重新定位行内代码
-  const codeSpans2 = options?.includeInlineCode ? [] : locateInlineCode(result);
+  const codeSpans2 = locateInlineCode(result);
   const inCode2 = (pos: number) => codeSpans2.some((s) => pos >= s.start && pos < s.end);
 
   const htmlRe = /(<img[^>]+src=["'])([^"']+)(["'][^>]*\/?>)/gi;

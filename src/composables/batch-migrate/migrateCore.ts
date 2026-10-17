@@ -1,9 +1,8 @@
 /**
- * 批量迁移核心处理逻辑
+ * 单张图补充备份的管线（下载 → 可选转换 → 多目标上传 → 更新历史）
  *
- * 单条迁移管线（下载 → 可选转换 → 多目标上传 → 更新历史）
- * 从 useBatchMigrate.ts 抽出，保持纯函数（不依赖 composable 的 ref），
- * 方便批量循环和单条重试复用。
+ * 链接健康的「补充备份」（useSupplementBackup）与图库的单张 / 多张补充备份共用；
+ * 并发与暂停由调用方掌握，这里只在入口与下载后看一眼暂停 / 取消标志。
  */
 
 import type { Ref } from 'vue';
@@ -11,7 +10,6 @@ import { invoke } from '@tauri-apps/api/core';
 import type { MultiServiceUploader, SingleServiceResult } from '@/core/MultiServiceUploader';
 import { historyDB } from '@/services/database';
 import { needsFormatConversion } from '@/constants/serviceFormats';
-import { Semaphore } from '@/utils/semaphore';
 import { createLogger } from '@/utils/logger';
 import { cleanMigrateError, formatMigrateFailureSummary } from '@/utils/uploadFailureMessage';
 import { cleanupOwnedTempFile } from '@/utils/userFiles';
@@ -21,12 +19,6 @@ import { getSourceCandidatesForStatus } from './sourceSelection';
 
 const log = createLogger('migrateCore');
 
-/**
- * 图片级并发上限。
- * 单张图内部多目标改为 Promise.allSettled 并行后，每图床的峰值并发数 = MAX_CONCURRENT（和目标数无关）。
- * 取 3 是「网络 I/O 为主 + compress_image CPU 峰值 + 多目标并行转换临时文件」的折中档位。
- */
-export const MAX_CONCURRENT = 3;
 const MAX_SOURCE_RETRY = 3;
 
 function cleanupMigrateTempFile(path: string): void {
@@ -285,46 +277,4 @@ export async function migrateOneItem(
   } else {
     markStatusFailed(status, failedDetails, 'upload');
   }
-}
-
-/**
- * 批量处理一页项目（MAX_CONCURRENT 并发）
- * 每条完成后调用 onItemDone 回调，让上层累计统计
- */
-export async function processBatch(
-  items: HistoryItem[],
-  batchStatuses: MigrateItemStatus[],
-  targets: string[],
-  config: UserConfig,
-  multiUploader: MultiServiceUploader,
-  isCancelled: Ref<boolean>,
-  isPaused: Ref<boolean>,
-  stats: Ref<MigrateStats>,
-  onItemDone: (status: MigrateItemStatus) => void,
-  onTargetSettled?: () => void,
-) {
-  const semaphore = new Semaphore(MAX_CONCURRENT);
-  const tasks = batchStatuses.map((status, i) => {
-    const item = items[i];
-    return semaphore.withPermit(async () => {
-      if (isCancelled.value) {
-        status.status = 'skipped';
-        status.skipReason = 'not-attempted';
-        onItemDone(status);
-        return;
-      }
-      // 暂停期间拿到 permit 的新条目：保持 pending，不计入统计，主循环 resume 后重新查询
-      if (isPaused.value) {
-        return;
-      }
-      try {
-        await migrateOneItem(item, status, targets, config, multiUploader, isCancelled, isPaused, stats, onTargetSettled);
-      } catch (e: unknown) {
-        markStatusFailed(status, [{ message: cleanMigrateError(undefined, extractErrorMessage(e)) }]);
-      } finally {
-        onItemDone(status);
-      }
-    });
-  });
-  await Promise.all(tasks);
 }

@@ -271,9 +271,6 @@ fn main() {
         .manage(commands::link_checker::BatchCheckPauseFlag(Arc::new(
             AtomicBool::new(false),
         )))
-        .manage(commands::md_scanner::MdScanCancelFlag(Arc::new(
-            AtomicBool::new(false),
-        )))
         .manage(ServerState {
             upload_config: Arc::new(TokioMutex::new(None)),
             auth_token: Arc::new(TokioMutex::new(None)),
@@ -343,7 +340,6 @@ fn main() {
             commands::image_compress::strip_exif_only,
             commands::image_compress::read_image_as_base64,
             commands::md_scanner::scan_md_folder,
-            commands::md_scanner::cancel_md_scan,
             commands::app_key::get_or_create_secure_key,
             commands::app_key::set_secure_key,
             commands::system::open_log_dir,

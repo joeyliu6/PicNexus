@@ -1,32 +1,11 @@
 /**
- * 批量迁移相关类型定义
+ * 补充备份（单张图迁移管线 migrateCore）的类型
  */
 
 /**
  * 跳过的原因：目标上本来就有 / 停止或中止时还没轮到 / 抢救模式下已不需要 / 处理前记录被删了
  */
 export type MigrateSkipReason = 'already-there' | 'not-attempted' | 'not-needed' | 'deleted';
-
-/** 迁移流程阶段：配置 → 执行 → 完成 */
-export type MigratePhase = 'configuring' | 'migrating' | 'done';
-
-/** 处理范围：所有缺失备份 / 仅处理仍有可用链接的可恢复图片 */
-export type MigrateScope = 'all-backups' | 'broken-with-valid-source';
-
-/** 筛选模式（高级筛选用） */
-export type FilterMode = 'all' | 'threshold';
-
-/** 目标图床配置 */
-export interface MigrateTargetService {
-  serviceId: string;
-  displayName: string;
-  isConfigured: boolean;
-  /** 不在该图床上的图片数（待迁移） */
-  pendingCount: number;
-  /** 已在该图床上的图片数（无需迁移） */
-  backedUpCount: number;
-  checked: boolean;
-}
 
 /**
  * 单次失败的技术细节
@@ -42,7 +21,7 @@ export interface MigrateFailureDetail {
   message: string;
 }
 
-/** 单项迁移实时状态（migrating 阶段 UI 绑定） */
+/** 单张图迁移的实时状态 */
 export interface MigrateItemStatus {
   historyId: string;
   fileName: string;
@@ -81,43 +60,7 @@ export interface MigrateItemStatus {
   problemServiceIds?: string[];
 }
 
-/** 失败项记录（done 态跨条目汇总用） */
-export interface MigrateFailureRecord {
-  /** 历史记录 ID，供单条重试 / 永久跳过定位使用 */
-  historyId: string;
-  fileName: string;
-  /** 易读错误摘要，与 MigrateItemStatus.error 同一字符串 */
-  error: string;
-  errorType?: 'download' | 'upload';
-  /** 结构化失败详情 */
-  details: MigrateFailureDetail[];
-  /** 是否为多目标迁移中的部分失败；条目本身已至少有一个目标成功 */
-  isPartial?: boolean;
-  /** 部分失败时需要重试的目标图床 */
-  failedTargets?: string[];
-}
-
-/** 迁移最终结果 */
-export interface MigrateResult {
-  successCount: number;
-  failedCount: number;
-  skippedCount: number;
-  failures: MigrateFailureRecord[];
-  /** 整体成功但部分目标失败的记录 */
-  partialFailures: Array<{ historyId: string; fileName: string; failedTargets: string[] }>;
-  /** 非正常结束原因 */
-  pauseReason?: 'consecutive-failures' | 'user-cancelled' | 'preload-error' | 'runtime-error';
-  /** 总耗时（毫秒） */
-  durationMs: number;
-  /** 平均速度（字节/秒） */
-  avgBytesPerSec: number;
-  /** 目标图床 ID 列表 */
-  targetServiceIds: string[];
-  /** 全量项快照，供终态展示和导出报告使用 */
-  itemsSnapshot: MigrateItemStatus[];
-}
-
-/** 迁移实时统计（三个统计卡用） */
+/** 迁移统计（下载字节数等） */
 export interface MigrateStats {
   startTime: number;
   elapsedMs: number;

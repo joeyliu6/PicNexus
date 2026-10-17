@@ -59,7 +59,7 @@ function create() {
   };
 
   const rows = refThrottled(linkCheck.checkRows, CHECKING_REBUILD_MS, true, true);
-  const running = computed(() => linkCheck.isChecking.value && linkCheck.progressSource.value === 'monitor');
+  const running = computed(() => linkCheck.isChecking.value);
   const images: ComputedRef<HealthImage[]> = computed(() =>
     buildHealthImages(rows.value, running.value ? linkCheck.activeRun.value ?? undefined : undefined));
   const summary: ComputedRef<HealthSummary> = computed(() => summarize(images.value));

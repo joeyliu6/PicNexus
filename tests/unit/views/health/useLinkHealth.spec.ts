@@ -28,7 +28,6 @@ function makeEngine(rows: LinkCheckRow[]) {
     checkRows,
     isChecking: ref(false),
     isPaused: ref(false),
-    progressSource: ref<'monitor' | null>(null),
     activeRun: shallowRef<{ keys: Set<string>; startedAt: number } | null>(null),
     progress: ref<BatchCheckProgress | null>(null),
     loaded: ref(true),
@@ -61,7 +60,7 @@ describe('useLinkHealth', () => {
     const e = makeEngine([row('a', 'weibo', gone)]);
     const health = useLinkHealth();
     e.isChecking.value = true;
-    e.progressSource.value = 'monitor';
+
     expect(health.state.value).toBe('checking');
     e.isPaused.value = true;
     expect(health.state.value).toBe('paused');
@@ -78,7 +77,7 @@ describe('useLinkHealth', () => {
     ];
     const e = makeEngine(rows);
     e.isChecking.value = true;
-    e.progressSource.value = 'monitor';
+
     e.activeRun.value = { keys: new Set(['a::weibo', 'b::weibo', 'c::jd']), startedAt: 100 };
     e.progress.value = { checked: 1, total: 3, current_url: '' };
     const health = useLinkHealth();

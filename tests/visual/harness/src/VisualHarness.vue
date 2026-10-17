@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, provide, ref } from 'vue';
 import ReloadBanner from '@/components/common/ReloadBanner.vue';
-import MdRescueInline from '@/components/views/link-check/MdRescueInline.vue';
-import MigrateSelectPhase from '@/components/views/link-check/migrate/MigrateSelectPhase.vue';
-import MigrateProgressPhase from '@/components/views/link-check/migrate/MigrateProgressPhase.vue';
-import { MIGRATE_KEY } from '@/components/views/link-check/migrate/keys';
-import HistoryCheckPanel from '@/components/views/link-check/HistoryCheckPanel.vue';
-import LinkCheckSkeleton from '@/components/views/link-check/history-check/LinkCheckSkeleton.vue';
 import GeneralSettingsPanel from '@/components/settings/GeneralSettingsPanel.vue';
 import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSection.vue';
 import DataItemCard from '@/components/settings/backup-sync/DataItemCard.vue';
@@ -17,14 +11,12 @@ import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
 import PnConfirmHost from '@/components/pn/PnConfirmHost.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useOnboarding } from '@/composables/useOnboarding';
-import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
-import type { CheckLinkResult, LinkCheckRow, BatchCheckProgress } from '@/types/linkCheck';
 import type { ProfileSyncRecord, ThemeMode, WebDAVConfig } from '@/config/types';
 import type { ServiceHealthStatus } from '@/types/serviceHealth';
 import type { ServiceCheckSession } from '@/types/serviceCheck';
 import type { LinkFormat } from '@/utils/linkFormatter';
 
-type VisualPage = 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings' | 'dialogs';
+type VisualPage = 'backup-sync' | 'settings' | 'dialogs';
 type VisualState = string;
 
 const params = new URLSearchParams(window.location.search);
@@ -33,19 +25,11 @@ const state = (params.get('state') || 'empty') as VisualState;
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 const isDark = state === 'dark-theme' || prefersDark;
 const rootClass = isDark ? 'dark-theme' : 'light-theme';
-const isLinkFeaturePage = computed(() => page === 'link-check' || page === 'markdown-repair' || page === 'batch-migrate');
 const isSettingsPage = computed(() => page === 'settings' || page === 'backup-sync');
 
 document.documentElement.classList.toggle('dark-theme', isDark);
 document.documentElement.classList.toggle('light-theme', !isDark);
 document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
-
-const migrateContext = createMigrateContext(state);
-provide(MIGRATE_KEY, migrateContext);
-
-if (page === 'markdown-repair') {
-  applyMarkdownRepairFixture(state);
-}
 
 /* ---- dialogs 页：集中覆盖不隶属于任何业务页面的独立弹窗 ---- */
 const showWechatQrDialog = ref(page === 'dialogs' && state === 'wechat-qr');
@@ -62,70 +46,6 @@ if (page === 'dialogs' && state in onboardingStepIndex) {
   onboarding.reopen();
   for (let i = 0; i < onboardingStepIndex[state]; i++) onboarding.nextStep();
 }
-
-function result(kind: 'valid' | 'invalid' | 'timeout' | 'hotlink'): CheckLinkResult {
-  if (kind === 'valid') return { link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false, response_time: 108 };
-  if (kind === 'timeout') return { link: '', is_valid: false, error_type: 'timeout', error: 'Timeout', browser_might_work: false, response_time: 10000 };
-  if (kind === 'hotlink') return { link: '', is_valid: false, status_code: 403, error_type: 'http_4xx', error: 'Forbidden', browser_might_work: true, response_time: 840 };
-  return { link: '', is_valid: false, status_code: 404, error_type: 'http_4xx', error: 'Not found', browser_might_work: false, response_time: 280 };
-}
-
-/** 三天前检查过：结论卡写「3天前检查」 */
-const CHECKED_AT = Date.now() - 3 * 86_400_000;
-
-function row(idx: number, serviceId: string, kind?: 'valid' | 'invalid' | 'timeout' | 'hotlink', primary = false): LinkCheckRow {
-  return {
-    historyId: `history-${idx}`,
-    serviceId,
-    url: `https://img.example/${idx}/${serviceId}.jpg`,
-    uploadedAt: 0,
-    rawUrl: `https://img.example/${idx}/${serviceId}.jpg`,
-    fileName: `gallery-shot-${idx.toString().padStart(2, '0')}.jpg`,
-    isPrimary: primary,
-    checkResult: kind ? result(kind) : undefined,
-    checkedAt: kind ? CHECKED_AT : undefined,
-  };
-}
-
-/**
- * 八张图覆盖每一类：能改用备份 / 打不开（超时）/ 找不回（404）/ 受限（防盗链）/ 备份失效 / 正常 / 没检查
- */
-function mixedLinkRows(): LinkCheckRow[] {
-  return [
-    row(1, 'jd', 'valid', true),
-    row(2, 'weibo', 'invalid', true),
-    row(2, 'jd', 'valid'),
-    row(3, 'r2', 'timeout', true),
-    row(4, 'github', 'hotlink', true),
-    row(5, 'smms', undefined, true),
-    row(6, 'zhihu', 'valid', true),
-    row(6, 'weibo', 'invalid'),
-    row(7, 'nami', 'invalid', true),
-    row(8, 'qiyu', undefined, true),
-  ];
-}
-
-const linkRows = computed<LinkCheckRow[]>(() => {
-  if (state === 'empty' || state === 'skeleton') return [];
-  if (state === 'never-checked') return mixedLinkRows().map((r) => ({ ...r, checkResult: undefined, checkedAt: undefined }));
-  if (state === 'all-clear') {
-    return [
-      row(1, 'jd', 'valid', true),
-      row(1, 'weibo', 'valid'),
-      row(2, 'r2', 'valid', true),
-      row(2, 'jd', 'valid'),
-      row(3, 'github', 'valid', true),
-    ];
-  }
-  const rows = mixedLinkRows();
-  if (state === 'recheck-result') {
-    rows[3].recheckLoading = true;
-    rows[1].recheckResult = result('valid');
-  }
-  return rows;
-});
-
-const progressValue = computed<BatchCheckProgress | null>(() => (state === 'running' || state === 'paused') ? { checked: 5, total: 10, current_url: 'https://img.example/5/smms.jpg' } : null);
 
 const passwordDialogStates = [
   'password-dialog',
@@ -285,49 +205,12 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
       <div class="visual-logo">PN</div>
       <div class="visual-nav"><i class="pi pi-cloud-upload"></i><span>Upload</span></div>
       <div class="visual-nav"><i class="pi pi-images"></i><span>History</span></div>
-      <div class="visual-nav" :class="{ active: isLinkFeaturePage }"><i class="pi pi-wrench"></i><span>Links</span></div>
+      <div class="visual-nav"><i class="pi pi-wrench"></i><span>Links</span></div>
       <div class="visual-nav" :class="{ active: isSettingsPage }"><i class="pi pi-cog"></i><span>Settings</span></div>
     </aside>
 
     <main class="visual-main">
-      <section
-        v-if="isLinkFeaturePage"
-        class="visual-page visual-linkcheck"
-        :class="{ 'visual-linkcheck--native': true }"
-      >
-        <div class="visual-tabs">
-          <span :class="{ active: page === 'link-check' }">链接检测</span>
-          <span :class="{ active: page === 'markdown-repair' }">文档修复</span>
-          <span :class="{ active: page === 'batch-migrate' }">补充备份</span>
-        </div>
-        <div v-if="page === 'markdown-repair'" class="visual-native-body">
-          <MdRescueInline />
-        </div>
-        <div v-else-if="page === 'batch-migrate'" class="visual-migrate-panel">
-          <MigrateSelectPhase
-            v-if="migrateContext.phase.value === 'configuring'"
-            @start="migrateContext.startMigrate"
-          />
-          <MigrateProgressPhase v-else />
-        </div>
-        <div v-else class="visual-native-body">
-          <LinkCheckSkeleton v-if="state === 'skeleton'" />
-          <HistoryCheckPanel
-            v-else
-            :check-rows="linkRows"
-            :is-checking="state === 'running' || state === 'paused'"
-            :is-paused="state === 'paused'"
-            :is-loading="false"
-            :load-error="null"
-            :is-phase2-loading="state === 'phase2-loading'"
-            :progress="progressValue"
-            progress-source="monitor"
-            :is-action-locked="false"
-          />
-        </div>
-      </section>
-
-      <section v-else-if="page === 'backup-sync'" class="visual-page visual-settings visual-backup-sync">
+      <section v-if="page === 'backup-sync'" class="visual-page visual-settings visual-backup-sync">
         <div class="settings-layout visual-settings-layout">
           <div class="settings-sidebar">
             <div class="sidebar-title">Settings</div>

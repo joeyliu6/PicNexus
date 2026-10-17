@@ -1,18 +1,3 @@
-export const SEVERITY: Record<string, number> = {
-  http_4xx: 0,
-  http_5xx: 1,
-  network: 2,
-  // 被本机出站策略拦下，与 network 同权重（漏了这条会被 ?? SEVERITY.success 兜底，
-  // 把被拦链接按"成功"权重排到列表最底）
-  blocked: 2,
-  timeout: 3,
-  suspicious: 4,
-  // 3xx 跳转与 suspicious 同权重：都是「大概率还能看，但值得看一眼」
-  // （同样漏了会被 ?? SEVERITY.success 兜底，排到列表最底）
-  redirect: 4,
-  success: 5,
-};
-
 export interface CheckLinkResult {
   link: string;
   is_valid: boolean;
@@ -93,30 +78,4 @@ export interface LinkCheckRow {
   checkedAt?: number;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;
-  fadingOut?: boolean;
-}
-
-export interface MdImageLink {
-  originalText: string;
-  url: string;
-  altText: string;
-  lineNumber: number;
-  syntax: 'markdown' | 'html';
-  context?: 'normal' | 'blockquote' | 'table';
-  excluded?: boolean;
-  checkResult?: CheckLinkResult;
-  backupLinks?: MdBackupLink[];
-  selectedBackup?: string;
-}
-
-export interface MdBackupLink {
-  url: string;
-  serviceId: string;
-  checkResult?: CheckLinkResult;
-}
-
-export interface MdReplacement {
-  originalUrl: string;
-  newUrl: string;
-  lineNumber: number;
 }

@@ -280,9 +280,6 @@ export interface UserConfig {
   /** 编辑器兼容 Server（Typora/Obsidian 集成） */
   editorServer?: EditorServerConfig;
 
-  /** MD 文档救援图床优先级（serviceId 列表，空数组 = 不限） */
-  mdRescueHostPreference?: string[];
-
   /** 链接健康：文档文件夹与自动检测 */
   linkHealth?: LinkHealthConfig;
 }

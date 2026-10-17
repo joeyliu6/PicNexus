@@ -22,7 +22,7 @@ async function fresh() {
   return (await import('@/views/health/useDocFolders')).useDocFolders();
 }
 
-const scanResult = (files: Array<{ filePath: string }>) => ({ files: files.map((f) => ({ ...f, fileName: 'a.md', links: [] })), cancelled: false });
+const scanResult = (files: Array<{ filePath: string }>) => ({ files: files.map((f) => ({ ...f, fileName: 'a.md', links: [] }))});
 
 describe('useDocFolders', () => {
   beforeEach(() => {

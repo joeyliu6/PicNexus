@@ -70,7 +70,7 @@ export function getDefaultMigrateSource(
   return defaultMigrateSources(item, preferredServiceIds)[0] ?? null;
 }
 
-export function getRecoverableLinkInfo(
+function getRecoverableLinkInfo(
   item: HistoryItem,
   preferredServiceIds: string[] = [],
 ): RecoverableLinkInfo | null {

@@ -73,6 +73,17 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+function liteRow(id: string) {
+  return {
+    id,
+    timestamp: 1_700_000_000_000,
+    local_file_name: `${id}.jpg`,
+    primary_service: 'r2',
+    results: JSON.stringify([{ serviceId: 'r2', status: 'success', result: { serviceId: 'r2', fileKey: id, url: `https://r2.example/${id}.jpg` } }]),
+    link_check_status: null,
+  };
+}
+
 // ─── 工具：每个 case 重置模块拿到干净的单例状态 ─────────────────
 
 async function freshManager() {
@@ -184,44 +195,6 @@ describe('useLinkCheckManager 响应 history-deleted', () => {
     expect(manager.checkRows.value).toHaveLength(1);
   });
 
-  it('正在播放删除动画的行保留，交给 removeRowsByKeys 收尾', async () => {
-    // 本视图自己删的行会先 setFadingOutRows(380ms) 再 removeRowsByKeys；
-    // 事件抢先摘掉会让淡出动画直接跳帧
-    const { manager, emitCacheEvent } = await freshManagerWithCacheEvents();
-    manager.checkRows.value = [
-      makeRow({ historyId: 'h1', serviceId: 'r2' }),
-      makeRow({ historyId: 'h2', serviceId: 'r2' }),
-    ];
-    manager.setFadingOutRows([{ historyId: 'h1', serviceId: 'r2' }], true);
-
-    emitCacheEvent({ type: 'history-deleted', timestamp: 1, data: { ids: ['h1', 'h2'] } });
-
-    expect(manager.checkRows.value).toHaveLength(1);
-    expect(manager.checkRows.value[0].historyId).toBe('h1');
-
-    manager.removeRowsByKeys([{ historyId: 'h1', serviceId: 'r2' }]);
-    expect(manager.checkRows.value).toHaveLength(0);
-  });
-});
-
-describe('useLinkCheckManager.removeRowsByKeys', () => {
-  it('精准按 (historyId, serviceId) 删除，同 historyId 其他图床保留', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [
-      makeRow({ historyId: 'h1', serviceId: 'r2' }),
-      makeRow({ historyId: 'h1', serviceId: 'smms' }),
-    ];
-    m.removeRowsByKeys([{ historyId: 'h1', serviceId: 'r2' }]);
-    expect(m.checkRows.value).toHaveLength(1);
-    expect(m.checkRows.value[0].serviceId).toBe('smms');
-  });
-
-  it('空数组时 checkRows 不变', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [makeRow()];
-    m.removeRowsByKeys([]);
-    expect(m.checkRows.value).toHaveLength(1);
-  });
 });
 
 describe('useLinkCheckManager.setPrimaryServices', () => {
@@ -257,12 +230,13 @@ describe('useLinkCheckManager.recheckSingle', () => {
     vi.useFakeTimers();
     try {
       const m = await freshManager();
-      m.checkRows.value = [makeRow({
-        historyId: 'h1',
-        serviceId: 'r2',
-        checkResult: { link: '', is_valid: false, status_code: 404, error_type: 'http_4xx', browser_might_work: false },
-      })];
-      m.removeRowsByKeys([{ historyId: 'none', serviceId: 'none' }]);
+      // 走真实的读取流程把这一行（上次查出 404）读进来，行索引才会建好
+      historyDBStreamMock.mockImplementationOnce(async function* () {
+        yield [{ ...liteRow('h1'), link_check_status: JSON.stringify({ r2: { isValid: false, statusCode: 404, errorType: 'http_4xx', lastCheckTime: 1 } }) }];
+      });
+      const loading = m.loadHistoryRows();
+      await vi.advanceTimersByTimeAsync(1);
+      await loading;
       invokeMock.mockResolvedValueOnce({ link: '', is_valid: true, status_code: 200, error_type: 'success', browser_might_work: false });
 
       const pending = m.recheckSingle(m.checkRows.value[0]);
@@ -283,101 +257,6 @@ describe('useLinkCheckManager.recheckSingle', () => {
   });
 });
 
-describe('useLinkCheckManager.setFadingOutRows', () => {
-  it('对匹配的 (historyId, serviceId) 设置 fadingOut=true', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [
-      makeRow({ historyId: 'h1', serviceId: 'r2' }),
-      makeRow({ historyId: 'h1', serviceId: 'smms' }),
-    ];
-    m.setFadingOutRows([{ historyId: 'h1', serviceId: 'r2' }], true);
-    expect(m.checkRows.value[0].fadingOut).toBe(true);
-    expect(m.checkRows.value[1].fadingOut).toBeUndefined();
-  });
-
-  it('空 keys 时不修改任何行', async () => {
-    const m = await freshManager();
-    m.checkRows.value = [makeRow()];
-    m.setFadingOutRows([], true);
-    expect(m.checkRows.value[0].fadingOut).toBeUndefined();
-  });
-});
-
-// ─── 并发守护 ──────────────────────────────────────────────────
-
-describe('useLinkCheckManager.checkUrls', () => {
-  it('空 items 立即返回 null（不调用 invoke）', async () => {
-    const m = await freshManager();
-    const result = await m.checkUrls([]);
-    expect(result).toBeNull();
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it('isChecking=true 时阻断并提示 toast.warn', async () => {
-    const m = await freshManager();
-    m.isChecking.value = true;
-    const result = await m.checkUrls([
-      { url: 'https://x.com/1.jpg', history_id: 'h1', service_id: 'r2' },
-    ]);
-    expect(result).toBeNull();
-    expect(toastWarnMock).toHaveBeenCalled();
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it('正常调用 batch_check_links 并返回结果', async () => {
-    const m = await freshManager();
-    const fakeResult = {
-      results: [], total: 0, valid: 0, invalid: 0,
-      timeout: 0, suspicious: 0, elapsed_ms: 100, cancelled: false,
-    };
-    invokeMock.mockResolvedValueOnce(fakeResult);
-
-    const result = await m.checkUrls([
-      { url: 'https://x.com/1.jpg', history_id: 'h1', service_id: 'r2' },
-    ]);
-
-    expect(result).toEqual(fakeResult);
-    expect(invokeMock).toHaveBeenCalledWith('batch_check_links', expect.objectContaining({
-      request: expect.objectContaining({
-        links: expect.arrayContaining([expect.objectContaining({ url: 'https://x.com/1.jpg' })]),
-      }),
-    }));
-  });
-
-  // invoke 参数名 lint 只核对顶层键，request 里的 snake_case 嵌套键靠这条兜底：
-  // 漏传/写错 confirmed_http_hosts 的直接后果是已确认的 http 主机名图床被误判「策略拦截」
-  it('把已确认明文 HTTP 主机名随请求传给 Rust', async () => {
-    loadConfigMock.mockResolvedValue({
-      webdav_profiles: [
-        { lanHttpConfirmed: true, publicDomain: 'http://nas.local:5244' },
-      ],
-    });
-    const m = await freshManager();
-    invokeMock.mockResolvedValueOnce({
-      results: [], total: 0, valid: 0, invalid: 0,
-      timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
-    });
-
-    await m.checkUrls([{ url: 'http://nas.local:5244/1.jpg', history_id: 'h1', service_id: 'webdav' }]);
-
-    expect(invokeMock).toHaveBeenCalledWith('batch_check_links', expect.objectContaining({
-      request: expect.objectContaining({
-        confirmed_http_hosts: ['nas.local'],
-      }),
-    }));
-  });
-
-  it('完成后释放 isChecking 锁（finally 分支）', async () => {
-    const m = await freshManager();
-    invokeMock.mockResolvedValueOnce({
-      results: [], total: 0, valid: 0, invalid: 0,
-      timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
-    });
-    await m.checkUrls([{ url: 'https://x.com/1.jpg', history_id: 'h1', service_id: 'r2' }]);
-    expect(m.isChecking.value).toBe(false);
-  });
-});
-
 describe('useLinkCheckManager.cancelCheck', () => {
   it('isChecking=false 时直接返回，不调用 cancel_batch_check', async () => {
     const m = await freshManager();
@@ -392,7 +271,7 @@ describe('useLinkCheckManager.cancelCheck', () => {
     await m.cancelCheck();
     expect(invokeMock).toHaveBeenCalledWith('cancel_batch_check');
     expect(m.isChecking.value).toBe(false);
-    expect(m.progressSource.value).toBeNull();
+    expect(m.activeRun.value).toBeNull();
   });
 });
 
@@ -405,30 +284,19 @@ describe('useLinkCheckManager.checkAllHistoryLinks', () => {
     expect(toastWarnMock).toHaveBeenCalled();
   });
 
-  it('历史数据加载失败时暴露 loadError 并提示用户', async () => {
+  it('历史数据加载失败时提示用户，且不算读完', async () => {
     const m = await freshManager();
     historyDBOpenMock.mockRejectedValueOnce(new Error('database unavailable'));
 
     await m.loadHistoryRows();
 
-    expect(m.loadError.value).toBe('database unavailable');
+    expect(m.loaded.value).toBe(false);
     expect(toastErrorMock).toHaveBeenCalledWith('加载历史检测数据失败', 'database unavailable');
     expect(m.isLoading.value).toBe(false);
   });
 });
 
 describe('useLinkCheckManager.loadHistoryRows', () => {
-  function liteRow(id: string) {
-    return {
-      id,
-      timestamp: 1_700_000_000_000,
-      local_file_name: `${id}.jpg`,
-      primary_service: 'r2',
-      results: JSON.stringify([{ serviceId: 'r2', status: 'success', result: { serviceId: 'r2', fileKey: id, url: `https://r2.example/${id}.jpg` } }]),
-      link_check_status: null,
-    };
-  }
-
   // 链接健康的总数、日历都要全量：读到一半就交出去，状态栏会先闪错的张数
   it('读完全部批次才一次交出，期间不出现半截的行', async () => {
     let releaseSecond!: () => void;
@@ -541,9 +409,9 @@ describe('useLinkCheckManager.checkSubset', () => {
     });
     vi.spyOn(Date, 'now').mockReturnValue(4242);
 
-    m.checkRows.value = [makeRow({ historyId: 'h1', serviceId: 'r2' })];
-    // 行索引只在整表替换的入口重建（真实流程走 loadHistoryRows）；这里直接赋值，借一次空删除让它重建
-    m.removeRowsByKeys([{ historyId: 'none', serviceId: 'none' }]);
+    // 行索引只在整表替换的入口重建：走真实的读取流程把这一行读进来
+    historyDBStreamMock.mockImplementationOnce(async function* () { yield [liteRow('h1')]; });
+    await m.loadHistoryRows();
     const row = m.checkRows.value[0];
     const itemResult = {
       link: row.url, history_id: 'h1', service_id: 'r2',

@@ -8,7 +8,6 @@
 /* eslint-disable max-lines -- central database facade intentionally groups delegated query APIs */
 import type Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '@/config/types';
-import type { MigrateScope } from '@/types/batchMigrate';
 import type { ImageMeta } from '@/types/image-meta';
 import { extractMirrorServices } from '@/types/image-meta';
 import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
@@ -31,14 +30,7 @@ import {
   getLinkCheckContextByIdsQuery,
 } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
-import {
-  getItemsByBackupCountQuery,
-  getBackupCountStatsQuery,
-  getServiceDistributionQuery,
-  getItemsByIdsQuery,
-  setMigrationSkipQuery,
-  type ServiceDistributionMode,
-} from './MigrationQuery';
+import { getItemsByIdsQuery } from './MigrationQuery';
 import {
   getDayStatsQuery,
   getItemsByDayRangeQuery,
@@ -633,44 +625,8 @@ class HistoryDatabase {
     return rows;
   }
 
-  // ============================================
-  // 批量迁移查询（委托 MigrationQuery）
-  // ============================================
-
-  async getItemsByBackupCount(options: {
-    maxSuccessCount: number;
-    serviceFilter?: string;
-    hasServiceId?: string | string[];
-    timestampAfter?: number;
-    cursorTimestamp?: number;
-    cursorId?: string;
-    limit?: number;
-    offset?: number;
-    scope?: MigrateScope;
-  }): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {
-    const db = await this.connection.getDb();
-    return getItemsByBackupCountQuery(db, options);
-  }
-
-  async getBackupCountStats(): Promise<{ count1: number; count2: number; countAll: number }> {
-    const db = await this.connection.getDb();
-    return getBackupCountStatsQuery(db);
-  }
-
-  async getServiceDistribution(options: {
-    maxSuccessCount: number;
-    serviceFilter?: string;
-    hasServiceId?: string | string[];
-    timestampAfter?: number;
-    scope?: MigrateScope;
-    distribution?: ServiceDistributionMode;
-  }): Promise<Map<string, number>> {
-    const db = await this.connection.getDb();
-    return getServiceDistributionQuery(db, options);
-  }
-
+  /** 按 ID 批量取记录，保持输入顺序（委托 MigrationQuery） */
   async getItemsByIds(ids: string[]): Promise<HistoryItem[]> { return getItemsByIdsQuery(await this.connection.getDb(), ids); }
-  async setMigrationSkip(id: string, skip: boolean): Promise<void> { await setMigrationSkipQuery(await this.connection.getDb(), id, skip); }
 
   /**
    * 获取所有时间段的统计信息（轻量级查询）

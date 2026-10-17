@@ -64,7 +64,6 @@ export function createLinkCheckRow(overrides: Partial<LinkCheckRow> = {}): LinkC
     checkedAt: overrides.checkedAt,
     recheckResult: overrides.recheckResult,
     recheckLoading: overrides.recheckLoading,
-    fadingOut: overrides.fadingOut,
   };
 }
 

@@ -7,7 +7,7 @@
 import { copyFile, mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { basename, dirname, join } from '@tauri-apps/api/path';
 import pLimit from 'p-limit';
-import { NonUtf8FileError, readUtf8TextFile, writeUtf8TextFile } from '@/composables/md-rescue/mdTextIo';
+import { NonUtf8FileError, readUtf8TextFile, writeUtf8TextFile } from './mdTextIo';
 import { formatTimestampCompact } from '@/utils/formatters';
 import { createLogger } from '@/utils/logger';
 import { replaceImageLinks } from '@/utils/mdParser';

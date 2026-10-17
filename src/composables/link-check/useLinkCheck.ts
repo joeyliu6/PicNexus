@@ -6,7 +6,6 @@ import { ref, shallowRef, type Ref } from 'vue';
 import { createRafScheduler } from '@/utils/rafScheduler';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { HistoryItem } from '@/config/types';
 import { useConfigManager } from '@/composables/useConfig';
 import { historyDB } from '@/services/database';
 import { useToast } from '@/composables/useToast';
@@ -26,10 +25,7 @@ import {
   restoreCheckStatus,
   applyResultsToRows,
 } from './linkCheckDataBuilder';
-import {
-  updateHistoryCheckStatus,
-  exportCsv,
-} from './linkCheckPersistence';
+import { updateHistoryCheckStatus } from './linkCheckPersistence';
 import { onCacheEvent, type HistoryEventData } from '@/events/cacheEvents';
 import { getConfirmedHttpHosts } from '@/security/networkPolicy';
 
@@ -43,13 +39,9 @@ const isChecking = ref(false);
 const isPaused = ref(false);
 const isLoading = ref(false);
 const loadError = ref<string | null>(null);
-/** 旧链接检测页的两段式加载标志；读取已改成一次读完，恒为 false（旧页面删除时一起删） */
-const isPhase2Loading = ref(false);
 /** 至少完整读过一次（之后的重读期间仍保留上一次的行） */
 const loaded = ref(false);
 const progress: Ref<BatchCheckProgress | null> = ref(null);
-/** 进度来源标识：区分是链接检测还是文档修复在跑，防止 UI 串扰 */
-const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
 const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
 /**
  * 正在跑的这一轮：覆盖哪些行、什么时候开始。链接健康据此把本轮还没查到的旧结果先当作待查
@@ -93,16 +85,11 @@ function rebuildRowIndex(): void {
   );
 }
 
-/**
- * 按 historyId 移除 checkRows 中的行（整条历史记录被删后调用）
- *
- * 正在播放删除动画（`fadingOut`）的行会被保留：那是本视图自己发起的删除，
- * 380ms 淡出结束后由 `removeRowsByKeys` 收尾。这里抢先摘掉会让过渡直接跳帧。
- */
+/** 按 historyId 移除 checkRows 中的行（整条历史记录被删后调用） */
 function removeRowsByHistoryIds(ids: string[]): void {
   if (ids.length === 0) return;
   const idSet = new Set(ids);
-  const next = checkRows.value.filter((r) => !idSet.has(r.historyId) || r.fadingOut === true);
+  const next = checkRows.value.filter((r) => !idSet.has(r.historyId));
   if (next.length === checkRows.value.length) return;
   checkRows.value = next;
   rebuildRowIndex();
@@ -120,7 +107,6 @@ interface RowStateSnapshot {
   checkedAt?: number;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;
-  fadingOut?: boolean;
 }
 
 function errorMessage(error: unknown): string {
@@ -142,9 +128,9 @@ const DEFAULT_CHECK_PARAMS = {
   timeout_secs: 10,
 } as const;
 
-function createClientBatchId(source: 'monitor' | 'rescue'): string {
+function createClientBatchId(): string {
   nextClientBatchSeq += 1;
-  return `${source}-${Date.now()}-${nextClientBatchSeq}`;
+  return `monitor-${Date.now()}-${nextClientBatchSeq}`;
 }
 
 function isProgressForBatch(payload: BatchCheckProgress, batchId: string): boolean {
@@ -202,7 +188,6 @@ export function useLinkCheckManager() {
   /** 重置检测状态 */
   function resetCheckState(): void {
     progress.value = null;
-    progressSource.value = null;
   }
 
   /**
@@ -229,7 +214,6 @@ export function useLinkCheckManager() {
         checkedAt: row.checkedAt,
         recheckResult: cloneResult(row.recheckResult),
         recheckLoading: row.recheckLoading,
-        fadingOut: row.fadingOut,
       },
     ]));
   }
@@ -244,7 +228,6 @@ export function useLinkCheckManager() {
       row.checkedAt = saved.checkedAt;
       row.recheckResult = cloneResult(saved.recheckResult);
       row.recheckLoading = saved.recheckLoading;
-      row.fadingOut = saved.fadingOut;
       return row;
     });
     rebuildRowIndex();
@@ -293,22 +276,12 @@ export function useLinkCheckManager() {
     if (checkSessionId === session) {
       isChecking.value = false;
       isPaused.value = false;
-      progressSource.value = null;
       activeRun.value = null;
       clearProgressListener();
     }
     // 同帧合并的 mutation 强制落地：避免最后一批结果还在 rAF 队列里就被
     // 后续 checkRows 重赋值（applyResultsToRows）覆盖
     checkRowsRefreshScheduler.flush();
-  }
-
-  /** async 包装，兼容原有调用 */
-  async function buildCheckItems(items: HistoryItem[]): Promise<{
-    requestItems: BatchCheckRequestItem[];
-    rows: LinkCheckRow[];
-  }> {
-    const config = await loadConfig();
-    return buildCheckItemsSync(items, config);
   }
 
   /** 让出主线程，防止长任务阻塞 UI 渲染 */
@@ -381,11 +354,10 @@ export function useLinkCheckManager() {
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
     const myClearedGeneration = historyClearedGeneration;
-    const myBatchId = createClientBatchId('monitor');
+    const myBatchId = createClientBatchId();
     isChecking.value = true;
     isPaused.value = false;
     resetCheckState();
-    progressSource.value = 'monitor';
 
     try {
       // 先确保读到了全部记录
@@ -482,59 +454,6 @@ export function useLinkCheckManager() {
   }
 
   /**
-   * 检测指定的 URL 列表（用于 MD 救援等）
-   */
-  async function checkUrls(
-    items: BatchCheckRequestItem[],
-    onProgress?: (prog: BatchCheckProgress) => void,
-    source: 'monitor' | 'rescue' = 'rescue',
-  ): Promise<BatchCheckResult | null> {
-    if (items.length === 0) return null;
-
-    // 阻断并发：Rust 侧 cancel_flag + 前端 progressUnlisten 均为全局单例，
-    // 同时跑多个批次会相互取消/覆盖监听器
-    if (isChecking.value) {
-      toast.warn('检测进行中', '请等待当前检测完成后再试');
-      return null;
-    }
-
-    isChecking.value = true;
-    isPaused.value = false;
-    progressSource.value = source;
-    progress.value = null;
-    const myBatchId = createClientBatchId(source);
-
-    // 监听进度（先清理旧监听器，防止累积泄漏）
-    clearProgressListener();
-    progressUnlisten = await listen<BatchCheckProgress>(
-      'link-check://progress',
-      (event) => {
-        if (!isProgressForBatch(event.payload, myBatchId)) return;
-        progress.value = event.payload;
-        onProgress?.(event.payload);
-      },
-    );
-
-    try {
-      const result = await invoke<BatchCheckResult>('batch_check_links', {
-        request: {
-          links: items,
-          batch_id: myBatchId,
-          confirmed_http_hosts: await loadConfirmedHttpHosts(),
-          ...DEFAULT_CHECK_PARAMS,
-        },
-      });
-
-      return isResultForBatch(result, myBatchId) ? result : null;
-    } finally {
-      isChecking.value = false;
-      isPaused.value = false;
-      progressSource.value = null;
-      clearProgressListener();
-    }
-  }
-
-  /**
    * 取消正在进行的检测
    */
   async function cancelCheck(): Promise<void> {
@@ -544,7 +463,6 @@ export function useLinkCheckManager() {
       ++checkSessionId; // 使旧 finally 失效
       isChecking.value = false;
       isPaused.value = false;
-      progressSource.value = null;
       activeRun.value = null;
       clearProgressListener();
       checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
@@ -618,10 +536,9 @@ export function useLinkCheckManager() {
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
     const myClearedGeneration = historyClearedGeneration;
-    const myBatchId = createClientBatchId('monitor');
+    const myBatchId = createClientBatchId();
     isChecking.value = true;
     isPaused.value = false;
-    progressSource.value = 'monitor';
     progress.value = null;
     latestStartedBatchKeys = new Set(filtered.map(linkCheckRowKey));
     activeRun.value = { keys: latestStartedBatchKeys, startedAt: Date.now() };
@@ -813,35 +730,6 @@ export function useLinkCheckManager() {
   }
 
   /**
-   * 按 (historyId, serviceId) 键精准移除 checkRows 中的行
-   * 用于链接检测"仅删除单条图床链接"的场景：同一 historyId 下其他图床的行应保留
-   */
-  function removeRowsByKeys(keys: Array<{ historyId: string; serviceId: string }>): void {
-    if (keys.length === 0) return;
-    const keySet = new Set(keys.map((k) => `${k.historyId}::${k.serviceId}`));
-    checkRows.value = checkRows.value.filter((r) => !keySet.has(`${r.historyId}::${r.serviceId}`));
-    rebuildRowIndex();
-  }
-
-  /**
-   * 按 (historyId, serviceId) 键设置指定行的 fadingOut 状态
-   */
-  function setFadingOutRows(
-    keys: Array<{ historyId: string; serviceId: string }>,
-    value: boolean,
-  ): void {
-    if (keys.length === 0) return;
-    const keySet = new Set(keys.map((k) => `${k.historyId}::${k.serviceId}`));
-    const rows = [...checkRows.value];
-    for (const row of rows) {
-      if (keySet.has(`${row.historyId}::${row.serviceId}`)) {
-        row.fadingOut = value;
-      }
-    }
-    checkRows.value = rows;
-  }
-
-  /**
    * 主图床已在库里切换后，同步行上的「主链接」标记（不重新加载整表）
    *
    * 一次收一批（historyId → 新主图床）：「把 N 张改用备份」只遍历整表一遍。
@@ -893,27 +781,19 @@ export function useLinkCheckManager() {
     isChecking,
     isPaused,
     isLoading,
-    isPhase2Loading,
     loaded,
     progress,
-    progressSource,
     checkRows,
     activeRun,
     // 方法
     loadHistoryRows,
-    loadError,
     checkAllHistoryLinks,
     checkSubset,
     recheckSingle,
-    checkUrls,
     cancelCheck,
     pauseCheck,
     resumeCheck,
-    exportCsv,
-    buildCheckItems,
     removeRowsByHistoryIds,
-    removeRowsByKeys,
-    setFadingOutRows,
     setPrimaryServices,
     onViewActivated,
     onViewDeactivated,

@@ -8,10 +8,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::sync::LazyLock;
-use tauri::Emitter;
 
 /// 递归深度上限。Windows MAX_PATH 260 字符，深度超过这个量级基本是循环或恶意构造。
 const MAX_SCAN_DEPTH: usize = 64;
@@ -60,24 +57,6 @@ pub struct MdFileResult {
     pub links: Vec<MdImageLink>,
 }
 
-/// 进度事件
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScanProgress {
-    /// "scanning" | "reading"
-    pub phase: String,
-    /// 已发现的 MD 文件数
-    pub scanned_files: usize,
-    /// 已读取完的文件数
-    pub processed_files: usize,
-    /// 总文件数（reading 阶段有值）
-    pub total_files: usize,
-    /// 已提取的链接数
-    pub found_links: usize,
-    /// 当前处理的文件名（用于 UI 展示）
-    pub current_file: String,
-}
-
 /// 最终返回
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -86,15 +65,11 @@ pub struct ScanResult {
     pub total_files: usize,
     pub total_links: usize,
     pub elapsed_ms: u64,
-    pub cancelled: bool,
     /// 因权限不足等原因跳过的目录列表
     pub skipped_dirs: Vec<String>,
     /// 已发现但读取失败的 Markdown 文件
     pub read_failed_files: Vec<String>,
 }
-
-/// 取消标志
-pub struct MdScanCancelFlag(pub Arc<AtomicBool>);
 
 /// MD 文件扩展名
 const MD_EXTENSIONS: &[&str] = &[".md", ".markdown"];
@@ -150,16 +125,11 @@ fn strip_verbatim_prefix(path: &Path) -> PathBuf {
 fn scan_md_files(
     dir: &Path,
     include_subfolders: bool,
-    cancel: &AtomicBool,
     results: &mut Vec<String>,
     skipped_dirs: &mut Vec<String>,
     visited: &mut HashSet<PathBuf>,
     depth: usize,
 ) {
-    if cancel.load(Ordering::Relaxed) {
-        return;
-    }
-
     if depth > MAX_SCAN_DEPTH {
         log::warn!("[MdScanner] 超过最大递归深度，跳过: {:?}", dir);
         skipped_dirs.push(dir.to_string_lossy().into_owned());
@@ -178,9 +148,6 @@ fn scan_md_files(
     let mut sub_dirs = Vec::new();
 
     for entry in entries.flatten() {
-        if cancel.load(Ordering::Relaxed) {
-            return;
-        }
         let path = entry.path();
         if path.is_dir() && include_subfolders {
             // 跳过自己建的备份目录：否则下一轮扫描会把"修复前的原件"当正常文档再修一遍，
@@ -216,7 +183,6 @@ fn scan_md_files(
         scan_md_files(
             &sub,
             include_subfolders,
-            cancel,
             results,
             skipped_dirs,
             visited,
@@ -240,7 +206,6 @@ fn detect_context(line: &str) -> &'static str {
 /// 明确"不是图片"的文件扩展名黑名单（小写，不带点）
 /// 用于过滤徽章/代理服务 URL 中嵌套的 .js/.css 等资源路径被误识为图片
 /// 未列出的扩展名（包括图床 ID 无扩展 URL）一律放行
-/// 必须与 JS 侧 `src/utils/mdParser.ts` 的 NON_IMAGE_EXTENSIONS 保持一致
 const NON_IMAGE_EXTENSIONS: &[&str] = &[
     // 脚本/样式/源码
     "js", "mjs", "cjs", "ts", "tsx", "jsx", "css", "scss", "sass", "less",
@@ -520,18 +485,14 @@ fn extract_image_links(content: &str, include_code_blocks: bool) -> Vec<MdImageL
     results
 }
 
-/// 主命令：单次 IPC 完成目录扫描 + 文件读取 + 链接提取
+/// 主命令：单次 IPC 完成目录扫描 + 文件读取 + 链接提取（链接健康的文档文件夹）
 #[tauri::command]
 pub async fn scan_md_folder(
-    window: tauri::Window,
     dir: String,
     include_subfolders: bool,
     include_code_blocks: bool,
-    cancel_flag: tauri::State<'_, MdScanCancelFlag>,
 ) -> Result<ScanResult, AppError> {
     let start = std::time::Instant::now();
-    let cancel = cancel_flag.0.clone();
-    cancel.store(false, Ordering::SeqCst);
 
     // 路径安全校验：规范化 + 确认是目录
     let canonical = std::fs::canonicalize(&dir)
@@ -544,9 +505,7 @@ pub async fn scan_md_folder(
     // 走查用剥掉 verbatim 前缀的根：子文件路径都由这个根拼出来，
     // 一处剥离即可让所有返回给前端的路径与文件选择对话框的形态一致
     let dir_clone = strip_verbatim_prefix(&canonical).to_string_lossy().to_string();
-    let cancel_clone = cancel.clone();
-    let window_clone = window.clone();
-    let scan_result = tokio::task::spawn_blocking(move || {
+    let (md_paths, skipped_dirs) = tokio::task::spawn_blocking(move || {
         let mut paths = Vec::new();
         let mut skipped = Vec::new();
         let mut visited: HashSet<PathBuf> = HashSet::new();
@@ -556,60 +515,25 @@ pub async fn scan_md_folder(
         scan_md_files(
             Path::new(&dir_clone),
             include_subfolders,
-            &cancel_clone,
             &mut paths,
             &mut skipped,
             &mut visited,
             0,
         );
-
-        // 发送扫描完成进度
-        let _ = window_clone.emit(
-            "md-scan://progress",
-            ScanProgress {
-                phase: "scanning".to_string(),
-                scanned_files: paths.len(),
-                processed_files: 0,
-                total_files: 0,
-                found_links: 0,
-                current_file: String::new(),
-            },
-        );
-
         (paths, skipped)
     })
     .await
     .map_err(|e| AppError::file_io(format!("扫描线程异常: {}", e)))?;
 
-    let (md_paths, skipped_dirs) = scan_result;
-
-    if cancel.load(Ordering::SeqCst) || md_paths.is_empty() {
-        return Ok(ScanResult {
-            files: vec![],
-            total_files: md_paths.len(),
-            total_links: 0,
-            elapsed_ms: start.elapsed().as_millis() as u64,
-            cancelled: cancel.load(Ordering::SeqCst),
-            skipped_dirs,
-            read_failed_files: vec![],
-        });
-    }
-
     let total_files = md_paths.len();
 
     // 阶段 2：批量读取 + 链接提取（在 blocking 线程中执行）
-    let cancel_clone = cancel.clone();
-    let window_clone = window.clone();
-    let files = tokio::task::spawn_blocking(move || {
+    let (files, total_links, read_failed_files) = tokio::task::spawn_blocking(move || {
         let mut results: Vec<MdFileResult> = Vec::new();
         let mut total_links = 0usize;
         let mut read_failed_files = Vec::new();
 
-        for (idx, path_str) in md_paths.iter().enumerate() {
-            if cancel_clone.load(Ordering::Relaxed) {
-                break;
-            }
-
+        for path_str in &md_paths {
             let file_name = Path::new(path_str)
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -622,7 +546,7 @@ pub async fn scan_md_folder(
                     total_links += links.len();
                     results.push(MdFileResult {
                         file_path: path_str.clone(),
-                        file_name: file_name.clone(),
+                        file_name,
                         links,
                     });
                 }
@@ -631,21 +555,6 @@ pub async fn scan_md_folder(
                     read_failed_files.push(path_str.clone());
                 }
             }
-
-            // 每 5 个文件或最后一个文件发送进度
-            if (idx + 1) % 5 == 0 || idx + 1 == total_files {
-                let _ = window_clone.emit(
-                    "md-scan://progress",
-                    ScanProgress {
-                        phase: "reading".to_string(),
-                        scanned_files: total_files,
-                        processed_files: idx + 1,
-                        total_files,
-                        found_links: total_links,
-                        current_file: file_name,
-                    },
-                );
-            }
         }
 
         (results, total_links, read_failed_files)
@@ -653,37 +562,22 @@ pub async fn scan_md_folder(
     .await
     .map_err(|e| AppError::file_io(format!("读取线程异常: {}", e)))?;
 
-    let (read_files, total_links, read_failed_files) = files;
-    let cancelled = cancel.load(Ordering::SeqCst);
     let elapsed_ms = start.elapsed().as_millis() as u64;
-
     log::info!(
-        "[MdScanner] 完成: {} 文件, {} 链接, {}ms, 取消={}",
-        read_files.len(),
+        "[MdScanner] 完成: {} 文件, {} 链接, {}ms",
+        files.len(),
         total_links,
         elapsed_ms,
-        cancelled,
     );
 
     Ok(ScanResult {
         total_files,
         total_links,
-        files: read_files,
+        files,
         elapsed_ms,
-        cancelled,
         skipped_dirs,
         read_failed_files,
     })
-}
-
-/// 取消扫描
-#[tauri::command]
-pub async fn cancel_md_scan(
-    cancel_flag: tauri::State<'_, MdScanCancelFlag>,
-) -> Result<(), AppError> {
-    log::info!("[MdScanner] 收到取消请求");
-    cancel_flag.0.store(true, Ordering::SeqCst);
-    Ok(())
 }
 
 // ==================== 单元测试 ====================
@@ -813,14 +707,12 @@ mod tests {
     }
 
     fn collect_scan(dir: &Path, include_subfolders: bool) -> Vec<String> {
-        let cancel = AtomicBool::new(false);
         let mut results = Vec::new();
         let mut skipped = Vec::new();
         let mut visited: HashSet<PathBuf> = HashSet::new();
         scan_md_files(
             dir,
             include_subfolders,
-            &cancel,
             &mut results,
             &mut skipped,
             &mut visited,
