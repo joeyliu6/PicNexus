@@ -2,10 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getInvokeMock, getListenMock, resetTauriMocks } from '../../helpers/tauriMock';
 
-const m = vi.hoisted(() => ({ on: false }));
+const m = vi.hoisted(() => ({ on: false, toastError: vi.fn() }));
 vi.mock('@/store/instances', () => ({
   readFreshConfig: vi.fn(async () => ({ appBehavior: { autoUpload: true, autoUploadClipboard: m.on } })),
 }));
+
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ error: m.toastError }) }));
 
 import { CLIPBOARD_IMAGE_EVENT, installClipboardWatch } from '@/composables/upload/clipboardWatch';
 
@@ -15,6 +17,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   resetTauriMocks();
+  m.toastError.mockReset();
   for (const key of Object.keys(handlers)) delete handlers[key];
   getListenMock().mockImplementation(async (event: string, handler: unknown) => {
     handlers[event] = handler as Handler;
@@ -46,6 +49,22 @@ describe('installClipboardWatch', () => {
     handlers['config-updated']();
     await flush();
     expect(getInvokeMock()).toHaveBeenLastCalledWith('set_clipboard_watch', { enabled: true });
+  });
+
+  it('打开后台监听失败：说明原因，下次配置变化时再试（不当作已经开着）', async () => {
+    m.on = true;
+    getInvokeMock().mockRejectedValueOnce(new Error('监听线程启动失败'));
+    const target = { pasteClipboard: vi.fn().mockResolvedValue(undefined) };
+    installClipboardWatch(target);
+    await flush();
+    expect(m.toastError).toHaveBeenCalledWith('未能开启自动上传剪贴板', expect.stringContaining('监听线程启动失败'));
+    handlers[CLIPBOARD_IMAGE_EVENT]();
+    expect(target.pasteClipboard).not.toHaveBeenCalled();
+
+    getInvokeMock().mockClear();
+    handlers['config-updated']();
+    await flush();
+    expect(getInvokeMock()).toHaveBeenCalledWith('set_clipboard_watch', { enabled: true });
   });
 
   it('卸载时关掉后台监听', async () => {

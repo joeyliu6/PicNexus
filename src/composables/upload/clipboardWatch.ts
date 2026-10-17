@@ -4,6 +4,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { readFreshConfig } from '@/store/instances';
+import { useToast } from '@/composables/useToast';
+import { getErrorMessage } from '@/types/errors';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ClipboardWatch');
@@ -21,19 +23,27 @@ export function installClipboardWatch(target: ClipboardWatchTarget): () => void 
   let disposed = false;
   const unlisteners: UnlistenFn[] = [];
 
+  // 后台真的切过去了才记下：失败时保持原值，下次配置变化再试
   async function sync(): Promise<void> {
     const config = await readFreshConfig();
     const next = config?.appBehavior?.autoUploadClipboard === true;
     if (next === enabled || disposed) return;
+    try {
+      await invoke('set_clipboard_watch', { enabled: next });
+    } catch (error) {
+      log.warn('切换自动上传剪贴板失败', error);
+      if (next) useToast().error('未能开启自动上传剪贴板', `${getErrorMessage(error) || '后台监听没有启动'}，请关闭后重新打开`);
+      return;
+    }
     enabled = next;
-    await invoke('set_clipboard_watch', { enabled: next });
   }
 
-  void sync().catch((error) => log.warn('开启自动上传剪贴板失败', error));
+  const resync = () => { void sync().catch((error) => log.warn('读取自动上传剪贴板设置失败', error)); };
+  resync();
   const keep = (promise: Promise<UnlistenFn>) => promise
     .then((unlisten) => { if (disposed) unlisten(); else unlisteners.push(unlisten); })
     .catch((error) => log.warn('监听失败', error));
-  keep(listen('config-updated', () => { void sync().catch((error) => log.warn('切换自动上传剪贴板失败', error)); }));
+  keep(listen('config-updated', resync));
   keep(listen(CLIPBOARD_IMAGE_EVENT, () => {
     if (!enabled) return;
     void target.pasteClipboard().catch((error) => log.warn('自动上传剪贴板失败', error));
