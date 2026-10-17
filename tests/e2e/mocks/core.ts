@@ -57,6 +57,12 @@ export async function invoke<T = unknown>(command: string, args?: unknown): Prom
       return false as T;
     case 'get_executable_path':
       return 'C:\\PicNexus\\PicNexus.exe' as T;
+    case 'get_cli_path_status':
+      return { supported: true, inPath: false, executableDir: 'C:\\PicNexus', commandName: 'picnexus', needsTerminalRestart: false } as T;
+    case 'check_editor_server_status':
+      return JSON.stringify({ app: 'PicNexus', ready: true }) as T;
+    case 'check_port_free':
+      return true as T;
     case 'encrypt_webdav_password':
       return 'encrypted-webdav-password' as T;
     case 'decrypt_webdav_password':

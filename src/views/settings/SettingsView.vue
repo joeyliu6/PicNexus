@@ -10,6 +10,7 @@ import WindowControls from '@/shell/WindowControls.vue';
 import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
 import { useAutoUpdate } from '@/composables/useAutoUpdate';
 import { createLogger } from '@/utils/logger';
+import EditorGroup from './EditorGroup.vue';
 import GeneralGroup from './GeneralGroup.vue';
 import SettingsNav from './SettingsNav.vue';
 import ShortcutGroup from './ShortcutGroup.vue';
@@ -96,6 +97,7 @@ watch(() => [targetTab?.value, targetSection?.value], () => { if (active.value) 
           <GeneralGroup v-if="groupId === 'general'" />
           <UploadGroup v-else-if="groupId === 'upload'" />
           <ShortcutGroup v-else-if="groupId === 'shortcut'" />
+          <EditorGroup v-else-if="groupId === 'editor'" />
         </div>
       </div>
     </section>

@@ -620,6 +620,14 @@
   --pn-size-settings-hotkey: 150px;
   --pn-size-settings-app-key: 44px;
   --pn-space-settings-kbd-x: 7px;
+  /* 编辑器卡：头部最小高 60、标识块 32；下半内边距 12 16 14；命令框内边距 0 4 0 12（高 34 同对话框输入框） */
+  --pn-size-settings-editor-head: 60px;
+  --pn-size-settings-editor-mark: 32px;
+  --pn-space-settings-editor-body: 12px 16px 14px;
+  --pn-space-settings-editor-code: 0 4px 0 12px;
+  /* 「上传到」菜单按钮高 24、左右 6；端口输入框宽 72 */
+  --pn-size-settings-picker: 24px;
+  --pn-size-settings-port: 72px;
   /* 外观三卡：预览高 96、内边距 14 12、条间距 7（标题条 8 高 60% 宽、卡片 28 高、说明条 6 高 40% 宽，圆角 2 / 5）；选中描边 2 + 2 */
   --pn-size-theme-preview: 96px;
   --pn-space-theme-preview: 14px 12px;
