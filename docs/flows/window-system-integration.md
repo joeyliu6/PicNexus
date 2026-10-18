@@ -8,8 +8,9 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 
 - **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),根据屏幕分辨率自适应初始大小
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
-- **系统托盘**:菜单包含打开界面、上传剪贴板、选择图片…、当前图床二级菜单、历史记录、退出;左键点击图标直接唤起主窗口
-- **全局快捷键**:插件已加载,**但当前未注册任何快捷键**(预留扩展点)
+- **系统托盘**:三个平台都有,点开是系统原生菜单(交接说明 8.6,T01–T08)。Rust 建图标与点击行为,菜单由主窗口前端按配置画;Windows 左键 / 双击打开主界面、右键菜单,macOS / Linux 点开即菜单(见图 2)
+- **全局快捷键**:默认 `Ctrl+Shift+C` 上传剪贴板图片、`Ctrl+Shift+O` 选择文件上传,可在设置 › 快捷键改或整体关闭;上传走应用级上传控制器,与首页、托盘同一条路
+- **单实例**:`tauri-plugin-single-instance`,再次启动只把已运行的主窗口唤起
 - **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
 - **CLI PATH**:设置页的 CLI 开关会同步管理命令入口。Windows 写入用户级注册表;macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接,AppImage 优先链接到 `$APPIMAGE`。
 
@@ -19,7 +20,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 
 展示应用启动后,主窗口如何创建、显示、最小化、关闭(到托盘)的完整状态机。
 
-> **关键源文件**:`src-tauri/tauri.conf.json`(L17~L33 windows 配置)、`src-tauri/src/main.rs`(L505~L550 自适应大小、L557~L569 on_window_event、L641~L643 set_close_to_tray)
+> **关键源文件**:`src-tauri/tauri.conf.json`(L17~L33 windows 配置)、`src-tauri/src/main.rs`(`setup` 里的自适应大小、`on_window_event` 关闭到托盘、`set_close_to_tray` 命令)
 
 ```mermaid
 stateDiagram-v2
@@ -48,7 +49,7 @@ stateDiagram-v2
     CheckCloseToTray --> HiddenToTray: closeToTray = true<br/>(默认)<br/>api.prevent_close + hide
     CheckCloseToTray --> Quit: closeToTray = false
 
-    HiddenToTray --> Focused: 托盘左键 / 菜单项<br/>window.show + unminimize + focus
+    HiddenToTray --> Focused: 托盘左键 / 双击 / 菜单项<br/>window.show + unminimize + focus
     HiddenToTray --> Quit: 托盘菜单 → 退出<br/>plugin-process exit(0)
 
     Quit --> [*]
@@ -60,94 +61,55 @@ stateDiagram-v2
 
     note right of Visible
       Windows 高分屏:
-      main.rs L495~L502 替换
+      main.rs setup 里替换
       128×128@2x 任务栏图标
     end note
 ```
 
 ---
 
-## 图 2:自定义托盘菜单构建与事件分发
+## 图 2:托盘原生菜单
 
-展示托盘图标、自定义 `tray-menu` Webview 窗口、以及菜单项事件如何路由到主窗口。
+托盘图标由 Rust 建好;菜单内容由主窗口前端从「上传控制器」的配置、图床与上传进度推出来,再用 Tauri 菜单接口画成系统原生菜单。配置在前端加密保存,Rust 读不到,所以菜单只能在前端算。
 
-> **关键源文件**:`src-tauri/src/main.rs`(托盘图标和 `tray-menu` 窗口创建)、`src/components/tray/TrayMenuWindow.vue`(菜单 UI / 定位 / 服务切换)、`src/services/trayMenu.ts`(菜单数据与动作分发)
+> **关键源文件**:`src-tauri/src/commands/tray.rs`(建托盘、点击 / 悬停、剪贴板序号、Windows 默认项加粗、任务栏深浅)、`src/tray/trayMenuModel.ts`(配置 → 菜单,纯函数)、`src/tray/trayProgress.ts`(上传进度 → 状态行与花瓣,纯函数)、`src/tray/nativeTray.ts`(画菜单与图标)、`src/tray/installTray.ts`(外壳里常驻:何时重画、点了交给谁)、`src/composables/appPresence.ts`(主窗口在不在屏 → 通知走应用内还是系统通知)
 
 ```mermaid
 flowchart TD
-    A[setup 回调] --> W[WebviewWindowBuilder<br/>label: tray-menu<br/>url: tray-menu.html<br/>hidden / transparent / always_on_top]
-    A --> T[TrayIconBuilder::with_id main-tray]
-    T --> T1[.icon<br/>128×128@2x PNG]
-    T --> T2[.show_menu_on_left_click false]
-    T --> T3[.on_tray_icon_event]
-    T3 --> C{MouseButton + State}
-    C -- Left + Up --> L[hide tray-menu<br/>show main + unminimize + focus]
-    C -- Right + Up --> R[show_tray_menu_window<br/>clamp position<br/>set size / position<br/>show + focus<br/>emit tray-menu-opened]
+    S[setup] --> T[commands::tray::setup_tray<br/>TrayIconBuilder main-tray<br/>兜底菜单:打开 / 退出]
+    T --> EV{托盘事件}
+    EV -- Windows 左键抬起<br/>双击 = 两次抬起 --> RV[reveal_main_window<br/>show + focus + main-window-presence-changed]
+    EV -- Enter / Move<br/>最多每 0.8 秒一次 --> HV[emit tray-pointer-enter<br/>附 Windows 任务栏深浅]
+    T --> CW[Windows:每 0.5 秒看剪贴板序号<br/>变了 emit tray-clipboard-changed]
 
-    W --> V[TrayMenuWindow.vue]
-    R --> V
-    V --> M[buildTrayMenuItems<br/>打开界面 / 上传剪贴板 / 选择图片…<br/>当前图床二级菜单 / 历史记录 / 退出]
-    M --> E{用户点击菜单项}
-    E -- open_window --> A0[show main + unminimize + focus]
-    E -- upload_clipboard --> A1[show main<br/>emit navigate-to upload<br/>emit tray-action upload_clipboard]
-    E -- select_upload_files --> A2[show main<br/>emit navigate-to upload<br/>emit tray-action select_upload_files]
-    E -- current_service item --> A3[toggleTrayService<br/>保存 enabledServices<br/>emit config-updated]
-    E -- open_history --> A4[show main<br/>emit navigate-to history]
-    E -- quit --> A5[plugin-process exit 0]
+    SHELL[AppShell onMounted] --> IT[installTray upload 控制器]
+    IT --> R{upload.ready?}
+    R -- 否 --> FB[保持兜底菜单]
+    R -- 是 --> M[buildTrayMenu<br/>配置 + 图床 + 剪贴板 + 进度]
+    HV & CW --> CB[clipboard_has_image] --> M
+    M --> SIG{签名变了?}
+    SIG -- 是 --> AM[applyTrayMenu<br/>Menu.new → tray.setMenu<br/>Windows: set_tray_default_item 加粗<br/>换下的菜单留 60 秒再释放]
+    IT --> IC[trayIconOpacities → 画四瓣<br/>applyTrayIcon → tray.setIcon]
 
-    A1 & A2 & A4 --> F[AppShell / useUploadController]
-    F --> F1[listen navigate-to<br/>切换路由]
-    F --> F2[listen tray-action<br/>上传动作]
-
-    style A fill:#e3f2fd,stroke:#1976d2
-    style W fill:#e3f2fd,stroke:#1976d2
-    style V fill:#fff3e0,stroke:#ef6c00
-    style F1 fill:#e8f5e9,stroke:#2e7d32
-    style F2 fill:#e8f5e9,stroke:#2e7d32
-    style A5 fill:#ffebee,stroke:#c62828
+    AM --> CLICK{点了哪项}
+    CLICK -- 上传剪贴板 / 选择文件 --> UP[控制器 pasteClipboard / pickAndUpload<br/>后台上传,不打开主界面]
+    CLICK -- 上传到 / 复制为 / 压缩 --> CT[控制器 toggleHost / loginHost /<br/>setFormat recopy:false / setCompression]
+    CLICK -- 三个勾选 --> SP[设置页的保存入口 useSettingsConfig.patch]
+    CLICK -- 打开 / 设置… / 管理图床… --> NAV[show + focus + 重判在屏<br/>emit navigate-to]
+    CLICK -- 退出 --> Q[plugin-process exit 0]
+    UP & CT & SP --> CFG[config-updated] --> M
+    CLICK -.配置没变也再画一次.-> AM
 ```
 
-`tray-menu` 是独立的 Vite 入口(`tray-menu.html` + `src/tray-menu.ts`)。它直接读取配置生成菜单,根据 `enabledServices` / `availableServices` / 图床配置状态展示 `当前图床：…` 二级勾选菜单；服务切换后保存配置并广播 `config-updated`。
+### 同步契约
 
-### 缓存契约(跨窗口读配置前必看)
+- **托盘、首页「上传到」、设置页改的是同一份配置**:托盘读 `useUploadController()` 的 `config` / `hosts`,写也走同一个控制器(图床、格式、压缩)或设置页的保存入口(三个勾选)。别处改了配置,控制器收到 `config-updated` 刷新,托盘跟着重画;不要在托盘里另读一份配置。
+- **只在菜单「长什么样」变了时重建**(行的 JSON 签名),进度百分比不在菜单里。点完一项后签名没变的也再画一次:系统菜单点勾选项时自己就把勾翻过去了,而配置可能没变(点已选中的格式、点「登录失效」的图床、取消风险确认)。
+- **换下来的菜单留 60 秒才释放**:用户看着菜单时可能连着重建几次(上传中每个图床传完一次),正在显示的那份若被销毁,Windows 上会出错。
+- **剪贴板状态**:Windows 靠剪贴板序号(悬停也会重查,但资源管理器转发托盘鼠标移动有延迟,只靠悬停会慢一拍);macOS 靠悬停;Linux 收不到托盘事件,第一项一直可点。
+- **托盘发起的上传不打开主界面**:结果靠通知。`useToast` 在主窗口隐藏或最小化时把普通通知改发系统通知(带「撤销」的仍留在应用内);「在不在屏」由 `appPresence` 判断——焦点、尺寸变化、Rust 关到托盘 / 从托盘打开时发的 `main-window-presence-changed`、前端自己 `show()` / `hide()` 之后都会重判,几次判断同时进行时只认最后发起的那次。
 
-主窗口和 `tray-menu` 是**两个独立 webview**,各有一份 `configStore` / `syncStatusStore` 单例和各自的 `CacheStore`。而且**两边都会写配置**(托盘能改 `enabledServices` 和主题)。任何一方写入只刷新自己那份缓存,**对方的缓存就此陈旧**。
-
-所以这是个**双向**问题,两个方向的症状不同:
-
-| 方向 | 症状 |
-|------|------|
-| 主窗口改 → 托盘不知道 | 托盘图床名单/名称/勾选停在**开机快照**(托盘常驻不销毁,缓存能活一整个进程) |
-| 托盘改 → 主窗口不知道 | 从托盘点勾选/切主题,**主界面纹丝不动** |
-
-统一规则:**凡是「因为配置可能被别的窗口改了而重新读」,一律走 [`readFreshConfig()`](../../src/store/instances.ts),不要直接 `configStore.get()`。** 它先 `invalidateCache()` 再读盘。组件自己写完再读不需要它——写入路径已经同步刷新过本窗口缓存。
-
-现有调用点:`TrayMenuWindow.loadConfig` / `App.vue`(主题) / `useUploadController.refreshConfig`(压缩配置与 profile) / `useServiceSelector.loadServiceButtonStates`(图床勾选) / `useGlobalShortcut.loadConfig`。
-
-健康状态另有一层:`useServiceHealth` 的 `autoLoadPromise` 是永久 memoize,托盘要拿最新检测结果必须 `loadHealthStatus({ force: true })`(它会一并作废 `syncStatusStore` 缓存)。托盘侧配置 + 健康状态由 `refreshTrayState()` 串起来,`onMounted` / `config-updated` / `tray-menu-opened` 三个时机共用。
-
-⚠️ 别拿 `Store.clear()` 当刷新用——它会**连磁盘文件一起清空**。只作废内存副本的是 `invalidateCache()`([`src/store/MutexStore.ts`](../../src/store/MutexStore.ts))。
-
-⚠️ `readFreshConfig(defaultValue)` 的参数不只是兜底返回值:传了它,Store 才会在文件损坏时走恢复路径重建配置(`useGlobalShortcut` 依赖这个行为)。
-
-单测注意:`trayMenu.spec.ts` / `useGlobalShortcut.spec.ts` 把 store 整个 mock 掉了(`get` 每次都回最新值),天然测不出缓存陈旧,所以那里断言的是「有没有走 `invalidateCache` / `readFreshConfig`」这个契约;真实缓存行为由 `tests/unit/services/store.spec.ts` 的跨实例用例覆盖。
-
-### 面板定位契约
-
-托盘菜单不是系统原生菜单,定位全靠自己算。几何计算集中在 [`src/services/trayMenuLayout.ts`](../../src/services/trayMenuLayout.ts)(纯函数,单测见 `tests/unit/services/trayMenuLayout.spec.ts`),`TrayMenuWindow.vue` 只负责取数据和贴样式。
-
-两段式定位:
-
-1. **Rust 首次定位** —— `show_tray_menu_window` 按 `TRAY_MENU_WIDTH/HEIGHT` 把窗口摆到托盘图标正上方,这是**锚点**的来源。
-2. **前端接管** —— `syncWindowLayout` 把窗口撑满整个工作区并移到工作区原点,主菜单/二级面板改用窗口内绝对定位。撑满是为了让点击面板外的透明区域也能关闭菜单。
-
-> ⚠️ **核心不变式:主菜单锚点只由主菜单自身高度决定,绝不能把二级面板算进去。**
->
-> `clampAnchor(rawAnchor, frame, menuPanelHeight)` 只吃 `menuPanelHeight`。历史缺陷:曾用 `max(主菜单高, 行偏移 + 二级面板高)` 夹紧锚点,导致展开「当前图床」时一级菜单被向上顶一行(实测 26px);又因为夹紧结果被回写进锚点、而夹紧是单向的 `Math.min`,收起后菜单还回不到原位。
->
-> 空间不足时该让位的是二级面板:`resolveFlyoutTop` 让它整体上移直到底边贴住工作区底部,`resolveFlyoutOpensLeft` / `resolveFlyoutLeft` 处理左右翻转与兜底夹取。
-
-另注:`rawAnchor` 只允许 `cacheAnchor` 写入。任何把夹紧后坐标回写进去的改法都会让菜单每次同步都往上漂。
+托盘写法与平台差异(右列、⚠、状态行、图标颜色)见 [decisions/tray.md](../design/redesign/decisions/tray.md) 与 [README 平台限制记录](../design/redesign/README.md#平台限制记录)。
 
 ---
 
@@ -216,46 +178,20 @@ flowchart TD
 
 ---
 
-## 图 4:已加载但未使用的扩展点
-
-展示两个「基础设施就绪但业务层未接」的集成点,用于后续快速启用。
+## 图 4:文件关联(未实现)
 
 ```mermaid
 flowchart LR
-    subgraph R1[全局快捷键]
-        R1A[✅ Cargo.toml:<br/>tauri-plugin-global-shortcut]
-        R1B[✅ main.rs L241:<br/>.plugin Builder::new .build]
-        R1C[❌ 未调用 register<br/>无快捷键生效]
-        R1D[❌ 前端无消费代码]
-    end
-
-    subgraph R2[文件关联 / 深链接]
-        R2A[❌ tauri.conf.json<br/>无 fileAssociations]
-        R2B[❌ 无 deepLinks]
-        R2C[❌ 无 single_instance<br/>插件]
-        R2D[⚠️ 仅靠 CLI 参数<br/>Typora 集成]
-    end
-
-    R1A --> R1B --> R1C --> R1D
-    R2A --> R2B --> R2C --> R2D
-
-    style R1C fill:#ffebee,stroke:#c62828
-    style R1D fill:#ffebee,stroke:#c62828
+    R2A[❌ tauri.conf.json<br/>无 fileAssociations] --> R2B[❌ 无 deepLinks] --> R2D[⚠️ 仅靠 CLI 参数<br/>Typora 集成]
     style R2A fill:#ffebee,stroke:#c62828
     style R2B fill:#ffebee,stroke:#c62828
-    style R2C fill:#ffebee,stroke:#c62828
     style R2D fill:#fff3e0,stroke:#ef6c00
 ```
 
-**启用全局快捷键的步骤**(如果要做):
-1. 在 `main.rs` 的 `.plugin(global_shortcut::Builder::new()...)` 链式调用中加 `.with_shortcuts([...])?.with_handler(...)`
-2. 前端在 `useConfig` 的 `globalShortcut` 配置区域加开关
-3. 配置变化时通过命令调用 `unregister_all` + `register_multiple`
-
 **启用文件关联的步骤**:
 1. `tauri.conf.json` 加 `bundle.fileAssociations: [{ ext: ["png","jpg"], role: "Editor" }]`
-2. 加载 `tauri-plugin-single-instance`,在 `main.rs` 把 `second_instance` 回调里的 `argv` 转发到主窗口
-3. 前端 `listen("open-file", ...)` 接收文件路径,触发上传
+2. 在 `main.rs` 的 `tauri_plugin_single_instance::init` 回调里把 `argv` 转发到主窗口(插件已加载,现在只唤起窗口)
+3. 前端 `listen("open-file", ...)` 接收文件路径,交给 `useUploadController().uploadFiles`
 
 ---
 
@@ -263,7 +199,6 @@ flowchart LR
 
 | 插件 | 用途 | 本图关联 |
 |------|------|----------|
-| `tauri-plugin-positioner` | 托盘弹窗定位 | 图2 T6 |
 | `tauri-plugin-autostart` | 开机自启 | — |
 | `tauri-plugin-sql` | SQLite 驱动 | [db-migration-flow](./db-migration-flow.md) |
 | `tauri-plugin-dialog` | 文件对话框 | — |
@@ -272,7 +207,7 @@ flowchart LR
 | `tauri-plugin-notification` | 系统通知 | — |
 | `tauri-plugin-shell` | 打开外部链接；token sidecar 由 Rust `portable::run_sidecar` 管理 | — |
 | `tauri-plugin-http` | HTTP 客户端 | — |
-| `tauri-plugin-global-shortcut` | 全局快捷键 | 图4 R1 |
+| `tauri-plugin-global-shortcut` | 全局快捷键 | 概览 |
 | `tauri-plugin-updater` | 自动更新 | [auto-update-flow](./auto-update-flow.md) |
 | `tauri-plugin-process` | 进程管理 / relaunch | — |
 | `tauri-plugin-log` | 日志系统 | [logger-diagnostics](./logger-diagnostics-flow.md) |
@@ -284,12 +219,12 @@ flowchart LR
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
 | 点 × 直接退出而不是隐藏 | `CloseToTrayState` 被设为 `false` | 图1 CheckCloseToTray |
-| 托盘菜单点击无反应 | `tray-menu` Webview 未创建/未显示,或前端没 listen `navigate-to` / `tray-action` | 图2 W/V/F1/F2 |
-| 托盘图床名单/名称/勾选与主界面对不上,重启才同步 | 托盘 webview 那份 Store 内存缓存没作废,`loadConfig` 空转读到启动快照 | 图2 缓存契约 |
-| 从托盘点勾选/切主题,主界面没反应 | 反方向的同一个坑:托盘写盘只刷新托盘自己的缓存,主窗口的消费点没走 `readFreshConfig` | 图2 缓存契约 |
-| 托盘图床状态圆点不跟随可用性检测结果 | 同上,外加 `useServiceHealth` 的 `autoLoadPromise` 永久 memoize;需要 `loadHealthStatus({ force: true })` | 图2 缓存契约 |
-| 展开「当前图床」把一级菜单顶上去 / 收起后回不到原位 | 二级面板高度被算进了 `clampAnchor`,或夹紧结果被回写进 `rawAnchor` | 图2 面板定位契约 |
-| 二级面板底部被任务栏截断 | `resolveFlyoutTop` 未按 `windowHeight` 上移,或 `.flyout-panel` 少了 `overflow: hidden auto` | 图2 面板定位契约 |
+| 托盘一直只有「打开 / 退出」两项 | 前端没画成正式菜单:`installTray` 没装上、`upload.ready` 一直为假,或 `TRAY_ID` 两边不一致(`check-cross-language-constants` 会拦) | 图2 R / FB |
+| 托盘勾选与首页 / 设置页对不上 | 托盘另读了一份配置,或没走控制器 / 设置页保存入口;点完没强制重画(系统菜单自己翻的勾没纠正) | 图2 同步契约 |
+| 剪贴板里有图,托盘第一项仍是灰的(或反过来) | Windows 剪贴板序号线程没起;macOS 没收到悬停;Linux 本来就不刷新 | 图2 CW / HV |
+| 托盘里上传后什么提示都没有 | 主窗口隐藏时 `appPresence` 仍判「在屏」,通知进了看不见的应用内;或系统通知权限被拒 | 图2 同步契约 |
+| Windows 上「打开 PicNexus」没加粗 | `set_tray_default_item` 失败(看日志「设置托盘默认项失败」),或默认项的位置算错 | 图2 AM |
+| 托盘图标在任务栏上看不清 | Windows 任务栏深浅读取失败(按深色任务栏画了白色);Linux 浅色面板固定白色是已知限制 | 图2 IC |
 | 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | CLI 裸路径调用不上传 | 普通 CLI 必须传 `--service <serviceId>`;裸路径会打印可用图床和示例后退出 | 图3 D7 |
@@ -298,8 +233,8 @@ flowchart LR
 | CLI 上传成功但 GUI 历史没更新 | CLI 是独立进程,不与 GUI 实例共享 DB 连接 | 图3 note1 |
 | macOS 打开 CLI 后仍提示 PATH 未生效 | `~/.local/bin` 不在当前 shell PATH;按设置页 message 把 export 行加入 `~/.zshrc` 后新开终端 | CLI PATH 管理 |
 | AppImage 打开 CLI 后命令失效 | 符号链接可能指向旧的 `/tmp/.mount_*` 临时挂载;应确认当前运行时存在 `$APPIMAGE`,再手动移走旧链接后重新打开 CLI | CLI PATH 管理 |
-| 配置全局快捷键不生效 | **当前未实现**,插件已加载但无 `register` 调用 | 图4 R1C |
-| 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,需要同时加 `single_instance` | 图4 R2 |
+| 全局快捷键按了没反应 | 设置 › 快捷键里关掉了;或组合键被别的程序占用(启动时会提示「全局快捷键未生效」) | 概览 |
+| 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,还要在单实例回调里转发 `argv` | 图4 |
 
 ---
 
@@ -307,5 +242,5 @@ flowchart LR
 
 - [系统总览](./system-overview.md) — 宏观架构分层
 - [应用生命周期](./app-lifecycle.md) — 启动初始化顺序
-- [IPC 命令层](./ipc-command-flow.md) — 托盘菜单如何通过 `emit` 通知前端
+- [IPC 命令层](./ipc-command-flow.md) — 托盘事件与命令的登记
 - [上传流程](./upload-flow.md) — CLI 上传链路复用的上传器

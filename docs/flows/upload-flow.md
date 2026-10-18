@@ -16,6 +16,7 @@ flowchart TD
     A1["拖入窗口任意页面"] --> B
     A2[选择文件 / 从 URL 下载] --> B
     A3["Ctrl+V / ⌘V 粘贴剪贴板<br/>任意页面；输入框内、弹窗打开时不接"] --> B
+    A4["托盘菜单 / 全局快捷键 / 自动上传剪贴板<br/>后台上传，不打开主界面；窗口不在屏时结果走系统通知"] --> B
 
     B[useUploadController.uploadFiles<br/>开一个上传会话]
     B --> C{isUploading?}
@@ -342,7 +343,8 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 按 Ctrl+V 没反应 | 焦点在输入框里，或有弹窗开着（`.pn-dialog[data-state="open"]`）——这两种情况有意不接 | 图1 节点 A3 |
 | 拖进窗口没出现遮罩 | 有弹窗或命令面板开着（`modalOpen`）——有意不接，免得在弹窗背后悄悄传图 | 图1 节点 A1 |
 | 单张传完复制的不是想要的图床 | 复制来源 = 固定的图床（传上了才算），否则最先完成的；不按配置顺序 | 重试 → 不变量 4 |
-| 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关 | `src/composables/useGlobalShortcut.ts` |
+| 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关；上传同样走 `useUploadController`，首页「最近上传」与托盘都看得到 | `src/composables/useGlobalShortcut.ts` |
+| 窗口藏在托盘时上传，没有任何提示 | 结果靠系统通知：`useToast` 看 `appPresence` 判断主窗口不在屏才改发；查通知权限，及隐藏窗口后有没有重判（[window-system-integration](./window-system-integration.md) 图 2 同步契约） | 图1 节点 A4 |
 
 ---
 

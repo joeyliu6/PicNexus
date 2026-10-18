@@ -185,7 +185,7 @@ flowchart TD
 
 配套规则：
 
-- **判定「已添加 / 启用 / 出问题」只看 `useUploadController().hosts`**，图床页与首页共用这一份，不要各自再拼一遍（托盘菜单在另一个窗口，由 `trayMenu.ts` 的 `isConfiguredService` 自己判断是否已配置，改「已添加」的口径时两处一起改）。
+- **判定「已添加 / 启用 / 出问题」只看 `useUploadController().hosts`**，图床页、首页与托盘菜单（`src/tray/installTray.ts`）共用这一份，不要各自再拼一遍。
 - **断开 = 清掉凭证并移出两个列表**（通知带撤销，撤销按快照原样恢复，含原来的位置）；WebDAV / 自定义 S3 叫「删除这份」，同时删掉 profile 并 `syncProfileUploaders`。
 - **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用一律先过 `usePublicRiskConfirm().ensureAccepted()`（P11 弹窗），那是 `publicServiceRiskAccepted` 唯一的置位入口；绕过它启用，会让上传时被静默过滤。
 - `availableServices` **可以为空**（一个图床都没添加是正常状态：首页显示「没有图床」，图床页右侧直接是目录）。

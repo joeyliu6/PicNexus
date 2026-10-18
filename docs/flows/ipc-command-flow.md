@@ -16,14 +16,14 @@ PicNexus 后端的 `#[tauri::command]`(上传器、Token 获取、链接检测�
 
 > **关键源文件**:`src-tauri/src/main.rs`、`src-tauri/build.rs`、`src-tauri/capabilities/*.json`、`src-tauri/Cargo.toml`
 >
-> 📌 命令实现**全部在 `src-tauri/src/commands/`**。2026-09-09 把最后 21 个内联命令搬出去之后,`main.rs` 里只剩 `set_close_to_tray` 一个命令(它和托盘构建代码同住),其余都以 `commands::<模块>::<命令名>` 的形式登记在 `generate_handler!` 里。
+> 📌 命令实现**全部在 `src-tauri/src/commands/`**。2026-09-09 把最后 21 个内联命令搬出去之后,`main.rs` 里只剩 `set_close_to_tray` 一个命令(托盘在 `commands/tray.rs`),其余都以 `commands::<模块>::<命令名>` 的形式登记在 `generate_handler!` 里。
 
 ```mermaid
 flowchart TD
     A[main.rs::main] --> B[tauri::Builder::default]
 
     %% 插件链
-    B --> P1[.plugin positioner]
+    B --> P1[.plugin single_instance]
     P1 --> P2[.plugin autostart]
     P2 --> P3[.plugin sql]
     P3 --> P4[.plugin dialog/fs/clipboard]
@@ -50,14 +50,14 @@ flowchart TD
 
     %% Setup 回调
     H --> S[.setup app handler]
-    S --> S1[创建系统托盘 + 菜单]
+    S --> S1[commands::tray::setup_tray<br/>托盘图标 + 兜底菜单]
     S1 --> S2[注册 on_window_event<br/>关闭到托盘]
     S2 --> S3[根据屏幕分辨率<br/>自适应窗口大小]
     S3 --> R[.run generate_context!]
 
     %% 权限校验
     R -.读取.-> CAP[capabilities/*.json<br/>按窗口划定权限范围]
-    CAP --> CAP0[应用命令:build.rs 登记清单后才逐窗口检查<br/>主窗口 / 托盘 / 登录引导页各自只放行 allow-命令名]
+    CAP --> CAP0[应用命令:build.rs 登记清单后才逐窗口检查<br/>主窗口 / 登录引导页各自只放行 allow-命令名]
     CAP --> CAP1[core:window:* / event:*]
     CAP --> CAP2[sidecar 由 Rust portable::run_sidecar 启动<br/>前端不暴露 shell spawn]
     CAP --> CAP3[fs:allow-* + 作用域<br/>appdata/appcache/applog/temp + 用户对话框临时授权]
@@ -199,8 +199,10 @@ flowchart LR
 | `upload://progress` | `{id, progress, total, step, step_index, total_steps}` | 各 upload_to_* 命令 | `useUpload.ts` |
 | `link-check://progress` | `{batch_id?, checked, total, current_url, current_result?, recent_results}` | `batch_check_links` | `useLinkCheck.ts` |
 | `config-updated` | `{timestamp}` | `useConfig.saveConfig` | 所有需要响应配置变更的 composable |
-| `navigate-to` | `string` 或 `{view, tab?, section?}` | 托盘菜单 / macOS 菜单栏 / 前端跳转 | `src/shell/useAppNavigation.ts`（路径映射见 `navigatePayload.ts`） |
-| `tray-action` | `'upload_clipboard' \| 'select_upload_files'` | 托盘菜单 | `src/shell/useAppNavigation.ts` / `src/composables/upload/useUploadController.ts` |
+| `navigate-to` | `string` 或 `{view, tab?, section?}` | 托盘菜单(主窗口前端发) / macOS 菜单栏 / 前端跳转 | `src/shell/useAppNavigation.ts`（路径映射见 `navigatePayload.ts`） |
+| `tray-pointer-enter` | `{taskbarLight: boolean \| null}` | `commands/tray.rs`(鼠标在托盘图标上,最多每 0.8 秒一次) | `src/tray/installTray.ts`(重看剪贴板与任务栏深浅) |
+| `tray-clipboard-changed` | 无 | `commands/tray.rs`(Windows 剪贴板序号变了) | `src/tray/installTray.ts` |
+| `main-window-presence-changed` | 无 | `commands/tray.rs` 打开主窗口 / `main.rs` 关到托盘 | `src/composables/appPresence.ts`(重判在不在屏) |
 
 ```mermaid
 sequenceDiagram

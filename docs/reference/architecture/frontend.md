@@ -19,7 +19,7 @@
 
 ### 目录结构
 
-页面在 `src/views/<页面>/`（首页 `home/`、图库 `gallery/`、链接健康 `health/`、图床 `hosts/`、设置 `settings/`，每页一个 `*View.vue`），外壳在 `src/shell/`，零件在 `src/components/pn/` 与 `src/components/biz/`。
+页面在 `src/views/<页面>/`（首页 `home/`、图库 `gallery/`、链接健康 `health/`、图床 `hosts/`、设置 `settings/`，每页一个 `*View.vue`），外壳在 `src/shell/`，托盘原生菜单在 `src/tray/`（由外壳装上，见 [window-system-integration.md](../../flows/window-system-integration.md) 图 2），零件在 `src/components/pn/` 与 `src/components/biz/`。
 
 ```
 src/views/settings/

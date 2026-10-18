@@ -32,7 +32,7 @@ Vitest 使用 `happy-dom`，全局 setup 为 `tests/unit/setup.ts`，当前会�
 | utils / formatter / status 计算 | 单元测试 | `tests/unit/utils/formatters.spec.ts` 验证 `formatFileSize`、`formatRelativeTime`；`tests/unit/utils/uploadStatus.spec.ts` 验证成功、失败、上传中、等待中状态判断 |
 | URL、Markdown、路径、布局算法 | 单元测试 | `linkFormatter.spec.ts`、`mdParser.spec.ts`、`pathUtils.spec.ts`、`justifiedLayout.spec.ts` |
 | uploader 或 service 分发逻辑 | 单元测试，必要时 mock Tauri invoke | `uploaderFactory.spec.ts`、`multiServiceUploader.spec.ts`、`historyDatabase.spec.ts` |
-| composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD 与节流更新；`useUploadController.spec.ts` 验证上传会话、图床列表与托盘动作；`useLinkCheck.spec.ts`、`tests/unit/views/health/*.spec.ts` 验证业务状态推进 |
+| composable 状态流 | composable 测试 | `useQueueState.spec.ts` 验证队列 CRUD 与节流更新；`useUploadController.spec.ts` 验证上传会话与图床列表；`tests/unit/tray/*.spec.ts` 验证托盘菜单由配置推出、点击分派到控制器；`useLinkCheck.spec.ts`、`tests/unit/views/health/*.spec.ts` 验证业务状态推进 |
 | 组件交互 | 组件测试 | `tests/unit/shell/appShell.spec.ts` 验证侧栏导航、跳转事件、`Ctrl+\` 收起侧栏 |
 | 页面多状态 UI | 视觉截图测试 | 新界面：`tests/redesign/home.visual.spec.ts` 跑真应用 + `tests/e2e/mocks`，按设计画板编号覆盖首页、图库、链接健康、图床、设置各状态 |
 | mocked 原生边界 | mocked E2E | `tests/e2e/app-smoke.e2e.spec.ts` 验证启动不白屏、主导航、设置保存与失败回滚、文件选择、剪贴板、上传后复制链接、图库空状态、链接健康状态栏 |
@@ -150,7 +150,10 @@ portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥�
 - 全新的隔离库会先弹新手引导（点「跳过引导」），而且没有京东：补充备份要两个可用图床，自己加一个。
 - 原生对话框（「添加文件夹…」的选文件夹）拦不住：`window.__TAURI_INTERNALS__.invoke` 是只读属性。点完按钮后用 PowerShell 的 UI Automation 找到「Select Folder」窗口，往 AutomationId 1152 下的输入框发 `WM_SETTEXT` 写路径、给 AutomationId 1 的按钮发 `BM_CLICK`。
 - 补充备份能跑通：取原图放行 `http://127.0.0.1`。假图床同时接 WebDAV 的 `PUT` / `MKCOL` / `PROPFIND`（`PUT` 故意慢 2–3 秒，才来得及点暂停），在图床页加一个指向它的 WebDAV 当目标。
-- 想读页面里的状态，用 `import('/@fs/C:/…/src/xxx.ts')` 拿到和应用同一份模块（`/src/…` 是另一份，状态是空的）。
+- 想读页面里的状态，要导入和应用**同一个地址**的模块：先用 `performance.getEntriesByType('resource')` 看页面实际加载的地址，一般是 `/src/xxx.ts`，热更新过的模块带 `?t=时间戳`；`/@fs/C:/…` 和不带 `?t=` 的都是另一份，状态是空的、改了也不影响应用。
+- 托盘原生菜单：Windows 10 通知区域的图标不在 UI Automation 树里，先截任务栏找到图标位置；弹出的菜单（`#32768` 窗口）UIA 也读不出菜单项，靠截图看、按坐标点。鼠标用 `mouse_event`（绝对坐标）模拟：`SetCursorPos` 不产生托盘的鼠标消息。PowerShell 里别把函数叫 `Mv`（会被当成移动文件的 `mv` 别名）；脚本里有中文要存成带 BOM 的 UTF-8，否则 PowerShell 5 读成乱码。
+- 测剪贴板相关（「剪贴板无图片」）前先把剪贴板里的内容存下来，测完放回；托盘、截图都会和你同时使用的鼠标打架，被打断就重来一次。
+- 走查中想摆出「上传中」等状态，不必真的上传：拿到应用那份 `useUploadController()` / `useQueueState()`，往队列里加一条、往 `sessions` 里塞一个未结束的会话。
 - 走查中改代码会热更新：外壳里常驻的组件（传输中心）重挂后，挂在它身上的东西会停掉，看到「数据库对、页面不对」先刷新页面重试一次再下结论。
 - 微博链接检测走百度中转，中转连不到本机，假图床模拟不了微博，造数据换别的图床。
 
@@ -185,7 +188,7 @@ Tauri 借用系统 WebView，三个平台不是同一个引擎：
 
 - **字体完全不对（最大盲区）**。`src/styles/app.css` 的字体栈在真 macOS 上落到 SF Pro / 苹方，在 Windows 的 Playwright WebKit 上落到微软雅黑。所有由字体度量驱动的差异（换行位置、按钮实际高度、省略号截断点、CJK 与拉丁混排基线）一条都抓不到。这也正是不做像素基准、不做几何量 diff 的原因——那两样在这个盲区下产出的都是假信号。
 - **Playwright WebKit ≠ WKWebView，也 ≠ WebKitGTK**。Playwright 打包的是 WebKit trunk 构建，比任何已发布 Safari 都新。用户如果在老 macOS 上，那是更早的引擎，**Playwright WebKit 支持的特性它可能不支持**。典型例子：`src/` 里多处 `backdrop-filter` 没写 `-webkit-` 前缀，Playwright WebKit 渲染正常，老 mac 上会直接没有毛玻璃效果——这类问题不改变布局，哨兵抓不到，只能靠 code review。
-- **原生控件与窗口层**：titlebar、托盘、原生菜单、macOS 红绿灯按钮，Playwright 里根本没有窗口 chrome。
+- **原生控件与窗口层**：titlebar、托盘、原生菜单、macOS 红绿灯按钮，Playwright 里根本没有窗口 chrome。托盘菜单只能核对应用交给菜单接口的结构（`tests/e2e/mocks/menu.ts` 记下来，`tray.e2e.spec.ts` 用它查「托盘、首页、设置同一份配置」），菜单长什么样靠真机走查。
 - **DPI / 缩放**：截图固定 @1x，Retina 2x 与 Linux 分数缩放下的 1px 边框消失、圆角走样抓不到。
 - **滚动条占位**：macOS 默认 overlay 滚动条不占宽度，Windows / Linux 传统滚动条占约 15px，本机量不到这个差。
 - **Tauri IPC / 权限 / 文件系统**：E2E 那套全是 `tests/e2e/mocks/*` 的假实现，只验前端时序。

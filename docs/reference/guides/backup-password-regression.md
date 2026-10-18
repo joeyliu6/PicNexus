@@ -14,14 +14,14 @@
 ### 坑 1：点窗口 X 不会退出应用
 
 `closeToTray` 默认 `true`（[defaults.ts:145](../../../src/config/defaults.ts)），
-Rust 侧在读到配置之前就已经默认 `true`（[main.rs:317](../../../src-tauri/src/main.rs)）。
+Rust 侧在读到配置之前就已经默认 `true`（[main.rs:138](../../../src-tauri/src/main.rs)）。
 点 X 只是 `window.hide()`，进程还活着，**配置根本没重新从磁盘加载**。
 
 这条最要命：所有「重启后仍然成功」的判据，只要是这么"重启"的，结论全部无效。
 
 **完整退出的两种方式**（Windows）：
 
-1. **托盘右键 →「退出」**（[trayMenu.ts:265](../../../src/services/trayMenu.ts)，走 `process::exit`，一定杀进程）
+1. **托盘右键 →「退出 PicNexus」**（[installTray.ts](../../../src/tray/installTray.ts) 的 `quit`，走 `process::exit`，一定杀进程）
 2. 或先去 设置 → 通用 关掉「关闭时最小化到托盘」，再点 X
 
 任务管理器里确认 `PicNexus.exe` 已消失，再启动。
@@ -38,7 +38,7 @@ Rust 侧在读到配置之前就已经默认 `true`（[main.rs:317](../../../src
 - 同一个 `history.db` 和 logs 目录
 
 **测试会污染你的真实配置。** 而且注册了 single-instance
-（[main.rs:274](../../../src-tauri/src/main.rs)）：正式版还在托盘驻留时启动 dev 版，
+（[main.rs:100](../../../src-tauri/src/main.rs)）：正式版还在托盘驻留时启动 dev 版，
 第二个实例会被拦截、只是唤起已有窗口——**你以为在测新代码，其实在点老版本**。
 
 对策，按干净程度排序：

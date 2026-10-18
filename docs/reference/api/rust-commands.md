@@ -70,6 +70,8 @@
 | | `analytics_shutdown` | 销毁隔离 WebView 与本地回环服务 |
 | | `analytics_start_heartbeat` | 启动在线心跳（Rust 定时器 + Measurement Protocol，25 分钟一次）；返回 `started` 或 `disabled` |
 | | `analytics_stop_heartbeat` | 停止在线心跳，幂等 |
+| **托盘** | `set_tray_default_item` | 把前端建好的托盘菜单（`rid`）第 `position` 项（从 0 数，分隔线也算）设为默认项：Windows 调 `SetMenuDefaultItem`，系统把它加粗；其他平台什么也不做 |
+| | `get_taskbar_light` | Windows 任务栏是不是浅色（注册表 `SystemUsesLightTheme`，不是应用模式）；其他平台返回 `null`。前端据此把单色托盘图标画成深色或白色 |
 
 > Analytics 心跳：密钥经编译期环境变量 `PICNEXUS_GA_API_SECRET` 注入，未注入时 `analytics_start_heartbeat` 返回 `disabled`。设计取舍见 [composables.md](./composables.md#在线心跳)。
 
