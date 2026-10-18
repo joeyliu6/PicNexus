@@ -251,9 +251,8 @@ export class MutexStore {
    *
    * ⚠️ 与 clear() 的区别：clear() 会连磁盘文件一起清空，本方法只丢弃内存副本。
    *
-   * Why 需要它：托盘菜单是常驻不销毁的独立 webview（label `tray-menu`），
-   * 有自己一份 Store 单例和自己一份 CacheStore。主窗口写配置只刷新主窗口那份缓存，
-   * 托盘那份永远停在启动时的快照——不主动作废，托盘的「重新加载配置」就是空转。
+   * 用途：readFreshConfig() 经过这里，保证读到的是磁盘上的值。现在只有主窗口一个 webview 读写配置，
+   * 本窗口的缓存不会被别的窗口弄旧；这层多读一次磁盘，开销可以忽略。
    */
   async invalidateCache(): Promise<void> {
     await this.mutex.withLock(async () => {

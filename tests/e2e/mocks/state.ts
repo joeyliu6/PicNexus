@@ -7,7 +7,10 @@ type E2ECall =
   | { type: 'fs.readFile'; path: string }
   | { type: 'fs.readTextFile'; path: string }
   | { type: 'fs.writeTextFile'; path: string; contents: string }
-  | { type: 'event.emit'; event: string; payload?: unknown };
+  | { type: 'event.emit'; event: string; payload?: unknown }
+  | { type: 'tray.setMenu'; items: unknown[] }
+  | { type: 'tray.closeMenu'; rid: number }
+  | { type: 'tray.setIcon' };
 
 /** 让某个原生命令按需要的方式返回（视觉测试用它摆出上传中 / 部分失败等状态） */
 export interface InvokeOverride {

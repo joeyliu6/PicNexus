@@ -3,7 +3,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const defaultRoots = ['src', 'login-webview.html', 'login-titlebar.html', 'tray-menu.html', 'index.html'];
+const defaultRoots = ['src', 'login-webview.html', 'login-titlebar.html', 'index.html'];
 const productionExtensions = new Set(['.vue', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.html']);
 const skippedDirs = new Set(['node_modules', 'dist', 'coverage', 'test-results', 'playwright-report']);
 const copyRegistryFiles = new Set([

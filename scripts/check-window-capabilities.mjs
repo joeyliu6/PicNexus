@@ -34,24 +34,18 @@ const root = process.cwd();
 const failures = [];
 
 /**
- * 每个页面跑在哪个窗口 / webview 里。来源：tauri.conf.json（main）、src-tauri/src/main.rs
- * （tray-menu）、src-tauri/src/commands/cookie_login.rs（login-window 及其两个子 webview）。
+ * 每个页面跑在哪个窗口 / webview 里。来源：tauri.conf.json（main）、
+ * src-tauri/src/commands/cookie_login.rs（login-window 及其两个子 webview）。
  * 统计窗口（analytics-transport）加载的是本机统计服务的远程页，不在这里，也不该被放行任何命令。
  */
 const PAGE_WINDOWS = {
   'index.html': { window: 'main', webview: 'main' },
-  'tray-menu.html': { window: 'tray-menu', webview: 'tray-menu' },
   'login-webview.html': { window: 'login-window', webview: 'login-content' },
   'login-titlebar.html': { window: 'login-window', webview: 'login-titlebar' },
 };
 
 /** 页面代码里出现、但运行时走不到的命令：刻意不放行，并写明理由 */
-const WITHHELD = {
-  'tray-menu.html': {
-    set_secure_key: '托盘只读配置；crypto.ts 里改主密钥的三个方法只有设置页和启动恢复会调',
-    get_history_db_path: 'appPaths.ts 顺带导出，只有 HistoryDatabase 会调，托盘不碰历史库',
-  },
-};
+const WITHHELD = {};
 
 /** 不是代码、不会再引入命令的资源扩展名 */
 const ASSET_EXTENSIONS = new Set(['.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.json', '.woff', '.woff2']);

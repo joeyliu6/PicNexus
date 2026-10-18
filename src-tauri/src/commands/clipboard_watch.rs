@@ -48,8 +48,9 @@ fn is_new_image(previous: Option<u64>, current: Option<u64>) -> bool {
     current.is_some() && current != previous
 }
 
+/// 系统剪贴板的序号：每次有人往剪贴板里放东西就加一（托盘也用它判断剪贴板变没变）
 #[cfg(windows)]
-fn sequence_number() -> u32 {
+pub(crate) fn sequence_number() -> u32 {
     // SAFETY: 无参数的 Win32 查询，只读系统计数
     unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() }
 }

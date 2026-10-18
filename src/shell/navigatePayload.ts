@@ -1,5 +1,5 @@
 // 「navigate-to」事件 → 路由
-// 托盘（Rust 与托盘窗口）和应用内各处仍按旧的视图名发事件：
+// 托盘、macOS 应用菜单和应用内各处仍按旧的视图名发事件：
 //   'upload' | 'history' | 'link-check' | 'settings'，或 { view, tab?, section? }
 // 这里统一翻译成新的页面路径；设置页的二级定位（tab / section）照旧透传。
 

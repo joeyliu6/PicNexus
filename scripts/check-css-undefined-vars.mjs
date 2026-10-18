@@ -42,7 +42,7 @@ const root = process.cwd();
 /** 定义扫描面：项目里任何可能声明 CSS 变量的地方 */
 const DEFINITION_SCAN = {
   dirs: ['src', 'public'],
-  rootFiles: ['index.html', 'login-webview.html', 'login-titlebar.html', 'tray-menu.html'],
+  rootFiles: ['index.html', 'login-webview.html', 'login-titlebar.html'],
   extensions: /\.(css|vue|ts|js|mjs|html)$/,
 };
 

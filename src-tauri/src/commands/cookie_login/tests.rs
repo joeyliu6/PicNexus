@@ -334,7 +334,7 @@ fn login_navigation_allows_only_the_bundled_login_page_among_app_pages() {
         "http://tauri.localhost/index.html",
         "http://tauri.localhost/",
         "https://tauri.localhost/index.html",
-        "tauri://localhost/tray-menu.html",
+        "tauri://localhost/index.html",
         "http://tauri.localhost/login-titlebar.html?name=x",
     ] {
         assert!(!nav(url), "{url} 不该放行");

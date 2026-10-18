@@ -212,9 +212,11 @@ function createController() {
   /**
    * 选中 = 改默认格式，并按新格式重新复制焦点卡的链接（交接说明 8.1「复制为」）。
    * 多张还没传完时只改格式：整批结束前不动剪贴板，结束时会按新格式一次复制。
+   * recopy = false 只改格式（托盘：下一次上传才按新格式复制，不动剪贴板里现有的内容，T04）。
    */
-  async function setFormat(format: LinkFormat): Promise<void> {
+  async function setFormat(format: LinkFormat, { recopy = true }: { recopy?: boolean } = {}): Promise<void> {
     await saveConfigPatch((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), defaultFormat: format } }));
+    if (!recopy) return;
     const focus = sessions[0];
     if (!focus || (!focus.finished && focus.itemIds.length > 1)) return;
     await copySession(focus.id, true);
@@ -378,10 +380,6 @@ function createController() {
     ready.value = true;
     unlisteners.push(await uploadManager.setupConfigListener());
     unlisteners.push(await listen('config-updated', () => { void refreshConfig(); }));
-    unlisteners.push(await listen<string>('tray-action', (event) => {
-      if (event.payload === 'upload_clipboard') void pasteClipboard();
-      else if (event.payload === 'select_upload_files') void pickAndUpload();
-    }));
     unlisteners.push(await cookieLogin.install());
     return () => unlisteners.splice(0).forEach((unlisten) => unlisten());
   }

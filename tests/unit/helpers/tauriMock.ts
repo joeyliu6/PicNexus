@@ -55,7 +55,7 @@ const tauriWindowMockState = vi.hoisted(() => {
   });
 
   return {
-    currentWindow: makeWindow('tray-menu'),
+    currentWindow: makeWindow('main'),
     labeledWindow: makeWindow('main'),
   };
 });

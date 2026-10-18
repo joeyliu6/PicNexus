@@ -20,13 +20,11 @@ mod acl_tests;
 use log::LevelFilter;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+#[cfg(target_os = "windows")]
 use tauri::image::Image;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{
-    Emitter, LogicalSize, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindowBuilder,
-};
+use tauri::{Emitter, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 use tokio::sync::Mutex as TokioMutex;
 
@@ -40,128 +38,6 @@ pub struct ServerState {
     pub upload_config: Arc<TokioMutex<Option<server::ServerUploadConfig>>>,
     pub auth_token: Arc<TokioMutex<Option<String>>>,
     pub abort_handle: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
-}
-
-#[cfg(windows)]
-#[link(name = "dwmapi")]
-extern "system" {
-    fn DwmSetWindowAttribute(
-        hwnd: isize,
-        dw_attribute: u32,
-        pv_attribute: *const std::ffi::c_void,
-        cb_attribute: u32,
-    ) -> i32;
-}
-
-#[cfg(windows)]
-fn disable_window_transitions(hwnd: isize) {
-    const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
-    let disable: i32 = 1;
-    unsafe {
-        DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_TRANSITIONS_FORCEDISABLED,
-            &disable as *const i32 as *const std::ffi::c_void,
-            std::mem::size_of::<i32>() as u32,
-        );
-    }
-}
-
-fn reveal_main_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
-    let window = app.get_webview_window("main")?;
-    let _ = window.unminimize();
-    let _ = window.show();
-    let _ = window.set_focus();
-    Some(window)
-}
-
-const TRAY_MENU_WINDOW_LABEL: &str = "tray-menu";
-const TRAY_MENU_WIDTH: f64 = 185.0;
-/// 菜单布局常量：必须与 Vue TrayMenuWindow.vue 保持同步
-const TRAY_MENU_ITEM_HEIGHT: f64 = 26.0;
-const TRAY_MENU_SEPARATOR_HEIGHT: f64 = 5.0;
-const TRAY_MENU_PANEL_EXTRA: f64 = 18.0;
-const TRAY_MENU_ITEM_COUNT: f64 = 7.0;
-const TRAY_MENU_SEPARATOR_COUNT: f64 = 3.0;
-/// 计算结果: 7*26 + 3*5 + 18 = 215.0
-const TRAY_MENU_HEIGHT: f64 = TRAY_MENU_ITEM_COUNT * TRAY_MENU_ITEM_HEIGHT
-    + TRAY_MENU_SEPARATOR_COUNT * TRAY_MENU_SEPARATOR_HEIGHT
-    + TRAY_MENU_PANEL_EXTRA;
-
-fn hide_tray_menu_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window(TRAY_MENU_WINDOW_LABEL) {
-        let _ = window.emit("tray-menu-hide-requested", ());
-    }
-}
-
-fn clamp_tray_menu_position(
-    app: &tauri::AppHandle,
-    event_position: PhysicalPosition<f64>,
-    rect: Rect,
-    scale_factor: f64,
-) -> PhysicalPosition<i32> {
-    let rect_position = rect.position.to_physical::<f64>(scale_factor);
-    let rect_size = rect.size.to_physical::<f64>(scale_factor);
-    let menu_width = (TRAY_MENU_WIDTH * scale_factor).round();
-    let menu_height = (TRAY_MENU_HEIGHT * scale_factor).round();
-
-    let mut x = rect_position.x + rect_size.width - menu_width;
-    let mut y = rect_position.y - menu_height;
-
-    if let Ok(Some(monitor)) = app.monitor_from_point(event_position.x, event_position.y) {
-        let work_area = monitor.work_area();
-        let left = work_area.position.x as f64;
-        let top = work_area.position.y as f64;
-        let right = left + work_area.size.width as f64;
-        let bottom = top + work_area.size.height as f64;
-
-        if y < top {
-            y = rect_position.y + rect_size.height;
-        }
-        if y + menu_height > bottom {
-            y = rect_position.y - menu_height;
-        }
-
-        let max_x = (right - menu_width).max(left);
-        let max_y = (bottom - menu_height).max(top);
-        x = x.clamp(left, max_x);
-        y = y.clamp(top, max_y);
-    }
-
-    PhysicalPosition::new(x.round() as i32, y.round() as i32)
-}
-
-fn show_tray_menu_window(
-    app: &tauri::AppHandle,
-    event_position: PhysicalPosition<f64>,
-    rect: Rect,
-) {
-    let Some(window) = app.get_webview_window(TRAY_MENU_WINDOW_LABEL) else {
-        log::warn!("[Tray] tray-menu 窗口不存在，无法显示自定义托盘菜单");
-        return;
-    };
-
-    let scale_factor = app
-        .monitor_from_point(event_position.x, event_position.y)
-        .ok()
-        .flatten()
-        .map(|monitor| monitor.scale_factor())
-        .or_else(|| window.scale_factor().ok())
-        .unwrap_or(1.0);
-    let position = clamp_tray_menu_position(app, event_position, rect, scale_factor);
-
-    if let Err(error) = window.set_size(LogicalSize::new(TRAY_MENU_WIDTH, TRAY_MENU_HEIGHT)) {
-        log::warn!("[Tray] 设置托盘菜单尺寸失败: {:?}", error);
-    }
-    if let Err(error) = window.set_position(position) {
-        log::warn!("[Tray] 设置托盘菜单位置失败: {:?}", error);
-    }
-    if let Err(error) = window.show() {
-        log::warn!("[Tray] 显示托盘菜单失败: {:?}", error);
-        return;
-    }
-    let _ = window.set_focus();
-    let _ = window.emit("tray-menu-opened", ());
 }
 
 /// 全局 HTTP 客户端状态
@@ -222,14 +98,9 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            commands::tray::reveal_main_window(app);
         }))
         // 注册 Tauri 2.0 插件
-        .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -350,7 +221,9 @@ fn main() {
             commands::system::check_editor_server_status,
             commands::system::update_server_config,
             commands::cli_config::save_cli_config,
-            commands::system::get_executable_path
+            commands::system::get_executable_path,
+            commands::tray::get_taskbar_light,
+            commands::tray::set_tray_default_item
         ])
         .setup(|app| {
             // 1. 创建原生菜单栏 (仅 macOS)
@@ -410,75 +283,8 @@ fn main() {
                 });
             }
 
-            // 3. 创建自定义托盘菜单窗口
-            // macOS 使用上面的应用级菜单栏作为入口，不创建系统托盘
-            #[cfg(not(target_os = "macos"))]
-            {
-                let tray_menu_window = WebviewWindowBuilder::new(
-                    app,
-                    TRAY_MENU_WINDOW_LABEL,
-                    WebviewUrl::App("tray-menu.html".into()),
-                )
-                .inner_size(TRAY_MENU_WIDTH, TRAY_MENU_HEIGHT)
-                .transparent(true)
-                .resizable(false)
-                .decorations(false)
-                .visible(false)
-                .skip_taskbar(true)
-                .always_on_top(true)
-                .focused(false)
-                .shadow(false)
-                .build()?;
-
-                #[cfg(windows)]
-                if let Ok(hwnd) = tray_menu_window.hwnd() {
-                    disable_window_transitions(hwnd.0 as isize);
-                }
-
-                let tray_menu_for_focus = tray_menu_window.clone();
-                tray_menu_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(focused) = event {
-                        if !*focused {
-                            let _ = tray_menu_for_focus.emit("tray-menu-hide-requested", ());
-                        }
-                    }
-                });
-
-                // 4. 创建系统托盘（右键显示 Vue 控制的小菜单窗口）
-                // 使用 256x256 PNG 作为托盘图标（适合高分屏缩放）
-                let tray_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))
-                    .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
-                let _tray = TrayIconBuilder::with_id("main-tray")
-                    .icon(tray_icon)
-                    .icon_as_template(false) // Windows 不使用模板模式以显示彩色图标
-                    .show_menu_on_left_click(false) // 左键不显示菜单
-                    .on_tray_icon_event(|tray, event| {
-                        // 将事件传递给 positioner 插件
-                        tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
-
-                        if let TrayIconEvent::Click {
-                            position,
-                            rect,
-                            button,
-                            button_state: MouseButtonState::Up,
-                            ..
-                        } = event
-                        {
-                            let app = tray.app_handle();
-                            match button {
-                                MouseButton::Left => {
-                                    hide_tray_menu_window(app);
-                                    let _ = reveal_main_window(app);
-                                }
-                                MouseButton::Right => {
-                                    show_tray_menu_window(app, position, rect);
-                                }
-                                _ => {}
-                            }
-                        }
-                    })
-                    .build(app)?;
-            } // #[cfg(not(target_os = "macos"))] 块结束
+            // 2. 系统托盘（三个平台都建）：菜单内容由主窗口前端按配置画（src/tray/）
+            commands::tray::setup_tray(app)?;
 
             // 5. 窗口初始化
             let window = match app.get_webview_window("main") {
@@ -562,6 +368,8 @@ fn main() {
                             if close_to_tray {
                                 api.prevent_close();
                                 let _ = window_for_close.hide();
+                                let _ = window_for_close
+                                    .emit(commands::tray::WINDOW_PRESENCE_EVENT, ());
                             }
                         }
                         #[cfg(target_os = "windows")]

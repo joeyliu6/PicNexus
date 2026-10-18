@@ -84,7 +84,6 @@
         { "url": "http://localhost:*" }
       ]
     },
-    "positioner:default",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
@@ -94,6 +93,7 @@
     "global-shortcut:allow-is-registered",
     "updater:default",
     "process:allow-restart",
+    "process:allow-exit",
     "log:default",
     "allow-set-close-to-tray",
     "allow-get-user-data-dir",
@@ -162,6 +162,8 @@
     "allow-check-editor-server-status",
     "allow-update-server-config",
     "allow-save-cli-config",
-    "allow-get-executable-path"
+    "allow-get-executable-path",
+    "allow-get-taskbar-light",
+    "allow-set-tray-default-item"
   ]
 }

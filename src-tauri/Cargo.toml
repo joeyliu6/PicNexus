@@ -52,7 +52,6 @@ lodepng = "3"
 mozjpeg = "0.10"
 webp = "0.3"
 imagesize = "0.13"
-tauri-plugin-positioner = { version = "2.0", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"

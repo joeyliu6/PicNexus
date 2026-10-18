@@ -80,6 +80,8 @@ const APP_COMMANDS: &[&str] = &[
     "update_server_config",
     "save_cli_config",
     "get_executable_path",
+    "get_taskbar_light",
+    "set_tray_default_item",
 ];
 
 fn main() {

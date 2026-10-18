@@ -27,11 +27,10 @@ const MAIN_RS: &str = include_str!("main.rs");
 const REACHED: &str = "reached";
 
 /// 本应用会创建的全部 webview：(窗口 label, webview label)。
-/// 来源：tauri.conf.json（main）、main.rs（tray-menu）、commands/cookie_login.rs（登录窗口两块）、
+/// 来源：tauri.conf.json（main）、commands/cookie_login.rs（登录窗口两块）、
 /// analytics/mod.rs（统计窗口）。新增窗口时这里也要加，否则它的权限没人测。
-const WEBVIEWS: [(&str, &str); 5] = [
+const WEBVIEWS: [(&str, &str); 4] = [
     ("main", "main"),
-    ("tray-menu", "tray-menu"),
     ("login-window", "login-titlebar"),
     ("login-window", "login-content"),
     ("analytics-transport", "analytics-transport"),
@@ -221,7 +220,6 @@ fn build_webviews(app: &App<MockRuntime>) -> Vec<(&'static str, &'static str, We
     };
 
     let main = window_page("main");
-    let tray = window_page("tray-menu");
     let analytics = window_page("analytics-transport");
 
     let login_window = tauri::window::WindowBuilder::new(app, "login-window")
@@ -241,7 +239,6 @@ fn build_webviews(app: &App<MockRuntime>) -> Vec<(&'static str, &'static str, We
 
     let webviews = vec![
         ("main", "main", main.as_ref().clone()),
-        ("tray-menu", "tray-menu", tray.as_ref().clone()),
         ("login-window", "login-titlebar", titlebar),
         ("login-window", "login-content", content),
         ("analytics-transport", "analytics-transport", analytics.as_ref().clone()),

@@ -41,6 +41,90 @@ const PAIRS = [
     ],
   },
   {
+    name: 'TRAY_ID',
+    why: '托盘图标由 Rust 建、前端按这个 id 找到它换菜单和图标。名字一分叉，托盘一直停在只有「打开 / 退出」的兜底菜单，也不报错',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/tray.rs',
+        pattern: /const\s+TRAY_ID\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/tray/nativeTray.ts',
+        pattern: /const\s+TRAY_ID\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
+    name: 'TRAY_HOVER_EVENT',
+    why: '鼠标移到托盘图标上时 Rust 发的事件名，前端据此重看剪贴板与任务栏深浅。名字一分叉，macOS 上「剪贴板无图片」永远不变灰',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/tray.rs',
+        pattern: /const\s+TRAY_HOVER_EVENT\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/tray/installTray.ts',
+        pattern: /const\s+TRAY_HOVER_EVENT\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
+    name: 'TRAY_CLIPBOARD_EVENT',
+    why: 'Windows 剪贴板一变 Rust 就发的事件名，前端据此重看剪贴板。名字一分叉，托盘第一项的灰 / 亮会慢一拍',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/tray.rs',
+        pattern: /const\s+TRAY_CLIPBOARD_EVENT\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/tray/installTray.ts',
+        pattern: /const\s+TRAY_CLIPBOARD_EVENT\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
+    name: 'TRAY OPEN_LABEL',
+    why: '托盘「打开 PicNexus」：Rust 的兜底菜单与前端画的正式菜单各写一份。启动那一两秒看到的是兜底菜单，两边不一致就会在启动后「变字」',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/tray.rs',
+        pattern: /const\s+OPEN_LABEL\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/tray/trayMenuModel.ts',
+        pattern: /const\s+OPEN_LABEL\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
+    name: 'TRAY QUIT_LABEL',
+    why: '托盘「退出 PicNexus」：Rust 的兜底菜单与前端画的正式菜单各写一份，理由同上',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/tray.rs',
+        pattern: /const\s+QUIT_LABEL\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/tray/trayMenuModel.ts',
+        pattern: /const\s+QUIT_LABEL\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
+    name: 'WINDOW_PRESENCE_EVENT',
+    why: 'Rust 关到托盘 / 从托盘打开主窗口后发的事件名，前端据此判断通知走应用内还是系统通知。名字一分叉，窗口藏起来后的上传结果没人看得到',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/tray.rs',
+        pattern: /const\s+WINDOW_PRESENCE_EVENT\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/composables/appPresence.ts',
+        pattern: /const\s+WINDOW_PRESENCE_EVENT\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'FAKE_IP_HOST_MESSAGE',
     why: 'fake-ip 地址被当成局域网时的提示。设置页由前端拦、上传时由 Rust 拦，是同一件事的两个拦截点',
     sources: [

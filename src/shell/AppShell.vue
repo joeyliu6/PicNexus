@@ -26,6 +26,7 @@ import { installClipboardWatch } from '@/composables/upload/clipboardWatch';
 import { installHealthBadge } from '@/views/health/healthBadge';
 import { setUpdateInstallGate } from '@/composables/useAutoUpdate';
 import { installAppPresence, isAppOnScreen } from '@/composables/appPresence';
+import { installTray } from '@/tray/installTray';
 
 const log = createLogger('AppShell');
 
@@ -56,8 +57,8 @@ onMounted(async () => {
   disposers.push(installEditorSync());
   // 自动上传剪贴板：开关跟着配置走，后台发现新图片就照「粘贴上传」传
   disposers.push(installClipboardWatch(upload));
-  // 主窗口在不在屏（决定通知走应用内还是系统通知）
-  disposers.push(installAppPresence());
+  // 主窗口在不在屏（决定通知走应用内还是系统通知）；托盘原生菜单与图标（交接说明 8.6）
+  disposers.push(installAppPresence(), installTray(upload));
   // 两件事互不依赖：一件失败不能拖住另一件
   await Promise.all([
     upload.init().then((dispose) => disposers.push(dispose)).catch((error) => log.error('上传控制器初始化失败', error)),

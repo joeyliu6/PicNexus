@@ -277,6 +277,16 @@ describe('useUploadController', () => {
       await running;
     });
 
+    it('re-copies the finished card in the new format, unless asked only to change the format (tray)', async () => {
+      const { controller } = await upload(item('one', { jd: 'done' }));
+      await controller.setFormat('html', { recopy: false });
+      expect(m.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ linkOutput: expect.objectContaining({ defaultFormat: 'html' }) }), true);
+      expect(m.copyLinks).not.toHaveBeenCalled();
+
+      await controller.setFormat('markdown');
+      expect(m.copyLinks).toHaveBeenCalledTimes(1);
+    });
+
     it('clears the list but keeps the newest upload on its card', async () => {
       const { controller } = await upload(item('old', { jd: 'done' }));
       const { session: newest } = await upload(item('new', { jd: 'done' }));

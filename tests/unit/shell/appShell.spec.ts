@@ -6,13 +6,13 @@ import { flushPromisesAndTicks } from '../helpers/wait';
 import { getListenMock, resetTauriMocks } from '../helpers/tauriMock';
 
 const mockState = vi.hoisted(() => ({
-  setupTrayMenu: vi.fn(),
-  unlistenTrayMenu: vi.fn(),
+  installTray: vi.fn(),
+  disposeTray: vi.fn(),
   hasUpdate: { value: false },
 }));
 
-vi.mock('@/services/trayMenu', () => ({
-  setupTrayMenu: mockState.setupTrayMenu,
+vi.mock('@/tray/installTray', () => ({
+  installTray: mockState.installTray,
 }));
 
 vi.mock('@/composables/useAutoUpdate', async () => {
@@ -26,11 +26,10 @@ import AppShell from '@/shell/AppShell.vue';
 import { __resetSidebarCollapseForTests } from '@/shell/useSidebarCollapse';
 
 type Handler = (event: { payload: unknown }) => void;
-// 同一个事件可以有好几个监听（外壳的跳转和上传控制器都听 tray-action），和 Tauri 一样全部通知到
+// 同一个事件可以有好几个监听（外壳的跳转、上传控制器、托盘都可能听同一个），和 Tauri 一样全部通知到
 const handlers: Record<string, Handler[]> = {};
 const fire = (event: string, payload: unknown) => (handlers[event] ?? []).forEach((handler) => handler({ payload }));
 const unlistenNavigate = vi.fn();
-const unlistenTrayAction = vi.fn();
 
 const SettingsStub = defineComponent({
   setup() {
@@ -73,12 +72,11 @@ beforeEach(() => {
   localStorage.clear();
   __resetSidebarCollapseForTests();
   mockState.hasUpdate.value = false;
-  mockState.setupTrayMenu.mockResolvedValue(mockState.unlistenTrayMenu);
+  mockState.installTray.mockReturnValue(mockState.disposeTray);
   for (const key of Object.keys(handlers)) delete handlers[key];
   getListenMock().mockImplementation(async (event, handler) => {
     (handlers[event as string] ??= []).push(handler as Handler);
     if (event === 'navigate-to') return unlistenNavigate;
-    if (event === 'tray-action') return unlistenTrayAction;
     return vi.fn();
   });
 });
@@ -123,17 +121,13 @@ describe('AppShell', () => {
 
     wrapper.unmount();
     expect(unlistenNavigate).toHaveBeenCalled();
-    expect(unlistenTrayAction).toHaveBeenCalled();
-    expect(mockState.unlistenTrayMenu).toHaveBeenCalled();
+    expect(mockState.disposeTray).toHaveBeenCalled();
   });
 
-  it('goes to 快传 on tray upload actions', async () => {
-    const { wrapper, router } = await mountShell();
-    await router.push('/gallery');
-
-    fire('tray-action', 'select_upload_files');
-    await flushPromisesAndTicks();
-    expect(router.currentRoute.value.path).toBe('/home');
+  it('installs the tray with the shared upload controller', async () => {
+    await mountShell();
+    const { useUploadController } = await import('@/composables/upload/useUploadController');
+    expect(mockState.installTray).toHaveBeenCalledWith(useUploadController());
   });
 
   it('shows the brand dot on 设置 only when an update is available', async () => {

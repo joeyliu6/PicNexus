@@ -28,6 +28,7 @@ pub mod s3_compatible;
 pub mod smms;
 pub mod storage_probe;
 pub mod system;
+pub mod tray;
 pub mod utils;
 pub mod webdav_backup;
 pub mod webdav_upload;
