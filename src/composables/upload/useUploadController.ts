@@ -154,11 +154,12 @@ function createController() {
     }
   }
 
-  async function pickAndUpload(): Promise<void> {
+  /** showHint：从首页按钮选文件时才出「更快的方法」提示；托盘、全局快捷键不出 */
+  async function pickAndUpload({ showHint = true }: { showHint?: boolean } = {}): Promise<void> {
     const filePaths = await uploadManager.selectFiles();
     if (!filePaths?.length) return;
     // 渐进提示：第一次用了慢的方法（点按钮选文件）之后，轻轻告诉他更快的路，只出现一次
-    if (!readHintShown()) showFastUploadHint.value = true;
+    if (showHint && !readHintShown()) showFastUploadHint.value = true;
     await uploadFiles(filePaths);
   }
 

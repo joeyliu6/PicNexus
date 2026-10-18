@@ -136,16 +136,16 @@ describe('useUploadController', () => {
     expect(m.managerOptions?.resultsOnScreen?.()).toBe(false);
   });
 
-  it('handles tray upload actions after init', async () => {
+  it('shows the faster-way hint only after picking files from the home button', async () => {
     const upload = useUploadController();
     m.selectFiles.mockResolvedValue(['C:/tray.png']);
-    await upload.init();
 
-    m.listeners['tray-action']({ payload: 'upload_clipboard' });
-    expect(m.pasteAndUpload).toHaveBeenCalledTimes(1);
+    await upload.pickAndUpload({ showHint: false });
+    expect(m.handleFilesUpload).toHaveBeenCalledWith(['C:/tray.png'], {});
+    expect(upload.showFastUploadHint.value).toBe(false);
 
-    m.listeners['tray-action']({ payload: 'select_upload_files' });
-    await vi.waitFor(() => expect(m.handleFilesUpload).toHaveBeenCalledWith(['C:/tray.png'], {}));
+    await upload.pickAndUpload();
+    expect(upload.showFastUploadHint.value).toBe(true);
   });
 
   it('saves the compression choice, with 关 meaning original images', async () => {

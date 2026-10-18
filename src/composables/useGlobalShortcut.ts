@@ -1,64 +1,25 @@
-// 全局快捷键管理 - 在任何应用中通过快捷键触发上传
+// 全局快捷键：在任何程序里按下组合键上传剪贴板图片 / 选择文件上传。
+// 上传走应用级上传控制器（与首页、托盘同一条路）：进度在托盘与首页都看得到，复制规则一致；
+// 主窗口不在屏时结果由系统通知告知（useToast → appPresence）。
 
-import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
 import { register, unregisterAll, isRegistered, unregister } from '@tauri-apps/plugin-global-shortcut';
-import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from '@tauri-apps/plugin-notification';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { listen } from '@tauri-apps/api/event';
-import { basename, resolveResource } from '@tauri-apps/api/path';
 
 import { readFreshConfig } from '@/store/instances';
-import {
-  DEFAULT_CONFIG
-} from '@/config/types';
-import type { ServiceType ,
-  UserConfig,
-  GlobalShortcutConfig} from '@/config/types';
-import type { SingleServiceResult } from '@/core/MultiServiceUploader';
-import { MultiServiceUploader } from '@/core/MultiServiceUploader';
-import { useHistorySaver } from '@/composables/history/useHistorySaver';
-import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
-import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from './upload/FileValidator';
-import { buildUploadSummaryToast, type UploadCopySummary } from '@/utils/uploadSummary';
+import { DEFAULT_CONFIG, type GlobalShortcutConfig, type UserConfig } from '@/config/types';
+import { useUploadController } from '@/composables/upload/useUploadController';
+import { useToast } from '@/composables/useToast';
 import { createLogger } from '@/utils/logger';
-import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
-import {
-  getFileExtension,
-  getSupportedServicesForFormat,
-  getUnsupportedServicesForFormat,
-} from '@/constants/serviceFormats';
-import { getServiceDisplayName } from '@/constants/serviceNames';
+import { uiPlatform } from '@/utils/platform';
+import { formatShortcut } from '@/utils/shortcutText';
 
 const log = createLogger('GlobalShortcut');
 
-const isUploading = ref(false);
 let configUnlisten: UnlistenFn | null = null;
 const registeredShortcuts = new Set<string>();
 let lastShortcutConfig: GlobalShortcutConfig | null = null;
 const notifiedConflicts = new Set<string>();
-
-async function notify(title: string, body: string) {
-  try {
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === 'granted';
-    }
-    if (granted) {
-      const icon = await resolveResource('icons/icon.png');
-      sendNotification({ title, body, icon });
-    }
-  } catch (err) {
-    log.error('通知发送失败:', err);
-  }
-}
 
 /**
  * 对比两个快捷键配置是否相等
@@ -71,232 +32,16 @@ function isShortcutConfigEqual(a: GlobalShortcutConfig | null, b: GlobalShortcut
 }
 
 /**
- * 快捷键的每个触发点都要用当前配置（启用的图床、链接格式），
- * 而配置可能刚被托盘窗口改过——走 readFreshConfig 绕开本窗口的陈旧缓存。
+ * 每次注册都要用当前配置，而配置可能刚被别处（设置页、云同步）改过——走 readFreshConfig 绕开陈旧缓存。
  */
 async function loadConfig(): Promise<UserConfig> {
   const loaded = await readFreshConfig(DEFAULT_CONFIG);
   return loaded || DEFAULT_CONFIG;
 }
 
-async function getFileName(filePath: string): Promise<string> {
-  try {
-    return await basename(filePath);
-  } catch {
-    return filePath.split(/[/\\]/).pop() || '未知文件';
-  }
-}
-
-/**
- * 后台上传单个文件到所有启用的图床
- */
-interface UploadResult {
-  primaryUrl: string;
-  primaryService: ServiceType;
-}
-
-async function uploadFileInBackground(filePath: string, config: UserConfig): Promise<UploadResult | null> {
-  const uploader = new MultiServiceUploader();
-  const historySaver = useHistorySaver();
-
-  const enabledServices = config.enabledServices || [];
-  if (enabledServices.length === 0) {
-    await notify('PicNexus', '没有启用任何图床，请先配置');
-    return null;
-  }
-
-  const ext = getFileExtension(filePath);
-  const supportedServices = getSupportedServicesForFormat(enabledServices, ext);
-  const unsupportedServices = getUnsupportedServicesForFormat(enabledServices, ext);
-  if (unsupportedServices.length > 0) {
-    const names = unsupportedServices.map(serviceId => getServiceDisplayName(serviceId, config)).join('、');
-    await notify('PicNexus', `${names} 不支持 .${ext || 'unknown'} 格式，已跳过`);
-  }
-
-  if (supportedServices.length === 0) {
-    await notify('PicNexus', `已选图床不支持 .${ext || 'unknown'} 格式`);
-    return null;
-  }
-
-  const historyId = crypto.randomUUID();
-  let firstSaved = false;
-
-  const result = await uploader.uploadToMultipleServices(
-    filePath,
-    supportedServices,
-    config,
-    undefined,
-    async (serviceResult: SingleServiceResult) => {
-      if (serviceResult.status === 'success' && !firstSaved) {
-        firstSaved = true;
-        try {
-          await historySaver.saveHistoryItemImmediate(filePath, serviceResult, historyId);
-        } catch (err) {
-          log.error('保存历史记录失败:', err);
-        }
-      } else if (serviceResult.status === 'success' && firstSaved) {
-        try {
-          await historySaver.addResultToHistoryItem(historyId, serviceResult);
-        } catch (err) {
-          log.error('追加历史记录失败:', err);
-        }
-      }
-    }
-  );
-
-  if (!result.primaryUrl) return null;
-  return {
-    primaryUrl: result.primaryUrl,
-    primaryService: result.primaryService as ServiceType,
-  };
-}
-
-async function withUploadGuard(label: string, fn: () => Promise<void>) {
-  if (isUploading.value) {
-    await notify('PicNexus', '正在上传中，请稍候...');
-    return;
-  }
-  isUploading.value = true;
-  try {
-    await fn();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error(`${label}失败:`, err);
-    await notify('上传失败', msg);
-  } finally {
-    isUploading.value = false;
-  }
-}
-
-async function formatLinkForShortcut(
-  primaryUrl: string,
-  filePath: string,
-  config: UserConfig,
-  serviceId?: string
-): Promise<string> {
-  const fileName = await getFileName(filePath);
-  return formatLinkWithConfig({ url: primaryUrl, fileName, serviceId }, config);
-}
-
-function createShortcutCopySummary(config: UserConfig, autoCopyEnabled: boolean): UploadCopySummary {
-  const { format } = getLinkFormatConfig(config);
-  return {
-    autoCopyEnabled,
-    copiedCount: 0,
-    format,
-    copyFailed: false,
-  };
-}
-
-async function notifyUploadSummary(total: number, success: number, copy: UploadCopySummary): Promise<void> {
-  const payload = buildUploadSummaryToast({
-    total,
-    success,
-    failed: Math.max(0, total - success),
-  }, copy);
-  if (!payload) return;
-  await notify(payload.summary, payload.detail);
-}
-
-async function validateShortcutFileSelection(filePaths: string[]): Promise<string[]> {
-  const { valid, invalid, truncatedCount } = await filterValidFiles(filePaths);
-
-  if (invalid.length > 0) {
-    await notify('PicNexus', `已忽略 ${invalid.length} 个无效或损坏的图片文件`);
-  }
-
-  if (truncatedCount > 0) {
-    await notify('PicNexus', `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件，已截断多余的 ${truncatedCount} 个`);
-  }
-
-  if (valid.length === 0) {
-    await notify('PicNexus', '未检测到有效图片');
-  }
-
-  return valid;
-}
-
-const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () => {
-  const hasImage = await invoke<boolean>('clipboard_has_image');
-  if (!hasImage) {
-    await notify('PicNexus', '剪贴板中没有图片');
-    return;
-  }
-
-  const tempFilePath = await invoke<string>('read_clipboard_image');
-  try {
-    const config = await loadConfig();
-    const uploadResult = await uploadFileInBackground(tempFilePath, config);
-    if (!uploadResult) return;
-
-    const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
-    const autoCopyEnabled = linkOutput.autoCopy !== false;
-    const copySummary = createShortcutCopySummary(config, autoCopyEnabled);
-    const formatted = await formatLinkForShortcut(uploadResult.primaryUrl, tempFilePath, config, uploadResult.primaryService);
-    if (autoCopyEnabled) {
-      try {
-        await writeText(formatted);
-        copySummary.copiedCount = 1;
-      } catch (err) {
-        copySummary.copyFailed = true;
-        log.error('自动复制失败:', err);
-      }
-    }
-    await notifyUploadSummary(1, 1, copySummary);
-  } finally {
-    await cleanupClipboardTempFile(tempFilePath);
-  }
-});
-
-const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async () => {
-  const selected = await dialogOpen({
-    multiple: true,
-    filters: [{ name: '图片', extensions: [...VALID_IMAGE_EXTENSIONS] }],
-  });
-
-  const selectedFilePaths = Array.isArray(selected) ? selected : selected ? [selected] : [];
-  if (selectedFilePaths.length === 0) return;
-
-  const filePaths = await validateShortcutFileSelection(selectedFilePaths);
-  if (filePaths.length === 0) return;
-
-  const config = await loadConfig();
-  const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
-  const autoCopyEnabled = linkOutput.autoCopy !== false;
-  const copySummary = createShortcutCopySummary(config, autoCopyEnabled);
-  const allLinks: string[] = [];
-
-  for (const filePath of filePaths) {
-    try {
-      const uploadResult = await uploadFileInBackground(filePath, config);
-      if (uploadResult) {
-        const formatted = await formatLinkForShortcut(
-          uploadResult.primaryUrl, filePath, config, uploadResult.primaryService
-        );
-        allLinks.push(formatted);
-      }
-    } catch (err) {
-      log.error(`文件上传失败: ${filePath}`, err);
-    }
-  }
-
-  if (allLinks.length > 0 && autoCopyEnabled) {
-    try {
-      await writeText(allLinks.join('\n'));
-      copySummary.copiedCount = allLinks.length;
-    } catch (err) {
-      copySummary.copyFailed = true;
-      log.error('自动复制失败:', err);
-    }
-  }
-
-  if (allLinks.length === 0) {
-    await notify('上传失败', '所有文件上传均失败');
-    return;
-  }
-
-  await notifyUploadSummary(filePaths.length, allLinks.length, copySummary);
-});
+const handleClipboardUpload = () => useUploadController().pasteClipboard();
+// 快捷键不是「点按钮选文件」这条慢路，不出「更快的方法」提示
+const handleFileSelectUpload = () => useUploadController().pickAndUpload({ showHint: false });
 
 /**
  * 注册全局快捷键
@@ -319,8 +64,7 @@ async function registerShortcuts(shortcutConfig: GlobalShortcutConfig) {
       }
       await register(shortcut.key, (event) => {
         if (event.state === 'Pressed') {
-          // Why: register 回调是同步签名，handler 返回的 Promise 若在 withUploadGuard 之外抛异常
-          // （例如 notify 内部 requestPermission 失败）会变成浏览器层 unhandledrejection，这里兜底记日志。
+          // Why: register 回调是同步签名，handler 返回的 Promise 抛异常会变成浏览器层 unhandledrejection，这里兜底记日志。
           shortcut.handler().catch((err) => log.error(`${shortcut.name} 执行异常:`, err));
         }
       });
@@ -330,7 +74,7 @@ async function registerShortcuts(shortcutConfig: GlobalShortcutConfig) {
       log.error(`${shortcut.name} 注册失败:`, err);
       // 避免重复通知同一个冲突快捷键
       if (!notifiedConflicts.has(shortcut.key)) {
-        await notify('PicNexus', `快捷键 ${shortcut.key} 注册失败，可能与其他应用冲突`);
+        useToast().warn('全局快捷键未生效', `${formatShortcut(shortcut.key, uiPlatform())} 已被其他程序占用，请在 设置 › 快捷键 中更换`);
         notifiedConflicts.add(shortcut.key);
       }
     }
@@ -438,6 +182,5 @@ export function useGlobalShortcut() {
   return {
     initGlobalShortcuts,
     cleanup,
-    isUploading,
   };
 }
