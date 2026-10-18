@@ -70,15 +70,6 @@
 
 **当前处置**：待处理
 
-### [ ] Tauri 真应用冒烟还按旧界面写选择器，推送 feat/redesign 前必须改写
-
-- **来源**：2026-10-17 阶段 7 收尾时发现
-- **现状**：`tests/tauri-e2e/app-smoke.tauri.e2e.cjs` 仍找旧标题栏（`.titlebar .app-title`，阶段 1 起就没有了）与旧设置页（`.settings-layout`、`.p-toggleswitch`）。CI 的 `tauri-e2e` 在 push 时阻断，分支一推就红；浏览器端冒烟（`tests/e2e`）已改好、8 条全过
-- **要做的**：按新外壳（`AppShell`）和新设置页（`.settings`、`role="switch"`）改写选择器，在装好 tauri-driver 的机器上跑一遍 `npm run test:tauri:e2e`
-- **优先级**：高——推送前做
-
-**当前处置**：待处理
-
 ### [ ] 图床凭证框没有单测
 
 - **来源**：2026-10-17 阶段 7 收尾时发现。旧设置页的 `SensitiveField` 有一套单测钉着「看一眼不等于改一次」「清空先确认」「圆点个数固定」，随旧设置页删除；图床页的 `HostSecretField`（阶段 6）实现了同样的规则，却没有对应测试
@@ -125,7 +116,7 @@
 - **症状**：`scripts/seed-tauri-e2e-portable.mjs` 的 6 条 `e2e-*` 记录把 `results` 写成 `{ serviceId, success: true, url }`；
   应用认的是 `{ serviceId, status: 'success', result: { url } }`（`isUsableMirror`）。脚本注释说派生列「按 isUsableMirror 的口径」，
   实际口径不同：应用里这些记录没有可用链接，链接检测、补充备份都看不到它们
-- **要做的**：改成应用的形状，再跑一遍 `PICNEXUS_ACCEPTANCE=1 npm run test:tauri:e2e` 确认依赖它的验收用例仍过
+- **要做的**：改成应用的形状。依赖它的验收用例 `scan-history-fix-acceptance.tauri.e2e.cjs` 还在点旧历史页（`.main-layout`、旧表格），新界面下必然失败：要么按图库页重写，要么连同种子脚本一起删掉
 - **为什么没顺手改**：这次跑不了那套验收（要 tauri-driver + msedgedriver），改了没法验证
 - **优先级**：低
 
@@ -260,6 +251,10 @@
 ---
 
 ## 已完成
+
+### [x] Tauri 真应用冒烟改按新界面写选择器
+
+`tests/tauri-e2e/app-smoke.tauri.e2e.cjs` 改认新外壳与五个新页面，本机 `npm run test:tauri:e2e` 已跑通；覆盖范围见 [testing-guide.md](./reference/guides/testing-guide.md)「真实桌面壳层」。
 
 ### [x] login-titlebar 的配色并进主题令牌
 
