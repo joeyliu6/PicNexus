@@ -70,8 +70,7 @@ await rekeyFieldSecrets(snapshots, swapFn);   // 解开 → 换钥匙 → 用新
 用新钥匙解不开旧密文，以及**下一次保存把旧密文写回磁盘，刚搬好的新密文被覆盖**。
 
 设置页现在不握配置副本：每改一项都经 `useSettingsConfig().patch` 从磁盘读最新配置、只改这一项再保存，
-所以换完钥匙不需要通知设置页刷新。托盘是独立 webview、有自己一份 `secureStorage`，
-换钥匙后由 `changeBackupPassword` 广播 `SECURE_KEY_ROTATED_EVENT`，托盘收到后 `forceReinit()` 换掉旧钥匙。
+所以换完钥匙不需要通知设置页刷新。托盘是主窗口画的系统原生菜单，没有自己的 `secureStorage`，也不用通知。
 
 > 📌 **这一步是 2026-08-15 第一次真机验收挂掉的地方**：搬运本身是对的，错在只搬了磁盘、没搬内存。
 > 任何持有密文副本的地方都要一起想到。

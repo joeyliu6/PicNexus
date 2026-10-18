@@ -1,11 +1,9 @@
 // 备份密码的设置 / 修改 / 关闭：都是「换钥匙」——内层密文先用旧钥匙解开、换钥匙、再用新钥匙锁上，
 // 外层配置文件用新钥匙重写；任一步失败都回滚到旧钥匙，免得配置永久解不开。
-// 换完广播 SECURE_KEY_ROTATED_EVENT：托盘是独立 webview，有自己一份 secureStorage，不通知它会拿旧钥匙把配置整份覆盖。
 
 import { invoke } from '@tauri-apps/api/core';
-import { emit as emitTauriEvent } from '@tauri-apps/api/event';
 import type { UserConfig } from '@/config/types';
-import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
+import { secureStorage } from '@/security/crypto';
 import { rekeyFieldSecrets, type RekeyReport } from '@/security/fieldSecrets';
 import { configStore, syncStatusStore } from '@/store/instances';
 import type { StoreData } from '@/store/types';
@@ -77,7 +75,6 @@ export async function changeBackupPassword(change: PasswordChange): Promise<Reke
   const report = await swapKeyAndReencrypt(() => (change.mode === 'disable'
     ? secureStorage.clearBackupPassword()
     : secureStorage.setBackupPassword(change.mode === 'set' ? change.password : change.newPassword)));
-  await emitTauriEvent(SECURE_KEY_ROTATED_EVENT);
   await writeSyncLog(change.mode === 'set' ? 'password_set' : change.mode === 'change' ? 'password_change' : 'password_disable', 'success');
   return report;
 }

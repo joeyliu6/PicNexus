@@ -1,8 +1,6 @@
 // 备份密码的设置 / 修改 / 关闭 = 换钥匙：当前密码不对什么都不动；内层密文先用旧钥匙解开、换钥匙、再用新钥匙锁上；
 // 旧钥匙就解不开的原样保留并报出来；写回失败回滚钥匙；换完广播给托盘（独立 webview，有自己一份钥匙）
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEmitMock } from '../../helpers/tauriMock';
-import { SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const secureStorageMock = vi.hoisted(() => ({
@@ -78,14 +76,13 @@ beforeEach(() => {
 });
 
 describe('changeBackupPassword', () => {
-  it('修改 / 关闭时当前密码不对：抛 WrongPasswordError，不换钥匙、不写盘、不广播', async () => {
+  it('修改 / 关闭时当前密码不对：抛 WrongPasswordError，不换钥匙、不写盘', async () => {
     secureStorageMock.verifyBackupPassword.mockResolvedValue(false);
     await expect(changeBackupPassword({ mode: 'change', currentPassword: 'x', newPassword: 'New12345' })).rejects.toBeInstanceOf(WrongPasswordError);
     await expect(changeBackupPassword({ mode: 'disable', currentPassword: 'x' })).rejects.toBeInstanceOf(WrongPasswordError);
     expect(secureStorageMock.setBackupPassword).not.toHaveBeenCalled();
     expect(secureStorageMock.clearBackupPassword).not.toHaveBeenCalled();
     expect(configStoreMock.setDirect).not.toHaveBeenCalled();
-    expect(getEmitMock()).not.toHaveBeenCalledWith(SECURE_KEY_ROTATED_EVENT);
   });
 
   it('设置：不验当前密码；内层密文先用旧钥匙解开再换钥匙，写回的是新钥匙锁上的', async () => {
@@ -114,16 +111,10 @@ describe('changeBackupPassword', () => {
     expect(report.orphans.length).toBe(1);
   });
 
-  it('换完广播 secure-key-rotated：托盘收到后换掉自己手里的旧钥匙', async () => {
-    await changeBackupPassword({ mode: 'set', password: 'New12345' });
-    expect(getEmitMock()).toHaveBeenCalledWith(SECURE_KEY_ROTATED_EVENT);
-  });
-
-  it('写回失败：钥匙回滚到旧的，错误交给调用方，不广播', async () => {
+  it('写回失败：钥匙回滚到旧的，错误交给调用方', async () => {
     configStoreMock.setDirect.mockRejectedValue(new Error('disk full'));
     await expect(changeBackupPassword({ mode: 'set', password: 'New12345' })).rejects.toThrow('disk full');
     expect(invokeMock).toHaveBeenCalledWith('set_secure_key', { key: 'old-key-b64' });
     expect(secureStorageMock.forceReinit).toHaveBeenCalled();
-    expect(getEmitMock()).not.toHaveBeenCalledWith(SECURE_KEY_ROTATED_EVENT);
   });
 });

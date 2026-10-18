@@ -54,10 +54,9 @@ flowchart TD
 > profile 全部丢失，不是"这次启动先凑合用默认值、文件保持原样待下次再试"。
 > `EncryptedStore.loadForRead` 在抛出解密失败前会把原始密文备份成 `.settings.dat.corrupted.<时间戳>`，
 > 密钥本身还在的情况下（比如密码模式换回旧口令）这份备份可能救回数据，但密钥已被覆盖时仍不可恢复。
-> 最容易触发这条路径的场景是托盘常驻窗口拿着换密码前的旧密钥回写配置，详见
-> [scan-config-mirror-2026-09-07.md](../audits/scan-config-mirror-2026-09-07.md) P0-1；
-> 换密钥的三个入口（设置/修改/停用密码、新机器输入密码恢复）现在都会广播 `secure-key-rotated` 事件，
-> 托盘收到后 `secureStorage.forceReinit()` 重新取新密钥，不会再发生这种写反的情况。
+> 只有主窗口一个 webview 持有 `secureStorage` 并写配置（托盘是系统原生菜单，由主窗口驱动），
+> 不会再出现另一个窗口拿换密码前的旧密钥回写配置的情况（历史缺陷见
+> [scan-config-mirror-2026-09-07.md](../audits/scan-config-mirror-2026-09-07.md) P0-1）。
 
 ### 配置保存
 
