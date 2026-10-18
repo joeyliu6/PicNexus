@@ -1,4 +1,4 @@
-/* global $, $$, browser, describe, expect, it */
+/* global $, $$, browser, beforeEach, describe, it */
 
 async function waitForVisible(selector, timeout = 60_000) {
   const element = await $(selector);
@@ -16,40 +16,8 @@ async function waitForElementCount(selector, count, timeout = 30_000) {
   });
 }
 
-async function waitForElementCountAtLeast(selector, minCount, timeout = 30_000) {
-  await browser.waitUntil(async () => {
-    const elements = await $$(selector);
-    return elements.length >= minCount;
-  }, {
-    timeout,
-    timeoutMsg: `Expected ${selector} to match at least ${minCount} elements`,
-  });
-}
-
-async function waitForAnyVisible(selectors, timeout = 30_000) {
-  let matchedSelector = '';
-
-  await browser.waitUntil(async () => {
-    for (const selector of selectors) {
-      const element = await $(selector);
-      if (await element.isExisting() && await element.isDisplayed()) {
-        matchedSelector = selector;
-        return true;
-      }
-    }
-
-    return false;
-  }, {
-    timeout,
-    timeoutMsg: `Expected one of these selectors to be visible: ${selectors.join(', ')}`,
-  });
-
-  return matchedSelector;
-}
-
 async function waitForMainLayout() {
-  await waitForVisible('#app .main-layout');
-  await waitForVisible('.titlebar .app-title');
+  await waitForVisible('#app .app-shell');
 }
 
 async function clickElement(element, label) {
@@ -103,66 +71,37 @@ async function clickElement(element, label) {
   }
 }
 
-async function expectNavCount(count) {
+/**
+ * 主导航按钮按名字找：宽窗口是展开的侧栏（按钮文字就是名字），
+ * 本机若按 Ctrl+\ 收起过则是图标栏（名字在 aria-label）。两种都认。
+ */
+async function findNavButton(label) {
+  let match;
   await browser.waitUntil(async () => {
-    const navButtons = await $$('.sidebar .nav-btn');
-    return navButtons.length === count;
-  }, {
-    timeout: 30_000,
-    timeoutMsg: `Expected ${count} main navigation buttons`,
-  });
-}
-
-async function openNav(index, expectedSelector) {
-  await expectNavCount(4);
-  const navButtons = await $$('.sidebar .nav-btn');
-  await waitForVisible(`.sidebar .nav-btn:nth-child(${index + 1})`);
-  await clickElement(navButtons[index], `.sidebar .nav-btn[${index}]`);
-  await waitForVisible(expectedSelector);
-}
-
-async function clickIndexed(selector, index) {
-  const elements = await $$(selector);
-  if (elements.length <= index) {
-    throw new Error(`Expected ${selector} to have an element at index ${index}, found ${elements.length}`);
-  }
-
-  await clickElement(elements[index], `${selector}[${index}]`);
-}
-
-async function waitForHistoryTabActive(index, timeout = 30_000) {
-  const selector = '.history-view .dashboard-strip .tab-btn';
-
-  await browser.waitUntil(async () => {
-    const tabs = await $$(selector);
-    if (tabs.length <= index) return false;
-
-    let activeCount = 0;
-    let targetIsActive = false;
-    for (let tabIndex = 0; tabIndex < tabs.length; tabIndex += 1) {
-      const classNames = (await tabs[tabIndex].getAttribute('class')).split(/\s+/);
-      if (classNames.includes('active')) {
-        activeCount += 1;
-        targetIsActive = tabIndex === index || targetIsActive;
+    const buttons = await $$('.app-sidebar .app-sidebar__item, .nav-rail .nav-rail__item');
+    for (const button of buttons) {
+      const name = (await button.getAttribute('aria-label')) || (await button.getText()).trim();
+      if (name === label) {
+        match = button;
+        return true;
       }
     }
-    return targetIsActive && activeCount === 1;
+    return false;
   }, {
-    timeout,
-    timeoutMsg: `Expected ${selector}[${index}] to become active`,
+    timeout: 30_000,
+    timeoutMsg: `Expected a main navigation button named ${label}`,
   });
+  return match;
 }
 
-async function waitForText(selector, expectedText, timeout = 30_000) {
-  await browser.waitUntil(async () => {
-    const element = await $(selector);
-    return await element.isExisting()
-      && await element.isDisplayed()
-      && await element.getText() === expectedText;
-  }, {
-    timeout,
-    timeoutMsg: `Expected ${selector} to display ${JSON.stringify(expectedText)}`,
+async function openNav(label, expectedSelector) {
+  const button = await findNavButton(label);
+  await clickElement(button, `nav ${label}`);
+  await browser.waitUntil(async () => (await button.getAttribute('aria-current')) === 'page', {
+    timeout: 30_000,
+    timeoutMsg: `Expected nav ${label} to become the current page`,
   });
+  await waitForVisible(expectedSelector);
 }
 
 async function expectRenderable(selector, minVisibleDescendants = 1) {
@@ -203,99 +142,53 @@ async function expectRenderable(selector, minVisibleDescendants = 1) {
   }
 }
 
-async function expectHistorySurface(viewSelector, emptyStateTitle) {
-  const emptyStateSelector = '.history-view .history-empty-state-wrapper';
-  const matchedSelector = await waitForAnyVisible([
-    viewSelector,
-    emptyStateSelector,
-  ]);
-
-  await expectRenderable(matchedSelector);
-  if (matchedSelector === emptyStateSelector) {
-    await waitForText(`${emptyStateSelector} .empty-state__title`, emptyStateTitle);
-  }
-}
-
+// 只切页面、只看不点：不改设置、不起检测、不联网，跑在真实数据上也不留痕迹
 describe('PicNexus real Tauri desktop smoke', () => {
   beforeEach(async () => {
+    // 1280 宽：侧栏展开（窄于 1000 才强制收成图标栏）
     await browser.setWindowSize(1280, 900);
     await waitForMainLayout();
   });
 
   it('starts the real desktop shell and switches between main navigation views', async () => {
-    const title = await $('.titlebar .app-title');
-    await expect(await title.getText()).toBe('PicNexus');
+    for (const label of ['快传', '图库', '链接健康', '图床', '设置']) {
+      await findNavButton(label);
+    }
 
-    await expectNavCount(4);
-    await waitForVisible('.upload-view');
-
-    await openNav(1, '.history-view');
-    await openNav(2, '.link-check-view');
-    await openNav(3, '.settings-layout');
-    await openNav(0, '.upload-view');
+    await openNav('图库', '.gallery');
+    await openNav('链接健康', '.health');
+    await openNav('图床', '.hosts-list');
+    await openNav('设置', '.settings');
+    await openNav('快传', '.home');
+    await expectRenderable('.home', 3);
   });
 
-  it('opens settings and renders key controls without changing native state', async () => {
-    await openNav(3, '.settings-layout');
-    await waitForVisible('.settings-layout .general-settings-panel');
+  it('opens settings and renders its groups and switches without changing native state', async () => {
+    await openNav('设置', '.settings .settings-nav');
 
-    await waitForElementCount('.settings-layout .settings-sidebar .nav-item', 5);
-    await waitForElementCount('.settings-layout .theme-card', 3);
-    await waitForElementCountAtLeast('.settings-layout .toggle-row', 5);
-    await waitForElementCountAtLeast('.settings-layout .p-toggleswitch', 5);
-    await waitForElementCountAtLeast('.settings-layout .format-card', 3);
-    await expectRenderable('.settings-layout', 20);
+    // 7 个分组：通用、上传与链接、快捷键、编辑器与命令行、备份与同步、数据与隐私、关于
+    await waitForElementCount('.settings .settings-nav .settings-nav__item', 7);
+    await browser.waitUntil(async () => (await $$('.settings [role="switch"]')).length >= 1, {
+      timeout: 30_000,
+      timeoutMsg: 'Expected the settings page to render at least one switch',
+    });
+    await expectRenderable('.settings', 20);
   });
 
-  it('opens history and keeps local view switching stable with or without saved rows', async () => {
-    await openNav(1, '.history-view');
+  it('opens the gallery and the hosts page with or without saved data', async () => {
+    await openNav('图库', '.gallery');
+    await expectRenderable('.gallery', 5);
 
-    await waitForVisible('.history-view .dashboard-strip');
-    await waitForElementCount('.history-view .dashboard-strip .tab-btn', 3);
-    await waitForVisible('.history-view .filter-chip');
-    await waitForVisible('.history-view .search-field-input');
-    await waitForVisible('.history-view .stat-badge');
-    await expectRenderable('.history-view', 10);
-
-    await waitForHistoryTabActive(0);
-    await expectHistorySurface('.history-view .table-view-container', '暂无上传记录');
-
-    await clickIndexed('.history-view .dashboard-strip .tab-btn', 1);
-    await waitForHistoryTabActive(1);
-    await expectHistorySurface('.history-view .timeline-view', '暂无上传记录');
-
-    await clickIndexed('.history-view .dashboard-strip .tab-btn', 2);
-    await waitForHistoryTabActive(2);
-    await expectHistorySurface('.history-view .favorites-view', '暂无收藏');
-
-    await clickIndexed('.history-view .dashboard-strip .tab-btn', 0);
-    await waitForHistoryTabActive(0);
-    await expectHistorySurface('.history-view .table-view-container', '暂无上传记录');
+    await openNav('图床', '.hosts-list');
+    await waitForVisible('.hosts-list .hosts-list__title');
+    await expectRenderable('.hosts-list', 3);
   });
 
-  it('opens link maintenance tabs without starting file or network workflows', async () => {
-    await openNav(2, '.link-check-view');
+  it('opens 链接健康 without starting a check', async () => {
+    await openNav('链接健康', '.health');
 
-    await waitForElementCount('.link-check-view .lc-tab', 3);
-    await waitForVisible('.link-check-view .monitor-panel');
-    await expectRenderable('.link-check-view', 8);
-
-    await clickIndexed('.link-check-view .lc-tab', 1);
-    await waitForVisible('.link-check-view .md-rescue');
-    await waitForVisible('.link-check-view .idle-zone');
-    await waitForElementCountAtLeast('.link-check-view .subfolder-option-row', 2);
-    await expectRenderable('.link-check-view .md-rescue', 6);
-
-    await clickIndexed('.link-check-view .lc-tab', 2);
-    await waitForVisible('.link-check-view .migrate-panel');
-    await waitForAnyVisible([
-      '.link-check-view .migrate-panel .sk-layout',
-      '.link-check-view .migrate-panel .split-layout',
-      '.link-check-view .migrate-panel .empty-state',
-    ]);
-    await expectRenderable('.link-check-view .migrate-panel', 3);
-
-    await clickIndexed('.link-check-view .lc-tab', 0);
-    await waitForVisible('.link-check-view .monitor-panel');
+    await waitForVisible('.health .health-status');
+    await waitForElementCount('.health .tool-card', 3);
+    await expectRenderable('.health', 8);
   });
 });
