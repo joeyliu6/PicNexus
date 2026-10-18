@@ -11,6 +11,7 @@ import PnToaster from '@/components/pn/PnToaster.vue';
 import PnConfirmHost from '@/components/pn/PnConfirmHost.vue';
 import { useThemeManager } from '@/composables/useTheme';
 import { useToast } from '@/composables/useToast';
+import { refreshAppPresence } from '@/composables/appPresence';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { useGlobalShortcut } from '@/composables/useGlobalShortcut';
 import { useAutoUpdate } from '@/composables/useAutoUpdate';
@@ -98,7 +99,7 @@ async function safeContinueStartup() {
     await continueStartup();
   } catch (err) {
     log.error('启动流程失败:', err);
-    try { await getCurrentWindow().show(); } catch { /* ignore */ }
+    try { await getCurrentWindow().show(); await refreshAppPresence(); } catch { /* ignore */ }
   }
 }
 
@@ -149,6 +150,8 @@ async function continueStartup() {
 
   if (!minimizeOnStart) {
     await getCurrentWindow().show();
+    // 启动时显示窗口不一定换焦点：自己重判「在不在屏」，免得此后的通知都跑去系统通知
+    await refreshAppPresence();
   } else {
     log.debug('启动时最小化到托盘，窗口保持隐藏');
   }
@@ -206,7 +209,7 @@ onMounted(async () => {
   } catch (err) {
     if (err instanceof BackupPasswordRequiredError) {
       log.debug('检测到迁移密码加密配置，等待用户输入密码');
-      try { await getCurrentWindow().show(); } catch { /* ignore */ }
+      try { await getCurrentWindow().show(); await refreshAppPresence(); } catch { /* ignore */ }
 
       try {
         const appDir = await getUserDataDir();
@@ -221,7 +224,7 @@ onMounted(async () => {
     }
 
     log.error('启动失败:', err);
-    try { await getCurrentWindow().show(); } catch { /* ignore */ }
+    try { await getCurrentWindow().show(); await refreshAppPresence(); } catch { /* ignore */ }
   }
 
 });

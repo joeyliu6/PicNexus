@@ -36,6 +36,18 @@ const currentWindow = {
   async onFocusChanged() {
     return makeUnlisten();
   },
+  async onResized() {
+    return makeUnlisten();
+  },
+  async onThemeChanged() {
+    return makeUnlisten();
+  },
+  async isVisible() {
+    return true;
+  },
+  async isMinimized() {
+    return false;
+  },
 };
 
 export class Window {

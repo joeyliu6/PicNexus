@@ -48,6 +48,10 @@ const tauriWindowMockState = vi.hoisted(() => {
     outerPosition: vi.fn().mockResolvedValue({ x: 1200, y: 600 }),
     scaleFactor: vi.fn().mockResolvedValue(1),
     onFocusChanged: vi.fn().mockResolvedValue(vi.fn()),
+    onResized: vi.fn().mockResolvedValue(vi.fn()),
+    onThemeChanged: vi.fn().mockResolvedValue(vi.fn()),
+    isVisible: vi.fn().mockResolvedValue(true),
+    isMinimized: vi.fn().mockResolvedValue(false),
   });
 
   return {

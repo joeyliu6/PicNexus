@@ -25,6 +25,7 @@ import { installEditorSync } from '@/composables/settings/editorSync';
 import { installClipboardWatch } from '@/composables/upload/clipboardWatch';
 import { installHealthBadge } from '@/views/health/healthBadge';
 import { setUpdateInstallGate } from '@/composables/useAutoUpdate';
+import { installAppPresence, isAppOnScreen } from '@/composables/appPresence';
 
 const log = createLogger('AppShell');
 
@@ -36,7 +37,8 @@ useAppNavigation();
 
 // 上传在任何页面都能发起（拖入 / 粘贴 / 托盘 / 命令面板），控制器是应用级单例，第一次取在这里
 const upload = useUploadController();
-upload.setHomeVisible(() => route.path === '/home');
+// 窗口隐藏到托盘 / 最小化时首页并不在屏：结果要靠通知（此时走系统通知）
+upload.setHomeVisible(() => route.path === '/home' && isAppOnScreen());
 const recentUploads = useRecentUploads();
 // 装新版本 / 重启完成更新前，等正在进行的上传传完（交接说明 8.5）
 setUpdateInstallGate(() => new Promise<void>((resolve) => {
@@ -54,6 +56,8 @@ onMounted(async () => {
   disposers.push(installEditorSync());
   // 自动上传剪贴板：开关跟着配置走，后台发现新图片就照「粘贴上传」传
   disposers.push(installClipboardWatch(upload));
+  // 主窗口在不在屏（决定通知走应用内还是系统通知）
+  disposers.push(installAppPresence());
   // 两件事互不依赖：一件失败不能拖住另一件
   await Promise.all([
     upload.init().then((dispose) => disposers.push(dispose)).catch((error) => log.error('上传控制器初始化失败', error)),

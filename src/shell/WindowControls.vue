@@ -3,14 +3,16 @@
 // 关闭键的语义是「隐藏到托盘」。
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import PnIcon from '@/components/pn/PnIcon.vue';
+import { refreshAppPresence } from '@/composables/appPresence';
 import { uiPlatform } from '@/utils/platform';
 
 const platform = uiPlatform();
 const appWindow = getCurrentWindow();
 
-const minimize = () => { void appWindow.minimize(); };
+// 隐藏 / 最小化之后马上重新判断「在不在屏」：此后的通知改走系统通知（appPresence）
+const minimize = () => { void appWindow.minimize().then(refreshAppPresence); };
 const toggleMaximize = () => { void appWindow.toggleMaximize(); };
-const hideToTray = () => { void appWindow.hide(); };
+const hideToTray = () => { void appWindow.hide().then(refreshAppPresence); };
 </script>
 
 <template>
