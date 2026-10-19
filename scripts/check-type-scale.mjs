@@ -24,10 +24,10 @@ const FONT_SIZES = new Set(['20px', '17px', '15px', '13px', '12px', '11px']);
 const FONT_WEIGHTS = new Set(['400', '500', '600']);
 const TOKEN_FILES = ['src/styles/tokens.css', 'src/styles/tokens-extra.css'];
 
-/** 刻度外的字号例外：令牌名 → 记在哪 */
+/** 刻度外的字号例外：令牌名 → 记下的值与出处（令牌的值也要对得上，免得例外被悄悄改大） */
 const EXCEPTIONS = {
-  '--pn-size-petal-badge-text': 'decisions/home.md（花瓣角标 9px）',
-  '--pn-size-calendar-weekday-text': 'decisions/health.md（日历星期 10px）',
+  '--pn-size-petal-badge-text': { value: '9px', where: 'decisions/home.md（花瓣角标）' },
+  '--pn-size-calendar-weekday-text': { value: '10px', where: 'decisions/health.md（日历星期）' },
 };
 
 const SIZE_OK = /^var\(--pn-text-[a-z-]+\)$/;
@@ -61,6 +61,12 @@ for (const file of TOKEN_FILES) {
     const allowed = decl.prop.startsWith('--pn-text-') ? FONT_SIZES : FONT_WEIGHTS;
     if (!allowed.has(value)) failures.push(`${file}:${decl.source?.start?.line}  ${decl.prop}: ${value}（不在刻度上）`);
   });
+  postcss.parse(fs.readFileSync(path.join(root, file), 'utf8')).walkDecls((decl) => {
+    const exception = EXCEPTIONS[decl.prop];
+    if (exception && decl.value.trim() !== exception.value) {
+      failures.push(`${file}:${decl.source?.start?.line}  ${decl.prop}: ${decl.value.trim()}（${exception.where} 记的是 ${exception.value}）`);
+    }
+  });
 }
 
 // ---- 2. 用法 ----
@@ -72,10 +78,15 @@ walk(path.join(root, 'src'), (file) => {
     : [{ text: source, offset: 0 }];
 
   for (const { text, offset } of blocks) {
-    postcss.parse(text).walkDecls(/^font-(size|weight)$/, (decl) => {
+    postcss.parse(text).walkDecls(/^font(-size|-weight)?$/, (decl) => {
       if (insideFontFace(decl)) return;
       const value = decl.value.trim();
       if (value === 'inherit') return;
+      // 简写 font 能顺手写进字号字重，绕过上面两条：只许 inherit
+      if (decl.prop === 'font') {
+        failures.push(`${rel}:${offset + (decl.source?.start?.line ?? 0)}  font: ${value}（不用简写，分开写 font-size / font-weight 令牌）`);
+        return;
+      }
       const ok = decl.prop === 'font-size'
         ? SIZE_OK.test(value) || Object.keys(EXCEPTIONS).some((name) => value === `var(${name})`)
         : WEIGHT_OK.test(value);
@@ -83,7 +94,7 @@ walk(path.join(root, 'src'), (file) => {
     });
   }
 
-  // 模板里的行内 style="font-size: …"（:style 绑定由截图测试量）
+  // 模板里写死的行内 style="font-size: …"（`:style` 绑定拦不到，由截图前的检查量画出来的值）
   if (file.endsWith('.vue')) {
     const template = source.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, (block) => block.replace(/[^\n]/g, ' '));
     for (const match of template.matchAll(/\sstyle="[^"]*font-(size|weight)\s*:[^"]*"/g)) {

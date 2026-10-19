@@ -22,7 +22,7 @@ export async function designRuleViolations(page: Page): Promise<string[]> {
     const problems: string[] = [];
     const FONT_SIZES = new Set([11, 12, 13, 15, 17, 20]);
     const FONT_WEIGHTS = new Set(['400', '500', '600']);
-    const GREENS = new Set(['rgb(22, 163, 74)', 'rgb(34, 197, 94)', 'rgb(20, 122, 58)']);
+    const GREENS = new Set(['rgb(22, 163, 74)', 'rgb(34, 197, 94)', 'rgb(20, 122, 58)', 'rgb(91, 208, 138)']);
 
     // 只给读屏看的元素（1×1 裁掉）不算
     const visible = (el: Element): boolean => {
