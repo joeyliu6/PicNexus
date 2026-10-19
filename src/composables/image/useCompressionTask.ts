@@ -50,13 +50,6 @@ export function useCompressionTask(
     return result.value ? result.value.ratio >= 1 : false;
   }
 
-  /** 格式化文件大小 */
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  }
-
   /** 重置所有状态 */
   function resetState() {
     status.value = 'compressing';
@@ -168,7 +161,6 @@ export function useCompressionTask(
     // 方法
     getSaved,
     getIsLarger,
-    formatSize,
     resetState,
     selectAndCompress,
   };

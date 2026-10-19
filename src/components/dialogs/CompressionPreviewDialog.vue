@@ -1,27 +1,25 @@
 <script setup lang="ts">
+// 压缩预览（设置 › 上传与链接 ›「压缩预览…」）：设计稿没画，按图库灯箱（G08）的样子做成整窗深色查看器，
+// 左右拖动分割线对比原图与压缩后。做法记在 docs/design/redesign/decisions/settings.md。
+import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue';
+import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import PnIcon from '@/components/pn/PnIcon.vue';
-import { ref, computed, watch, onMounted, onBeforeUnmount, toRef } from 'vue';
+import PnIconButton from '@/components/pn/PnIconButton.vue';
 import type { CompressionPreset } from '@/config/types';
 import { useImageZoom } from '@/composables/image/useImageZoom';
 import { useCompressionTask } from '@/composables/image/useCompressionTask';
-import CompressionPreviewHeader from './compression-preview/CompressionPreviewHeader.vue';
-import CompressionPreviewInfoBar from './compression-preview/CompressionPreviewInfoBar.vue';
-import CompressionPreviewState from './compression-preview/CompressionPreviewState.vue';
+import { formatFileSize } from '@/utils/formatters';
 
-interface Props {
+const props = defineProps<{
   visible: boolean;
   preset: CompressionPreset;
-}
-
-const props = defineProps<Props>();
+}>();
 const emit = defineEmits<{
   'update:visible': [value: boolean];
 }>();
 
-// ---- 容器 ref（template 中绑定） ----
 const containerRef = ref<HTMLElement | null>(null);
 
-// ---- 缩放 & 平移 ----
 const {
   scale,
   sliderX,
@@ -35,12 +33,8 @@ const {
   onWheel,
   onDoubleClick,
   cleanup: cleanupZoom,
-} = useImageZoom(containerRef, {
-  zoomAtCursor: true,
-  enableSlider: true,
-});
+} = useImageZoom(containerRef, { zoomAtCursor: true, enableSlider: true });
 
-// ---- 压缩任务 ----
 const {
   status,
   fileName,
@@ -50,239 +44,219 @@ const {
   errorMsg,
   getSaved,
   getIsLarger,
-  formatSize,
   selectAndCompress,
-} = useCompressionTask(toRef(props, 'preset'), {
-  onDone: () => resetView(),
-});
+} = useCompressionTask(toRef(props, 'preset'), { onDone: () => resetView() });
 
-// ---- 派生计算属性（template 直接使用） ----
 const saved = computed(() => getSaved());
 const isLarger = computed(() => getIsLarger());
+const done = computed(() => status.value === 'done' && result.value !== null);
 
-// ---- 对话框控制 ----
-function close() {
-  emit('update:visible', false);
+function setOpen(open: boolean) {
+  if (!open) emit('update:visible', false);
 }
 
-function onKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape') close();
-}
-
-function onOverlayClick(e: MouseEvent) {
-  if ((e.target as HTMLElement).classList.contains('cpd-overlay')) {
-    close();
-  }
-}
-
-// ---- 打开时自动选择文件 & 压缩 ----
-watch(() => props.visible, async (v) => {
-  if (v) {
-    resetView();
-    const selected = await selectAndCompress();
-    if (!selected) close();
-  }
-});
-
-function retrySelect() {
+// 打开时直接弹出选文件窗口；没选就关掉
+watch(() => props.visible, async (visible) => {
+  if (!visible) return;
   resetView();
-  selectAndCompress();
+  const selected = await selectAndCompress();
+  if (!selected) emit('update:visible', false);
+});
+
+function pickAnother() {
+  resetView();
+  void selectAndCompress();
 }
 
-onMounted(() => {
-  document.addEventListener('keydown', onKeyDown);
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeyDown);
-  cleanupZoom();
-});
+onBeforeUnmount(cleanupZoom);
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="cpd">
-      <div v-if="visible" class="cpd-overlay" @click="onOverlayClick">
-        <div class="cpd-dialog">
-          <!-- 头部 -->
-          <CompressionPreviewHeader
-            :show-filename="status === 'done' && !!result"
-            :file-name="fileName"
-            @close="close"
-          />
+  <DialogRoot :open="visible" @update:open="setOpen">
+    <DialogPortal>
+      <DialogContent class="pn-layer compress-view" data-theme="dark" :aria-describedby="undefined">
+        <div class="compress-view__top">
+          <PnIconButton icon="close" label="关闭" :icon-size="13" :stroke="2" class="compress-view__close" @click="setOpen(false)" />
+          <DialogTitle class="compress-view__title">压缩预览</DialogTitle>
+          <span v-if="done" class="compress-view__file">{{ fileName }}</span>
+        </div>
 
-          <!-- 信息条 -->
-          <CompressionPreviewInfoBar
-            v-if="status === 'done' && result"
-            :result="result"
-            :saved="saved"
-            :is-larger="isLarger"
-            :format-size="formatSize"
-          />
-
-          <!-- 主体区域 -->
-          <div class="cpd-body">
-            <!-- 加载/错误状态 -->
-            <CompressionPreviewState
-              v-if="status === 'compressing' || status === 'error'"
-              :status="status"
-              :file-name="fileName"
-              :error-msg="errorMsg"
-              @retry="retrySelect"
-            />
-
-            <!-- 对比视图 -->
-            <div
-              v-else-if="status === 'done' && originalSrc && compressedSrc"
-              ref="containerRef"
-              class="cpd-compare"
-              :style="{ cursor: isDraggingImage ? 'grabbing' : 'grab' }"
-              @wheel.prevent="onWheel"
-              @mousedown="onImageDown"
-              @dblclick="onDoubleClick"
-            >
-              <!-- 底层：压缩后 -->
-              <div class="cpd-img-layer">
-                <img :src="compressedSrc" :style="imageTransformStyle" class="cpd-img" draggable="false" />
-              </div>
-              <!-- 顶层：原图（clip 在 wrapper 上，百分比基于容器） -->
-              <div class="cpd-img-layer" :style="clipStyle">
-                <img :src="originalSrc" :style="imageTransformStyle" class="cpd-img" draggable="false" />
-              </div>
-
-              <!-- 滑块 -->
-              <div class="cpd-slider" :style="{ left: sliderX + '%' }">
-                <div class="cpd-slider-line" />
-                <div
-                  class="cpd-slider-handle"
-                  @mousedown.stop="onSliderDown"
-                  :style="{ cursor: 'ew-resize' }"
-                >
-                  <PnIcon name="arrowsH" :size="14" :stroke="2" />
-                </div>
-              </div>
-
-              <!-- 标签 -->
-              <span class="cpd-badge cpd-badge-left" :class="{ hidden: sliderX <= 8 }">原图</span>
-              <span class="cpd-badge cpd-badge-right" :class="{ hidden: sliderX >= 92 }">压缩后</span>
-            </div>
+        <div class="compress-view__stage">
+          <div v-if="status === 'compressing'" class="compress-view__state" role="status">
+            <svg class="compress-view__spinner" width="24" height="24" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" />
+              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="10 37.7" stroke-linecap="round" />
+            </svg>
+            <span>{{ fileName ? '正在压缩…' : '正在选择图片…' }}</span>
+            <span v-if="fileName" class="compress-view__muted">{{ fileName }}</span>
           </div>
 
-          <!-- 底部 -->
-          <div class="cpd-footer">
-            <div class="cpd-footer-left">
-              <template v-if="status === 'done'">
-                <span class="cpd-zoom-label">{{ zoomPercent }}%</span>
-                <button v-if="scale !== 1" class="cpd-btn ghost" @click="resetView">重置</button>
-              </template>
+          <div v-else-if="status === 'error'" class="compress-view__state" role="alert">
+            <PnIcon name="failRound" :size="24" class="compress-view__danger" />
+            <span class="compress-view__danger">压缩失败</span>
+            <span class="compress-view__muted">{{ errorMsg }}</span>
+            <button type="button" class="compress-view__button" @click="pickAnother">重新选择…</button>
+          </div>
+
+          <div
+            v-else-if="done && originalSrc && compressedSrc"
+            ref="containerRef"
+            class="compress-view__compare"
+            :class="{ 'compress-view__compare--dragging': isDraggingImage }"
+            @wheel.prevent="onWheel"
+            @mousedown="onImageDown"
+            @dblclick="onDoubleClick"
+          >
+            <div class="compress-view__layer">
+              <img :src="compressedSrc" :style="imageTransformStyle" class="compress-view__img" alt="压缩后" draggable="false" />
             </div>
-            <div class="cpd-footer-right">
-              <button v-if="status === 'done' || status === 'error'" class="cpd-btn outline" @click="retrySelect">
-                <PnIcon name="gallery" :size="14" />
-                换一张
-              </button>
-              <button class="cpd-btn primary" @click="close">关闭</button>
+            <!-- 原图盖在上面，按分割线位置裁掉右半边（裁切加在外层，百分比按容器算） -->
+            <div class="compress-view__layer" :style="clipStyle">
+              <img :src="originalSrc" :style="imageTransformStyle" class="compress-view__img" alt="原图" draggable="false" />
             </div>
+
+            <div class="compress-view__divider" :style="{ left: `${sliderX}%` }">
+              <div class="compress-view__line" />
+              <div class="compress-view__handle" aria-hidden="true" @mousedown.stop="onSliderDown">
+                <PnIcon name="arrowsH" :size="14" :stroke="2" />
+              </div>
+            </div>
+
+            <span class="compress-view__chip compress-view__chip--left" :class="{ 'compress-view__chip--hidden': sliderX <= 8 }">原图</span>
+            <span class="compress-view__chip compress-view__chip--right" :class="{ 'compress-view__chip--hidden': sliderX >= 92 }">压缩后</span>
           </div>
         </div>
-      </div>
-    </Transition>
-  </Teleport>
+
+        <div class="compress-view__bottom">
+          <div v-if="done && result" class="compress-view__info">
+            <span>
+              {{ formatFileSize(result.originalSize) }} → {{ formatFileSize(result.compressedSize) }}
+              <span v-if="isLarger" class="compress-view__warn">· 体积增大</span>
+              <span v-else>· 节省 {{ saved }}%</span>
+            </span>
+            <span class="compress-view__muted">{{ result.width }} × {{ result.height }} · {{ result.format.toUpperCase() }}</span>
+          </div>
+          <div class="compress-view__spacer" />
+          <template v-if="done">
+            <span class="compress-view__zoom">{{ zoomPercent }}%</span>
+            <button v-if="scale !== 1" type="button" class="compress-view__button" @click="resetView">重置</button>
+          </template>
+          <button v-if="status !== 'compressing'" type="button" class="compress-view__button" @click="pickAnother">
+            <PnIcon name="gallery" :size="14" />
+            换一张…
+          </button>
+        </div>
+      </DialogContent>
+    </DialogPortal>
+  </DialogRoot>
 </template>
 
-<style scoped>
-/* --- 遮罩 & 动画 --- */
-.cpd-overlay {
+<!-- 内容传送到 body，scoped 样式够不到，用不带 scoped 的唯一类名；颜色取深色令牌（data-theme="dark"），与灯箱一致 -->
+<style>
+.compress-view {
   position: fixed;
   inset: 0;
-  z-index: var(--z-lightbox);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 遮罩层半透明黑色背景，无对应 token */
-  background: rgb(0 0 0 / 60%);
-  backdrop-filter: blur(8px);
-}
-
-.cpd-enter-active {
-  transition: opacity var(--duration-normal) ease;
-}
-
-.cpd-enter-active .cpd-dialog {
-  transition: transform var(--duration-normal) var(--ease-overshoot), opacity var(--duration-normal) ease;
-}
-
-.cpd-leave-active {
-  transition: opacity var(--duration-fast) ease;
-}
-
-.cpd-leave-active .cpd-dialog {
-  transition: transform var(--duration-fast) ease, opacity var(--duration-fast) ease;
-}
-
-.cpd-enter-from {
-  opacity: 0;
-}
-
-.cpd-enter-from .cpd-dialog {
-  opacity: 0;
-  transform: scale(0.92);
-}
-
-.cpd-leave-to {
-  opacity: 0;
-}
-
-.cpd-leave-to .cpd-dialog {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
-/* --- 弹窗主体 --- */
-.cpd-dialog {
-  width: var(--dialog-width-xl);
-  max-width: 94vw;
-  height: var(--dialog-height-xl);
-  max-height: 88vh;
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-dialog);
+  z-index: var(--pn-z-lightbox);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  background: var(--pn-lightbox-bg);
+  color: var(--pn-text1);
+  outline: none;
 }
 
-/* --- 主体 --- */
-.cpd-body {
+.compress-view[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
+
+.compress-view__top,
+.compress-view__bottom {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--pn-space-button-sm-x);
+  min-width: 0;
+}
+
+.compress-view__top {
+  height: var(--pn-size-lightbox-top);
+  padding: 0 var(--pn-space-16) 0 var(--pn-space-12);
+}
+
+.compress-view__bottom {
+  height: var(--pn-size-lightbox-bottom);
+  padding: 0 var(--pn-space-16) 0 var(--pn-space-20);
+  box-shadow: inset 0 1px 0 var(--pn-lightbox-rule);
+}
+
+.compress-view__close {
+  background: var(--pn-lightbox-button);
+  color: var(--pn-text1);
+}
+
+.compress-view__title {
+  flex: none;
+  margin: 0;
+  font-size: var(--pn-text-headline);
+  font-weight: var(--pn-weight-semibold);
+  line-height: var(--pn-leading-headline);
+}
+
+.compress-view__file {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--pn-text3);
+  font-family: var(--pn-font-mono);
+  font-size: var(--pn-text-mono);
+}
+
+.compress-view__stage {
+  position: relative;
   flex: 1;
   min-height: 0;
-  margin: var(--space-md) var(--space-xl);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  position: relative;
-  background: var(--bg-input);
-
-  /* 棋盘格背景（透明图可见） */
-  background-image:
-    linear-gradient(45deg, var(--hover-overlay-subtle) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--hover-overlay-subtle) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--hover-overlay-subtle) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--hover-overlay-subtle) 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-color: var(--pn-checker-a);
+  background-image: var(--pn-checker);
+  background-position: var(--pn-checker-position);
+  background-size: var(--pn-size-checker) var(--pn-size-checker);
 }
 
-/* --- 对比容器 --- */
-.cpd-compare {
-  width: 100%;
-  height: 100%;
-  min-height: 380px;
-  position: relative;
+.compress-view__state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pn-space-8);
+  padding: 0 var(--pn-space-32);
+  background: var(--pn-lightbox-bg);
+  text-align: center;
+}
+
+.compress-view__spinner {
+  color: var(--pn-brand);
+  animation: k-spin var(--pn-dur-spin) linear infinite;
+}
+
+.compress-view__muted {
+  color: var(--pn-text3);
+  font-size: var(--pn-text-footnote);
+  word-break: break-all;
+}
+
+.compress-view__danger { color: var(--pn-danger); }
+.compress-view__warn { color: var(--pn-warning); }
+
+.compress-view__compare {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
+  cursor: grab;
   user-select: none;
 }
 
-.cpd-img-layer {
+.compress-view__compare--dragging { cursor: grabbing; }
+
+.compress-view__layer {
   position: absolute;
   inset: 0;
   display: flex;
@@ -291,177 +265,103 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.cpd-img-layer + .cpd-img-layer {
-  z-index: 1;
-}
-
-.cpd-img {
+.compress-view__img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  will-change: transform;
   pointer-events: none;
+  will-change: transform;
 }
 
-/* --- 滑块 --- */
-.cpd-slider {
+.compress-view__divider {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 2;
   transform: translateX(-50%);
   pointer-events: none;
 }
 
-.cpd-slider-line {
+.compress-view__line {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 2px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负偏移居中微调，无对应 token */
-  margin-left: -1px;
-  background: var(--bg-card);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 滑块分割线阴影，无对应 token */
-  box-shadow: 0 0 4px rgb(0 0 0 / 50%);
+  width: var(--pn-size-compare-line);
+  background: var(--pn-text1);
+  box-shadow: var(--pn-compare-line-shadow);
+  transform: translateX(-50%);
 }
 
-.cpd-slider-handle {
+.compress-view__handle {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 36px;
-  height: 36px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负偏移微调，无对应 token */
-  margin-left: -16px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负偏移微调，无对应 token */
-  margin-top: -16px;
-  border-radius: 50%;
-  background: var(--bg-card);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 滑块手柄阴影，无对应 token */
-  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
   display: flex;
   align-items: center;
   justify-content: center;
+  width: var(--pn-size-button-lg);
+  height: var(--pn-size-button-lg);
+  border-radius: 50%;
+  background: var(--pn-elevated);
+  box-shadow: var(--pn-e3);
+  color: var(--pn-text1);
+  cursor: ew-resize;
   pointer-events: auto;
-  color: var(--text-primary);
-  font-size: var(--text-base);
-  transition: transform var(--duration-micro);
+  transform: translate(-50%, -50%);
 }
 
-.cpd-slider-handle:hover {
-  transform: scale(1.1);
-}
-
-/* --- 标签 --- */
-.cpd-badge {
+.compress-view__chip {
   position: absolute;
-  top: 12px;
-  z-index: 3;
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm-md);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 标签文字白色为固定设计值 */
-  color: white;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 标签半透明黑色背景，无对应 token */
-  background: rgb(0 0 0 / 55%);
-  backdrop-filter: blur(4px);
+  top: var(--pn-space-12);
+  display: flex;
+  align-items: center;
+  height: var(--pn-size-lightbox-chip);
+  padding: 0 var(--pn-space-8);
+  border-radius: var(--pn-radius-button-sm);
+  background: var(--pn-lightbox-bg);
+  color: var(--pn-text1);
+  font-size: var(--pn-text-footnote);
   pointer-events: none;
-  transition: opacity var(--duration-fast);
+  transition: opacity var(--pn-dur-fast) var(--pn-ease-in);
 }
 
-.cpd-badge.hidden {
-  opacity: 0;
-}
+.compress-view__chip--left { left: var(--pn-space-12); }
+.compress-view__chip--right { right: var(--pn-space-12); }
+.compress-view__chip--hidden { opacity: 0; }
 
-.cpd-badge-left {
-  left: 12px;
-}
-
-.cpd-badge-right {
-  right: 12px;
-}
-
-/* --- 底部 --- */
-.cpd-footer {
+.compress-view__info {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-sm) var(--space-xl) var(--space-xl);
-  flex-shrink: 0;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.cpd-footer-left {
+.compress-view__spacer { flex: 1; }
+
+.compress-view__zoom {
+  color: var(--pn-text3);
+  font-family: var(--pn-font-mono);
+  font-size: var(--pn-text-mono);
+}
+
+.compress-view__button {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: var(--space-sm);
-}
-
-.cpd-footer-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.cpd-zoom-label {
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  min-width: 40px;
-}
-
-/* --- 按钮 ---
-   本弹窗是手搓外壳（需要自定义头部/信息条/对比画布），无法套用 PrimeVue Dialog，
-   但按钮规格与 .app-dialog 底栏保持一致，见 src/styles/app.css 第 3.6 节 */
-.cpd-btn {
-  padding: var(--space-sm-md) var(--space-xl);
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
+  gap: var(--pn-space-6);
+  height: var(--pn-size-button-lg);
+  padding: 0 var(--pn-space-12);
+  border: 0;
+  border-radius: var(--pn-radius-md);
+  background: var(--pn-lightbox-button);
+  color: var(--pn-text1);
+  font: inherit;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all var(--duration-fast) ease;
-
-  /* 保留 1px 边框位（实心按钮设为透明），否则与描边按钮并排时高度差 2px */
-  border: 1px solid transparent;
 }
 
-.cpd-btn:active {
-  transform: scale(0.98);
-}
+.compress-view__button:hover { background: var(--pn-lightbox-button-hover); }
 
-.cpd-btn.primary {
-  background: var(--primary);
-  color: var(--text-on-primary);
-}
-
-.cpd-btn.primary:hover {
-  opacity: 0.9;
-}
-
-.cpd-btn.outline {
-  background: transparent;
-  border-color: var(--border-subtle);
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-}
-
-.cpd-btn.outline:hover {
-  background: var(--hover-overlay);
-  border-color: var(--text-muted);
-}
-
-.cpd-btn.ghost {
-  background: transparent;
-  color: var(--text-muted);
-  padding: var(--space-xs) var(--space-sm-md);
-  font-size: var(--text-xs);
-}
-
-.cpd-btn.ghost:hover {
-  color: var(--primary);
-  background: var(--primary-alpha-8);
+@media (prefers-reduced-motion: reduce) {
+  .compress-view__chip { transition: none; }
 }
 </style>

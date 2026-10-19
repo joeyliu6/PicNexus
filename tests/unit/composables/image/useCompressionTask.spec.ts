@@ -113,9 +113,6 @@ describe('useCompressionTask', () => {
     expect(api.status.value).toBe('done');
     expect(api.getSaved()).toBe(60);
     expect(api.getIsLarger()).toBe(false);
-    expect(api.formatSize(512)).toBe('512 B');
-    expect(api.formatSize(1536)).toBe('1.5 KB');
-    expect(api.formatSize(2 * 1024 * 1024)).toBe('2.00 MB');
     expect(cleanupPaths).toContainEqual(['C:/tmp/original.webp']);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
