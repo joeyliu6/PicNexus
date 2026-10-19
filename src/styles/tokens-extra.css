@@ -686,3 +686,48 @@
   --pn-decor-thumb-aurora-b: radial-gradient(closest-side, rgba(124, 92, 246, 0.5), transparent);
   --pn-decor-thumb-blur: 6px;
 }
+
+:root {
+  /* 新手引导（Onboarding.dc.html O01–O03）：大弹窗 640×580、圆角 16；正文内边距 40 56 0，底栏高 72、左右 24。
+     标题 20/26 字距 -0.015em、说明限宽 460；圆点 6（当前 18）。勾选卡高 88、内边距 0 18、间距 14，图标块 36 圆角 9，勾选框 20。
+     欢迎页插图 420×220：示意窗口 120×80 在 24,70；三条连线从 150 起；图床行 150×40 从 258,42 起、行距 8，行内图标块 22 圆角 6 */
+  --pn-size-onboarding-w: 640px;
+  --pn-size-onboarding-h: 580px;
+  --pn-space-onboarding-page: 40px 56px 0;
+  --pn-size-onboarding-foot: 72px;
+  --pn-space-onboarding-gap: 18px;
+  --pn-space-onboarding-desc: 10px;
+  --pn-size-onboarding-text: 460px;
+  --pn-tracking-onboarding-title: -0.015em;
+  --pn-size-onboarding-dot: 6px;
+  --pn-size-onboarding-dot-on: 18px;
+  --pn-radius-onboarding-dot: 3px;
+  --pn-size-onboarding-card: 88px;
+  --pn-space-onboarding-card-x: 18px;
+  --pn-space-onboarding-card-gap: 14px;
+  --pn-size-onboarding-plate: 36px;
+  --pn-radius-onboarding-plate: 9px;
+  --pn-size-onboarding-check: 20px;
+  --pn-space-onboarding-panel: 14px 16px;
+  --pn-radius-onboarding-note: 12px;
+  --pn-size-onboarding-way-plate: 32px;
+  --pn-size-onboarding-art-w: 420px;
+  --pn-size-onboarding-art-h: 220px;
+  --pn-space-onboarding-shot-left: 24px;
+  --pn-space-onboarding-shot-top: 70px;
+  --pn-size-onboarding-shot-w: 120px;
+  --pn-size-onboarding-shot-h: 80px;
+  --pn-radius-onboarding-shot-block: 3px;
+  --pn-space-onboarding-rows-left: 258px;
+  --pn-space-onboarding-rows-top: 42px;
+  --pn-size-onboarding-row-w: 150px;
+  --pn-size-onboarding-row-h: 40px;
+  --pn-space-onboarding-row-x: 10px;
+  --pn-size-onboarding-row-plate: 22px;
+  /* 插图里的示意窗口：设计稿浅深同色 */
+  --pn-onboarding-shot-bg: #EEF1F5;
+  --pn-onboarding-shot-bar: #DDE2EA;
+  --pn-onboarding-shot-side: #E4E8EE;
+  --pn-onboarding-shot-block: #FFFFFF;
+  --pn-onboarding-shot-accent: #DBE3F6;
+}

@@ -114,7 +114,7 @@ async function clickFabDelete() {
 
 /**
  * ConfirmDialog：在所有 .p-dialog 里找含「删除」按钮的那个 DOM 直点，并断言它关闭。
- * portable 首启会弹新手引导 dialog（「跳过引导|下一步」），不能只抓第一个 dialog。
+ * portable 首启会弹新手引导（「跳过」「下一步」），不能只抓第一个 dialog。
  */
 async function acceptConfirmDialog() {
   await waitForVisible('.p-dialog');
@@ -144,23 +144,22 @@ async function acceptConfirmDialog() {
   }, { timeout: 10_000, timeoutMsg: 'Confirm dialog did not close after accept click' });
 }
 
-/** portable 全新数据目录 = 首次启动，新手引导弹窗会挡操作：出现则点「跳过引导」 */
+/** portable 全新数据目录 = 首次启动，新手引导弹窗会挡操作：出现则点「跳过」 */
 async function dismissOnboardingIfPresent(timeout = 10_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const state = await browser.execute(() => {
-      const skip = Array.from(document.querySelectorAll('.p-dialog button'))
-        .find((candidate) => candidate.textContent.trim() === '跳过引导');
+      const skip = Array.from(document.querySelectorAll('.onboarding button'))
+        .find((candidate) => candidate.textContent.trim() === '跳过');
       if (skip) {
         skip.click();
         return 'clicked';
       }
-      return document.querySelector('.p-dialog') ? 'other-dialog' : 'none';
+      return document.querySelector('[role="dialog"]') ? 'other-dialog' : 'none';
     });
     if (state === 'clicked') {
       await browser.waitUntil(async () => {
-        return await browser.execute(() => !Array.from(document.querySelectorAll('.p-dialog button'))
-          .some((candidate) => candidate.textContent.trim() === '跳过引导'));
+        return await browser.execute(() => !document.querySelector('.onboarding'));
       }, { timeout: 10_000, timeoutMsg: 'Onboarding dialog did not close after skip click' });
       return;
     }

@@ -1,158 +1,169 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
+// 新手引导（Onboarding.dc.html O01–O03，交接说明 8.7）：640×580 大弹窗，三步——欢迎 → 选图床 → 怎么传。
+// 底栏：左「跳过」、中间三个圆点、右「上一步」「下一步 / 开始使用」，按钮高 32（设计稿）。
+// 「开始使用」写入选择并回到首页；「跳过」与 Esc 不写选择；点遮罩不关，免得误点丢掉选择。
+import { computed, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
+import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
+import PnButton from '@/components/pn/PnButton.vue';
 import { useOnboarding } from '@/composables/useOnboarding';
-import WelcomeStep from './steps/WelcomeStep.vue';
-import UploadStep from './steps/UploadStep.vue';
-import ServicesStep from './steps/ServicesStep.vue';
+import { useUploadController } from '@/composables/upload/useUploadController';
+import { uiPlatform } from '@/utils/platform';
+import OnboardingWelcome from './OnboardingWelcome.vue';
+import OnboardingHosts from './OnboardingHosts.vue';
+import OnboardingHowTo from './OnboardingHowTo.vue';
+import { ONBOARDING_STEPS, stepButtons } from './onboardingModel';
 
-const {
-  isVisible,
-  currentStep,
-  totalSteps,
-  complete,
-  nextStep,
-  prevStep,
-} = useOnboarding();
+const router = useRouter();
+const upload = useUploadController();
+const onboarding = useOnboarding();
+const { isVisible, stepIndex, choice, saving } = onboarding;
 
-const isFirstStep = computed(() => currentStep.value === 0);
-const isLastStep = computed(() => currentStep.value === totalSteps - 1);
+const platform = uiPlatform();
+const step = computed(() => ONBOARDING_STEPS[stepIndex.value]);
+const buttons = computed(() => stepButtons(stepIndex.value));
+/** 关掉全局快捷键时不提组合键（与首页、托盘一致） */
+const hotkey = computed(() => {
+  const shortcut = upload.config.value.globalShortcut;
+  return shortcut?.enabled === false ? '' : (shortcut?.uploadClipboard ?? '');
+});
 
-function handleNext() {
-  if (isLastStep.value) {
-    complete();
-  } else {
-    nextStep();
+async function onNext(): Promise<void> {
+  if (step.value !== 'howto') {
+    onboarding.next();
+    return;
   }
+  if (await onboarding.finish()) await router.push('/home');
+}
+
+/** 打开时焦点落在「下一步」（Reka 默认落在第一个按钮「跳过」，回车就跳过了） */
+function onOpenAutoFocus(event: Event): void {
+  const next = document.querySelector<HTMLElement>('.onboarding [data-autofocus]');
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+}
+
+/** 回到第 1 步时「上一步」消失，焦点交给「下一步」，免得掉到弹窗外 */
+async function onBack(): Promise<void> {
+  onboarding.back();
+  if (buttons.value.back) return;
+  await nextTick();
+  document.querySelector<HTMLElement>('.onboarding [data-autofocus]')?.focus();
+}
+
+function onEscape(event: KeyboardEvent): void {
+  event.preventDefault();
+  void onboarding.skip();
 }
 </script>
 
 <template>
-  <Dialog
-    v-model:visible="isVisible"
-    modal
-    :closable="false"
-    :draggable="false"
-    :style="{ width: 'var(--dialog-width-md)' }"
-    :pt="{
-      root: { class: 'app-dialog onboarding-dialog' },
-      mask: { class: 'onboarding-mask' },
-    }"
-  >
-    <template #header>
-      <div class="onboarding-header">
-        <div class="step-indicators">
-          <span
-            v-for="i in totalSteps"
-            :key="i"
-            class="step-dot"
-            :class="{ active: currentStep === i - 1, done: currentStep > i - 1 }"
-          />
+  <DialogRoot :open="isVisible">
+    <DialogPortal>
+      <DialogOverlay class="pn-dialog-overlay" />
+      <DialogContent
+        class="pn-layer onboarding"
+        :aria-describedby="undefined"
+        @open-auto-focus="onOpenAutoFocus"
+        @escape-key-down="onEscape"
+        @pointer-down-outside="(event: Event) => event.preventDefault()"
+        @interact-outside="(event: Event) => event.preventDefault()"
+      >
+        <DialogTitle class="onboarding__sr">新手引导</DialogTitle>
+        <div class="onboarding__body">
+          <OnboardingWelcome v-if="step === 'welcome'" />
+          <OnboardingHosts v-else-if="step === 'hosts'" :hosts="choice.hosts" @toggle="onboarding.setHost" />
+          <OnboardingHowTo v-else :format="choice.format" :platform="platform" :hotkey="hotkey" @update:format="onboarding.setFormat" />
         </div>
-      </div>
-    </template>
-
-    <div class="onboarding-body">
-      <Transition name="step-fade" mode="out-in">
-        <WelcomeStep v-if="currentStep === 0" key="welcome" />
-        <UploadStep v-else-if="currentStep === 1" key="upload" />
-        <ServicesStep v-else key="services" />
-      </Transition>
-    </div>
-
-    <template #footer>
-      <Button
-        label="跳过引导"
-        text
-        severity="secondary"
-        class="dialog-btn-secondary"
-        @click="complete"
-      />
-      <Button
-        v-if="!isFirstStep"
-        label="上一步"
-        outlined
-        severity="secondary"
-        class="dialog-btn-reject"
-        @click="prevStep"
-      />
-      <Button
-        :label="isLastStep ? '开始使用' : '下一步'"
-        class="dialog-btn-accept"
-        @click="handleNext"
-      />
-    </template>
-  </Dialog>
+        <div class="onboarding__foot">
+          <PnButton variant="ghost" class="onboarding__skip" :disabled="saving" @click="onboarding.skip()">跳过</PnButton>
+          <div class="onboarding__dots" :aria-label="`第 ${stepIndex + 1} 步，共 ${ONBOARDING_STEPS.length} 步`" role="img">
+            <span v-for="(name, i) in ONBOARDING_STEPS" :key="name" class="onboarding__dot" :class="{ 'onboarding__dot--on': i === stepIndex }" />
+          </div>
+          <PnButton v-if="buttons.back" variant="secondary" @click="onBack">上一步</PnButton>
+          <PnButton variant="primary" class="onboarding__next" data-autofocus :loading="saving" @click="onNext">{{ buttons.next }}</PnButton>
+        </div>
+      </DialogContent>
+    </DialogPortal>
+  </DialogRoot>
 </template>
 
-<style scoped>
-.onboarding-header {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-.step-indicators {
-  display: flex;
-  gap: var(--space-xs-sm);
-  align-items: center;
-}
-
-.step-dot {
-  width: 8px;
-  height: 6px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 全圆角药丸形，无对应 radius token */
-  border-radius: 9999px;
-  background: var(--border-subtle);
-  transition: all var(--duration-medium) var(--ease-overshoot);
-}
-
-.step-dot.active {
-  width: 28px;
-  background: var(--primary);
-}
-
-.step-dot.done {
-  background: var(--primary);
-  opacity: 0.4;
-}
-
-.onboarding-body {
-  width: 100%;
-  padding: var(--space-sm) 0 var(--space-lg);
-  min-height: 340px;
-  max-height: min(520px, calc(100vh - 180px));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden auto;
-}
-
-/* 底栏布局与按钮规格由 .app-dialog 统一提供（"跳过引导"用 .dialog-btn-secondary，
-   自带 margin-right:auto 顶到左侧），见 src/styles/app.css 第 3 节 */
-
-.step-fade-enter-active,
-.step-fade-leave-active {
-  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
-}
-
-.step-fade-enter-from {
-  opacity: 0;
-  transform: translateX(12px);
-}
-
-.step-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-12px);
-}
-</style>
-
+<!-- 传送到 body，用不带 scoped 的类名 -->
 <style>
-/* 外壳（圆角/背景/阴影/头尾内边距/按钮规格）由 .app-dialog 统一提供。
-   这里只写引导弹窗的差异：正文自带上下留白且需要自行滚动，故取消内容区默认内边距。 */
-.onboarding-dialog .p-dialog-content {
-  padding: 0 var(--space-xl) !important;
-  overflow: hidden !important;
+.onboarding {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: var(--pn-z-dialog);
+  display: flex;
+  flex-direction: column;
+  width: var(--pn-size-onboarding-w);
+  height: var(--pn-size-onboarding-h);
+  max-width: calc(100vw - var(--pn-space-32));
+  max-height: calc(100vh - var(--pn-space-16));
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: var(--pn-radius-dialog);
+  background: var(--pn-elevated);
+  box-shadow: var(--pn-e4);
+  color: var(--pn-text1);
+  transform: translate(-50%, -50%);
+}
+
+.onboarding[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding[data-state='open'] { animation-name: pn-dialog-fade; }
+}
+
+.onboarding__sr {
+  position: absolute;
+  width: var(--pn-space-1);
+  height: var(--pn-space-1);
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.onboarding__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.onboarding__foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--pn-space-button-sm-x);
+  height: var(--pn-size-onboarding-foot);
+  padding: 0 var(--pn-space-24);
+}
+
+/* 比 PnButton 自带的变体样式多一层类名，才盖得住（设计稿：跳过 灰字、左右 10；下一步 左右 16） */
+.onboarding__foot .onboarding__skip { padding: 0 var(--pn-space-button-sm-x); color: var(--pn-text2); }
+.onboarding__foot .onboarding__next { padding: 0 var(--pn-space-16); }
+
+.onboarding__dots {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: var(--pn-space-6);
+}
+
+.onboarding__dot {
+  width: var(--pn-size-onboarding-dot);
+  height: var(--pn-size-onboarding-dot);
+  border-radius: var(--pn-radius-onboarding-dot);
+  background: var(--pn-border-strong);
+  transition: width var(--pn-dur-standard) var(--pn-ease-out), background-color var(--pn-dur-standard) var(--pn-ease-out);
+}
+
+.onboarding__dot--on { width: var(--pn-size-onboarding-dot-on); background: var(--pn-text1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding__dot { transition: none; }
 }
 </style>
