@@ -102,20 +102,15 @@
   --success: #10b981;      /* Emerald 500 */
   --error: #ef4444;        /* Red 500 */
   --warning: #eab308;      /* Yellow 500 */
-  --pending: #a78bfa;      /* Violet 400 — 中性"待定"语义 */
   --success-alpha-8: rgba(16, 185, 129, 0.08);
   --success-alpha-10: rgba(16, 185, 129, 0.1);
   --success-alpha-12: rgba(16, 185, 129, 0.12);
-  --success-alpha-15: rgba(16, 185, 129, 0.15);
   --warning-alpha-8: rgba(234, 179, 8, 0.08);
   --warning-alpha-10: rgba(234, 179, 8, 0.1);
-  --warning-alpha-15: rgba(234, 179, 8, 0.15);
   --warning-alpha-25: rgba(234, 179, 8, 0.25);
   --warning-alpha-40: rgba(234, 179, 8, 0.4);
   --error-alpha-8: rgba(239, 68, 68, 0.08);
   --error-alpha-15: rgba(239, 68, 68, 0.15);
-  --pending-alpha-8: rgba(167, 139, 250, 0.08);
-  --pending-alpha-15: rgba(167, 139, 250, 0.15);
 
   /* Tertiary / Orange — 用于文档修复异常徽章等暖色调场景 */
   --tertiary: #ea580c;      /* Orange 600 */
@@ -240,7 +235,6 @@
 
   /* 对话框宽度（xl 供图片对比等需要大画布的弹窗使用） */
   --dialog-width-sm: 336px;
-  --dialog-width-md: 460px;
   --dialog-width-lg: 520px;
   --dialog-width-xl: 900px;
   --dialog-height-xl: 680px;
@@ -1340,7 +1334,7 @@ button:focus-visible {
 
    接入方式（PrimeVue Dialog）：
      :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
-   需要局部差异时再叠加自己的类（如 .onboarding-dialog），只写差异、不复制外壳。
+   需要局部差异时再叠加自己的类，只写差异、不复制外壳。
 
    ⚠️ 按钮样式必须写在这里（全局），不能写进弹窗组件的 scoped `:deep()`：
    PrimeVue Dialog 会 Teleport 到 body，其根节点 .p-dialog 不带 data-v 作用域属性，

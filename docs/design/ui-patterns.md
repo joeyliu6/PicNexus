@@ -86,7 +86,7 @@
 
 ```vue
 <Dialog
-  :style="{ width: 'var(--dialog-width-md)' }"
+  :style="{ width: 'var(--dialog-width-lg)' }"
   :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
 >
   <template #footer>

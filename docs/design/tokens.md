@@ -265,7 +265,6 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 | 变量 | 值 | 场景 |
 |------|-----|------|
 | `--dialog-width-sm` | 336px | 纯展示型（二维码、单图） |
-| `--dialog-width-md` | 460px | 默认档：表单、确认、引导 |
 | `--dialog-width-lg` | 520px | 含列表/多选项的决策弹窗 |
 | `--dialog-width-xl` | 900px | 需要大画布（图片对比预览） |
 | `--dialog-height-xl` | 680px | 与 `--dialog-width-xl` 配套 |
