@@ -54,6 +54,8 @@ flowchart TD
 | 时间 | `timestamp >= since`（最近 7 天 / 最近 30 天 / 今年 1 月 1 日起） |
 | 搜索 | 只搜文件名：`local_file_name_lower LIKE %词% ESCAPE '\'`；输入后 200ms 才查 |
 
+「状态」只勾了「失效」时网格不按天分（`useDeadSections`）：带 `backup: 'available' | 'none'` 各查一次全部记录，分「失效 · 有可用备份」「失效 · 无可用备份」两组；有可用备份 = 别的图床上还有一份没被查出失效（`USABLE_BACKUP_SQL`，与详情顶上的提示同一口径）。这时没有刻度条，灯箱按两组的顺序翻。
+
 **读己之写**：点星标是「先乐观改 favoriteSet、后写盘」，而 tauri-plugin-sql 的连接池对读写不排队（WAL 下 SELECT 读提交前快照）。所以带「★ 收藏」筛选的图库查询，以及 `getFavoriteIdList` / `getFavoriteCount`，入口都先等在途收藏写入（`HistoryDatabase.pendingFavoriteWrites`）落盘再查。
 
 > **关键源文件**：`src/views/gallery/galleryFilters.ts`、`src/services/database/TimelineQueryService.ts`、`src/services/database/HistoryDatabase.ts`
@@ -66,7 +68,7 @@ flowchart TD
     D -- 是 --> D1[等在途收藏写入落盘]
     D -- 否 --> E
     D1 --> E["appendFilterClause 拼 WHERE"]
-    E --> F1[网格：天聚合重算，已加载的天作废]
+    E --> F1[网格：天聚合重算，已加载的天作废；只筛失效时按有没有可用备份分两组]
     E --> F2[列表：页缓存作废，从第 0 页重取]
     F1 & F2 --> G{有结果?}
     G -- 否 --> G1["空状态：没有匹配的图片 / 还没有收藏"]
