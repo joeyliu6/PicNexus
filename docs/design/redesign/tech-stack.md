@@ -4,22 +4,20 @@
 
 ## 1. 结论
 
-**桌面框架、后端、业务逻辑都不换；界面层按设计稿重写，零件用 Reka UI + 自写组件。**
+**桌面框架、后端、业务逻辑沿用；界面层按设计稿写，零件用 Reka UI + 自写组件。**
 
-| 层 | 现在 | 重构后 |
-|---|---|---|
-| 桌面框架 | Tauri 2 | 不变 |
-| 后端 | Rust | 不变；为托盘原生菜单、上传日历等加少量命令 |
-| 前端框架 | Vue 3 + TypeScript + Vite | 不变 |
-| 业务逻辑 | composables / core / services / uploaders / store | 保留，只在设计要求变行为的地方定点修改 |
-| 界面零件 | PrimeVue 4 + PrimeIcons | **Reka UI**（无样式，只管键盘、焦点、读屏）+ 自写 `Pn*` 组件 |
-| 图标 | PrimeIcons | `PnIcon`：形状照抄设计源文件的 SVG（`src/components/pn/icons.ts`），不从图标库里挑近似的；图床 logo 继续用项目自带的 SVG |
-| 样式 | 主题 CSS + PrimeVue 覆盖样式 | scoped CSS，只引用 `var(--pn-*)` 令牌（[handoff/tokens/tokens.css](./handoff/tokens/tokens.css)） |
-| 通知 / 确认框 | PrimeVue Toast / ConfirmDialog | 自写 PnToast / PnDialog，挂在现有 `useToast` / `useConfirm` / `useUndoToast` 下面，调用方式不变 |
-| 长列表 | PrimeVue VirtualScroller + 自写虚拟时间轴 | `@tanstack/vue-virtual`；等高行排版算法（`utils/justifiedLayout.ts`）保留 |
-| 页面切换 | `currentView` + 事件 + provide/inject | vue-router（内存模式），托盘、命令面板、应用内跳转都走路由 |
-| 灯箱 | PhotoSwipe + 自写桥接 | 不变 |
-| 托盘 | 网页浮窗（`tray-menu.html`） | Tauri 原生菜单（`Menu` / `CheckMenuItem` / `Submenu`） |
+| 层 | 用什么 |
+|---|---|
+| 桌面框架 / 后端 / 前端框架 | Tauri 2 / Rust / Vue 3 + TypeScript + Vite |
+| 业务逻辑 | composables / core / services / uploaders / store，只在设计要求变行为的地方定点修改 |
+| 界面零件 | **Reka UI**（无样式，只管键盘、焦点、读屏）+ 自写 `Pn*` 组件（`src/components/pn/`）与业务组件（`src/components/biz/`） |
+| 图标 | `PnIcon`：形状照抄设计源文件的 SVG（`src/components/pn/icons.ts`），不从图标库里挑近似的；图床 logo 用项目自带的 SVG（`HostIcon`） |
+| 样式 | scoped CSS，只引用 `var(--pn-*)` 令牌（[docs/design/tokens.md](../tokens.md)） |
+| 通知 / 确认框 | `PnToaster` / `PnConfirmHost`，接在 `useToast` / `useConfirm` / `useUndoToast` 下面 |
+| 长列表 | `@tanstack/vue-virtual`；等高行排版算法 `utils/justifiedLayout.ts` |
+| 页面切换 | vue-router（内存模式），托盘、命令面板、应用内跳转都走路由 |
+| 灯箱 | PhotoSwipe + 自写桥接（`usePhotoSwipeBridge.ts`） |
+| 托盘 | Tauri 原生菜单（`Menu` / `CheckMenuItem` / `Submenu`） |
 
 ## 2. 为什么不用 shadcn-vue + Tailwind
 
@@ -30,16 +28,16 @@
 
 不做：前端改用 React。上传编排、镜像回退、链接检测、同步、加密都写在 Vue composables 里并有大量测试护着，重写没有产品收益，只有回归风险。
 
-## 3. 规矩跟着变的地方
+## 3. 规矩
 
-| 规矩 | 重构后 |
+| 规矩 | 做法 |
 |---|---|
-| CSS 禁止写死颜色、间距等 | 保留。设计稿用到而导出令牌没收录的颜色、尺寸，以及不在刻度上的值，写成具名令牌放进 `src/styles/tokens-extra.css`，不硬写、也不凑到最近的刻度 |
-| 令牌位置 | `src/styles/tokens.css`（设计包原样）+ `src/styles/tokens-extra.css`；旧的 `light-theme.css` / `dark-theme.css` 在最后一个旧页面删掉时一并删除；`check-theme-token-copies.mjs` 改读新位置 |
-| 主题与平台 | 根元素 `data-theme="light|dark"`、`data-platform="windows|macos|linux"` |
-| 单个 `.vue` 不超过 500 行 | 保留 |
-| Logger、Store 单例、配置深拷贝 | 不变 |
-| 视觉基准图 | 按页面重做后逐页重录（1400×900 与 800×600，浅 / 深）；跨引擎布局探针保留 |
+| CSS 禁止写死颜色、间距等 | 设计稿用到而导出令牌没收录的颜色、尺寸，以及不在刻度上的值，写成具名令牌放进 `src/styles/tokens-extra.css`，不硬写、也不凑到最近的刻度 |
+| 令牌位置 | `src/styles/tokens.css`（设计包原样）+ `src/styles/tokens-extra.css`；首屏手抄的副本由 `check-theme-token-copies.mjs` 比对 |
+| 主题与平台 | 根元素 `data-theme="light|dark"`、`data-platform="windows|macos|linux"`（[themes.md](../themes.md)） |
+| 单个 `.vue` 不超过 500 行 | 照旧 |
+| Logger、Store 单例、配置深拷贝 | 照旧 |
+| 视觉基准图 | `tests/redesign/`，1400×900 与 800×600、浅 / 深各一套；截图前量一遍验收规则（`designRules.ts`）；跨引擎布局由 e2e 的 WebKit 项目承担 |
 
 ## 4. 落地时要核实的事
 

@@ -1,215 +1,54 @@
-# UI 模式与最佳实践
+# 界面零件与常见做法
 
-## 空状态设计规范
+界面零件 = Reka UI（行为与无障碍）+ 自写的 `Pn*` 组件（样子）+ scoped CSS，只引用 `--pn-*` 令牌（[tokens.md](./tokens.md)）。新写界面先在下面两个目录里找现成的，没有再写；尺寸、文案以 `design-source/project/*.dc.html` 为准。
 
-项目中的空状态分为 4 种类型，每种类型有明确的使用场景和样式规范。
+## 零件
 
-### 1. 标准空状态（Standard Empty State）
+**基础控件**（`src/components/pn/`，`Controls.dc.html` / `Patterns.dc.html`）
 
-**使用场景**：列表、表格、网格等主要内容区域的空状态
+| 组件 | 用途与规格 |
+|---|---|
+| `PnButton` | `primary` 主按钮（每页最多一个，每个弹窗最多一个）/ `soft` 白色浮起按钮（次要操作首选）/ `secondary` 白底描边（较早定稿的页面）/ `ghost` 文字按钮 / `danger` 危险按钮（写动作，不写「确定」）。高度 `sm` 28 / `md` 30 / `lg` 32 / `dialog` 34；`loading` 原地写「正在…」 |
+| `PnIconButton` | 28×28 纯图标按钮，必须有 `label`（读屏 + 悬停气泡） |
+| `PnInput` | 高 32（弹窗里 34），聚焦蓝框 + 3px 浅蓝外环，出错红框；占位字 `--pn-text3` |
+| `PnSwitch` / `PnSegmented` / `PnSelect` | 开关 36×20；分段控件（切换「怎么看」，选中块浮起、不用彩色）；下拉选择（选中项左侧蓝勾，右侧可带等宽示例） |
+| `PnMenu` / `PnContextMenu` | 下拉菜单 / 右键菜单：项高 32，危险项放最后、红字、前面一条线；样式在 `src/styles/pn-menu.css` |
+| `PnPopover` / `PnTooltip` | 弹出层（圆角 14、内距 8、e3）；气泡（深底白字 12px，键盘聚焦也出现） |
+| `PnDialog` / `PnConfirmHost` | 对话框、确认框（见下） |
+| `PnToaster` | 通知（见 [notification-patterns.md](./notification-patterns.md)） |
+| `PnEmpty` / `PnSkeleton` / `PnKbd` / `PnIcon` | 空状态、骨架、快捷键标签（macOS 写 ⌘ ⇧）、线条图标（名字在 `pn/icons.ts`） |
 
-**组件**：`EmptyState.vue`
+**业务组件**（`src/components/biz/`）：`HostIcon`（所有图床图标都用它：16 列表 / 20 标签 / 24 选择面板 / 32 图床页头部 / 44 登录窗口，认不出的退回名字前两个字）、`PetalGlyph`（一瓣 = 一个图床）、`BrandMark`（Logo）、`BgDecor`（背景装饰，只用于首页与空状态）、`CopyButton`（原地变「✓ 已复制」1.5 秒，不弹通知）、`LinkBlock`、`PreviewFrame`（预览框：图完整显示，空处铺模糊放大版）、`ToolCard` / `ToolCardArt`、`UploadCalendar`、`YearPills`。缩略图统一用 `src/components/common/ThumbnailImage.vue`（按候选链接逐个试，全部失败画「图已不存在」图标）。
 
-**样式规范**：
-- 图标大小：48px（`--text-4xl`）
-- 图标颜色：`--text-disabled`，透明度 0.5
-- 标题字号：16px（`--text-lg`），字重 500
-- 标题颜色：`--text-secondary`
-- 描述字号：13px（`--text-sm`）
-- 描述颜色：`--text-muted`
-- 垂直间距：`--space-md`（12px）
-- 容器内边距：`--space-2xl`（32px）
+## 弹窗
 
-**图标选择指南**：
-- 通用无数据：`pi-inbox`
-- 搜索/筛选无结果：`pi-search`
-- 收藏为空：`pi-star`
-- 历史记录为空：`pi-clock`
-- 配置缺失：`pi-cog`
-- 错误状态：`pi-exclamation-triangle`
+- **对话框一律用 `PnDialog`**：宽 520、圆角 16、内边距 24 / 28、左侧 40px 图标块（普通品牌蓝 / 警告琥珀 / 危险红）、标题 17px + 12px 灰色上下文、按钮高 34（`PnButton size="dialog"`）、垂直水平居中；最高「窗口高 − 56」，超出在弹窗里滚动。宽度不可改（没有 `width` 参数）。
+- 打开时焦点落在 `[data-autofocus]`，没有就第一个输入框，再没有就主按钮；Esc 与点遮罩关闭（`blocking` 的不关）。
+- **确认框**：`useConfirm()`，画在 `PnConfirmHost`，一次只显示一个、排队。`tone: 'danger'` = 红图标块 + 红确认按钮（不可逆的危险操作），不给按琥珀。能撤销的操作不弹确认（改用撤销通知），见 notification-patterns.md。
+- 规格外的三处，各自记在 decisions：新手引导（大弹窗，[onboarding.md](./redesign/decisions/onboarding.md)）、命令面板（同圆角、遮罩、阴影，[home.md](./redesign/decisions/home.md)）、压缩预览（整窗深色查看器，[settings.md](./redesign/decisions/settings.md)）。
+- 截图测试会量每个 `.pn-dialog` 的宽、圆角、居中与按钮高（`tests/redesign/designRules.ts`）。
 
-**用法示例**：
+## 传送到 body 的浮层
 
-```vue
-<EmptyState
-  icon="pi pi-star"
-  title="暂无收藏"
-  description="点击图片右上角的 ★ 开始收藏"
-/>
+对话框、菜单、弹出层、气泡的内容由 Reka 传送到 `<body>`，组件的 scoped 样式够不到：
 
-<EmptyState
-  icon="pi pi-search"
-  title="未找到结果"
-  description="尝试调整搜索关键词或筛选条件"
->
-  <button @click="reset">重置筛选</button>
-</EmptyState>
-```
+- 浮层根元素加 `pn-layer`（取外壳的字体、字号、颜色与焦点环），样式用不带 `scoped` 的唯一类名写在组件的 `<style>` 里或 `pn-menu.css`。
+- `:deep()` 救不了：浮层根节点不带 `data-v` 属性；全局 `.css` 里的 `:deep()` 会被浏览器整条丢弃（`scripts/check-css-deep.mjs` 拦）。
+- 菜单、弹出层离窗口边至少 8px。
 
-### 2. 内联空状态（Inline Empty State）
+## 空状态与加载
 
-新界面的空状态以图库 G09–G11 为准，所有页面共用一份尺寸（见 [decisions/gallery.md](./redesign/decisions/gallery.md)）；紧凑区域（如设置页「最近操作」）没有内容时整组不显示，不画空状态。
+- 空状态用 `PnEmpty`：44px 线条图标 + 15px 标题 + 一句说明 + 可选按钮，居中偏上（下方留 80）。`compact` 版（卡片、小列表里）只有标题和说明；紧凑区域（如设置页「最近操作」）没内容时整组不显示。背景装饰（`BgDecor`）只放在图库无图、链接健康从未检测、引导欢迎页与首页。
+- 加载超过 300ms 才出骨架（`PnSkeleton`），骨架按真实版式排（`LoadingRules.dc.html`）；转圈用共用的 `pn-spin`（`pn-base.css`），「减少动态效果」时停住。
 
-### 3. 交互空状态（Interactive Empty State）
+## 焦点、键盘与读屏
 
-**使用场景**：拖放区域、文件选择等需要用户交互的空状态
+- 焦点环：品牌蓝 2px 外环，只在键盘操作时出现（`pn-base.css`）；输入框不套这一圈，由自己的框画聚焦样式。
+- Tab 顺序：侧栏 → 页面工具栏 → 内容 → 详情面板；`Esc` 关闭一切浮层。
+- 所有可点元素是真的 `<button>` / `<a>` / `<input>`；纯图标按钮有 `aria-label`；装饰性 SVG `aria-hidden`；只给读屏看的标题用 1×1 裁切写法。
 
-**实现方式**：自定义组件（如 `RescueIdleZone.vue`）
+## 滚动条与布局
 
-**样式规范**：
-- 图标大小：36px（`--text-4xl`）
-- 图标颜色：`--primary`
-- 边框：2px dashed `--border-subtle`
-- 边框圆角：`--radius-md`（8px）
-- 悬停边框：`--primary-alpha-40`
-- 拖拽时边框：`--primary`（实线）
-- 拖拽时背景：`--primary-alpha-5`
-- 主文字字号：16px（`--text-lg`），字重 600
-- 主文字颜色：`--text-secondary`
-- 描述字号：13px（`--text-sm`）
-- 描述颜色：`--text-muted`
-- 容器内边距：`--space-3xl`（40px）
-
-**特点**：
-- 虚线边框提示可拖放
-- 悬停和拖拽时有视觉反馈
-- 包含明确的交互指引
-
----
-
-## 弹窗规格
-
-全项目弹窗共用**一套**外壳与按钮规格，定义在 [`src/styles/app.css`](../../src/styles/app.css) 第 3 节。
-改规格只改那一处，所有弹窗跟着变。
-
-### 接入方式
-
-```vue
-<Dialog
-  :style="{ width: 'var(--dialog-width-lg)' }"
-  :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
->
-  <template #footer>
-    <Button label="取消" severity="secondary" outlined class="dialog-btn-reject" />
-    <Button label="确认" class="dialog-btn-accept" />
-  </template>
-</Dialog>
-```
-
-确认框（`useConfirm`）不走这套外壳，画在新界面的 `src/components/pn/PnConfirmHost.vue`（宽 520，规格见 `docs/design/redesign/`）。
-
-| 底栏按钮 class | 外观 | 位置 |
-|----------------|------|------|
-| `dialog-btn-accept` | 实心主色（加 `severity="danger"` 转红） | 最右 |
-| `dialog-btn-reject` | 描边次要 | 主按钮左侧 |
-| `dialog-btn-secondary` | 无边框文字态 | 顶到最左（自带 `margin-right: auto`） |
-
-### 标准值
-
-| 项 | 值 |
-|----|-----|
-| 外壳圆角 | `--radius-xl`（16px） |
-| 标题栏 | `--space-xl` 三面，**不画分割线** |
-| 内容区 | `--space-lg-xl` / `--space-xl` / `--space-xl` |
-| 底栏 | `--space-sm` / `--space-xl` / `--space-xl`，右对齐，间距 `--space-md` |
-| 按钮 | 高 40px · 圆角 `--radius-md` · `--text-base` · `--weight-semibold` |
-
-### ⚠️ 按钮样式不能写在组件的 `:deep()` 里
-
-PrimeVue Dialog 会 Teleport 到 `<body>`，其根节点 `.p-dialog` **不带 Vue scoped 属性**，
-`:deep(.x)` 编译出的 `[data-v-*] .x` 找不到祖先，规则永远不生效（不报错，静默失效）。
-同理，普通 `.css` 文件里的 `:deep()` 会被浏览器整条丢弃 —— 两种情况都由
-[`scripts/check-css-deep.mjs`](../../scripts/check-css-deep.mjs) 在 `npm run lint` 时拦截。
-
-组件内的元素（如 `.field :deep(.p-password input)`）不受影响，因为 scoped 属性落在 `.field` 上。
-
-### 例外怎么登记
-
-确有差异的弹窗（如引导弹窗的正文自带留白）**只写差异**，不复制外壳，
-并在弹窗组件旁注释写明原因。新界面的弹窗一律用 `PnDialog`（宽 520、圆角 16、内边距 24/28、按钮高 34），外壳规格由组件给定，不在页面里各写一份。
-
----
-
-## 常见模式
-
-### 滚动条
-
-全局滚动条样式在 `styles/app.css` 中定义，使用 CSS 变量：
-
-```css
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--scrollbar-track, transparent);
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-hover);
-}
-```
-
-组件如需透明 track，只需覆盖 track 样式：
-
-```css
-.my-component::-webkit-scrollbar-track {
-  background: transparent;
-}
-```
-
-### 焦点环
-
-使用统一的焦点环变量：
-
-```css
-.focusable-element:focus {
-  border-color: var(--border-focus);
-  box-shadow: var(--focus-ring-shadow);
-}
-```
-
-### 悬浮效果
-
-```css
-.hoverable:hover {
-  background-color: var(--hover-overlay);
-}
-
-/* 微妙悬浮（用于列表项等） */
-.subtle-hover:hover {
-  background-color: var(--hover-overlay-subtle);
-}
-```
-
----
-
-## 最佳实践
-
-### ✅ 应该做
-
-1. **新增颜色时先检查变量**：查看是否已有合适的变量可用
-2. **新增组件样式时使用变量**：确保主题适配
-3. **PrimeVue 覆盖集中管理**：添加到 `primevue-overrides.css`
-4. **测试两种主题**：修改样式后同时测试深色和浅色主题
-
-### ❌ 不应该做
-
-1. **不要硬编码颜色值**：使用变量代替
-2. **不要在组件中重复全局样式**：如滚动条、焦点环
-3. **不要在主题文件中写选择器样式**：主题文件只定义变量
-4. **不要使用 `!important`**：除非绝对必要
-
-### 添加新变量的流程
-
-1. 确认现有变量无法满足需求
-2. 在 `dark-theme.css` 和 `light-theme.css` 中同时添加变量
-3. 使用语义化命名（如 `--state-info-bg` 而非 `--blue-bg-015`）
-4. 在需要的地方使用新变量
-5. 测试两种主题下的效果
+- 滚动条：6px 细条、轨道透明，悬停加深（`pn-base.css`，设计稿没画）。
+- 最小窗口 800×600，任何页面不横向滚动；宽 < 1000px 侧栏收成 56px 图标栏（截图测试会量）。
+- 尺寸都按 `box-sizing: border-box` 算（`pn-base.css` 全局写了）。

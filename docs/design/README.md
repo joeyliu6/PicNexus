@@ -1,111 +1,33 @@
 # PicNexus 设计规范
 
-本目录定义了 PicNexus 项目的样式架构和开发规范，确保样式代码的一致性、可维护性和主题适配能力。
+界面按 Claude Design 交付、已验收的设计包实现（[redesign/](./redesign/README.md)）。改界面前先对照设计源文件 `redesign/handoff/design-source/project/*.dc.html`：尺寸、颜色、文案以它为准；规则与页面说明在 [交接说明](./redesign/handoff/HANDOFF.md)，每张状态图的索引在 `handoff/states/STATES.md`，设计没画、开发时补的做法在 [decisions/](./redesign/decisions/)。
 
-## 文档索引
+## 文档
 
 | 文档 | 内容 |
-|------|------|
-| [CSS 变量体系](./tokens.md) | 变量命名、颜色/间距/动效 Token |
-| [主题与组件](./themes.md) | 深色/浅色主题适配、PrimeVue 组件覆盖 |
-| [UI 模式与实践](./ui-patterns.md) | 常见 UI 模式、最佳实践、新增变量流程 |
-| [设置页面排版](./settings-layout.md) | 设置面板标题/描述/容器/激活态/间距体系 |
-| [弹窗与通知规范](./notification-patterns.md) | 通知通道决策树、文案口径——新增 toast/confirm/banner 前必读 |
-| [产品文案规范](./product-copy.md) | 中文优先、短句优先，帮用户判断状态而不抢注意力 |
-| [界面重构](./redesign/README.md) | 已验收的设计交付包（交接说明、状态索引、令牌、设计源文件）、技术选型与实施阶段 |
+|---|---|
+| [tokens.md](./tokens.md) | `--pn-*` 令牌：在哪、刻度、门禁、首屏副本 |
+| [themes.md](./themes.md) | 深浅色（`data-theme`）与平台（`data-platform`） |
+| [ui-patterns.md](./ui-patterns.md) | 界面零件（`Pn*` / 业务组件）、弹窗、浮层、空状态、焦点与键盘 |
+| [notification-patterns.md](./notification-patterns.md) | 通知、撤销、确认框、横幅怎么选；新增提醒前必读 |
+| [product-copy.md](./product-copy.md) | 文案规则 |
+| [settings-layout.md](./settings-layout.md) | 设置页的骨架与规则 |
+| [redesign/](./redesign/README.md) | 设计包入口、已定的事、平台限制、各页 decisions |
 
----
+## 三条底线
 
-## 核心设计原则
+1. **只用令牌**：颜色、字号、间距、圆角、阴影、层级、动效时长都写 `var(--pn-*)`；设计稿有、令牌没收录的写成 `tokens-extra.css` 里的具名令牌。`npm run lint` 与截图测试会拦。
+2. **只用这套零件**：Reka UI + `src/components/pn/` + `src/components/biz/`，scoped CSS；不用 Tailwind / shadcn-vue / 其他组件库（理由见 [redesign/tech-stack.md](./redesign/tech-stack.md)）。
+3. **照设计稿，不顺手优化**：交接说明第 4 节（产品规则）和第 12 节（已否决的方案）是硬约束；设计稿自相矛盾时不自己选，记进 decisions 的「待拍板」。
 
-### 1. 变量优先，避免硬编码
-
-**所有颜色值必须使用 CSS 变量**，禁止在组件中硬编码颜色。
-
-```css
-/* ✅ 正确 */
-.card {
-  background-color: var(--bg-card);
-  color: var(--text-main);
-  border: 1px solid var(--border-subtle);
-}
-
-/* ❌ 错误 */
-.card {
-  background-color: #1e293b;
-  color: #f8fafc;
-  border: 1px solid #334155;
-}
-```
-
-### 2. 单一职责，分层管理
-
-样式按职责分层，每个文件只负责特定功能：
-
-| 层级 | 文件 | 职责 |
-|------|------|------|
-| 变量层 | `dark-theme.css`, `light-theme.css` | 定义主题变量，不包含选择器样式 |
-| 组件层 | `primevue-overrides.css` | PrimeVue 组件的主题覆盖 |
-| 全局层 | `styles/app.css` | 全局基础样式、布局、通用组件 |
-| 动效层 | `styles/motion.css` | 时长 / 缓动令牌与共享 keyframes（主题切换无过渡：加 `.theme-transitioning` 的逻辑 2026-03 随 ThemeManager 重构一并移除，`transitions.css` 已于 2026-09-11 删除） |
-
-### 3. 一处定义，多处复用
-
-相同的样式模式只在一个地方定义，通过 CSS 变量实现主题适配，避免在多个文件中重复。
-
----
-
-## 文件结构
+## 样式文件
 
 ```
-src/
-├── styles/
-│   ├── app.css                  # 全局基础样式
-│   ├── motion.css               # 时长 / 缓动令牌、共享 keyframes、reduced-motion 归零
-│   └── bottom-bar-buttons.css   # 底栏按钮共享样式
-└── theme/
-    ├── preset.ts                # PrimeVue 预设配置
-    ├── ThemeManager.ts          # 主题切换逻辑
-    ├── dark-theme.css           # 深色主题变量
-    ├── light-theme.css          # 浅色主题变量
-    └── primevue-overrides.css   # PrimeVue 组件覆盖
+src/styles/
+├── tokens.css        设计稿导出的令牌（原样，不手改）
+├── tokens-extra.css  设计稿用到、导出没收录的具名令牌（按页面分段）
+├── pn-base.css       字体、box-sizing、页面底、滚动条、焦点环、弹窗遮罩、转圈
+└── pn-menu.css       菜单与下拉的共用样式
 ```
 
-### 导入顺序（main.ts）
-
-样式文件的导入顺序非常重要，确保正确的层叠优先级：
-
-```typescript
-// 1. 第三方样式
-import 'primeicons/primeicons.css';
-
-// 2. 主题变量（先加载，供后续样式使用）
-import './theme/dark-theme.css';
-import './theme/light-theme.css';
-
-// 3. PrimeVue 组件覆盖（依赖主题变量）
-import './theme/primevue-overrides.css';
-
-// 4. 动效令牌与共享样式
-import './styles/motion.css';
-import './styles/bottom-bar-buttons.css';
-```
-
-> **注意**：`styles/app.css` 在 `index.html` 中通过 `<link>` 引入，在 main.ts 之前加载。
-
----
-
-## 相关文档
-
-- [动效 Token 集中管理](../reference/patterns/motion-token-system.md) — duration / easing / keyframes 模式详解
-- [系统总览流程图](../flows/system-overview.md) — 项目宏观架构，定位样式在哪一层
-
----
-
-## 维护记录
-
-| 日期 | 变更内容 |
-|------|---------|
-| 2025-12-28 | 初始版本：创建样式设计规范，重构主题系统 |
-| 2026-03-25 | 新增设置页面排版规范（标题/描述/容器/激活态/间距） |
-| 2026-04-09 | 拆分为多文件结构 |
+`src/main.ts` 按这个顺序引入（令牌在前）；Cookie 登录小窗的内容页（`src/login-webview.ts`）引入前三份。组件样式写在各自 `.vue` 的 `<style scoped>` 里，传送到 body 的浮层用不带 scoped 的唯一类名。
