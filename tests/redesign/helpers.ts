@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, type Route } from '@playwright/test';
 import { mockObjectName } from '../e2e/mocks/core';
 import type { E2ESeed } from '../e2e/mocks/state';
+import { expectDesignRules } from './designRules';
 
 /**
  * 新界面像素基准的公共部分。
@@ -132,6 +133,7 @@ const MAX_DIFF_PIXELS = 100;
 export async function capture(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => [...document.images].every((img) => img.complete));
+  await expectDesignRules(page);
   await expect(page).toHaveScreenshot(`${name}.png`, {
     animations: 'disabled',
     caret: 'hide',
