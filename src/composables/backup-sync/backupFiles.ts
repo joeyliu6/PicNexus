@@ -21,7 +21,10 @@ export type BackupFile =
   | { kind: 'config'; config: UserConfig }
   | { kind: 'history'; content: string; count: number };
 
-/** 认出文件里是什么：加密的或对象 = 配置，数组 = 上传记录；都不是就报无法识别 */
+/**
+ * 认出文件里是什么：加密的或对象 = 配置，数组 = 上传记录；都不是就报无法识别。
+ * 启动还原时「跳过」另存下来的加密配置是整份存储（配置在 config 键下），同样认作配置。
+ */
 export async function parseBackupFile(raw: string, decrypt: DecryptContent): Promise<BackupFile> {
   const text = raw.trim();
   if (!text) throw new Error(UNRECOGNIZED_FILE);
@@ -34,6 +37,8 @@ export async function parseBackupFile(raw: string, decrypt: DecryptContent): Pro
   }
   if (Array.isArray(parsed)) return { kind: 'history', content, count: parsed.length };
   if (isValidUserConfig(parsed)) return { kind: 'config', config: parsed };
+  const stored = (parsed as { config?: unknown } | null)?.config;
+  if (isValidUserConfig(stored)) return { kind: 'config', config: stored };
   throw new Error(UNRECOGNIZED_FILE);
 }
 

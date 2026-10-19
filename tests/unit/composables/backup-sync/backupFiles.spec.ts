@@ -41,7 +41,13 @@ describe('parseBackupFile', () => {
     expect(decrypt).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['', 'not json', '{"hello":1}', '42'])('认不出（%j）写「无法识别」', async (raw) => {
+  it('启动时「跳过」另存下来的加密配置（整份存储，配置在 config 里）也认作配置', async () => {
+    const store = JSON.stringify({ config: { ...DEFAULT_CONFIG, enabledServices: ['jd'] }, analytics_data: { installId: 'x' } });
+    const file = await parseBackupFile(`PNXPWD:${store}`, decrypt);
+    expect(file).toMatchObject({ kind: 'config', config: { enabledServices: ['jd'] } });
+  });
+
+  it.each(['', 'not json', '{"hello":1}', '42', '{"config":{"hello":1}}'])('认不出（%j）写「无法识别」', async (raw) => {
     await expect(parseBackupFile(raw, decrypt)).rejects.toThrow(UNRECOGNIZED_FILE);
   });
 });
