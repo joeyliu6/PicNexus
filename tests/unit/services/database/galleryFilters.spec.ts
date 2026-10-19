@@ -95,6 +95,26 @@ describe.skipIf(!sqlite)('gallery filters on the real SQLite', () => {
     expect(await ids({ since: NOW - 7 * DAY })).toEqual(['ok', 'dead', 'limited', 'unchecked', 'pending']);
   });
 
+  // G06 / G07：按「失效」筛选时分「有可用备份 / 无可用备份」两组，与详情顶上的提示同一口径——
+  // 别的图床上还有一份没被查出失效（正常、尚未检测、可能受限都算）就是有可用备份
+  it('splits dead images by whether another copy is still usable', async () => {
+    const insert = raw.prepare(`INSERT INTO history_items
+      (id, timestamp, local_file_name, local_file_name_lower, aspect_ratio, primary_service, generated_link, results,
+       is_favorited, link_check_status, success_count, successful_service_ids, width, height, file_size, format)
+      VALUES (?, ?, ?, ?, 1, 'weibo', '', '[]', 0, ?, ?, ?, 10, 10, 1, 'png')`);
+    const dead = { isValid: false, errorType: 'http_4xx' };
+    const extra: Array<[string, Record<string, object>, string[]]> = [
+      ['both-dead', { weibo: dead, jd: dead }, ['weibo', 'jd']],
+      ['backup-unchecked', { weibo: dead }, ['weibo', 'jd']],
+      ['backup-limited', { weibo: dead, jd: { isValid: false, browserMightWork: true } }, ['weibo', 'jd']],
+      ['backup-pending', { weibo: dead, jd: { isValid: false, errorType: 'pending' } }, ['weibo', 'jd']],
+    ];
+    extra.forEach(([id, status, hosts], i) => insert.run(id, NOW - (10 + i) * DAY, id, id, JSON.stringify(status), hosts.length, JSON.stringify(hosts)));
+
+    expect(await ids({ statusFilter: ['dead'], backup: 'available' })).toEqual(['dead', 'backup-unchecked', 'backup-limited', 'backup-pending']);
+    expect(await ids({ statusFilter: ['dead'], backup: 'none' })).toEqual(['both-dead', 'nas-dead']);
+  });
+
   it('applies the same filters to the per-day counts', async () => {
     const days = await getDayStatsQuery(db as never, { statusFilter: ['dead'], since: NOW - 7 * DAY });
     expect(days.reduce((sum, day) => sum + day.count, 0)).toBe(1);

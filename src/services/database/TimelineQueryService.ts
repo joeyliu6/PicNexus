@@ -48,6 +48,19 @@ export const COPY_LINK_HEALTH_SQL = `CASE
   ELSE 'dead'
 END`;
 
+/** 某一份（`copy.value` 是图床 ID）在 link_check_status 里的某个字段 */
+const copyField = (field: string) => `json_extract(link_check_status, '$."' || copy.value || '".${field}')`;
+
+/**
+ * 别的图床上还有一份没被查出失效：正常、尚未检测（含排队中）、可能受限都算可用。
+ * 与图库详情顶上的提示（detailHosts.detailBanner）同一口径。
+ */
+const USABLE_BACKUP_SQL = `EXISTS (SELECT 1 FROM json_each(successful_service_ids) AS copy
+  WHERE copy.value <> primary_service
+    AND NOT (COALESCE(${copyField('isValid')}, 1) = 0
+      AND COALESCE(${copyField('errorType')}, '') <> 'pending'
+      AND COALESCE(${copyField('browserMightWork')}, 0) <> 1))`;
+
 /**
  * 格子的宽高比，与 utils/imageDisplay 的 layoutRatio 同一套规则（G13）：按天汇总只能在 SQL 里算。
  * 两边是否一致由 galleryFilters.spec 在真的 SQLite 上对照。
@@ -69,7 +82,7 @@ function appendFilterClause(
   conditions: string[],
   params: (string | number)[],
 ): void {
-  const { serviceFilter = 'all', hostFilter, statusFilter, since, searchTerm, favoritesOnly } = filter ?? {};
+  const { serviceFilter = 'all', hostFilter, statusFilter, since, searchTerm, favoritesOnly, backup } = filter ?? {};
   const next = (value: string | number) => { params.push(value); return `$${params.length}`; };
   if (favoritesOnly) conditions.push('is_favorited = 1');
   if (serviceFilter !== 'all') conditions.push(`primary_service = ${next(serviceFilter)}`);
@@ -84,6 +97,7 @@ function appendFilterClause(
     ];
     conditions.push(`(${anyOf.join(' OR ')})`);
   }
+  if (backup) conditions.push(backup === 'available' ? USABLE_BACKUP_SQL : `NOT ${USABLE_BACKUP_SQL}`);
   if (since !== undefined) conditions.push(`timestamp >= ${next(since)}`);
   const trimmed = searchTerm?.trim().toLowerCase();
   if (trimmed) {

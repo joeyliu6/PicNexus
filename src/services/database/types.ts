@@ -66,6 +66,8 @@ export interface DayStatsFilter {
   since?: number;
   searchTerm?: string;
   favoritesOnly?: boolean;
+  /** 别的图床上还有没有一份没被查出失效（图库「失效」分组，G06 / G07） */
+  backup?: 'available' | 'none';
 }
 
 export type SyncLogOperation =

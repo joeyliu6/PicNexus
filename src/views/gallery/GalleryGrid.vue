@@ -38,7 +38,8 @@ const groupById = computed(() => new Map(props.grid.groups.value.map((g) => [g.i
 
 function heading(groupId: string): { title: string; sub: string } {
   const group = groupById.value.get(groupId);
-  return group ? formatDayHeading(group.year, group.month, group.day, props.now) : { title: '', sub: '' };
+  if (!group) return { title: '', sub: '' };
+  return group.heading ?? formatDayHeading(group.year, group.month, group.day, props.now);
 }
 
 /** 吸顶的日期标题：当前所在那天的标题已经滚出顶部时出现；下一天的标题顶上来时被推走 */

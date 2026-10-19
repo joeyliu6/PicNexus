@@ -10,6 +10,8 @@ export interface PhotoGroup {
   id: string;
   /** 分组标签（如 '2024年5月15日'） */
   label: string;
+  /** 不按日期写的分组标题（图库「失效 · 有可用备份」+「15 张」）；没有时按日期写 */
+  heading?: { title: string; sub: string };
   /** 年份 */
   year: number;
   /** 月份 (0-11) */

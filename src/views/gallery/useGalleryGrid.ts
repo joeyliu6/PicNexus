@@ -1,4 +1,5 @@
 // 图库网格的数据与虚拟滚动（交接说明 8.2）：按天分组、等高行、按需加载可见天、刻度条拖动跳转、灯箱。
+// 「状态」只勾了「失效」时改按有没有可用备份分两组（useDeadSections），不按天、没有刻度条。
 // 复用时间轴那组 composables，尺寸照 GalleryScreen.dc.html，筛选由页面整份传进来。
 
 import { computed, onUnmounted, watch, type Ref } from 'vue';
@@ -22,6 +23,8 @@ import { useScrollAnchor } from '@/composables/timeline/useScrollAnchor';
 import { useVirtualTimeline } from '@/composables/timeline/useVirtualTimeline';
 import { confirmedHttpHostsKey } from '@/security/networkPolicy';
 import { historyDB } from '@/services/database';
+import { isDeadOnly, useDeadSections } from './useDeadSections';
+import { useListLightbox } from './useListLightbox';
 
 /** GalleryScreen.dc.html：行高 150、格间距 6；日期标题 34 + 与首行间距 6；两天之间 18 + 6 */
 export const GALLERY_GRID = { targetRowHeight: 150, gap: 6, headerHeight: 40, groupGap: 24, overscan: 3 } as const;
@@ -47,10 +50,16 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
   const scrubber = useTimelineSidebarControl({ scrollHideDelay: SCRUBBER_HIDE_MS, hoverHideDelay: 300 });
 
   const pagination = useTimelineDayPagination({ filter, visible });
-  const { groups, dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, isLoadingStats, hasLoadedStats, isFullyPreloaded } = pagination;
+  const { dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, isLoadingStats, hasLoadedStats, isFullyPreloaded } = pagination;
 
-  /** 按月汇总（刻度条的年月刻度、拖动跳转都用它），新的在前 */
+  /** 按有没有可用备份分两组（G06 / G07）的那种排法 */
+  const sectioned = computed(() => isDeadOnly(filter.value));
+  const sections = useDeadSections(filter, sectioned);
+  const groups = computed(() => (sectioned.value ? sections.groups.value : pagination.groups.value));
+
+  /** 按月汇总（刻度条的年月刻度、拖动跳转都用它），新的在前；分两组时没有刻度条 */
   const months = computed<MonthTick[]>(() => {
+    if (sectioned.value) return [];
     const byMonth = new Map<string, MonthTick>();
     for (const day of dayStats.value) {
       const key = `${day.year}-${day.month}`;
@@ -132,6 +141,16 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     toast,
   });
 
+  /** 分两组时灯箱按两组眼前的顺序翻（一次读全，「3 / 21」是第几张） */
+  const sectionLightbox = useListLightbox({
+    list: { ensure: async () => {}, rowAt: (i: number) => sections.items.value[i] ?? null },
+    total: sections.total,
+    detailCache: historyManager.detailCache,
+    config: configManager.config,
+    confirmedHttpHosts: () => confirmedHttpHosts.value,
+    toast,
+  });
+
   // layout 重算时保持视口锚点，消除高度估算偏差带来的跳动
   const anchor = useScrollAnchor(scrollContainer, virtual.layoutResult, virtual.isCalculating, virtual.visibleItems);
 
@@ -189,9 +208,12 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     confirmedHttpHosts,
     groups,
     months,
-    totalCount: pagination.totalCount,
-    isLoadingStats,
-    hasLoadedStats,
+    sectioned,
+    sectionItems: sections.items,
+    sectionLightbox,
+    totalCount: computed(() => (sectioned.value ? sections.total.value : pagination.totalCount.value)),
+    isLoadingStats: computed(() => (sectioned.value ? sections.isLoading.value : isLoadingStats.value)),
+    hasLoadedStats: computed(() => (sectioned.value ? sections.hasLoaded.value : hasLoadedStats.value)),
     allLoadedMetas,
     getThumbnailUrls,
     toggleFavorite,

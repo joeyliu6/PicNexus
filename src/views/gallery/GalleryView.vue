@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 图库（GalleryScreen.dc.html，交接说明 8.2）：按天分组的等高行网格 / 列表、筛选、多选、详情、灯箱、刻度条。
+// 图库（GalleryScreen.dc.html，交接说明 8.2）：按天分组（只筛「失效」时按有没有可用备份分两组）的等高行网格 / 列表、筛选、多选、详情、灯箱、刻度条。
 // 数据与虚拟滚动在 useGalleryGrid（复用时间轴那组 composables）；这里只做页面编排与键盘。
 import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -348,7 +348,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         <GalleryEmpty v-if="emptyKind" :kind="emptyKind" @go-home="router.push('/home')" @clear-filters="setFilters(EMPTY_FILTERS)" />
         <GallerySkeleton v-if="showSkeleton && !grid.hasLoadedStats.value" class="gallery__overlay" />
         <GalleryScrubber
-          v-if="view === 'grid' && !emptyKind && grid.hasLoadedStats.value"
+          v-if="view === 'grid' && !emptyKind && grid.hasLoadedStats.value && !grid.sectioned.value"
           :ticks="ticks"
           :visible="grid.scrubber.isSidebarVisible.value"
           @jump="jump"
