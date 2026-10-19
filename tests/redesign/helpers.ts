@@ -171,3 +171,25 @@ export function historyRow(index: number, name: string, minutesAgo: number, serv
     link_check_skip: 0,
   };
 }
+
+/**
+ * 设置页读备份密码状态之前：让应用处在「已设置备份密码」（真机上由启动还原或设置密码进入），
+ * 并把同步连接的密码换成这把钥匙解得开的密文（种子里的是占位串）
+ */
+export async function passwordSet(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    // 在页面里按 Vite 的路径取应用自己的模块；路径放进变量，类型由 typeof import 给出
+    const cryptoPath = '/src/security/crypto.ts';
+    const storePath = '/src/store/instances.ts';
+    const crypto: typeof import('../../src/security/crypto') = await import(/* @vite-ignore */ cryptoPath);
+    const { configStore }: typeof import('../../src/store/instances') = await import(/* @vite-ignore */ storePath);
+    await crypto.secureStorage.init();
+    const config = await configStore.get<{ webdav?: { profiles: Array<{ passwordEncrypted?: string }> } }>('config');
+    if (config?.webdav?.profiles[0]) {
+      config.webdav.profiles[0].passwordEncrypted = await crypto.secureStorage.encrypt('app-password');
+      await configStore.set('config', config);
+      await configStore.save();
+    }
+    (crypto.secureStorage as unknown as { mode: string }).mode = 'password';
+  });
+}
