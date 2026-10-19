@@ -33,6 +33,8 @@ export function useGlobalUploadInput() {
   const overlay = reactive<DropOverlayState>({ active: false, imageCount: 0, skippedText: '' });
   let unlisten: UnlistenFn | null = null;
   let disposed = false;
+  /** 这次拖入已按 Esc 取消（H07）：松手不上传，直到下一次拖入 */
+  let cancelled = false;
 
   const hasHost = () => upload.hosts.value.some((h) => h.selected);
 
@@ -51,6 +53,7 @@ export function useGlobalUploadInput() {
           return;
         }
         if (payload.type === 'enter') {
+          cancelled = false;
           const summary = summarizeDrop(payload.paths);
           overlay.active = true;
           overlay.imageCount = summary.images.length;
@@ -58,6 +61,10 @@ export function useGlobalUploadInput() {
         } else if (payload.type === 'drop') {
           const summary = summarizeDrop(payload.paths);
           reset();
+          if (cancelled) {
+            cancelled = false;
+            return;
+          }
           if (hasHost() && summary.images.length > 0) void upload.uploadFiles(summary.images);
         }
       });
@@ -81,9 +88,11 @@ export function useGlobalUploadInput() {
     void upload.pasteClipboard();
   });
 
-  // 拖放悬停时 Esc 取消遮罩
+  // 拖放悬停时 Esc 取消这次拖入（H07「Esc 或拖出窗口即取消」）
   useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && overlay.active) reset();
+    if (event.key !== 'Escape' || !overlay.active) return;
+    cancelled = true;
+    reset();
   });
 
   /** ⑦ 拖入感应（M07）：松开就会上传时，侧栏 Logo 的花瓣张开「接住」；拖出、松手、Esc 即合拢 */

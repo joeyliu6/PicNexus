@@ -104,6 +104,21 @@ describe('useGlobalUploadInput', () => {
     wrapper.unmount();
   });
 
+  // H07：Esc 或拖出窗口即取消——按了 Esc 之后这次松手不上传，下一次拖入照常
+  it('cancels this drag on Esc: the drop that follows uploads nothing', async () => {
+    const { wrapper, overlay } = await mountInput();
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/a.png'] } });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(overlay().active).toBe(false);
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
+    expect(m.uploadFiles).not.toHaveBeenCalled();
+
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/b.png'] } });
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/b.png'] } });
+    expect(m.uploadFiles).toHaveBeenCalledWith(['C:/b.png']);
+    wrapper.unmount();
+  });
+
   it('does not upload when no host is selected', async () => {
     m.selected = false;
     const { wrapper } = await mountInput();
