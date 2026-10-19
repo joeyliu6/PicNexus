@@ -51,6 +51,12 @@ const saved = computed(() => getSaved());
 const isLarger = computed(() => getIsLarger());
 const done = computed(() => status.value === 'done' && result.value !== null);
 
+// 没有输入框和主按钮：打开时焦点落在查看器本身，不落在「关闭」上（否则它的气泡一打开就盖住「原图」标签）
+function focusViewer(event: Event) {
+  event.preventDefault();
+  (event.currentTarget as HTMLElement | null)?.focus();
+}
+
 function setOpen(open: boolean) {
   if (!open) emit('update:visible', false);
 }
@@ -74,7 +80,7 @@ onBeforeUnmount(cleanupZoom);
 <template>
   <DialogRoot :open="visible" @update:open="setOpen">
     <DialogPortal>
-      <DialogContent class="pn-layer compress-view" data-theme="dark" :aria-describedby="undefined">
+      <DialogContent class="pn-layer compress-view" data-theme="dark" tabindex="-1" :aria-describedby="undefined" @open-auto-focus="focusViewer">
         <div class="compress-view__top">
           <PnIconButton icon="close" label="关闭" :icon-size="13" :stroke="2" class="compress-view__close" @click="setOpen(false)" />
           <DialogTitle class="compress-view__title">压缩预览</DialogTitle>
