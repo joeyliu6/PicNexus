@@ -63,7 +63,8 @@ export async function designRuleViolations(page: Page): Promise<string[]> {
     // 窄窗口侧栏
     if (window.innerWidth < 1000) {
       const rail = document.querySelector('.nav-rail');
-      const width = rail ? rail.getBoundingClientRect().width : 0;
+      // 系统缩放（如 175%）下量出来会是 56.0000038 这样的小数
+      const width = rail ? Math.round(rail.getBoundingClientRect().width) : 0;
       if (width !== 56) problems.push(`窗口宽 ${window.innerWidth} 时侧栏应为 56 的图标栏，实际 ${rail ? width : '没有图标栏'}`);
       if (document.querySelector('.app-sidebar')) problems.push('窗口窄于 1000 时仍显示展开的侧栏');
     }
