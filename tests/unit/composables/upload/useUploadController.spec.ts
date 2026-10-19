@@ -176,6 +176,16 @@ describe('useUploadController', () => {
     expect(m.loadServiceButtonStates).toHaveBeenCalled();
   });
 
+  it('applies a whole-config change (onboarding) to the latest saved config, then refreshes 上传到 at once', async () => {
+    const upload = useUploadController();
+    m.fresh = { ...m.fresh, enabledServices: ['r2'] };
+    await upload.applyConfigPatch((c) => ({ ...c, enabledServices: [...(c.enabledServices ?? []), 'jd'] }));
+    expect(m.ensureAccepted).not.toHaveBeenCalled();
+    expect(m.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ enabledServices: ['r2', 'jd'] }), true);
+    expect(m.loadServiceButtonStates).toHaveBeenCalled();
+    expect(upload.config.value.enabledServices).toEqual(['r2', 'jd']);
+  });
+
   describe('after an upload', () => {
     type HostState = 'done' | 'failed' | 'uploading';
     const STATUS: Record<HostState, string> = { done: '✓ 完成', failed: '✗ 失败', uploading: '上传中...' };

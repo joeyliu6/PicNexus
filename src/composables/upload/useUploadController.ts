@@ -199,6 +199,15 @@ function createController() {
     await uploadManager.loadServiceButtonStates();
   }
 
+  /**
+   * 一次改好几处配置（新手引导「开始使用」）：在最新配置上改、只保存一次，随后重算「上传到」，
+   * 首页与托盘立即看到同一份结果。公共图床风险由调用方负责（引导里勾选即视为已确认）。
+   */
+  async function applyConfigPatch(patch: (config: UserConfig) => UserConfig): Promise<void> {
+    await saveConfigPatch(patch);
+    await uploadManager.loadServiceButtonStates();
+  }
+
   /** 图床页改完配置后：重算「已添加」与启用状态（与首页「上传到」同一份） */
   async function refreshHosts(): Promise<void> {
     await uploadManager.loadServiceButtonStates();
@@ -410,6 +419,7 @@ function createController() {
     dismissFastUploadHint,
     toggleHost,
     enableNoConfigHost,
+    applyConfigPatch,
     refreshHosts,
     setCopyFrom,
     setFormat,
