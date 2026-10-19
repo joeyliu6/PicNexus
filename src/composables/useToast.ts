@@ -69,6 +69,8 @@ export interface ToastActionOptions {
   life?: number;
   /** 底部倒计时细线（「撤销」类，默认停留 6 秒） */
   countdown?: boolean;
+  /** 还没执行、到时间才执行：从不被新通知挤掉 */
+  deferred?: boolean;
   /** 到时间自然消失时调用（没点动作按钮） */
   onExpire?: () => void;
 }
