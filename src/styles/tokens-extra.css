@@ -731,3 +731,16 @@
   --pn-onboarding-shot-block: #FFFFFF;
   --pn-onboarding-shot-accent: #DBE3F6;
 }
+
+:root {
+  /*
+   * Logo 动效（M03 M06 M07，交接说明第 10 节）：每个动效对应一个真实时刻，反馈类 ≤ 0.6 秒。
+   * 「减少动态效果」时在文件末尾归零，用到它们的关键帧动画另在组件里改成 none。
+   */
+  /* ③ 一片花瓣亮起 / 变红：M03 三秒循环里亮起的那一段（8% → 18%） */
+  --pn-dur-petal-light: 300ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --pn-dur-petal-light: 0ms; }
+}

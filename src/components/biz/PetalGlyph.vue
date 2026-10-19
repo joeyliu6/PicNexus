@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 花瓣标 PetalGlyph（PetalScale.dc.html）：一瓣 = 一个图床。已完成亮蓝、上传中半透明、排队灰、失败红、可能受限琥珀。
-// 几个图床传完亮几片；哪片变红就是哪个图床出了问题。最小 12px。
+// 几个图床传完亮几片；哪片变红就是哪个图床出了问题。最小 12px。动效规则见 decisions/motion.md。
 import { computed } from 'vue';
 import { layoutPetals, type PetalState } from '@/utils/petals';
 
@@ -39,6 +39,13 @@ const layout = computed(() => layoutPetals(props.states));
   position: relative;
   display: inline-flex;
   flex: none;
+}
+
+/* ③ 逐片点亮（M03）：图床传完、失败时这片渐变到新颜色；只在状态真的变了才播，打开页面时不播 */
+.petals__petal {
+  transition:
+    fill var(--pn-dur-petal-light) var(--pn-ease-in),
+    fill-opacity var(--pn-dur-petal-light) var(--pn-ease-in);
 }
 
 .petals__petal--ok { fill: var(--pn-brand); }
