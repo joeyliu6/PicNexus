@@ -19,7 +19,6 @@
 |------|------|
 | [timeline-fixed.md](./troubleshooting/timeline-fixed.md) | 时间线快速滚动闪烁（itemMap 重建 + margin 偏差） |
 | [timeline-view-switch-blank.md](./troubleshooting/timeline-view-switch-blank.md) | 图库加载与跳转时的占位策略（冷启动骨架 / 按天占位 / 跳转只跳最后一个） |
-| [ui-fixed.md](./troubleshooting/ui-fixed.md) | 表格滚动条 + 骨架屏偏移修复 |
 | [upload-queue-status-race-condition.md](./troubleshooting/upload-queue-status-race-condition.md) | 上传队列状态竞态（RAF 节流回调覆盖最终状态） |
 
 ### 前端 / 语言
