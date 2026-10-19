@@ -27,16 +27,15 @@
 
 ---
 
-## PrimeVue 4
+## Reka UI 2
 
-- [官方文档](https://primevue.org/)
+- [官方文档](https://reka-ui.com/)
 
 ### 项目约定
 
-- 按需导入组件（`import Button from 'primevue/button'`）
-- 样式定制用 PassThrough API（`:pt="{ root: { class: 'xxx' } }"`）
-- scoped CSS 穿透用 `:deep()` — 详见 `troubleshooting/primevue-scoped-css-width-not-applied.md`
-- 主题：Aura preset，暗色模式选择器 `.dark-mode`
+- 只用它的行为（键盘、焦点、读屏、浮层定位），样子由 `src/components/pn/` 的 `Pn*` 组件给，不用它的示例样式
+- 浮层内容传送到 body：样式用不带 scoped 的唯一类名，根元素加 `pn-layer`（见 `docs/design/ui-patterns.md`）
+- 对话框没有说明文字时，`DialogContent` 传 `:aria-describedby="undefined"`，否则开发版会在控制台警告
 
 ---
 
@@ -53,8 +52,8 @@
 ### 安全要点
 
 - `capabilities` 限制 API 访问权限和文件/命令范围
-- CSP 默认只允许外部 HTTPS；HTTP 仅保留 `localhost` / `127.0.0.1` 回环地址。样式内联因 PrimeVue/Tauri nonce 兼容问题暂时保留，脚本内联不再允许。
-- CSP nonce 会阻断 PrimeVue 动态样式 — 见 `troubleshooting/tauri-csp-nonce-blocks-primevue-styles.md`
+- CSP 默认只允许外部 HTTPS；HTTP 仅保留 `localhost` / `127.0.0.1` 回环地址。样式内联保留（见下一条），脚本内联不允许。
+- Tauri 正式版的 CSP nonce 会挡掉运行时插入的 `<style>` — 见 `troubleshooting/tauri-csp-nonce-inline-styles.md`
 
 ---
 

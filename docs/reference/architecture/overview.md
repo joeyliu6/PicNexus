@@ -24,7 +24,7 @@
 | 桌面框架 | Tauri | 2.x | Rust 后端 + WebView 前端 |
 | 前端框架 | Vue | 3.x | Composition API |
 | 语言 | TypeScript | 5.x | 严格模式 |
-| UI 组件 | PrimeVue | 4.x | PassThrough 主题定制 |
+| UI 组件 | Reka UI + 自写 `Pn*` 组件 | 2.x | 样子照设计稿，令牌 `--pn-*` |
 | 状态管理 | Vue Reactivity | - | ref/reactive + composables |
 | 数据存储 | SQLite | - | 历史记录 |
 | 配置存储 | JSON + AES-GCM | - | 加密配置文件 |
@@ -123,22 +123,17 @@ PicNexus/
 │   │   └── ...                  # 其他图床
 │   │
 │   ├── services/                 # 服务层
-│   │   ├── HistoryDatabase.ts   # SQLite 历史记录
-│   │   ├── storage/             # 存储服务抽象
-│   │   └── ThumbCache.ts        # 缩略图缓存服务
+│   │   ├── database/            # SQLite 历史记录（HistoryDatabase.ts 等）
+│   │   └── RetryService.ts      # 失败重传
 │   │
 │   ├── config/                   # 配置和类型
 │   │   └── types.ts             # TypeScript 类型定义
 │   │
-│   ├── theme/                    # 主题系统
-│   │   ├── preset.ts             # PrimeVue 主题预设
-│   │   ├── dark-theme.css       # 深色主题变量
-│   │   ├── light-theme.css      # 浅色主题变量
-│   │   └── primevue-overrides.css # PrimeVue 覆盖
+│   ├── theme/ThemeManager.ts     # 深浅色切换（写 data-theme）
 │   │
 │   ├── security/                 # 加密和网络安全策略
 │   ├── store/                    # 加密配置存储及单例
-│   ├── styles/                   # 全局样式
+│   ├── styles/                   # 令牌（tokens.css / tokens-extra.css）与全局基础样式
 │   ├── utils/                    # 工具函数
 │   ├── main.ts                   # 应用入口
 │   └── App.vue                   # 根组件

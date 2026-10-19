@@ -1,6 +1,6 @@
 # 前端架构
 
-> Vue 3 + TypeScript + PrimeVue 前端架构详解
+> Vue 3 + TypeScript 前端架构：页面、零件、状态、主题与 Tauri 交互
 
 ---
 
@@ -10,7 +10,7 @@
 |------|------|------|
 | Vue | 3.x | 响应式框架，Composition API |
 | TypeScript | 5.x | 类型安全 |
-| PrimeVue | 4.x | UI 组件库 |
+| Reka UI | 2.x | 无样式零件（键盘、焦点、读屏）；样子由自写 `Pn*` 组件给 |
 | Vite | 5.x | 构建工具 |
 
 ---
@@ -149,62 +149,20 @@ export function useConfig() {
 
 ---
 
-## 主题系统
+## 主题与样式
 
-### CSS 变量体系
-
-所有颜色使用 CSS 变量，自动适配深色/浅色主题。
-
-```css
-/* 背景色 */
---bg-app          /* 应用主背景 */
---bg-card         /* 卡片背景 */
---bg-input        /* 输入框背景 */
-
-/* 文本色 */
---text-main       /* 主文本 */
---text-muted      /* 次要文本 */
---text-disabled   /* 禁用文本 */
-
-/* 边框色 */
---border-subtle   /* 普通边框 */
---border-focus    /* 焦点边框 */
-
-/* 状态色 */
---primary         /* 主品牌色 */
---success         /* 成功 */
---warning         /* 警告 */
---error           /* 错误 */
-```
-
-### 主题文件
-
-```
-src/theme/
-├── dark-theme.css         # 深色主题变量定义
-├── light-theme.css        # 浅色主题变量定义
-├── primevue-overrides.css # PrimeVue 组件覆盖
-├── ThemeManager.ts        # 主题切换逻辑
-└── preset.ts              # PrimeVue 预设配置
-```
-
-### 使用规范
+- 根元素 `data-theme="light|dark"`（`src/theme/ThemeManager.ts`，经 `useThemeManager()` 使用）与 `data-platform="windows|macos|linux"`（`src/utils/platform.ts`）。
+- 令牌在 `src/styles/tokens.css`（设计稿导出）与 `tokens-extra.css`（具名补充），全局基础样式在 `pn-base.css`、菜单在 `pn-menu.css`，由 `src/main.ts` 引入。
+- 组件只写 `var(--pn-*)`，不写颜色、字号、间距等数值；`npm run lint` 会拦。
 
 ```css
-/* ✅ 正确：使用变量 */
-.card {
-  background-color: var(--bg-card);
-  color: var(--text-main);
-}
-
-/* ❌ 错误：硬编码颜色 */
-.card {
-  background-color: #1e293b;
-  color: #f8fafc;
-}
+/* ✅ */
+.card { background: var(--pn-surface); color: var(--pn-text1); border-radius: var(--pn-radius-card); }
+/* ❌ */
+.card { background: #f5f7fa; color: #171717; border-radius: 16px; }
 ```
 
-详见 [设计规范](../../design/)。
+详见 [docs/design/tokens.md](../../design/tokens.md) 与 [themes.md](../../design/themes.md)。
 
 ---
 
@@ -220,7 +178,7 @@ src/theme/
 | `/hosts` | 图床 | 从设置里搬出来的独立页 |
 | `/settings` | 设置 | |
 
-托盘与应用内各处仍发 `navigate-to` 事件（旧的视图名 `upload` / `history` / `link-check` / `settings`），由 `src/shell/navigatePayload.ts` 翻译成路径、`src/shell/useAppNavigation.ts` 执行跳转。界面重构进度与过渡期安排见 `docs/design/redesign/README.md`。
+托盘与应用内各处仍发 `navigate-to` 事件（旧的视图名 `upload` / `history` / `link-check` / `settings`），由 `src/shell/navigatePayload.ts` 翻译成路径、`src/shell/useAppNavigation.ts` 执行跳转。界面设计包与各页做法见 `docs/design/redesign/README.md`。
 
 ## 与 Tauri 交互
 

@@ -52,39 +52,14 @@ export function getServiceIcon(service: string): string | undefined {
 }
 ```
 
-### 命中不到时的兜底
+### 命中不到时的兜底与使用方式
 
-glob 的 key 就是文件名，所以**只有内置服务能命中**。多实例私有存储用的是 `custom_s3:<profileId>` / `webdav:<profileId>` 复合 ID，每个 profile 不可能各自带 logo，因此按类型退到 PrimeIcons 字体图标：
+glob 的 key 就是文件名，所以**只有内置服务能命中**。多实例私有存储用的是 `custom_s3:<profileId>` / `webdav:<profileId>` 复合 ID，每个 profile 不可能各自带 logo，查不到时直接 `v-html` 会渲染成一个空占位方块。
 
-```typescript
-export type ServiceLogoSource =
-  | { kind: 'svg'; svg: string }
-  | { kind: 'icon'; className: string };
-
-export function resolveServiceLogo(serviceId: string): ServiceLogoSource {
-  const svg = serviceIconMap.get(serviceId);
-  if (svg) return { kind: 'svg', svg };
-  if (isCustomS3Id(serviceId)) return { kind: 'icon', className: 'pi pi-database' };
-  if (isWebDAVId(serviceId)) return { kind: 'icon', className: 'pi pi-server' };
-  return { kind: 'icon', className: 'pi pi-cloud' };
-}
-```
-
-日后若补了 `custom_s3.svg` / `webdav.svg`，SVG 分支会自动优先命中，消费方不用改。
-
-### 使用方式
-
-不要在页面里直接 `v-html="getServiceIcon(x)"` —— 查不到时会渲染成一个空占位方块。统一走共享组件 [src/components/common/ServiceLogo.vue](../../../src/components/common/ServiceLogo.vue)，尺寸与颜色交给父级 class（单根组件，class 会 fallthrough 到根元素）：
+所以页面里不直接用 `getServiceIcon`，一律用 [src/components/biz/HostIcon.vue](../../../src/components/biz/HostIcon.vue)：自定义 S3 画对象存储（桶）图标、WebDAV 画服务器图标（配置删掉后残留的复合 ID 也按前缀认类型），其余认不出的退回名字的前两个字。尺寸按设计档位传 `size`（16 / 20 / 24 / 32 / 44），颜色跟随文字颜色。
 
 ```vue
-<template>
-  <ServiceLogo :service-id="serviceId" class="badge-icon" />
-</template>
-
-<style scoped>
-/* 字体图标靠 font-size 撑，SVG 靠 width/height，两者都写上才能对齐 */
-.badge-icon { width: 14px; height: 14px; font-size: var(--text-xs); color: var(--text-muted); }
-</style>
+<HostIcon :host="serviceId" :size="16" :name="serviceName" />
 ```
 
 ## 参数说明
@@ -107,6 +82,5 @@ export function resolveServiceLogo(serviceId: string): ServiceLogoSource {
 ## 相关文件
 
 - [src/utils/icons.ts](../../../src/utils/icons.ts) - 实际实现
-- [src/components/common/ServiceLogo.vue](../../../src/components/common/ServiceLogo.vue) - 统一渲染入口（含兜底）
+- [src/components/biz/HostIcon.vue](../../../src/components/biz/HostIcon.vue) - 统一渲染入口（含兜底）
 - [src/assets/icons/services/](../../../src/assets/icons/services/) - SVG 图标目录
-- [docs/design/tokens.md](../../design/tokens.md#service-name-truncation) - 图床名截断宽度约定

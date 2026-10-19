@@ -12,11 +12,12 @@
 
 ```mermaid
 flowchart TD
-    subgraph Views["视图层 (src/views/ 新界面 · src/components/views/ 过渡期旧页)"]
+    subgraph Views["视图层 (src/views/)"]
         V1[HomeView<br/>首页·快传]
         V2[GalleryView<br/>图库]
-        V4[SettingsView<br/>设置面板]
         V5[HealthView<br/>链接健康]
+        V3[HostsView<br/>图床]
+        V4[SettingsView<br/>设置]
     end
 
     subgraph Layout["外壳 (src/shell/)"]

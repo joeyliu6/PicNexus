@@ -1,73 +1,36 @@
-# 动效 Token 统一管理模式
+# 动效令牌集中管理
 
 ## 适用场景
 
-- 项目动效分散在各组件 scoped style 中，出现重复定义
-- 硬编码的 transition 时长和缓动函数难以全局调整
-- 新增组件时不知道该用什么时长/缓动
+- 新写的组件要加过渡或动画，不知道该用多长、什么曲线
+- 想让「减少动态效果」一处生效，而不是每个组件各写一遍
 
-## 模式说明
+## 做法
 
-将所有动效参数集中到一个 CSS 变量文件（`motion.css`）中管理，包括：
+时长与缓动全部是令牌，定义在 `src/styles/tokens.css`（设计稿导出的四档）和 `src/styles/tokens-extra.css`（转圈、Logo 动效），速查表在 [docs/design/tokens.md](../../design/tokens.md)「动效」：
 
-1. **Duration Token** — 标准化时长档位（micro/fast/normal/medium/slow/slower + 循环动画周期）
-2. **Easing Token** — 标准化缓动函数（standard/decelerate/accelerate/overshoot/spring）
-3. **共享 @keyframes** — 高频动画提取为全局 keyframes，`k-` 前缀命名
-4. **Vue Transition class** — 可复用的 `<Transition>` class，`t-` 前缀命名
-
-### 核心原则
-
-- **单文件管理**：250 行以内用分节注释，不拆目录（KISS）
-- **命名约定**：`k-` = keyframes，`t-` = transition class，`--duration-*` / `--ease-*` = token
-- **参数化**：不同组件需要微调时，直接引用 keyframes + 不同的 duration token，不搞 CSS 私有变量参数化
-- **无障碍内置**：`prefers-reduced-motion` 自动归零所有 duration，组件层无需额外处理
-- **只提取高频**：只有被 2+ 处复用的 keyframes 才提取到全局；高度定制的保留组件内
-
-### 什么不做
-
-- 不引入第三方动效库（项目动效全是基础 transform/opacity，不需要）
-- 不搞 Tailwind 式全量 utility class（只有 5 个高频模式，不值得）
-- 不搞 CSS 私有变量参数化（认知负担重，直接多定义几个具体 keyframes 更直白）
-
-## 代码示例
+- 时长：`--pn-dur-instant` 100（悬停）/ `fast` 150（复制、开关）/ `standard` 200（菜单出现）/ `expressive` 250（对话框、灯箱）；`--pn-dur-spin` 转圈一周；花瓣三个动效各一个。
+- 缓动：进场 `--pn-ease-in`，退场 `--pn-ease-out` 且时长快 30%。
+- 关键帧：只有多处共用的才放全局（`pn-base.css` 里的 `pn-spin`、`pn-dialog-in`、`pn-dialog-fade`）；其余写在组件自己的 `<style>` 里，名字带组件前缀（`drop-overlay-fan`、`petals-bloom`）。
+- stylelint 拦写死的时长：`transition` / `animation` 里不能有裸的 `ms` / `s`。
 
 ```css
-/* motion.css Token 定义 */
-:root {
-  --duration-micro: 100ms;
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
-  --duration-medium: 300ms;
-  --duration-slow: 350ms;
-  --duration-slower: 500ms;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-}
+.focus-card__pill { transition: background var(--pn-dur-fast) var(--pn-ease-in); }
+.pn-dialog[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
 
-/* 共享 keyframes */
-@keyframes k-fade-slide-up {
-  from { opacity: 0; transform: translateY(5px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* 组件中使用 */
-.settings-section {
-  animation: k-fade-slide-up var(--duration-medium) var(--ease-decelerate) both;
-}
-
-.button {
-  transition: all var(--duration-fast) ease;
+@media (prefers-reduced-motion: reduce) {
+  .pn-dialog[data-state='open'] { animation-name: pn-dialog-fade; }
 }
 ```
 
-## 注意事项
+## 减少动态效果
 
-- 新增 @keyframes 前先检查 motion.css 是否已有可复用的
-- 0.1s 用 `--duration-micro`，0.15s 用 `--duration-fast`，0.2s 用 `--duration-normal`，0.3s 用 `--duration-medium`
-- `ease`/`ease-out`/`ease-in-out` 保持原样（CSS 原生关键字，不需要变量化）
-- 只替换 `cubic-bezier(...)` 为 `var(--ease-*)`
-- TransitionGroup 的精调动画允许保留非标准值
+- `--pn-dur-fast / standard / expressive` 与三个花瓣时长在 `@media (prefers-reduced-motion: reduce)` 里归零；`pn-spin` 在同一条件下改成不转的关键帧。
+- 有位移、缩放的进场，在组件里改用纯淡入（`pn-dialog-fade`），不要只靠时长归零——归零后是「直接出现」，交接说明 5.3 要的是「位移改淡入」。
+- JS 里写死的时长（传给 PhotoSwipe 的灯箱开关时长等）走 `src/utils/reducedMotion.ts` 的 `motionDuration()`。
+- 守门测试在真浏览器里记 `animationstart` / `transitionstart`（`tests/e2e/motion.e2e.spec.ts`），jsdom 不跑 CSS 动画，单测证明不了。
 
-## 相关文件
+## 不做
 
-- `src/styles/motion.css` — Token + Keyframes + Transition class 定义
-- `docs/style-design.md` — 完整的动效变量速查表
+- 不引入动效库：全是 transform / opacity。
+- 不给每个组件定私有时长变量：用令牌，确有设计稿原值再写成具名令牌。

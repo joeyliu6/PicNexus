@@ -169,7 +169,7 @@ flowchart TD
 
 ### CLI PATH 管理
 
-设置页 `CliCard.vue` 调用 `get_cli_path_status` / `add_cli_to_path` / `remove_cli_from_path` 管理快捷命令。CLI 开关打开时会尝试启用命令入口并导出 `services` 配置;关闭时会移除命令入口并停止导出普通 CLI 配置。
+设置 › 编辑器与命令行的命令行卡片（`src/views/settings/useEditorCards.ts`）调用 `get_cli_path_status` / `add_cli_to_path` / `remove_cli_from_path` 管理快捷命令。CLI 开关打开时会尝试启用命令入口并导出 `services` 配置;关闭时会移除命令入口并停止导出普通 CLI 配置。
 
 - Windows:读写 `HKEY_CURRENT_USER\Environment\Path`,加入或移除当前可执行文件目录,变更后广播 `WM_SETTINGCHANGE`。
 - macOS / Linux:创建或删除 `~/.local/bin/picnexus` 符号链接。普通包链接到 `current_exe()`;AppImage 运行时若存在 `$APPIMAGE`,优先链接到该真实 AppImage 路径。

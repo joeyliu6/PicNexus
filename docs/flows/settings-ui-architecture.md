@@ -10,7 +10,7 @@ PicNexus 的配置系统绕开了 `tauri-plugin-store`,采用**自写 SimpleStor
 - **加密**:AES-GCM,支持"随机密钥"和"备份密码"两种格式(v2.8+)
 - **并发控制**:全局互斥锁,防止多处同时写入导致数据损坏(v2.9+)
 - **配置入口**:`useConfigManager()` composable,返回响应式 `config` + `loadConfig` + `saveConfig`；设置页只经 `useSettingsConfig().patch` 写配置(见图 1)
-- **主题切换**:`ThemeManager` 通过 `document.documentElement.classList` 切换 `.dark-theme` / `.light-theme`
+- **主题切换**:`ThemeManager` 在根元素写 `data-theme="light|dark"`,`--pn-*` 令牌按它取浅 / 深两套值
 - **跨组件同步**:保存后 `emit('config-updated')`,其他 composable 通过 `listen('config-updated')` 重新读取
 - **强制规则**:序列化 config 时必须先调 `toPlainConfig()` 剥离 Vue Proxy
 
@@ -61,92 +61,70 @@ flowchart TD
 
 ## 图 2:主题切换的运行时机制
 
-展示 `ThemeManager` 如何在三种模式(`light` / `dark` / `auto`)下正确切换 CSS 类,以及与系统深色模式的联动。
+`ThemeManager` 在三种模式(`light` / `dark` / `auto`)下写根元素的 `data-theme`,跟随系统时监听深色模式变化。
 
-> **关键源文件**:`src/theme/ThemeManager.ts`、`src/composables/useTheme.ts`、`src/theme/dark-theme.css`、`src/theme/light-theme.css`
+> **关键源文件**:`src/theme/ThemeManager.ts`、`src/composables/useTheme.ts`、`public/preload-theme.js`、`src/styles/tokens.css`
 
 ```mermaid
 flowchart TD
-    A[useThemeManager<br/>首次调用] --> B[new ThemeManager 单例]
-    B --> C[读 config.theme.mode]
+    A[App 启动 useThemeManager.initializeTheme] --> B[new ThemeManager 读 config.theme.mode]
+    B --> D{mode?}
+    D -- light --> E1[浅色]
+    D -- dark --> E2[深色]
+    D -- auto --> E3[监听 prefers-color-scheme<br/>按系统当前取浅 / 深]
+    E3 --> E1
+    E3 --> E2
+    E1 & E2 --> F[根元素 data-theme = light / dark]
+    F --> G[--pn-* 令牌按 data-theme 取值<br/>所有组件重绘,无需 JS 介入]
+    F --> L[localStorage picnexus-theme<br/>light-theme / dark-theme / auto]
+    L -.下次启动.-> P[public/preload-theme.js<br/>页面加载前先写 data-theme<br/>preload.css 铺首屏底色]
 
-    C --> D{mode?}
-    D -- light --> E1[强制亮色]
-    D -- dark --> E2[强制深色]
-    D -- auto --> E3[注册 mediaQuery 监听器<br/>prefers-color-scheme]
-
-    E3 --> E3A{系统当前是暗?}
-    E3A -- 是 --> E2
-    E3A -- 否 --> E1
-
-    E1 --> F1[applyThemeClass 'light']
-    E2 --> F2[applyThemeClass 'dark']
-
-    F1 --> G1[documentElement<br/>.classList.toggle<br/>'light-theme' true<br/>'dark-theme' false]
-    F2 --> G2[documentElement<br/>.classList.toggle<br/>'dark-theme' true<br/>'light-theme' false]
-
-    G1 & G2 --> H[CSS 变量立即生效]
-    H --> H1[读取 :root.xxx-theme<br/>下的 --bg-app 等变量]
-    H1 --> H2[所有组件重绘<br/>无需 JS 介入]
-
-    %% 持久化
-    F1 & F2 --> I[localStorage.setItem<br/>picnexus-theme<br/>快速恢复用]
-    I --> J[configStore.set 'config'<br/>持久化到 .settings.dat]
-
-    %% auto 模式切换
-    E3 -.系统暗黑变化.-> E3B[mediaQuery change handler]
-    E3B --> F1
-    E3B --> F2
+    S[设置 › 通用 改主题] --> T[setTheme:先读最新配置、只改 theme、落盘]
+    T -- 成功 --> D
+    T -- 失败 --> R[回滚内存里的配置,不改界面]
+    E3 -.系统深色模式变化.-> F
 
     style A fill:#e3f2fd,stroke:#1976d2
-    style H2 fill:#e8f5e9,stroke:#2e7d32
-    style E3 fill:#fff3e0,stroke:#ef6c00
+    style G fill:#e8f5e9,stroke:#2e7d32
+    style R fill:#ffebee,stroke:#c62828
 ```
 
 **关键细节**:
 
-- **切换方式是 `classList` 而非 `data-theme` 属性**(与 `docs/design/themes.md` 约定一致)
-- **localStorage 是性能优化**:下次启动时 `index.html` 的内联脚本可以第一时间读 localStorage 应用主题,避免白屏闪烁(FOUC)
-- **PrimeVue 集成**:PrimeVue 组件读取 `:root.xxx-theme` 下的 CSS 变量,不需要 JS 调用 PrimeVue API
-- **auto 模式切换时的 listener 生命周期**:`setTheme(mode)` 先 `removeEventListener` 旧的,再按需 `addEventListener` 新的,避免重复触发
+- **只有一个开关 `data-theme`**:组件不写 `[data-theme]` 选择器,只引用令牌;灯箱、压缩预览这类始终深色的区域在容器上写 `data-theme="dark"`
+- **先落盘再改界面**:避免界面已切换、磁盘写失败,下次启动又跳回旧主题
+- **localStorage 只为首屏不闪**:`preload-theme.js` 在 Vue 挂载前按它写好 `data-theme`;真相源仍是配置里的 `theme.mode`
+- **auto 模式的监听器**:`setTheme(mode)` 先移除旧监听再按需添加,避免重复触发
+- Cookie 登录小窗按主窗口传来的 `?theme=` 写自己的 `data-theme`(`useLoginTheme.ts`、`login-titlebar.ts`)
 
 ---
 
-## 图 3:CSS 变量体系与组件消费
+## 图 3:令牌与组件
 
-展示 CSS 变量从 `:root` 定义到各组件 `var(--xxx)` 引用的层级关系,帮助新增设置项时正确使用变量而非硬编码(CLAUDE.md 禁止硬编码)。
+令牌分两份:`tokens.css`(设计稿导出,原样)与 `tokens-extra.css`(设计稿用到、导出没收录的具名值)。组件只写 `var(--pn-*)`,不写数值。详见 [tokens.md](../design/tokens.md)。
 
-> **关键源文件**:`src/theme/dark-theme.css`、`src/theme/light-theme.css`、`src/styles/motion.css`、`docs/design/tokens.md`
+> **关键源文件**:`src/styles/tokens.css`、`src/styles/tokens-extra.css`、`src/styles/pn-base.css`、`docs/design/tokens.md`
 
 ```mermaid
 flowchart LR
-    subgraph R[:root.dark-theme]
-        R1[颜色系:<br/>--bg-app<br/>--bg-sidebar<br/>--bg-card<br/>--text-primary<br/>--text-secondary<br/>--primary<br/>--success / --error / --warning]
-        R2[间距/圆角:<br/>--space-*<br/>--radius-*<br/>--shadow-*]
-        R3[动效:<br/>--duration-*<br/>--ease-*]
-        R4[透明度派生:<br/>--primary-alpha-8<br/>--primary-alpha-16]
+    subgraph T[令牌 按 data-theme 取浅 / 深]
+        T1[颜色:--pn-canvas / surface / text1-3<br/>brand / warning / danger / success]
+        T2[刻度:--pn-text-* / weight-*<br/>space-* / radius-* / e1-e4 / z-*]
+        T3[动效:--pn-dur-* / ease-in / ease-out<br/>减少动态效果时归零]
+        T4[具名值:--pn-size-* 等<br/>tokens-extra.css 按页面分段]
     end
 
-    subgraph L[:root.light-theme]
-        L1[覆盖颜色系<br/>其他变量继承 dark]
-    end
-
-    R --> C[组件 SCSS / Vue style]
-    L --> C
-
-    C --> C1[setting-panel.vue<br/>background: var --bg-card]
-    C --> C2[toggle-row.vue<br/>color: var --text-secondary]
-    C --> C3[primary-button.vue<br/>background: var --primary<br/>transition: var --duration-normal var --ease-standard]
-
+    T --> C[组件 scoped CSS]
+    C --> C1[SettingsCard<br/>background: var --pn-canvas]
+    C --> C2[SettingRow<br/>color: var --pn-text3]
+    C --> C3[PnButton<br/>background: var --pn-button]
     C1 & C2 & C3 --> U[最终 UI]
 
-    %% 禁止的写法
-    X[❌ background: #1a1a1e<br/>❌ padding: 12px<br/>❌ transition: 200ms ease]:::bad
-    X -.被禁止.-> C
+    X[❌ background: #1a1a1e<br/>❌ padding: 12px<br/>❌ font-size: 14px]:::bad
+    X -.lint 拦下.-> C
     classDef bad fill:#ffebee,stroke:#c62828
 
-    style R fill:#e3f2fd,stroke:#1976d2
-    style L fill:#fff3e0,stroke:#ef6c00
+    style T fill:#e3f2fd,stroke:#1976d2
     style U fill:#e8f5e9,stroke:#2e7d32
 ```
 
@@ -250,15 +228,15 @@ interface LinkPrefixItem { name: string; template: string }
 | 改完设置刷新后丢失 | 没走 `useSettingsConfig().patch`,或 patch 失败(看「未能保存」通知与日志) | 图1 C、G1 |
 | 保存报 `Converting circular structure to JSON` | 没调 `toPlainConfig`,直接序列化 Vue Proxy | 图1 L1 |
 | 多处写配置偶尔丢数据 | 没过 `mutex.withLock`(自己 new Store 绕过了单例),或拿旧副本整份回写(设置页一律先 `readFreshConfig`) | 图1 D、M |
-| 修改主题后部分组件没变色 | 该组件用了硬编码颜色,不消费 CSS 变量 | 图3 X |
+| 修改主题后部分组件没变色 | 该组件写了数值颜色,没引用 `--pn-*` 令牌(lint 会拦) | 图3 X |
 | auto 模式系统切换不生效 | `setTheme('auto')` 没正确注册 mediaQuery listener | 图2 E3 |
-| 启动时短暂白屏闪烁(FOUC) | `index.html` 的内联脚本没读 localStorage | 图2 I |
+| 启动时短暂闪一下另一种底色 | `public/preload-theme.js` 没读到 `picnexus-theme`,或 `preload.css` 的手抄色值与令牌不一致(`check-theme-token-copies` 会拦) | 图2 P |
 | 保存后其他组件没重新响应 | 没 `listen('config-updated')`,或监听后没 unlisten 导致重复 | 图1 P |
 | 配置文件打不开/解密失败 | 备份密码机制触发,启动时弹「还原备份配置」(D01) | [app-lifecycle](./app-lifecycle.md) |
 | 新增字段迁移老配置报错 | 新字段没在 DEFAULT_CONFIG 加默认值,老 config 读到 undefined | 新增流程 C、D |
 | 改了开机自启,系统和开关对不上 | 系统改成功后写配置失败,回滚也失败(看日志「回滚失败」) | 图1 G2 |
 | 云同步后设置页还是旧值 | 下载的配置要刷新后生效,看页顶刷新横幅 | 图1 要点 |
-| 样式被硬编码污染 | 违反 CLAUDE.md,用 `docs/design/tokens.md` 里的变量替换 | 图3 |
+| 样式被硬编码污染 | 违反 AGENTS.md,换成 `docs/design/tokens.md` 里的令牌 | 图3 |
 | 新加的链接前缀没生效 / 搜狗风格 URL 不对 | template 占位符拼错,或调用方没过 `applyPrefixTemplate` 直接字符串拼接 | 链接前缀数据结构 |
 | 新建的自定义 S3 / WebDAV 在上传界面看不到 | 还没「测试并连接」成功（草稿不保存），或凭证没填全（被 `unconfigured` 过滤挡住） | 图床「启用」的三个字段 |
 | 改了 `services.*.enabled` 却毫无效果 | 该字段已退化为死字段，启用看 `enabledServices` | 图床「启用」的三个字段 |

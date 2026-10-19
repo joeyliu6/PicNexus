@@ -21,8 +21,6 @@
 | [timeline-view-switch-blank.md](./troubleshooting/timeline-view-switch-blank.md) | 图库加载与跳转时的占位策略（冷启动骨架 / 按天占位 / 跳转只跳最后一个） |
 | [ui-fixed.md](./troubleshooting/ui-fixed.md) | 表格滚动条 + 骨架屏偏移修复 |
 | [upload-queue-status-race-condition.md](./troubleshooting/upload-queue-status-race-condition.md) | 上传队列状态竞态（RAF 节流回调覆盖最终状态） |
-| [primevue-scoped-css-width-not-applied.md](./troubleshooting/primevue-scoped-css-width-not-applied.md) | PrimeVue scoped CSS 不生效（`:deep()` 穿透） |
-| [primevue-virtualscroller-fixed-itemsize.md](./troubleshooting/primevue-virtualscroller-fixed-itemsize.md) | VirtualScroller itemSize 必须固定值 |
 
 ### 前端 / 语言
 
@@ -37,7 +35,7 @@
 |------|------|
 | [sleep-resume-white-screen.md](./troubleshooting/sleep-resume-white-screen.md) | 休眠白屏（SQLite 连接丢失 + WebView reload 失败） |
 | [tauri-async-runtime-spawn-no-abort-handle.md](./troubleshooting/tauri-async-runtime-spawn-no-abort-handle.md) | Tauri async_runtime::spawn 无 abort_handle（改用 tokio） |
-| [tauri-csp-nonce-blocks-primevue-styles.md](./troubleshooting/tauri-csp-nonce-blocks-primevue-styles.md) | Tauri CSP nonce 阻断 PrimeVue 运行时样式 |
+| [tauri-csp-nonce-inline-styles.md](./troubleshooting/tauri-csp-nonce-inline-styles.md) | Tauri 2 正式版的 CSP nonce 挡掉运行时插入的样式 |
 
 ### 网络 / 图床
 

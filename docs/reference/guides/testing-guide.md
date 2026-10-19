@@ -188,7 +188,7 @@ Tauri 借用系统 WebView，三个平台不是同一个引擎：
 
 不要因为这一层是绿的就认为 macOS 已被覆盖。
 
-- **字体完全不对（最大盲区）**。`src/styles/app.css` 的字体栈在真 macOS 上落到 SF Pro / 苹方，在 Windows 的 Playwright WebKit 上落到微软雅黑。所有由字体度量驱动的差异（换行位置、按钮实际高度、省略号截断点、CJK 与拉丁混排基线）一条都抓不到。这也正是不做像素基准、不做几何量 diff 的原因——那两样在这个盲区下产出的都是假信号。
+- **字体完全不对（最大盲区）**。`--pn-font-ui`（`src/styles/tokens.css`）的字体栈在真 macOS 上落到 SF Pro / 苹方，在 Windows 的 Playwright WebKit 上落到微软雅黑。所有由字体度量驱动的差异（换行位置、按钮实际高度、省略号截断点、CJK 与拉丁混排基线）一条都抓不到。这也正是不做像素基准、不做几何量 diff 的原因——那两样在这个盲区下产出的都是假信号。
 - **Playwright WebKit ≠ WKWebView，也 ≠ WebKitGTK**。Playwright 打包的是 WebKit trunk 构建，比任何已发布 Safari 都新。用户如果在老 macOS 上，那是更早的引擎，**Playwright WebKit 支持的特性它可能不支持**。典型例子：`src/` 里多处 `backdrop-filter` 没写 `-webkit-` 前缀，Playwright WebKit 渲染正常，老 mac 上会直接没有毛玻璃效果——这类问题不改变布局，哨兵抓不到，只能靠 code review。
 - **原生控件与窗口层**：titlebar、托盘、原生菜单、macOS 红绿灯按钮，Playwright 里根本没有窗口 chrome。托盘菜单只能核对应用交给菜单接口的结构（`tests/e2e/mocks/menu.ts` 记下来，`tray.e2e.spec.ts` 用它查「托盘、首页、设置同一份配置」），菜单长什么样靠真机走查。
 - **DPI / 缩放**：截图固定 @1x，Retina 2x 与 Linux 分数缩放下的 1px 边框消失、圆角走样抓不到。

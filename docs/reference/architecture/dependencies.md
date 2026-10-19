@@ -10,7 +10,7 @@
 |------|------|------|
 | 🔴 | `src/config/types.ts` | 核心类型，被所有模块依赖 |
 | 🔴 | `src/uploaders/base/IUploader.ts` | 上传器接口，被 17 个上传器实现 |
-| 🔴 | `src/services/HistoryDatabase.ts` | 历史数据库，被所有历史视图依赖 |
+| 🔴 | `src/services/database/HistoryDatabase.ts` | 历史数据库，被所有历史视图依赖 |
 | 🟠 | `src/core/MultiServiceUploader.ts` | 上传编排，被 useUpload 调用 |
 | 🟠 | `src/composables/upload/useUpload.ts` | 上传管理，被 useUploadController（首页、外壳的上传入口）依赖 |
 | 🟠 | `src/composables/useConfig.ts` | 配置管理，被设置和上传依赖 |

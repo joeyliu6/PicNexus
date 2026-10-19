@@ -31,7 +31,7 @@ docs/
 ├── design/             # 🎨 设计规范
 │   ├── README.md       # 核心原则 + 文件结构
 │   ├── tokens.md       # CSS 变量体系
-│   ├── themes.md       # 主题适配 + PrimeVue
+│   ├── themes.md       # 深浅色与平台
 │   ├── ui-patterns.md  # UI 模式 + 最佳实践
 │   └── settings-layout.md  # 设置页面排版
 └── reference/          # 📚 知识库

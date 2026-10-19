@@ -55,7 +55,7 @@ Obsidian 插件已提交到 [Obsidian Community](https://community.obsidian.md/p
 |------|------|
 | 桌面框架 | Tauri 2 |
 | 前端 | Vue 3 + TypeScript + Vite |
-| UI 组件 | PrimeVue 4 |
+| UI 组件 | Reka UI + 自写 `Pn*` 组件 |
 | 后端 | Rust + reqwest + tokio |
 | 图片处理 | mozjpeg + imagequant + webp |
 | 数据库 | SQLite |

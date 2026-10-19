@@ -176,6 +176,6 @@ flowchart TD
 ## 相关文档
 
 - [休眠白屏修复](../reference/troubleshooting/sleep-resume-white-screen.md) — SQLite 连接丢失 + WebView reload 失败
-- [Tauri CSP nonce 问题](../reference/troubleshooting/tauri-csp-nonce-blocks-primevue-styles.md) — 启动后样式异常的排查
+- [Tauri CSP nonce 问题](../reference/troubleshooting/tauri-csp-nonce-inline-styles.md) — 正式版样式丢失的排查
 - [系统总览](./system-overview.md) — 宏观架构分层与模块关系
 - [数据持久化](./data-persistence.md) — 启动时加载的配置/历史存储机制
