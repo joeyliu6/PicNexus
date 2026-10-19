@@ -17,21 +17,21 @@ import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } fro
  * 灯箱开关动画的时长与缓动。
  *
  * 这几个值必须传给 PhotoSwipe 的 JS 选项，读不到 CSS 变量（getComputedStyle 在
- * jsdom 下拿空串，全测试都得 mock，不划算），所以在这里写死数值，但**取值一律
- * 对齐 motion.css 的 token**，改动时两边一起改。
+ * jsdom 下拿空串，全测试都得 mock，不划算），所以在这里写数值，**取值对齐
+ * tokens.css 的 --pn-dur-***，改动时两边一起改。
  *
- * 开慢关快是 motion.css 的既定原则（"进入略慢给感知，退出略快不拖沓"）：
- * 开场 300ms、关场 200ms。原先 300/280 两头几乎一样长，等于没体现这条原则。
- * 曲线两头都用 decelerate，理由见 EASE_DECELERATE。
+ * 交接说明 5.3：灯箱用「舒展 250ms」，退场快 30%（175ms）。
+ * 曲线两头都用 decelerate，与 5.3 的进场 / 退场曲线不同，理由见 EASE_DECELERATE
+ * （记在 docs/design/redesign/decisions/gallery.md）。
  */
-/** = --duration-medium */
-const SHOW_ANIMATION_DURATION = 300;
-/** = --duration-normal */
-const HIDE_ANIMATION_DURATION = 200;
-/** = --duration-normal */
+/** = --pn-dur-expressive */
+const SHOW_ANIMATION_DURATION = 250;
+/** = --pn-dur-expressive × 0.7 */
+const HIDE_ANIMATION_DURATION = 175;
+/** = --pn-dur-standard */
 export const ZOOM_ANIMATION_DURATION = 200;
 /**
- * = --ease-decelerate（快启慢停）。开场和关场都用它。
+ * 快启慢停。开场和关场都用它。
  *
  * 关场为什么不用 accelerate：这不是"退出"，而是**收回到一个具体落点**。
  * accelerate 的末段速度最快，实测最后 20ms 里图片会从 418px 猛缩到 300px ——
