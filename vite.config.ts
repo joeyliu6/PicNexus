@@ -33,7 +33,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-vue': ['vue', '@vueuse/core'],
-          'vendor-primevue': ['primevue', '@primeuix/themes'],
           'vendor-tauri': [
             '@tauri-apps/api',
             '@tauri-apps/plugin-clipboard-manager',

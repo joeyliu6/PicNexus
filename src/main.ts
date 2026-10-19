@@ -1,14 +1,8 @@
-// 新架构的主入口文件 - 使用 Vue 3 + PrimeVue 单应用模式
+// 主入口：Vue 3 单应用
 
 import { createApp } from 'vue';
 import App from './App.vue';
 import { createAppRouter } from './router';
-
-// PrimeVue 相关导入
-import PrimeVue from 'primevue/config';
-import { PicNexusPreset } from '@/theme/preset';
-import Tooltip from 'primevue/tooltip';
-import Ripple from 'primevue/ripple';
 
 // 上传器初始化
 import { initializeUploaders, syncCustomS3Uploaders, syncWebDAVUploaders } from '@/uploaders';
@@ -29,11 +23,9 @@ import { useAnalytics } from '@/composables/useAnalytics';
 // 备份文件清理
 import { cleanupStoreBackups } from '@/store/storeCleanup';
 
-// PrimeVue 样式
-import 'primeicons/primeicons.css';
+// 全局样式
 import './theme/dark-theme.css';
 import './theme/light-theme.css';
-import './theme/primevue-overrides.css';
 import './styles/motion.css';
 import './styles/tokens.css';
 import './styles/tokens-extra.css';
@@ -62,22 +54,6 @@ window.addEventListener('unhandledrejection', (event) => {
 window.addEventListener('error', (event) => {
   log.error('未捕获的全局错误:', event.error);
 });
-
-// 配置 PrimeVue
-app.use(PrimeVue, {
-  theme: {
-    preset: PicNexusPreset,
-    options: {
-      darkModeSelector: '.dark-theme',
-      cssLayer: { name: 'primevue', order: 'reset, primevue, app' }
-    }
-  },
-  ripple: true
-});
-
-// 配置 PrimeVue 服务
-app.directive('tooltip', Tooltip);
-app.directive('ripple', Ripple);
 
 app.use(createAppRouter());
 
