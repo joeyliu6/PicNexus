@@ -12,7 +12,7 @@ export interface ConfirmRequestOptions {
   acceptLabel: string;
   rejectLabel: string;
   tone: ConfirmTone;
-  /** 确认按钮用危险样式（红底）；默认焦点随之落在「取消」，回车不会误触 */
+  /** 确认按钮用危险样式（红底）；默认焦点不论哪种都在「取消」 */
   danger: boolean;
   /** 正文下面单独一行等宽显示的内容（P12 明文 HTTP 确认里的地址） */
   code?: string;

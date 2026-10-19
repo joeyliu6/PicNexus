@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 全局确认框：画 confirmStore 队首的那一个（useConfirm 的所有调用都走这里）
+// 全局确认框：画 confirmStore 队首的那一个（useConfirm 的所有调用都走这里）。
+// 默认焦点一律在「取消」（Patterns）：回车不会误触危险操作，也不会直接同意风险说明
 import { computed } from 'vue';
 import PnButton from './PnButton.vue';
 import PnDialog from './PnDialog.vue';
@@ -30,7 +31,7 @@ const icon = computed(() => (request.value?.tone === 'brand' ? 'info' : 'warning
     <span class="pn-confirm__message">{{ request.message }}</span>
     <span v-if="request.code" class="pn-confirm__code">{{ request.code }}</span>
     <template #footer>
-      <PnButton variant="secondary" size="dialog" :data-autofocus="request.danger ? '' : undefined" @click="finish('reject')">
+      <PnButton variant="secondary" size="dialog" data-autofocus @click="finish('reject')">
         {{ request.rejectLabel }}
       </PnButton>
       <PnButton :variant="request.danger ? 'danger' : 'primary'" size="dialog" @click="finish('accept')">

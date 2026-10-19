@@ -59,3 +59,17 @@ test('at 800×600 with no host yet the page opens on the catalog, not an empty l
   await page.locator('.hosts__back').click();
   await expect(page.locator('.host-catalog')).toBeVisible();
 });
+
+// 待拍板 ㉝（选 A）：Patterns「确认框默认焦点在『取消』，回车不会误触」——不只红色危险确认框，
+// 公共图床风险（P11）这类琥珀确认框也一样：按回车不该直接同意风险
+test('the public host risk confirm opens with 取消 focused', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openApp(page, { config: { availableServices: [], enabledServices: [], publicServiceRiskAccepted: false } });
+  await page.getByRole('button', { name: '启用京东图床（免配置）' }).click();
+  const confirm = page.getByRole('dialog');
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(confirm).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '启用京东图床（免配置）' })).toBeVisible();
+});
