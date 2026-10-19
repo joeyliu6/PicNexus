@@ -161,7 +161,7 @@ async function importFile(): Promise<void> {
     if (!file) return;
     if (file.kind === 'config') {
       const ok = await confirm('将以文件中的配置替换本机全部图床账号、上传组合与偏好，当前本地配置会丢失且无法撤销。本机的云同步连接与上传记录不受影响。', {
-        header: '导入配置？', acceptLabel: '导入', rejectLabel: '取消', acceptClass: 'p-button-danger',
+        header: '导入配置？', acceptLabel: '导入', rejectLabel: '取消', tone: 'danger',
       });
       if (!ok) return;
       await importConfig(file.config);

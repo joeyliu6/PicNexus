@@ -24,18 +24,8 @@ export interface ConfirmOptions {
   /** 取消回调 */
   reject?: () => void;
 
-  /** 图标（旧写法 'pi pi-…'）：含 exclamation 的按「警告」画琥珀图标块 */
-  icon?: string;
-
-  /** 确认按钮样式（旧写法 'p-button-danger' / 'p-button-warning'）：danger = 红色危险按钮 */
-  acceptClass?: string;
-}
-
-/** 由旧的 icon / acceptClass 写法推出新对话框的图标块色调与确认按钮样式 */
-export function resolveConfirmTone(icon?: string, acceptClass?: string): { tone: ConfirmTone; danger: boolean } {
-  if (acceptClass?.includes('danger')) return { tone: 'danger', danger: true };
-  if (acceptClass?.includes('warning') || icon?.includes('exclamation')) return { tone: 'warning', danger: false };
-  return { tone: 'brand', danger: false };
+  /** 图标块色调：danger = 红色图标块 + 红色确认按钮（不可逆的危险操作）；不给按 warning（琥珀） */
+  tone?: ConfirmTone;
 }
 
 /** 异步确认选项 */
@@ -43,7 +33,7 @@ export interface ConfirmAsyncOptions {
   header?: string;
   acceptLabel?: string;
   rejectLabel?: string;
-  acceptClass?: string;
+  tone?: ConfirmTone;
   /** 正文下面等宽显示的一行（地址、路径） */
   code?: string;
 }
@@ -53,8 +43,7 @@ interface RequireOptions {
   message: string;
   acceptLabel: string;
   rejectLabel: string;
-  icon?: string;
-  acceptClass?: string;
+  tone?: ConfirmTone;
   code?: string;
 }
 
@@ -65,7 +54,8 @@ function require(options: RequireOptions) {
     acceptLabel: options.acceptLabel,
     rejectLabel: options.rejectLabel,
     code: options.code,
-    ...resolveConfirmTone(options.icon, options.acceptClass),
+    tone: options.tone ?? 'warning',
+    danger: options.tone === 'danger',
   });
 }
 
@@ -81,10 +71,9 @@ export function useConfirm() {
     void require({
       header: options.header || confirmDefaults.header,
       message: options.message,
-      icon: options.icon || confirmDefaults.icon,
       acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
       rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
-      acceptClass: options.acceptClass,
+      tone: options.tone,
     }).then((result) => {
       // Esc / 点遮罩（dismiss）两个回调都不调，与按「取消」区分开
       if (result === 'accept') options.accept?.();
@@ -97,10 +86,9 @@ export function useConfirm() {
     void require({
       header: warnDefaults.header,
       message,
-      icon: warnDefaults.icon,
       acceptLabel: warnDefaults.acceptLabel,
       rejectLabel: warnDefaults.rejectLabel,
-      acceptClass: warnDefaults.acceptClass,
+      tone: 'warning',
     }).then((result) => { if (result === 'accept') onConfirm(); });
   };
 
@@ -124,10 +112,9 @@ export function useConfirm() {
     const result = await require({
       header: opts.header || confirmDefaults.header,
       message,
-      icon: confirmDefaults.icon,
       acceptLabel: opts.acceptLabel || confirmDefaults.acceptLabel,
       rejectLabel: opts.rejectLabel || confirmDefaults.rejectLabel,
-      acceptClass: opts.acceptClass,
+      tone: opts.tone,
       code: opts.code,
     });
     return result === 'accept';

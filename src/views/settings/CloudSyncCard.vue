@@ -59,7 +59,7 @@ async function overwriteCloud(): Promise<void> {
   if (items.value.config && props.passwordMissing) { emit('needPassword'); return; }
   const what = items.value.config && items.value.history ? '配置和上传记录' : items.value.config ? '配置' : '上传记录';
   const ok = await confirm(`将以本机的${what}替换${props.profile.name}上的数据，云端现有内容会丢失且无法撤销。`, {
-    header: '覆盖云端？', acceptLabel: '覆盖云端', rejectLabel: '取消', acceptClass: 'p-button-danger',
+    header: '覆盖云端？', acceptLabel: '覆盖云端', rejectLabel: '取消', tone: 'danger',
   });
   if (ok) void cloud.overwriteCloud(props.profile, items.value);
 }
@@ -67,7 +67,7 @@ async function overwriteCloud(): Promise<void> {
 async function overwriteLocal(): Promise<void> {
   if (!props.profile) return;
   const ok = await confirm(`将以${props.profile.name}上的配置替换本机全部图床账号、上传组合与偏好，当前本地配置会丢失且无法撤销。上传记录不受影响。`, {
-    header: '覆盖本地配置？', acceptLabel: '覆盖本地', rejectLabel: '取消', acceptClass: 'p-button-danger',
+    header: '覆盖本地配置？', acceptLabel: '覆盖本地', rejectLabel: '取消', tone: 'danger',
   });
   if (ok) void cloud.overwriteLocal(props.profile);
 }

@@ -230,7 +230,7 @@ function create() {
     if (!needsHttpDomainConsent(record)) return true;
     const ok = await confirm(HTTP_CONSENT_COPY.message, {
       header: HTTP_CONSENT_COPY.header, acceptLabel: HTTP_CONSENT_COPY.acceptLabel, rejectLabel: HTTP_CONSENT_COPY.rejectLabel,
-      acceptClass: 'p-button-warning', code: originOf(String(record.publicDomain)),
+      tone: 'warning', code: originOf(String(record.publicDomain)),
     });
     if (!ok) return false;
     const host = normalizeHost(new URL(String(record.publicDomain).trim()).hostname);
@@ -244,7 +244,7 @@ function create() {
   async function confirmLanHttp(hostId: string, record: Record<string, unknown>): Promise<boolean> {
     const ok = await confirm(HTTP_CONSENT_COPY.message, {
       header: HTTP_CONSENT_COPY.header, acceptLabel: HTTP_CONSENT_COPY.acceptLabel, rejectLabel: HTTP_CONSENT_COPY.rejectLabel,
-      acceptClass: 'p-button-warning', code: lanConsentOrigins(record),
+      tone: 'warning', code: lanConsentOrigins(record),
     });
     if (!ok) return false;
     record.lanHttpConfirmed = true;

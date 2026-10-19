@@ -316,7 +316,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
 
   /** 危险按钮写动作（交接说明 6.2：「移除」而不是「删除 / 确认」） */
   function confirmRemove(message: string, onConfirm: () => void): void {
-    showConfirm({ header: '移除这条链接？', message, acceptLabel: '移除', acceptClass: 'danger', accept: onConfirm });
+    showConfirm({ header: '移除这条链接？', message, acceptLabel: '移除', tone: 'danger', accept: onConfirm });
   }
 
   /**

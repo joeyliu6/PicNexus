@@ -261,7 +261,7 @@ export function useHistoryManager() {
     try {
       const confirmed = await confirm(
         '将删除本机全部上传记录与收藏，图床上的文件不受影响。确认后有 5 秒可以撤销。',
-        { header: '清空全部记录？', acceptLabel: '清空', rejectLabel: '取消', acceptClass: 'p-button-danger' }
+        { header: '清空全部记录？', acceptLabel: '清空', rejectLabel: '取消', tone: 'danger' }
       );
 
       if (!confirmed) {

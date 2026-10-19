@@ -171,7 +171,7 @@ export function createResultOps(ctx: ResultOpsContext) {
         {
           header: copy?.header ?? `移除 ${targets.length} 个链接？`,
           acceptLabel: copy?.acceptLabel ?? `移除 ${targets.length} 个`,
-          acceptClass: 'p-button-danger',
+          tone: 'danger',
         },
       );
       if (!confirmed) return false;

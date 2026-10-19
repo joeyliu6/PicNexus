@@ -68,7 +68,7 @@ async function clearRecords(): Promise<void> {
 
 async function resetDefaults(): Promise<void> {
   const ok = await confirm('外观、启动、快捷键、链接格式、压缩、编辑器等偏好将恢复默认值，无法撤销。图床账号、云同步连接与上传记录保留。', {
-    header: '恢复默认设置？', acceptLabel: '恢复', rejectLabel: '取消', acceptClass: 'p-button-danger',
+    header: '恢复默认设置？', acceptLabel: '恢复', rejectLabel: '取消', tone: 'danger',
   });
   if (!ok) return;
   resetting.value = true;

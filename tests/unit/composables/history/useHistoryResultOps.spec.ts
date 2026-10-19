@@ -397,7 +397,7 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
 
     expect(confirmMock).toHaveBeenCalledWith(
       '自定义说明',
-      expect.objectContaining({ header: '从记录中移除这张图？', acceptLabel: '移除', acceptClass: 'p-button-danger' }),
+      expect.objectContaining({ header: '从记录中移除这张图？', acceptLabel: '移除', tone: 'danger' }),
     );
   });
 

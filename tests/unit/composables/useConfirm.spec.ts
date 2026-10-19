@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resolveConfirmTone, useConfirm } from '@/composables/useConfirm';
+import { useConfirm } from '@/composables/useConfirm';
 import { __resetConfirmsForTests, currentConfirm, settleConfirm } from '@/components/pn/confirmStore';
 import { UI_COPY } from '@/constants';
 
@@ -70,10 +70,17 @@ describe('useConfirm', () => {
     await expect(second).resolves.toBe(true);
   });
 
-  it('maps the legacy icon and accept classes onto dialog tones', () => {
-    expect(resolveConfirmTone('pi pi-trash', 'p-button-danger')).toEqual({ tone: 'danger', danger: true });
-    expect(resolveConfirmTone('pi pi-exclamation-triangle')).toEqual({ tone: 'warning', danger: false });
-    expect(resolveConfirmTone(undefined, 'p-button-warning')).toEqual({ tone: 'warning', danger: false });
-    expect(resolveConfirmTone('pi pi-shield')).toEqual({ tone: 'brand', danger: false });
+  it('draws danger confirms with a red icon and a red accept button, others amber unless told', () => {
+    const { confirm } = useConfirm();
+    void confirm('删除？', { tone: 'danger' });
+    expect(current()).toMatchObject({ tone: 'danger', danger: true });
+    settleConfirm(current().id, 'reject');
+
+    void confirm('继续？');
+    expect(current()).toMatchObject({ tone: 'warning', danger: false });
+    settleConfirm(current().id, 'reject');
+
+    void confirm('打开？', { tone: 'brand' });
+    expect(current()).toMatchObject({ tone: 'brand', danger: false });
   });
 });

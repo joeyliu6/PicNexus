@@ -11,23 +11,6 @@ export interface LinkFormatContext {
   height?: number;
 }
 
-/** 链接格式选项（用于 UI 展示） */
-export interface LinkFormatOption {
-  format: LinkFormat;
-  label: string;
-  icon: string;
-  example: string;
-}
-
-/** 预定义格式选项 */
-export const LINK_FORMAT_OPTIONS: LinkFormatOption[] = [
-  { format: 'url', label: 'URL', icon: 'pi-link', example: 'https://example.com/image.png' },
-  { format: 'markdown', label: 'Markdown', icon: 'pi-file-edit', example: '![filename](url)' },
-  { format: 'html', label: 'HTML', icon: 'pi-code', example: '<img src="url" alt="filename" />' },
-  { format: 'bbcode', label: 'BBCode', icon: 'pi-comment', example: '[img]url[/img]' },
-  { format: 'custom', label: '自定义', icon: 'pi-pencil', example: '{url}' },
-];
-
 /** 格式名称映射 */
 export const FORMAT_NAMES: Record<LinkFormat, string> = {
   url: 'URL',

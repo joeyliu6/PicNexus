@@ -1,10 +1,3 @@
-export interface EmptyStateCopy {
-  icon: string;
-  title: string;
-  description?: string;
-  hint?: string;
-}
-
 export const UI_COPY = {
   actions: {
     confirm: '确认',
@@ -23,14 +16,11 @@ export const UI_COPY = {
       header: '确认',
       acceptLabel: '确认',
       rejectLabel: '取消',
-      icon: 'pi pi-exclamation-triangle',
     },
     warn: {
       header: '警告',
       acceptLabel: '继续',
       rejectLabel: '取消',
-      icon: 'pi pi-exclamation-triangle',
-      acceptClass: 'p-button-warning',
     },
   },
 
@@ -45,24 +35,6 @@ export const UI_COPY = {
         detail: error,
       }),
     },
-  },
-
-  emptyState: {
-    noData: {
-      icon: 'pi pi-inbox',
-      title: '暂无数据',
-      description: '没有可操作的数据',
-    } satisfies EmptyStateCopy,
-    searchNoResult: {
-      icon: 'pi pi-search',
-      title: '未找到结果',
-      description: '尝试调整搜索关键词或筛选条件',
-    } satisfies EmptyStateCopy,
-    hostingRequired: {
-      icon: 'pi pi-cog',
-      title: '暂无可用图床',
-      description: '请在设置中配置图床。',
-    } satisfies EmptyStateCopy,
   },
 
   status: {

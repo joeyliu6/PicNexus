@@ -141,7 +141,7 @@ export function useHealthRowActions(index: () => DocIndex) {
       const ok = await confirm(`「${image.name}」的每一份链接都已失效，移除后这条记录一并删除。${docsLine}图床上的文件不受影响，可在通知里撤销。`, {
         header: '移除失效链接？',
         acceptLabel: '移除',
-        acceptClass: 'p-button-danger',
+        tone: 'danger',
       });
       if (!ok) return;
       const removed = await historyManager.removeRecords([id]);
@@ -169,7 +169,7 @@ export function useHealthRowActions(index: () => DocIndex) {
     const ok = await confirm(`这 ${n} 张图片在每个图床上都已不存在。将从记录中移除，图床不受影响；可在通知里撤销。`, {
       header: `清理 ${n} 张找不回的图片？`,
       acceptLabel: `清理 ${n} 张`,
-      acceptClass: 'p-button-danger',
+      tone: 'danger',
     });
     if (!ok) return;
     const removed = await historyManager.removeRecords(ids);

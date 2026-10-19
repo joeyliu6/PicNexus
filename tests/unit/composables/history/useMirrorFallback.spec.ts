@@ -280,7 +280,7 @@ describe('useMirrorFallback - removeMirror', () => {
     await harness.api().removeMirror('qiyu');
     await flushConfirms();
 
-    expect(showConfirmMock).toHaveBeenCalledWith(expect.objectContaining({ header: '移除这条链接？', acceptLabel: '移除', acceptClass: 'danger' }));
+    expect(showConfirmMock).toHaveBeenCalledWith(expect.objectContaining({ header: '移除这条链接？', acceptLabel: '移除', tone: 'danger' }));
     expect(dbRemoveMirrorMock).toHaveBeenCalledWith('hist-1', 'qiyu');
     expect(dbSwitchPrimaryMock).not.toHaveBeenCalled();
     expect(toastSuccessMock).not.toHaveBeenCalled();
