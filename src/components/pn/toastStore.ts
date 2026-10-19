@@ -21,6 +21,8 @@ export interface ToastOptions {
   life?: number;
   /** 底部画倒计时细线（「撤销」类） */
   countdown?: boolean;
+  /** 还没执行、到时间才执行（「清空全部记录」）：从不被挤掉，挤掉 = 提前执行，与「还有 N 秒可撤销」矛盾 */
+  deferred?: boolean;
   /** 到时间自然消失（含被新通知挤掉）时调用；点了动作按钮或手动关闭不调用 */
   onExpire?: () => void;
 }
@@ -30,6 +32,7 @@ export interface ToastItem extends Readonly<Required<Pick<ToastOptions, 'kind' |
   readonly desc?: string;
   readonly action?: ToastAction;
   readonly countdown: boolean;
+  readonly deferred: boolean;
   readonly life: number;
 }
 
@@ -81,15 +84,18 @@ export function pushToast(options: ToastOptions): number {
     desc: options.desc,
     action: options.action,
     countdown: options.countdown ?? false,
+    deferred: options.deferred ?? false,
     life,
   });
   const timer: Timer = { handle: null, remaining: life, startedAt: 0, sticky: life === 0, onExpire: options.onExpire };
   timers.set(id, timer);
   if (!paused) startTimer(id, timer);
 
-  // 超过 3 条：挤掉最旧的普通通知；带倒计时的「撤销」类尽量留着，免得用户还没来得及撤销就生效
+  // 超过 3 条：挤掉最旧的普通通知；带倒计时的「撤销」类尽量留着，免得用户还没来得及撤销就生效；
+  // 到时间才执行的从不挤（全是这类时宁可多叠一条）
   while (items.length > MAX_TOASTS) {
-    const victim = items.find((item) => !item.countdown && item.id !== id) ?? items[0];
+    const victim = items.find((item) => !item.countdown && item.id !== id) ?? items.find((item) => !item.deferred);
+    if (!victim) break;
     expire(victim.id);
   }
   return id;

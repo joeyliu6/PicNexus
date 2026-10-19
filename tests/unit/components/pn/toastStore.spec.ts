@@ -30,6 +30,15 @@ describe('toastStore', () => {
     expect(onExpire).not.toHaveBeenCalled();
   });
 
+  it('never pushes out a deferred toast, since that would run the action before its countdown ends', () => {
+    const onExpire = vi.fn();
+    pushToast({ kind: 'warn', title: 'pending', countdown: true, deferred: true, action: { label: '撤销', run: vi.fn() }, onExpire });
+    for (const title of ['b', 'c', 'd']) pushToast({ kind: 'success', title, countdown: true, action: { label: '撤销', run: vi.fn() } });
+
+    expect(toasts.map((t) => t.title)).toEqual(['pending', 'c', 'd']);
+    expect(onExpire).not.toHaveBeenCalled();
+  });
+
   it('life 0 means it stays until pushed out, also across pause and resume', () => {
     pushToast({ kind: 'warn', title: 'sticky', life: 0 });
     vi.advanceTimersByTime(60_000);

@@ -1,6 +1,7 @@
 // 撤销 Toast Composable
 // 「先生效、可撤销」或「倒计时后才执行」：通知底部一条倒计时细线 +「撤销」按钮（T05-Toasts.dc.html）。
 // 每一轮各管各的：再来一轮不会撤掉上一轮；通知被挤掉或到时间都按「生效」处理（没人能再点撤销了）。
+// 琥珀色的「到时间才执行」那类不会被挤掉，只按自己的倒计时生效。
 
 import { UNDO_LIFE } from '@/components/pn/toastStore';
 import { useToast } from './useToast';
@@ -32,6 +33,7 @@ export function useUndoToast() {
       }, {
         life: seconds === undefined ? UNDO_LIFE : seconds * 1000,
         countdown: true,
+        deferred: kind === 'warn',
         onExpire: () => settle(true),
       });
       // 全局静默期间通知发不出来：没有人能点撤销，按到时间处理

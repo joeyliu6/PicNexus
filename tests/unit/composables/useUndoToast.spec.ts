@@ -67,6 +67,20 @@ describe('useUndoToast', () => {
     expect(toasts.map((t) => t.title)).toEqual(['2', '3', '4']);
   });
 
+  it('keeps a pending amber round until its own countdown ends, however many rounds pile up', async () => {
+    const undo = useUndoToast();
+    let pendingSettled = false;
+    const pending = undo.show('将清空', 5, 'warn').then((v) => { pendingSettled = true; return v; });
+    const rounds = [undo.show('1'), undo.show('2'), undo.show('3')];
+
+    await expect(rounds[0]).resolves.toBe(true);
+    expect(pendingSettled).toBe(false);
+    expect(toasts.map((t) => t.title)).toEqual(['将清空', '2', '3']);
+
+    vi.advanceTimersByTime(5000);
+    await expect(pending).resolves.toBe(true);
+  });
+
   it('defaults to the 6-second undo life and the green tick of the design', () => {
     void useUndoToast().show('已删除方案');
     expect(toasts[0]).toMatchObject({ life: 6000, kind: 'success' });
