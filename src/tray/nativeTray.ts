@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Image } from '@tauri-apps/api/image';
 import { Menu, type CheckMenuItemOptions, type IconMenuItemOptions, type MenuItemOptions, type PredefinedMenuItemOptions, type SubmenuOptions } from '@tauri-apps/api/menu';
 import { TrayIcon } from '@tauri-apps/api/tray';
-import { CLASSIC_PETAL_PATHS, MAX_PETALS, petalWidthScale, type PetalState } from '@/utils/petals';
+import { allocatePetals, CLASSIC_PETAL_PATHS, MAX_PETALS, petalWidthScale, type PetalState } from '@/utils/petals';
 import type { UiPlatform } from '@/utils/platform';
 import { createLogger } from '@/utils/logger';
 import type { TrayAction, TrayRow } from './trayMenuModel';
@@ -98,7 +98,9 @@ function statusPetalPaints(states: readonly PetalState[]): PetalPaint[] {
       default: return { color: token('--pn-petal-empty'), opacity: 1 };
     }
   };
-  const padded = states.length < 4 ? [...states, ...Array<PetalState>(4 - states.length).fill('empty')] : states;
+  // 超过 8 个图床按状态比例分到 8 瓣（与首页同一条规则）
+  const shown = allocatePetals(states);
+  const padded = shown.length < 4 ? [...shown, ...Array<PetalState>(4 - shown.length).fill('empty')] : shown;
   return padded.map(paintOf);
 }
 

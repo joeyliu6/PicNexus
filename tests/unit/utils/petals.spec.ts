@@ -29,6 +29,33 @@ describe('layoutPetals', () => {
     expect(layout.overflowCount).toBe(11);
   });
 
+  it('splits eight petals by state beyond eight hosts, normal first and problems last', () => {
+    const states = [...Array<'waiting'>(4).fill('waiting'), ...Array<'ok'>(5).fill('ok'), ...Array<'uploading'>(3).fill('uploading')];
+    expect(layoutPetals(states).petals.map((p) => p.state)).toEqual([
+      'ok', 'ok', 'ok', 'uploading', 'uploading', 'waiting', 'waiting', 'waiting',
+    ]);
+  });
+
+  it('keeps one red petal when a single host out of many fails', () => {
+    const states = [...Array<'ok'>(8).fill('ok'), 'failed' as const, 'ok' as const, 'ok' as const, 'ok' as const];
+    const shown = layoutPetals(states).petals.map((p) => p.state);
+    expect(shown).toEqual(['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'failed']);
+  });
+
+  it('gives every state that occurs at least one petal', () => {
+    const states = [...Array<'ok'>(11).fill('ok'), 'failed', 'limited', 'empty', 'waiting', 'uploading'] as const;
+    expect(layoutPetals(states).petals.map((p) => p.state)).toEqual([
+      'ok', 'ok', 'ok', 'uploading', 'waiting', 'empty', 'limited', 'failed',
+    ]);
+  });
+
+  it('does not give a state raised to one petal a second one', () => {
+    const states = [...Array<'ok'>(4).fill('ok'), ...Array<'waiting'>(4).fill('waiting'), 'failed' as const];
+    expect(layoutPetals(states).petals.map((p) => p.state)).toEqual([
+      'ok', 'ok', 'ok', 'ok', 'waiting', 'waiting', 'waiting', 'failed',
+    ]);
+  });
+
   it('matches the two widths drawn in the design', () => {
     expect(petalWidthScale(6)).toBe(0.74);
     expect(petalWidthScale(8)).toBe(0.56);

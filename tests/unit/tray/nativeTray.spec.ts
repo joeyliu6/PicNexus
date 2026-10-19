@@ -94,6 +94,16 @@ describe('applyTrayMenu', () => {
     expect(m.tray.setMenu).toHaveBeenCalledWith(m.menus[0]);
   });
 
+  it('超过 8 个图床时状态行的小花瓣与首页同样按状态分配，排在后面的失败也画红', async () => {
+    document.documentElement.style.setProperty('--pn-brand', '#3985ED');
+    document.documentElement.style.setProperty('--pn-danger-fill', '#DC2626');
+    const petals = [...Array<'ok'>(11).fill('ok'), 'failed' as const];
+    await applyTrayMenu([{ kind: 'status', text: '正在上传 a.png	11 / 12', petals }], vi.fn());
+    document.documentElement.style.removeProperty('--pn-brand');
+    document.documentElement.style.removeProperty('--pn-danger-fill');
+    expect(m.fills).toEqual([...Array<string>(7).fill('#3985ED'), '#DC2626']);
+  });
+
   it('状态行的小图标交给菜单后就释放', async () => {
     await applyTrayMenu(ROWS, vi.fn());
     expect(m.images[0].close).toHaveBeenCalled();
