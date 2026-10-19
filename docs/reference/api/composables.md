@@ -65,7 +65,7 @@
 
 `useAnalytics` 通过一次性的本机 HTTP 隔离 WebView 加载 Google tag，定义 `first_run` 和 `app_start` 两个生命周期事件。事件附带应用版本、操作系统和固定桌面平台标识，不提供通用事件追踪接口。
 
-公开方法为 `initialize()`、`enable()`、`disable()`。`first_run` 在 Google tag 未完成处理时保留到下次启动重试；`app_start` 不跨启动补发，避免把旧启动错误记到新的时间。该流程不阻塞应用挂载。
+公开方法为 `initialize()`、`enable()`、`disable()`。`first_run` 在 Google tag 未完成处理时保留到下次启动重试；`app_start` 不跨启动补发，避免把旧启动错误记到新的时间。该流程不阻塞应用挂载。开发版（`import.meta.env.DEV`）在读完统计开关后直接返回 `false`：不发生命周期事件、不起心跳、不改 `analytics_data`，正式版首次运行时照常发 `first_run`。
 
 ### 在线心跳
 
