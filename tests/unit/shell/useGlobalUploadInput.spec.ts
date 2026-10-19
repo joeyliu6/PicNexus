@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, ref, type Ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
@@ -36,15 +36,16 @@ async function mountInput(path = '/home') {
   });
   await router.push(path);
   let overlay: DropOverlayState | null = null;
+  let receiving: Readonly<Ref<boolean>> | null = null;
   const Host = defineComponent({
     setup() {
-      overlay = useGlobalUploadInput().overlay;
+      ({ overlay, receiving } = useGlobalUploadInput());
       return () => h('div', [h('input', { class: 'text' }), h('div', { class: 'plain', tabindex: 0 })]);
     },
   });
   const wrapper = mount(Host, { global: { plugins: [router] }, attachTo: document.body });
   await vi.waitFor(() => expect(m.dragHandler).not.toBeNull());
-  return { wrapper, overlay: () => overlay!, router };
+  return { wrapper, overlay: () => overlay!, receiving: () => receiving!.value, router };
 }
 
 function pressPaste(target: Element) {
@@ -67,6 +68,28 @@ describe('useGlobalUploadInput', () => {
 
     pressPaste(wrapper.get('.text').element);
     expect(m.pasteClipboard).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  // ⑦ 拖入感应（M07）：侧栏 Logo 的花瓣只在「松开就会上传」时张开，拖出、松手即合拢
+  it('opens the logo petals only while dragging images that will be uploaded', async () => {
+    const { wrapper, receiving } = await mountInput();
+    expect(receiving()).toBe(false);
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/a.png'] } });
+    expect(receiving()).toBe(true);
+    m.dragHandler!({ payload: { type: 'leave' } });
+    expect(receiving()).toBe(false);
+
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/b.zip'] } });
+    expect(receiving()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keeps the logo petals closed when no host is selected', async () => {
+    m.selected = false;
+    const { wrapper, receiving } = await mountInput();
+    m.dragHandler!({ payload: { type: 'enter', paths: ['C:/a.png'] } });
+    expect(receiving()).toBe(false);
     wrapper.unmount();
   });
 

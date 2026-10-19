@@ -9,6 +9,8 @@ import SidebarSearch from './SidebarSearch.vue';
 defineProps<{
   current: PageKey | undefined;
   badges: Partial<Record<PageKey, NavBadge>>;
+  /** 拖着会上传的图片进窗口：Logo 花瓣张开（M07） */
+  receiving: boolean;
 }>();
 
 defineEmits<{
@@ -25,7 +27,7 @@ const collapseTitle = `收起侧栏  ${isMac ? '⌘' : 'Ctrl+'}\\`;
     <!-- macOS：这一行由系统红绿灯占用 -->
     <div class="app-sidebar__logo" data-tauri-drag-region>
       <template v-if="!isMac">
-        <BrandMark :size="18" />
+        <BrandMark :size="18" :open="receiving" />
         <span class="app-sidebar__name" data-tauri-drag-region>PicNexus</span>
       </template>
     </div>

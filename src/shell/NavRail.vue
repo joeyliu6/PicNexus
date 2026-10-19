@@ -12,6 +12,8 @@ defineProps<{
   badges: Partial<Record<PageKey, NavBadge>>;
   /** 窗口窄于 1000px 时强制收起，不给「展开」 */
   canExpand: boolean;
+  /** 拖着会上传的图片进窗口：Logo 花瓣张开（M07） */
+  receiving: boolean;
 }>();
 
 defineEmits<{
@@ -26,7 +28,7 @@ const isMac = uiPlatform() === 'macos';
   <nav class="nav-rail" aria-label="主导航（已收起）">
     <!-- macOS：这一行由系统红绿灯占用 -->
     <div class="nav-rail__logo" data-tauri-drag-region>
-      <BrandMark v-if="!isMac" :size="20" />
+      <BrandMark v-if="!isMac" :size="20" :open="receiving" />
     </div>
 
     <SidebarSearch rail />

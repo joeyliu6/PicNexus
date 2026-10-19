@@ -751,8 +751,13 @@
   /* 涟漪框比花瓣大一圈（M06：120 的花瓣放在 150 的框里） */
   --pn-bloom-ripple-inset: -12.5%;
   --pn-bloom-ripple-width: 1.5px;
+  /* ⑦ 拖入感应：花瓣向外张开 10（花瓣坐标，M07），虚线框从 96% 放大到位，照片从叠放张开到 H07 的角度。
+     M07 张开用了 0.72 秒，按「反馈类 ≤ 0.6 秒」收到 0.6 秒；合拢快 30% */
+  --pn-dur-receive: 600ms;
+  --pn-receive-petal-shift: 10px;
+  --pn-receive-frame-from: 0.96;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --pn-dur-petal-light: 0ms; --pn-dur-bloom: 0ms; }
+  :root { --pn-dur-petal-light: 0ms; --pn-dur-bloom: 0ms; --pn-dur-receive: 0ms; }
 }

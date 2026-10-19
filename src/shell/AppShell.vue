@@ -46,7 +46,7 @@ setUpdateInstallGate(() => new Promise<void>((resolve) => {
   if (!upload.busy.value) { resolve(); return; }
   const stop = watch(upload.busy, (busy) => { if (!busy) { stop(); resolve(); } });
 }));
-const { overlay } = useGlobalUploadInput();
+const { overlay, receiving } = useGlobalUploadInput();
 useAppShortcuts();
 
 const disposers: UnlistenFn[] = [];
@@ -90,6 +90,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         :current="currentPage"
         :badges="badges"
         :can-expand="!narrow"
+        :receiving="receiving"
         @navigate="navigate"
         @expand="toggle"
       />
@@ -97,6 +98,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         v-else
         :current="currentPage"
         :badges="badges"
+        :receiving="receiving"
         @navigate="navigate"
         @collapse="toggle"
       />

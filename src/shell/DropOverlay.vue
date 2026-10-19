@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 拖放悬停遮罩（HomeScreen.dc.html H07）：盖住主栏，侧栏保持可见（表示「还在当前页」）。
 // 夹带的非图片文件提前说明会被跳过；没有可用图床时写「先启用一个图床」，不上传。
+// ⑦ 拖入感应（M07）：出现时虚线框亮起、两张照片从叠放张开；拖出、松手、Esc 时淡出（快 30%）。
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useUploadController } from '@/composables/upload/useUploadController';
@@ -22,40 +23,42 @@ const noHostHint = computed(() => {
 </script>
 
 <template>
-  <div v-if="state.active" class="drop-overlay" aria-live="polite">
-    <div class="drop-overlay__zone">
-      <div class="drop-overlay__art" aria-hidden="true">
-        <div class="drop-overlay__photo drop-overlay__photo--back">
-          <div class="drop-overlay__scene drop-overlay__scene--sunset">
-            <span class="drop-overlay__sun" />
-            <span class="drop-overlay__hill drop-overlay__hill--far" />
-            <span class="drop-overlay__hill drop-overlay__hill--near" />
+  <Transition name="drop-overlay">
+    <div v-if="state.active" class="drop-overlay" aria-live="polite">
+      <div class="drop-overlay__zone">
+        <div class="drop-overlay__art" aria-hidden="true">
+          <div class="drop-overlay__photo drop-overlay__photo--back">
+            <div class="drop-overlay__scene drop-overlay__scene--sunset">
+              <span class="drop-overlay__sun" />
+              <span class="drop-overlay__hill drop-overlay__hill--far" />
+              <span class="drop-overlay__hill drop-overlay__hill--near" />
+            </div>
           </div>
-        </div>
-        <div class="drop-overlay__photo drop-overlay__photo--front">
-          <div class="drop-overlay__scene drop-overlay__scene--day">
-            <span class="drop-overlay__sun" />
-            <span class="drop-overlay__hill drop-overlay__hill--far" />
-            <span class="drop-overlay__hill drop-overlay__hill--near" />
+          <div class="drop-overlay__photo drop-overlay__photo--front">
+            <div class="drop-overlay__scene drop-overlay__scene--day">
+              <span class="drop-overlay__sun" />
+              <span class="drop-overlay__hill drop-overlay__hill--far" />
+              <span class="drop-overlay__hill drop-overlay__hill--near" />
+            </div>
           </div>
+          <span v-if="state.imageCount > 0" class="drop-overlay__count">{{ state.imageCount }}</span>
         </div>
-        <span v-if="state.imageCount > 0" class="drop-overlay__count">{{ state.imageCount }}</span>
+        <template v-if="noHost">
+          <div class="drop-overlay__title">先启用一个图床</div>
+          <div class="drop-overlay__desc">{{ noHostHint }}</div>
+        </template>
+        <template v-else-if="state.imageCount === 0">
+          <div class="drop-overlay__title">没有可上传的图片</div>
+          <div class="drop-overlay__desc">{{ state.skippedText }}</div>
+        </template>
+        <template v-else>
+          <div class="drop-overlay__title">松开上传</div>
+          <div class="drop-overlay__desc">上传到 {{ selected.join('、') }} · 压缩：{{ compressionText }}</div>
+          <div v-if="state.skippedText" class="drop-overlay__note">{{ state.skippedText }}</div>
+        </template>
       </div>
-      <template v-if="noHost">
-        <div class="drop-overlay__title">先启用一个图床</div>
-        <div class="drop-overlay__desc">{{ noHostHint }}</div>
-      </template>
-      <template v-else-if="state.imageCount === 0">
-        <div class="drop-overlay__title">没有可上传的图片</div>
-        <div class="drop-overlay__desc">{{ state.skippedText }}</div>
-      </template>
-      <template v-else>
-        <div class="drop-overlay__title">松开上传</div>
-        <div class="drop-overlay__desc">上传到 {{ selected.join('、') }} · 压缩：{{ compressionText }}</div>
-        <div v-if="state.skippedText" class="drop-overlay__note">{{ state.skippedText }}</div>
-      </template>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -66,7 +69,23 @@ const noHostHint = computed(() => {
   display: flex;
   padding: var(--pn-space-toast-left);
   background: var(--pn-drag-veil);
+  animation: drop-overlay-fade var(--pn-dur-standard) var(--pn-ease-in) both;
 }
+
+/*
+ * 每次拖入遮罩都重新挂上，动画随挂载播一次。离开也用关键帧（快 30%）：进场动画的 both 把不透明度钉在 1，
+ * 再用 transition 改 opacity 不会动（见 scripts/check-css-animation-handoff.mjs）
+ */
+.drop-overlay-leave-active { animation: drop-overlay-out calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out) both; }
+
+@keyframes drop-overlay-fade { from { opacity: 0; } }
+
+@keyframes drop-overlay-out { to { opacity: 0; } }
+
+@keyframes drop-overlay-frame { from { opacity: 0; transform: scale(var(--pn-receive-frame-from)); } }
+
+/* 只写起点：终点就是照片自己的角度（H07） */
+@keyframes drop-overlay-fan { from { transform: none; } }
 
 .drop-overlay__zone {
   display: flex;
@@ -78,6 +97,7 @@ const noHostHint = computed(() => {
   border: var(--pn-ring-width) dashed var(--pn-brand);
   border-radius: var(--pn-radius-panel);
   background: var(--pn-brand-soft);
+  animation: drop-overlay-frame var(--pn-dur-receive) var(--pn-ease-in) both;
 }
 
 .drop-overlay__art { position: relative; width: var(--pn-size-drop-art-w); height: var(--pn-size-drop-art-h); }
@@ -91,6 +111,7 @@ const noHostHint = computed(() => {
   border-radius: var(--pn-radius-md);
   background: var(--pn-drop-photo-frame);
   box-shadow: var(--pn-e3);
+  animation: drop-overlay-fan var(--pn-dur-receive) var(--pn-ease-in) both;
 }
 
 .drop-overlay__photo--back { top: var(--pn-space-drop-back-top); left: var(--pn-space-16); transform: rotate(-10deg); }
@@ -147,4 +168,12 @@ const noHostHint = computed(() => {
 
 .drop-overlay__desc { color: var(--pn-text2); }
 .drop-overlay__note { font-size: var(--pn-text-footnote); color: var(--pn-text3); }
+
+/* 「减少动态效果」：遮罩直接出现、直接消失，文字照样说明松开后会怎样 */
+@media (prefers-reduced-motion: reduce) {
+  .drop-overlay,
+  .drop-overlay-leave-active,
+  .drop-overlay__zone,
+  .drop-overlay__photo { animation: none; }
+}
 </style>

@@ -1,6 +1,6 @@
 // 全局上传入口（交接说明 8.1）：图片拖进窗口任何一页都会出现遮罩并上传；Ctrl+V / ⌘V 粘贴剪贴板图片。
 
-import { onMounted, onUnmounted, reactive } from 'vue';
+import { computed, onMounted, onUnmounted, reactive } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEventListener } from '@vueuse/core';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -34,6 +34,8 @@ export function useGlobalUploadInput() {
   let unlisten: UnlistenFn | null = null;
   let disposed = false;
 
+  const hasHost = () => upload.hosts.value.some((h) => h.selected);
+
   function reset() {
     overlay.active = false;
     overlay.imageCount = 0;
@@ -56,8 +58,7 @@ export function useGlobalUploadInput() {
         } else if (payload.type === 'drop') {
           const summary = summarizeDrop(payload.paths);
           reset();
-          const canUpload = upload.hosts.value.some((h) => h.selected);
-          if (canUpload && summary.images.length > 0) void upload.uploadFiles(summary.images);
+          if (hasHost() && summary.images.length > 0) void upload.uploadFiles(summary.images);
         }
       });
       if (disposed) stop();
@@ -85,5 +86,8 @@ export function useGlobalUploadInput() {
     if (event.key === 'Escape' && overlay.active) reset();
   });
 
-  return { overlay };
+  /** ⑦ 拖入感应（M07）：松开就会上传时，侧栏 Logo 的花瓣张开「接住」；拖出、松手、Esc 即合拢 */
+  const receiving = computed(() => overlay.active && overlay.imageCount > 0 && hasHost());
+
+  return { overlay, receiving };
 }
