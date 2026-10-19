@@ -147,7 +147,7 @@ portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥�
 坑：
 
 - 隔离的只有数据库和配置；WebView 的 localStorage 和正式版共用：连上后先把 `Object.entries(localStorage)` 存下来，走查完在关应用前原样写回。`picnexus-theme` 会被开发版写成它自己的主题，正式版下次启动时自己改回。
-- 全新的隔离库会先弹新手引导（点「跳过引导」），而且没有京东：补充备份要两个可用图床，自己加一个。
+- 全新的隔离库会先弹新手引导（点「跳过」），而且没有京东：补充备份要两个可用图床，自己加一个。
 - 原生对话框（「添加文件夹…」的选文件夹）拦不住：`window.__TAURI_INTERNALS__.invoke` 是只读属性。点完按钮后用 PowerShell 的 UI Automation 找到「Select Folder」窗口，往 AutomationId 1152 下的输入框发 `WM_SETTEXT` 写路径、给 AutomationId 1 的按钮发 `BM_CLICK`。
 - 补充备份能跑通：取原图放行 `http://127.0.0.1`。假图床同时接 WebDAV 的 `PUT` / `MKCOL` / `PROPFIND`（`PUT` 故意慢 2–3 秒，才来得及点暂停），在图床页加一个指向它的 WebDAV 当目标。
 - 想读页面里的状态，要导入和应用**同一个地址**的模块：先用 `performance.getEntriesByType('resource')` 看页面实际加载的地址，一般是 `/src/xxx.ts`，热更新过的模块带 `?t=时间戳`；`/@fs/C:/…` 和不带 `?t=` 的都是另一份，状态是空的、改了也不影响应用。

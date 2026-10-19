@@ -8,7 +8,7 @@
 
 展示从 `main.ts` 初始化到应用就绪的完整步骤。重点关注**密码恢复分支**和**非阻塞初始化**。
 
-> **关键源文件**：`src/main.ts`、`src/App.vue`
+> **关键源文件**：`src/main.ts`、`src/App.vue`、`src/security/startupRestore.ts`（还原 / 跳过的收尾）、`src/composables/useOnboarding.ts`
 
 ```mermaid
 flowchart TD
@@ -31,16 +31,17 @@ flowchart TD
 
     J --> K{密钥曾重置?}
     K -- 是 --> K1[Toast 警告：密钥不匹配]
-    K -- 否 --> L
+    K -- 否 --> L0
 
-    K1 --> L[continueStartup]
+    K1 --> L0["takeStartupNotice<br/>取出重新加载前留下的通知，启动走完、引导关闭后才弹"]
+    L0 --> L[continueStartup]
     L --> L1[configStore.get 读取配置]
     L1 --> L2{启动时最小化?}
     L2 -- 是 --> L3[窗口保持隐藏]
     L2 -- 否 --> L4[getCurrentWindow.show]
     L3 & L4 --> M
 
-    M[checkOnboarding 首次引导]
+    M["checkOnboarding 首次引导<br/>onboardingCompleted 为 false 才弹（O01–O03）"]
     M --> N[initGlobalShortcuts 全局快捷键]
     N --> O{自动更新启用?}
     O -- 是 --> O1["setTimeout 3秒后 checkForUpdate"]
@@ -55,16 +56,18 @@ flowchart TD
     L -.-> ERR{抛出异常?}
     ERR -- BackupPasswordRequired --> PWD1[显示窗口]
     PWD1 --> PWD2[读取加密配置 .settings.dat]
-    PWD2 --> PWD3[显示 BackupPasswordDialog]
+    PWD2 --> PWD3["显示 BackupPasswordDialog（D01，阻塞）"]
     PWD3 --> PWD4{用户操作}
-    PWD4 -- 输入密码 --> PWD5["secureStorage.initWithPassword"]
-    PWD4 -- 跳过 --> PWD6[使用默认配置]
+    PWD4 -- 输入密码 --> PWD5["restoreWithPassword<br/>secureStorage.initWithPassword"]
+    PWD4 -- 跳过 --> PWD6["setAsideEncryptedConfig<br/>原样另存为 picnexus-encrypted-settings-时间.json<br/>核对一字不差后删 .settings.dat"]
     PWD5 --> PWD7{密码正确?}
-    PWD7 -- 是 --> PWD8["Toast: 恢复成功"]
-    PWD7 -- 否 --> PWD9["onPasswordFailed 重新输入"]
+    PWD7 -- 是 --> PWD8["派生密钥存进钥匙串<br/>留通知「已还原备份配置」"]
+    PWD7 -- 否 --> PWD9["onPasswordFailed：写剩余次数（D02）<br/>5 次用完只剩「跳过，使用默认配置」"]
     PWD9 --> PWD4
-    PWD8 --> L
-    PWD6 --> L
+    PWD8 --> RLD["window.location.reload 整页重新加载<br/>（等密码时主题、上传器、上传控制器已读配置失败一轮）"]
+    PWD6 --> RLD
+    PWD6 -. 另存失败 .-> PWD3
+    RLD --> A
     ERR -- 其他错误 --> ERR1[log.error + 强制显示窗口]
 
     style R fill:#e8f5e9,stroke:#2e7d32
@@ -153,6 +156,9 @@ flowchart TD
 |------|---------|-------------|
 | 启动后白屏 | continueStartup 异常但窗口未显示 | 图8 ERR 分支 |
 | 弹出密码输入框 | 更换设备或迁移，密钥不匹配 | 图8 PWD 分支 |
+| 还原或跳过后首页空白、读配置一直报「需要输入备份密码」 | 收尾没有整页重新加载（启动时各模块已失败一轮），或跳过时没把加密的 `.settings.dat` 挪开 | 图8 节点 RLD / PWD6 |
+| 跳过后想再还原 | 数据文件夹里的 `picnexus-encrypted-settings-时间.json`：设置 › 备份与同步 ›「从文件导入…」输入备份密码 | 图8 节点 PWD6 |
+| 新装后没弹新手引导 / 每次启动都弹 | 看配置里的 `onboardingCompleted`；「跳过」也会写 true，写失败只会下次再弹 | 图8 节点 M |
 | 启动时 Toast 警告"密钥不匹配" | 之前密钥失效，已重置为默认 | 图8 节点 K → K1 |
 | 主题未生效 | initializeTheme 在事件监听之前，检查 effectiveTheme | 图8 节点 I |
 | 自动更新未触发 | config.autoUpdate.enabled = false | 图8 节点 O |

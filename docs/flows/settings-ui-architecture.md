@@ -179,15 +179,15 @@ flowchart TD
 
 | 字段 | 语义 | 谁写入 |
 |------|------|--------|
-| `config.availableServices` | 「已添加」的一半：图床在这里**并且**免配置或凭证已填，才算已添加（出现在图床页左栏、首页「上传到」、托盘） | 图床页 `hostConfig.connectHost` / `disconnectHost` / `restoreHost`（撤销）；首页一键加免配置图床 `useUploadController.enableNoConfigHost` |
-| `config.enabledServices` | 「启用」= 上传时传到它；图床页的「启用 / 停用」和首页「上传到」的勾选是同一个字段 | `useUploadController.toggleHost`（图床页 `useHosts.toggleEnabled` 也调它）、托盘菜单；连接成功时 `connectHost` 一并启用 |
+| `config.availableServices` | 「已添加」的一半：图床在这里**并且**免配置或凭证已填，才算已添加（出现在图床页左栏、首页「上传到」、托盘） | 图床页 `hostConfig.connectHost` / `disconnectHost` / `restoreHost`（撤销）；首页一键加免配置图床 `useUploadController.enableNoConfigHost`；新手引导「开始使用」`useUploadController.applyConfigPatch` |
+| `config.enabledServices` | 「启用」= 上传时传到它；图床页的「启用 / 停用」和首页「上传到」的勾选是同一个字段 | `useUploadController.toggleHost`（图床页 `useHosts.toggleEnabled` 也调它）、托盘菜单；连接成功时 `connectHost` 一并启用；新手引导第 2 步勾选京东 / 七鱼（「开始使用」时一次写入） |
 | `config.services.*.enabled` | **已退化为死字段**：写入方一律写 `true`，唯一读取点 `MultiServiceUploader.filterConfiguredServices` 对任何已知服务都不可达。不要依赖它 | — |
 
 配套规则：
 
 - **判定「已添加 / 启用 / 出问题」只看 `useUploadController().hosts`**，图床页、首页与托盘菜单（`src/tray/installTray.ts`）共用这一份，不要各自再拼一遍。
 - **断开 = 清掉凭证并移出两个列表**（通知带撤销，撤销按快照原样恢复，含原来的位置）；WebDAV / 自定义 S3 叫「删除这份」，同时删掉 profile 并 `syncProfileUploaders`。
-- **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用一律先过 `usePublicRiskConfirm().ensureAccepted()`（P11 弹窗），那是 `publicServiceRiskAccepted` 唯一的置位入口；绕过它启用，会让上传时被静默过滤。
+- **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用一律先过 `usePublicRiskConfirm().ensureAccepted()`（P11 弹窗），它和新手引导是 `publicServiceRiskAccepted` 仅有的两个置位入口（引导第 2 步的勾选卡下面写着风险说明，勾选即视为确认，`onboardingModel.applyChoice`）；绕过这两处启用，会让上传时被静默过滤。
 - `availableServices` **可以为空**（一个图床都没添加是正常状态：首页显示「没有图床」，图床页右侧直接是目录）。
 
 ---
