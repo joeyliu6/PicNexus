@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 花瓣标 PetalGlyph（PetalScale.dc.html）：一瓣 = 一个图床。已完成亮蓝、上传中半透明、排队灰、失败红、可能受限琥珀。
 // 几个图床传完亮几片；哪片变红就是哪个图床出了问题。最小 12px。动效规则见 decisions/motion.md。
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { layoutPetals, type PetalState } from '@/utils/petals';
+import { shouldBloom } from '@/utils/petalMotion';
 
 const props = withDefaults(defineProps<{
   states: readonly PetalState[];
@@ -11,14 +12,29 @@ const props = withDefaults(defineProps<{
   label?: string;
   /** 盖在图片上（图库格子）：亮的白色、未亮的 30% 白 */
   onImage?: boolean;
-}>(), { size: 16, label: undefined, onImage: false });
+  /** ⑥ 完成绽放：每次复制成功时新建的那份结果；换成新的非空值时绽放一次（规则见 utils/petalMotion） */
+  bloomKey?: unknown;
+}>(), { size: 16, label: undefined, onImage: false, bloomKey: undefined });
 
 const layout = computed(() => layoutPetals(props.states));
+
+const svg = ref<SVGSVGElement>();
+const blooming = ref(false);
+watch(() => props.bloomKey, async (next, previous) => {
+  // 不在页面上（首页在 KeepAlive 里、人在别的页面）时不播：挂上的动画会等回到首页才开始，成了补播
+  if (!shouldBloom(previous, next) || !svg.value?.isConnected) return;
+  // 上一次还没播完时从头再播：先摘掉、让浏览器排一次版，再挂上
+  blooming.value = false;
+  await nextTick();
+  svg.value?.getBoundingClientRect();
+  blooming.value = true;
+});
 </script>
 
 <template>
-  <span class="petals" :class="{ 'petals--on-image': onImage }" :style="{ width: `${size}px`, height: `${size}px` }" :role="label ? 'img' : undefined" :aria-label="label">
-    <svg :width="size" :height="size" viewBox="-4 -4 136 136" aria-hidden="true" focusable="false">
+  <span class="petals" :class="{ 'petals--on-image': onImage, 'petals--bloom': blooming }" :style="{ width: `${size}px`, height: `${size}px` }" :role="label ? 'img' : undefined" :aria-label="label">
+    <span v-if="blooming" class="petals__ripple" aria-hidden="true" />
+    <svg ref="svg" :width="size" :height="size" viewBox="-4 -4 136 136" aria-hidden="true" focusable="false" @animationend.self="blooming = false">
       <path
         v-for="(petal, i) in layout.petals"
         :key="i"
@@ -56,6 +72,37 @@ const layout = computed(() => layoutPetals(props.states));
 .petals__petal--empty { fill: var(--pn-petal-empty); }
 .petals--on-image .petals__petal--ok { fill: var(--pn-media-fg); }
 .petals--on-image .petals__petal--empty { fill: var(--pn-media-fg-dim); }
+
+/* ⑥ 完成绽放（M06）：先往回收一点，再带回弹转正；一圈涟漪同时散开。0.6 秒内播完 */
+.petals--bloom > svg { animation: petals-bloom var(--pn-dur-bloom) var(--pn-ease-in) both; }
+
+.petals__ripple {
+  position: absolute;
+  inset: var(--pn-bloom-ripple-inset);
+  border: var(--pn-bloom-ripple-width) solid var(--pn-grad-a);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: petals-ripple var(--pn-dur-bloom) var(--pn-ease-in) both;
+}
+
+@keyframes petals-bloom {
+  0%, 100% { transform: none; }
+  30% { transform: rotate(var(--pn-bloom-turn-back)) scale(var(--pn-bloom-scale-back)); }
+  70% { transform: rotate(var(--pn-bloom-turn-over)) scale(var(--pn-bloom-scale-over)); }
+}
+
+@keyframes petals-ripple {
+  0% { opacity: 0; transform: scale(var(--pn-bloom-ripple-from)); }
+  20% { opacity: var(--pn-bloom-ripple-peak); }
+  100% { opacity: 0; transform: scale(var(--pn-bloom-ripple-to)); }
+}
+
+/* 「减少动态效果」：不转、不散，花瓣颜色和「已复制」文字照样说明结果 */
+@media (prefers-reduced-motion: reduce) {
+  .petals--bloom > svg,
+  .petals__ripple { animation: none; }
+}
 
 .petals__count {
   position: absolute;

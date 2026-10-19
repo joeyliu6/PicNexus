@@ -167,7 +167,7 @@ function copyHost(hostId: string) {
         </span>
         <div class="focus-card__spacer" />
         <span class="focus-card__hosts" :title="linkReady ? `存在 ${finishedCount} 个图床：${hostsTitle}` : undefined">
-          <PetalGlyph :states="petalStates(item)" :size="18" />
+          <PetalGlyph :states="petalStates(item)" :size="18" :bloom-key="session.copied" />
           <template v-if="failedAll">{{ failedAllTitle }}</template>
           <template v-else-if="!linkReady">{{ finishedCount }} / {{ hostRows.length }} 个图床</template>
         </span>

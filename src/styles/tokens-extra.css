@@ -739,8 +739,20 @@
    */
   /* ③ 一片花瓣亮起 / 变红：M03 三秒循环里亮起的那一段（8% → 18%） */
   --pn-dur-petal-light: 300ms;
+  /* ⑥ 完成绽放：先往回收一点，再带回弹转正（M06 的 8° / 1.06），同时一圈涟漪从 0.5 扩到 1.7 倍 */
+  --pn-dur-bloom: 600ms;
+  --pn-bloom-turn-back: -20deg;
+  --pn-bloom-scale-back: 0.82;
+  --pn-bloom-turn-over: 8deg;
+  --pn-bloom-scale-over: 1.06;
+  --pn-bloom-ripple-from: 0.5;
+  --pn-bloom-ripple-to: 1.7;
+  --pn-bloom-ripple-peak: 0.9;
+  /* 涟漪框比花瓣大一圈（M06：120 的花瓣放在 150 的框里） */
+  --pn-bloom-ripple-inset: -12.5%;
+  --pn-bloom-ripple-width: 1.5px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --pn-dur-petal-light: 0ms; }
+  :root { --pn-dur-petal-light: 0ms; --pn-dur-bloom: 0ms; }
 }
