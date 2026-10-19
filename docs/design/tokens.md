@@ -11,7 +11,7 @@
 | `src/styles/pn-base.css` | 全局基础样式：字体文件、`box-sizing`、页面底色与字体、滚动条、焦点环、弹窗遮罩、共用的转圈动画 | 只引用令牌 |
 | `src/styles/pn-menu.css` | 菜单、下拉的共用样式（内容传送到 body，组件的 scoped 样式够不到） | 只引用令牌 |
 
-- 主题：根元素 `data-theme="light|dark"`（`ThemeManager` 写，跟随系统或 设置 › 通用）。令牌按 `[data-theme]` 取浅 / 深两套；不随主题变的写在 `:root`。
+- 主题：根元素 `data-theme="light|dark"`（`ThemeManager` 写，跟随系统或 设置 › 通用）。令牌按 `[data-theme]` 取浅 / 深两套；不随主题变的写在 `:root`。引用了随主题变的令牌的（渐变、组合阴影，如 `--pn-checker`）也要在浅、深两段各写一次：写在 `:root` 会在根元素上按根的主题算死，`data-theme="dark"` 的区域里拿到的仍是浅色。
 - 平台：根元素 `data-platform="windows|macos|linux"`，只换中文字体（`--pn-font-cjk`）与浅色侧栏底色。
 - 灯箱、压缩预览这类「不随主题、始终深色」的区域，在容器上写 `data-theme="dark"` 取深色令牌。
 - 设计稿用到、令牌没收录的值（含不在刻度上的尺寸）：在 `tokens-extra.css` 写成具名令牌（如 `--pn-space-dialog-gap: 14px`），不凑到最近的刻度，也不在组件里写数字。
@@ -23,8 +23,8 @@
 | 检查 | 拦什么 |
 |---|---|
 | stylelint `declaration-property-value-allowed-list` / `disallowed-list` | 颜色、字号、z-index、动效时长不是 `var(--…)`；margin / padding / gap / 圆角 / 阴影里写裸数值或裸颜色 |
-| `scripts/check-type-scale.mjs` | `--pn-text-*` / `--pn-weight-*` 的值不在刻度上；`font-size` / `font-weight` 不是对应令牌（或借用别的令牌、写在行内 style） |
-| `scripts/check-css-undefined-vars.mjs` | `var(--x)` 引用了不存在的令牌（浏览器不报错，那条样式静默作废）；同一选择器下同名令牌定义两次且值不同 |
+| `scripts/check-type-scale.mjs` | `--pn-text-*` / `--pn-weight-*` 的值不在刻度上；`font-size` / `font-weight` 不是对应令牌（或借用别的令牌、用 `font` 简写、写死在模板的 `style="…"` 里）；例外令牌的值与记下的不一致 |
+| `scripts/check-css-undefined-vars.mjs` | `var(--x)` 引用了不存在的令牌（浏览器不报错，那条样式静默作废）；同一选择器下同名令牌定义两次且值不同；`:root` 里的令牌引用了随主题变的令牌 |
 | `scripts/check-theme-token-copies.mjs` | 首屏手抄的色值与令牌不一致（见「首屏副本」） |
 
 截图测试在每张基准图截图前还会量一遍画出来的样子（`tests/redesign/designRules.ts`）：字号字重、横向滚动、窄窗口侧栏、主按钮个数、弹窗规格、绿点。

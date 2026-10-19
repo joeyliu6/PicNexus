@@ -2,7 +2,7 @@
 
 ## 深浅色
 
-- 一个开关：根元素 `data-theme="light"` / `"dark"`。令牌按它取两套值（[tokens.md](./tokens.md)），组件里不写 `[data-theme]` 选择器，只引用令牌。
+- 一个开关：根元素 `data-theme="light"` / `"dark"`。令牌按它取两套值（[tokens.md](./tokens.md)），组件里只引用令牌，不写 `[data-theme]` 选择器；例外是背景装饰 `BgDecor`，浅色画花瓣、深色画极光，图形本身不同，用 `:root[data-theme='dark']` 切换。
 - 用户设置在 设置 › 通用（`config.theme.mode`：`light` / `dark` / `auto`，默认 `auto` 跟随系统）。`ThemeManager`（`src/theme/ThemeManager.ts`，由 `useThemeManager()` 持有）先写配置、成功后再改 `data-theme`，跟随系统时监听 `prefers-color-scheme`。
 - 首屏不闪：`ThemeManager` 同时把选择写进 localStorage 的 `picnexus-theme`（`light-theme` / `dark-theme` / `auto`），`public/preload-theme.js` 在页面加载前按它先写好 `data-theme`，`public/preload.css` 按它铺首屏底色（色值是令牌的手抄副本，见 tokens.md「首屏副本」）。
 - Cookie 登录小窗：主窗口打开它时在地址上带 `?theme=light|dark`；内容页由 `useLoginTheme.ts` 写 `data-theme`，标题栏页（`login-titlebar.html`）由 `login-titlebar.ts` 写 `data-theme` 与 `data-platform`。

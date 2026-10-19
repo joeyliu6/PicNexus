@@ -79,6 +79,9 @@
   - 图库：列表视图里点详情的预览图可能没反应（只在网格已加载的图里找，没跑过）；花瓣读屏文字把「尚未检测」读成「N 份均正常」
   - 错误通知只有原因没有处理办法：灯箱「加载失败」、「导出失败」、从 URL 下载全部失败、粘贴图片地址下载失败；「已导出 · N 条记录」没有千分位
   - `docs/reference/troubleshooting/ui-fixed.md` 整份讲的是已经不存在的旧表格视图，要不要删（不在这次批准删除的清单里）
+  - 通知超过 3 条且全是撤销类时，挤掉最旧一条并按「生效」处理：「清空全部记录」这种到时间才执行的操作会被提前执行（确认框写的「5 秒可以撤销」不成立）；到时间才执行的那类被挤掉时更稳妥的是当作取消，要改 `toastStore` 的挤出规则
+  - `useToast().clear()` 只移走通知、不通知等撤销结果的调用方，`useUndoToast().show()` 会一直等下去；现在没人调用 `clear()`
+  - `tests/tauri-e2e/scan-history-fix-acceptance.tauri.e2e.cjs` 还在找 PrimeVue 的 `.p-dialog`（这条验收本来就挂在「验收种子脚本」一条下，平时不跑）；`src/assets/icons/illustrations/cloud-upload.svg` 没人引用，还用着已删的 `var(--primary)`
 - **优先级**：中
 
 **当前处置**：待处理

@@ -91,7 +91,7 @@ flowchart TD
 
 **关键细节**:
 
-- **只有一个开关 `data-theme`**:组件不写 `[data-theme]` 选择器,只引用令牌;灯箱、压缩预览这类始终深色的区域在容器上写 `data-theme="dark"`
+- **只有一个开关 `data-theme`**:组件只引用令牌(背景装饰 `BgDecor` 浅深画的图形不同,是唯一按 `[data-theme]` 切换的组件);灯箱、压缩预览这类始终深色的区域在容器上写 `data-theme="dark"`
 - **先落盘再改界面**:避免界面已切换、磁盘写失败,下次启动又跳回旧主题
 - **localStorage 只为首屏不闪**:`preload-theme.js` 在 Vue 挂载前按它写好 `data-theme`;真相源仍是配置里的 `theme.mode`
 - **auto 模式的监听器**:`setTheme(mode)` 先移除旧监听再按需添加,避免重复触发

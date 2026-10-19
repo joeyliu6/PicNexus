@@ -93,33 +93,3 @@ await s3Client.send(new PutObjectCommand({ Bucket, Key, Body }));
 ```typescript
 const cache = new LRUCache<string, string>({ max: 500, ttl: 1000 * 60 * 30 });
 ```
-
----
-
-## Vue Virtual Waterfall
-
-- [GitHub](https://github.com/lhlyu/vue-virtual-waterfall) | 版本 1.0.8
-
-### 核心 Props
-
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| `items` | `any[]` | `[]` | 数据数组 |
-| `calcItemHeight` | `(item, width) => number` | `() => 250` | 高度计算函数（影响性能） |
-| `itemMinWidth` | `number` | `220` | 单项最小宽度 |
-| `gap` | `number` | `15` | 间距 |
-| `minColumnCount` / `maxColumnCount` | `number` | `2` / `10` | 列数范围 |
-| `preloadScreenCount` | `[number, number]` | `[0, 0]` | 预加载屏数 [上, 下] |
-| `virtual` | `boolean` | `true` | 虚拟滚动开关 |
-
-### 必须注意
-
-1. **容器必须有固定高度**（如 `height: 100vh`），否则虚拟滚动不工作
-2. `calcItemHeight` 应返回准确值且避免复杂计算，直接用预计算高度最佳
-3. 大数组用 `shallowRef`
-4. 每个 item 必须有唯一 `id`（或通过 `rowKey` 指定）
-
-### 项目中使用
-
-- `src/components/history/HistoryGridView.vue` — 历史记录网格视图
-- `src/components/history/GridTile.vue` — 网格项组件
