@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -18,15 +18,14 @@ import { useAutoUpdate } from '@/composables/useAutoUpdate';
 import { useServiceAvailability } from '@/composables/service/useServiceAvailability';
 import { TOAST_MESSAGES } from '@/constants';
 import { configStore, readFreshConfig } from '@/store/instances';
-import { BackupPasswordRequiredError, secureStorage } from '@/security/crypto';
+import { BackupPasswordRequiredError } from '@/security/crypto';
+import { readEncryptedConfig, restoreWithPassword, setAsideEncryptedConfig, takeStartupNotice, type StartupNotice } from '@/security/startupRestore';
 import { startupFlags } from '@/store/startupFlags';
-import { readTextFile } from '@tauri-apps/plugin-fs';
-import { join } from '@tauri-apps/api/path';
 import type { UserConfig } from '@/config/types';
 import { historyDB } from '@/services/database';
 import { attachConsole } from '@tauri-apps/plugin-log';
 import { createLogger } from '@/utils/logger';
-import { getUserDataDir } from '@/utils/appPaths';
+import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('App');
 
@@ -37,7 +36,7 @@ if (import.meta.env.DEV) {
 
 const { effectiveTheme, initializeTheme, updateConfig } = useThemeManager();
 const toast = useToast();
-const { checkAndShow: checkOnboarding } = useOnboarding();
+const { checkAndShow: checkOnboarding, isVisible: onboardingVisible } = useOnboarding();
 const { initGlobalShortcuts, cleanup: cleanupGlobalShortcuts } = useGlobalShortcut();
 const { checkForUpdate } = useAutoUpdate();
 const { checkAllAvailabilityWithCooldown, startPeriodicCheck } = useServiceAvailability();
@@ -93,51 +92,75 @@ async function handleAppResume() {
   }
 }
 
-/** continueStartup 的安全包装：失败时兜底显示窗口 */
-async function safeContinueStartup() {
-  try {
-    await continueStartup();
-  } catch (err) {
-    log.error('启动流程失败:', err);
-    try { await getCurrentWindow().show(); await refreshAppPresence(); } catch { /* ignore */ }
-  }
-}
-
 /**
- * 处理用户输入备份密码后的恢复流程
+ * 启动还原备份配置（D01 / D02）：密码对了把密钥存进钥匙串，跳过则把加密配置另存在数据文件夹。
+ * 两条路之后都整页重新加载——等密码时主题、上传器、上传控制器读配置已经失败一轮，接着往下走会停在空白首页。
+ * 要弹的通知跨过重新加载，onMounted 取出、启动走完后由 announceStartupNotice 弹。
  */
 async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
   if (payload.mode !== 'restore') return;
 
   try {
-    await secureStorage.initWithPassword(pendingEncryptedContent, payload.password);
-  } catch (err) {
-    if (err instanceof Error && err.message === '迁移密码不正确') {
+    if (await restoreWithPassword(pendingEncryptedContent, payload.password) === 'wrong-password') {
       passwordDialogRef.value?.onPasswordFailed();
-    } else {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.showConfig('error', { summary: '恢复失败', detail: msg });
+      return;
     }
+  } catch (err) {
+    passwordDialogRef.value?.resetLoading();
+    toast.error('还原失败', `${getErrorMessage(err)}，请重试`);
     return;
   }
 
   passwordDialogRef.value?.onPasswordSuccess();
-  toast.showConfig('success', { summary: '配置恢复成功' });
-  await safeContinueStartup();
+  window.location.reload();
 }
 
-/**
- * 用户选择跳过密码输入，使用默认配置
- */
 async function handlePasswordSkip() {
-  toast.showConfig('info', { summary: '已使用默认配置启动', detail: '你可以随时在「备份与同步」中输入迁移密码恢复' });
-  pendingEncryptedContent = '';
-  await safeContinueStartup();
+  try {
+    await setAsideEncryptedConfig();
+  } catch (err) {
+    log.error('另存加密配置失败:', err);
+    toast.error('未能使用默认配置', `${getErrorMessage(err)}，请重试`);
+    showPasswordDialog.value = true;
+    return;
+  }
+  window.location.reload();
+}
+
+/** 重新加载前留下的通知；启动走完才弹（还原后的配置确实读得出来） */
+let startupNotice: StartupNotice | null = null;
+/** 带文件名的一整句，普通通知的 4 秒读不完 */
+const SKIPPED_NOTICE_LIFE = 12_000;
+
+/** 跳过还原后会接着弹新手引导：通知等引导关了再弹，免得盖住引导底栏的按钮 */
+function announceStartupNotice() {
+  const notice = startupNotice;
+  startupNotice = null;
+  if (!notice) return;
+  const show = () => {
+    if (notice.kind === 'restored') {
+      toast.success('已还原备份配置');
+      return;
+    }
+    toast.showConfig('info', {
+      summary: '已使用默认配置启动',
+      detail: `加密的配置已另存为 ${notice.file}（在数据文件夹中），可在 设置 › 备份与同步 中「从文件导入…」并输入备份密码还原`,
+      life: SKIPPED_NOTICE_LIFE,
+    });
+  };
+  if (!onboardingVisible.value) {
+    show();
+    return;
+  }
+  const stop = watch(onboardingVisible, (visible) => {
+    if (visible) return;
+    stop();
+    show();
+  });
 }
 
 /**
  * 正常启动流程：读配置 → 显示窗口 → 引导 → 快捷键 → 自动更新
- * 由 onMounted 和密码对话框回调共同调用
  */
 async function continueStartup() {
   const config = await configStore.get<UserConfig>('config');
@@ -154,6 +177,7 @@ async function continueStartup() {
   }
 
   await checkOnboarding();
+  announceStartupNotice();
   await initGlobalShortcuts();
   ensurePeriodicCheckStarted();
 
@@ -201,6 +225,8 @@ onMounted(async () => {
     toast.showConfig('warn', TOAST_MESSAGES.config.orphanSecretsCleared(labels));
   }
 
+  startupNotice = takeStartupNotice();
+
   try {
     await continueStartup();
   } catch (err) {
@@ -209,9 +235,7 @@ onMounted(async () => {
       try { await getCurrentWindow().show(); await refreshAppPresence(); } catch { /* ignore */ }
 
       try {
-        const appDir = await getUserDataDir();
-        const configPath = await join(appDir, '.settings.dat');
-        pendingEncryptedContent = await readTextFile(configPath);
+        pendingEncryptedContent = await readEncryptedConfig();
       } catch (readErr) {
         log.error('读取加密配置文件失败:', readErr);
       }

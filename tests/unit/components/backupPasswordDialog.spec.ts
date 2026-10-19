@@ -86,7 +86,7 @@ describe('BackupPasswordDialog', () => {
     for (let i = 0; i < 4; i++) vm.onPasswordFailed();
     await nextTick();
     expect(button('确认恢复')).toBeUndefined();
-    expect(body().textContent).toContain('加密的配置文件仍在原处');
+    expect(body().textContent).toContain('跳过后加密的配置会另存在数据文件夹，可稍后在「备份与同步」中还原');
     button('跳过，使用默认配置')!.click();
     expect(wrapper.emitted('skip')).toBeTruthy();
   });

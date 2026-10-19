@@ -120,7 +120,7 @@ function onPasswordFailed(): void {
   }
   failedAttempts.value += 1;
   currentError.value = exhausted.value
-    ? '已达尝试次数上限。加密的配置文件仍在原处，可稍后在「备份与同步」中还原'
+    ? '已达尝试次数上限。跳过后加密的配置会另存在数据文件夹，可稍后在「备份与同步」中还原'
     : `密码不正确，剩余尝试次数：${MAX_ATTEMPTS - failedAttempts.value}`;
 }
 
