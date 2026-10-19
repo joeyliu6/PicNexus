@@ -18,6 +18,11 @@ describe('splitLinkSegments', () => {
     ]);
   });
 
+  it('colours the Markdown alt as the name even though it drops the extension', () => {
+    expect(splitLinkSegments(`![截图](${url})`, url, '截图.png')[1]).toEqual({ kind: 'name', text: '截图' });
+    expect(splitLinkSegments(`<img src="${url}" alt="截图.png">`, url, '截图.png')[3]).toEqual({ kind: 'name', text: '截图.png' });
+  });
+
   it('finds an HTML-escaped file name inside an img tag', () => {
     const segments = splitLinkSegments(`<img src="${url}" alt="a&amp;b">`, url, 'a&b');
     expect(segments.map((s) => s.kind)).toEqual(['syntax', 'url', 'syntax', 'name', 'syntax']);

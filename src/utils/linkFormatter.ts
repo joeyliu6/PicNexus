@@ -32,6 +32,11 @@ function escapeMarkdownUrl(str: string): string {
   return str.replace(/[()]/g, '\\$&');
 }
 
+/** Markdown 方括号里的说明：去掉最后一段扩展名（设计稿 `![截图](…)`）；只剩扩展名时原样保留 */
+export function markdownAlt(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '') || fileName;
+}
+
 /**
  * 格式化链接
  * @param url 链接地址
@@ -49,7 +54,7 @@ export function formatLink(
 ): string {
   switch (format) {
     case 'url': return url;
-    case 'markdown': return `![${escapeMarkdown(fileName)}](${escapeMarkdownUrl(url)})`;
+    case 'markdown': return `![${escapeMarkdown(markdownAlt(fileName))}](${escapeMarkdownUrl(url)})`;
     case 'html': return `<img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(fileName)}" />`;
     case 'bbcode': return `[img]${url}[/img]`;
     case 'custom': return applyTemplate(customTemplate || '{url}', {

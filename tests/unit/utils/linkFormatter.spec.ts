@@ -10,20 +10,26 @@ describe('formatLink', () => {
     expect(formatLink(url, fileName, 'url')).toBe(url);
   });
 
-  it('markdown 格式生成 ![alt](url)', () => {
+  it('markdown 格式生成 ![alt](url)，alt 是去掉扩展名的文件名（设计稿 ![截图](…)）', () => {
     expect(formatLink(url, fileName, 'markdown'))
-      .toBe('![image.png](https://cdn.example.com/image.png)');
+      .toBe('![image](https://cdn.example.com/image.png)');
+  });
+
+  it('markdown 的 alt 只去掉最后一段扩展名；没有扩展名或只剩扩展名时原样保留', () => {
+    expect(formatLink(url, 'archive.tar.gz', 'markdown')).toBe(`![archive.tar](${url})`);
+    expect(formatLink(url, '截图', 'markdown')).toBe(`![截图](${url})`);
+    expect(formatLink(url, '.png', 'markdown')).toBe(`![.png](${url})`);
   });
 
   it('markdown 格式转义文件名中的 []', () => {
     expect(formatLink(url, 'img[1].png', 'markdown'))
-      .toBe('![img\\[1\\].png](https://cdn.example.com/image.png)');
+      .toBe('![img\\[1\\]](https://cdn.example.com/image.png)');
   });
 
   it('markdown 格式转义 URL 中的 ()', () => {
     const urlWithParens = 'https://cdn.example.com/image(1).png';
     expect(formatLink(urlWithParens, fileName, 'markdown'))
-      .toBe('![image.png](https://cdn.example.com/image\\(1\\).png)');
+      .toBe('![image](https://cdn.example.com/image\\(1\\).png)');
   });
 
   it('html 格式生成 <img> 标签', () => {

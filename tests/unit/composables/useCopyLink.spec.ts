@@ -114,7 +114,7 @@ describe('useCopyLink helpers', () => {
       config
     );
 
-    expect(output).toBe('![a.png](https://example.com/a.png)');
+    expect(output).toBe('![a](https://example.com/a.png)');
   });
 
   it('formatLinkWithConfig supports bbcode override', () => {

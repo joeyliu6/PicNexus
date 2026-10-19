@@ -1,6 +1,8 @@
 // 链接块分色（Patterns.dc.html「链接块」）：按格式语法分色——网址蓝色、文件名正文色、语法符号灰色。
 // 不按格式写死规则，而是在已经生成好的链接文字里找网址与文件名，自定义模板也能用。
 
+import { markdownAlt } from './linkFormatter';
+
 export type LinkSegmentKind = 'url' | 'name' | 'syntax';
 
 export interface LinkSegment {
@@ -24,6 +26,9 @@ export function splitLinkSegments(text: string, url: string, filename?: string):
     needles.push({ value: filename, kind: 'name' });
     const escaped = escapeHtmlAttr(filename);
     if (escaped !== filename) needles.push({ value: escaped, kind: 'name' });
+    // Markdown 的说明不带扩展名；排在完整文件名之后，同一位置时先认完整的
+    const alt = markdownAlt(filename);
+    if (alt !== filename) needles.push({ value: alt, kind: 'name' });
   }
 
   const segments: LinkSegment[] = [];
