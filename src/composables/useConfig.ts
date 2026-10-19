@@ -337,8 +337,7 @@ export function useConfigManager() {
       log.info(`开始打开 ${provider.name} 登录窗口`);
 
       // 检测当前主题
-      const isLight = document.documentElement.classList.contains('light-theme');
-      const theme = isLight ? 'light' : 'dark';
+      const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
       // 先开准备页的小窗（CookieWindow.dc.html 520×600）；点「开始登录」后窗口按网站需要放大（login-webview.ts）
       const loginSize = LOGIN_PREP_WINDOW_SIZE;
 

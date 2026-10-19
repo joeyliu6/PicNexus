@@ -3,7 +3,7 @@
   var LIMIT_MS = 10000;
 
   function showFallback() {
-    var isDark = document.documentElement.classList.contains('dark-theme');
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     var bg = isDark ? '#0f172a' : '#f1f5f9';
     var fg = isDark ? '#f8fafc' : '#0f172a';
     var muted = isDark ? '#94a3b8' : '#64748b';

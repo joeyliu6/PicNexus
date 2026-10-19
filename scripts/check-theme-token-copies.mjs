@@ -46,7 +46,7 @@ const COPIES = [
     why: '登录 WebView 首屏在 Vue 挂载前渲染，tokens.css 未加载，只能就地重定义同名变量兜住首屏底色',
     blocks: [
       { selector: ':root', theme: 'dark', kind: 'custom-properties' },
-      { selector: ':root.light-theme', theme: 'light', kind: 'custom-properties' },
+      { selector: ':root[data-theme="light"]', theme: 'light', kind: 'custom-properties' },
     ],
   },
   {
@@ -54,7 +54,7 @@ const COPIES = [
     why: 'Cookie 登录小窗的标题栏是独立页面（不走 Vue 入口），拿不到 tokens.css，就地重定义用到的颜色与尺寸令牌',
     blocks: [
       { selector: ':root', theme: 'dark', kind: 'custom-properties' },
-      { selector: ':root.light-theme', theme: 'light', kind: 'custom-properties' },
+      { selector: ':root[data-theme="light"]', theme: 'light', kind: 'custom-properties' },
     ],
   },
   {

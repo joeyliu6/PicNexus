@@ -24,7 +24,7 @@
       --pn-weight-medium: 500;
     }
 
-    :root.light-theme {
+    :root[data-theme="light"] {
       --pn-sidebar: #F3F3F3;
       --pn-text1: #171717;
       --pn-sidebar-macos: #ECECEC;
@@ -32,10 +32,10 @@
     }
 
     /* 浅色侧栏三平台各一色（tokens.css 的 [data-platform]），深色一样 */
-    :root.light-theme.platform-macos { --pn-sidebar: var(--pn-sidebar-macos); }
-    :root.light-theme.platform-linux { --pn-sidebar: var(--pn-sidebar-linux); }
-    .platform-macos .titlebar { padding-left: var(--pn-space-login-title-mac-x); }
-    .platform-macos .close-btn { display: none; }
+    :root[data-theme="light"][data-platform="macos"] { --pn-sidebar: var(--pn-sidebar-macos); }
+    :root[data-theme="light"][data-platform="linux"] { --pn-sidebar: var(--pn-sidebar-linux); }
+    [data-platform="macos"] .titlebar { padding-left: var(--pn-space-login-title-mac-x); }
+    [data-platform="macos"] .close-btn { display: none; }
 
     * {
       box-sizing: border-box;

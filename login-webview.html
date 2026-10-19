@@ -7,12 +7,10 @@
   <title>登录授权 - PicNexus</title>
 
   <!-- 首屏主题感知：读 URL ?theme= 参数（useConfig.ts 生成 contentUrl 时始终携带），
-       在首次绘制前给 <html> 挂主题 class，避免浅色主题用户先闪一屏深色。
-       class 名与 useLoginTheme.ts 保持一致（dark-theme / light-theme），Vue 挂载后由其接管。 -->
+       在首次绘制前给 <html> 写 data-theme，避免浅色主题用户先闪一屏深色。Vue 挂载后由 useLoginTheme.ts 接管。 -->
   <script>
     (function () {
       var theme = new URLSearchParams(location.search).get('theme') === 'light' ? 'light' : 'dark';
-      document.documentElement.classList.add(theme + '-theme');
       document.documentElement.dataset.theme = theme;
     })();
   </script>
@@ -26,7 +24,7 @@
       --pn-text1: #EBEBEC;
     }
 
-    :root.light-theme {
+    :root[data-theme="light"] {
       --pn-canvas: #FFFFFF;
       --pn-text1: #171717;
     }

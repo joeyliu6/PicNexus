@@ -9,9 +9,7 @@ export async function initLoginTheme(): Promise<'light' | 'dark'> {
       ? requestedTheme
       : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
-    document.documentElement.classList.remove('dark-theme', 'light-theme');
-    document.documentElement.classList.add(`${effective}-theme`);
-    // 新界面的 --pn-* 令牌按 data-theme 切深浅色
+    // --pn-* 令牌按 data-theme 切深浅色
     document.documentElement.dataset.theme = effective;
 
     log.info('Theme initialized:', effective);
@@ -19,7 +17,6 @@ export async function initLoginTheme(): Promise<'light' | 'dark'> {
   } catch (error) {
     log.error('Theme init failed:', error);
     const fallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.classList.add(`${fallback}-theme`);
     document.documentElement.dataset.theme = fallback;
     return fallback;
   }

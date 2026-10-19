@@ -132,12 +132,11 @@ export class ThemeManager {
   private applyThemeClass(effective: EffectiveTheme): void {
     const root = document.documentElement;
 
-    root.classList.toggle('dark-theme', effective === 'dark');
-    root.classList.toggle('light-theme', effective === 'light');
-    // 新界面的 --pn-* 令牌按 data-theme 切换；旧页面仍读 class，两者在重构期间并存
+    // --pn-* 令牌按 data-theme 切深浅色（tokens.css）
     root.dataset.theme = effective;
 
     const mode = this.config.theme?.mode || 'auto';
+    // 存值沿用「light-theme / dark-theme / auto」，首屏的 public/preload-theme.js 按它先写 data-theme
     localStorage.setItem('picnexus-theme', mode === 'auto' ? 'auto' : `${effective}-theme`);
   }
 

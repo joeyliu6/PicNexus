@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -50,10 +50,6 @@ function ensurePeriodicCheckStarted() {
   periodicCheckIntervalId = periodicCheck.intervalId;
   periodicCheckStopWatch = periodicCheck.stopWatch;
 }
-
-const rootClass = computed(() => {
-  return effectiveTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
-});
 
 // 备份密码恢复对话框状态
 const showPasswordDialog = ref(false);
@@ -263,7 +259,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div id="app" :class="rootClass">
+  <div id="app">
     <AppShell />
 
     <!-- 首次使用引导 -->

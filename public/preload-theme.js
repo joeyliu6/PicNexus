@@ -1,17 +1,15 @@
 (function () {
+  // 存值由 ThemeManager 写：light-theme / dark-theme / auto（跟随系统）
   var saved = localStorage.getItem('picnexus-theme');
-  var cls;
+  var theme;
 
   if (saved === 'light-theme') {
-    cls = 'light-theme';
+    theme = 'light';
   } else if (saved === 'dark-theme') {
-    cls = 'dark-theme';
+    theme = 'dark';
   } else {
-    cls = window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark-theme'
-      : 'light-theme';
+    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
 
-  document.documentElement.classList.add(cls);
-  document.documentElement.setAttribute('data-theme', cls === 'dark-theme' ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
 })();

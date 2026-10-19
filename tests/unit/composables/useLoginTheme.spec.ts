@@ -20,19 +20,18 @@ function setSearch(search: string) {
 describe('initLoginTheme', () => {
   beforeEach(() => {
     setSearch('');
-    document.documentElement.classList.remove('dark-theme', 'light-theme');
+    delete document.documentElement.dataset.theme;
   });
 
   it('无 theme 参数 + 系统深色 → dark', async () => {
     mockMatchMedia(true);
     expect(await initLoginTheme()).toBe('dark');
-    expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
   it('无 theme 参数 + 系统浅色 → light', async () => {
     mockMatchMedia(false);
     expect(await initLoginTheme()).toBe('light');
-    expect(document.documentElement.classList.contains('light-theme')).toBe(true);
     // --pn-* 令牌按 data-theme 切换（Cookie 登录小窗的准备页用新界面的令牌）
     expect(document.documentElement.dataset.theme).toBe('light');
   });
@@ -53,7 +52,7 @@ describe('initLoginTheme', () => {
     setSearch('?theme=../../dark');
     mockMatchMedia(true);
     expect(await initLoginTheme()).toBe('dark');
-    expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
   it('theme=auto → 按系统主题处理', async () => {
