@@ -92,12 +92,13 @@ button { font-family: inherit; }
 
 ::-webkit-scrollbar-thumb:hover { background-color: var(--pn-scrollbar-thumb-hover); }
 
-/* 焦点环：品牌蓝 2px 外环（交接说明 3.4），只在键盘操作时出现。外壳内的元素和传送到 body 的浮层（.pn-layer）都适用。
+/* 焦点环：品牌蓝 2px 外环（交接说明 3.4），只在键盘操作时出现。外壳内的元素、传送到 body 的浮层（.pn-layer）与图库灯箱（.pswp）都适用。
    输入框不套这一圈：点进去就算 focus-visible，各自的框已经画了焦点样式（PnInput 等），再套一圈就成了双框 */
 :focus:not(:focus-visible) { outline: none; }
 
 .app-shell :focus-visible:not(input, textarea),
-.pn-layer :focus-visible:not(input, textarea) {
+.pn-layer :focus-visible:not(input, textarea),
+.pswp :focus-visible:not(input, textarea) {
   outline: var(--pn-ring-width) solid var(--pn-ring);
   outline-offset: var(--pn-ring-offset);
 }
