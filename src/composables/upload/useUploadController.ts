@@ -37,15 +37,15 @@ export interface UploadHost {
   id: string;
   name: string;
   selected: boolean;
-  /** 需要留意的原因（如「登录已失效」）；正常时为空 */
+  /** 需要留意的原因（如「登录失效」）；正常时为空 */
   warning: string | null;
-  /** Cookie 登录的图床：出问题时给「重新登录」 */
+  /** Cookie 登录的图床：出问题时给「重新登录…」 */
   cookieLogin: boolean;
 }
 
-/** 状态固定词（交接说明第 9 节）：Cookie 图床出问题一律说「登录已失效」，其余用检测给出的原因 */
+/** 状态固定词（交接说明第 9 节）：Cookie 图床出问题一律说「登录失效」（同图床页、托盘），其余用检测给出的原因 */
 export function hostWarningText(hostId: string, lastError: string | null): string {
-  return (COOKIE_BASED_SERVICES as readonly string[]).includes(hostId) ? '登录已失效' : (lastError ?? '需要处理');
+  return (COOKIE_BASED_SERVICES as readonly string[]).includes(hostId) ? '登录失效' : (lastError ?? '需要处理');
 }
 
 const HINT_STORAGE_KEY = 'picnexus-hint-fast-upload';

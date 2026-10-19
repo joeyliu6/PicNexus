@@ -75,7 +75,7 @@ function submit(): void {
       </div>
     </div>
     <div class="host-templates__foot">
-      <button type="button" class="host-templates__text-button host-templates__text-button--first" @click="openAdd">{{ addLabel }}</button>
+      <button type="button" class="host-templates__text-button host-templates__text-button--first" @click="openAdd">{{ addLabel }}…</button>
       <button type="button" class="host-templates__text-button" @click="emit('restore')">恢复默认</button>
       <span class="host-templates__spacer" />
       <span v-if="variables" class="host-templates__vars">可用变量 <span class="host-templates__mono">{{ variables }}</span></span>

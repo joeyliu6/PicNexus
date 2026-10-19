@@ -105,7 +105,7 @@ function onChip(hostId: string) {
     <div v-for="host in warned" :key="host.id" class="upload-to__warn">
       <span class="upload-to__dot" aria-hidden="true" />
       <span class="upload-to__warn-text">{{ host.name }}{{ host.cookieLogin ? host.warning : `：${host.warning}` }}，暂时传不上</span>
-      <button v-if="host.cookieLogin" type="button" class="upload-to__link" @click="emit('relogin', host.id)">重新登录</button>
+      <button v-if="host.cookieLogin" type="button" class="upload-to__link" @click="emit('relogin', host.id)">重新登录…</button>
     </div>
 
     <div class="upload-to__rule" />

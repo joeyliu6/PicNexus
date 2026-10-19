@@ -88,7 +88,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[图床页点「登录…」或「重新登录」] --> B["getCookieProvider(serviceId)"]
+    A[图床页点「登录…」或「重新登录…」] --> B["getCookieProvider(serviceId)"]
     B --> C{服务支持自动获取?}
     C -- 否 --> C1[提示：该服务不支持]
     C -- 是 --> D[获取 CookieProvider 配置]

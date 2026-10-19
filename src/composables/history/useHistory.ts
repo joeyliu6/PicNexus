@@ -39,6 +39,9 @@ const dataVersion = ref(0);
 
 // === TTL 缓存相关 ===
 const CACHE_TTL = 5 * 60 * 1000;  // 5 分钟 TTL
+
+/** 「清空全部记录」确认后还能撤销的秒数（设置 › 数据与隐私「重置」组的说明也写它） */
+export const CLEAR_UNDO_SECONDS = 5;
 const lastStatsLoadTime = ref<number>(0);
 
 /**
@@ -260,7 +263,7 @@ export function useHistoryManager() {
   async function clearHistory(): Promise<void> {
     try {
       const confirmed = await confirm(
-        '将删除本机全部上传记录与收藏，图床上的文件不受影响。确认后有 5 秒可以撤销。',
+        `将删除本机全部上传记录与收藏，图床上的文件不受影响。确认后有 ${CLEAR_UNDO_SECONDS} 秒可以撤销。`,
         { header: '清空全部记录？', acceptLabel: '清空', rejectLabel: '取消', tone: 'danger' }
       );
 
@@ -269,7 +272,7 @@ export function useHistoryManager() {
       }
 
       // 还没清，5 秒后才执行（确认框里写了「确认后有 5 秒可以撤销」）：用琥珀色，不用「已完成」的绿色
-      const proceed = await undoToast.show('将清空所有历史记录', 5, 'warn');
+      const proceed = await undoToast.show('将清空所有历史记录', CLEAR_UNDO_SECONDS, 'warn');
       if (!proceed) {
         return;
       }

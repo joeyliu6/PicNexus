@@ -53,7 +53,7 @@ async function testCookie(hostId: string, record: Record<string, unknown>): Prom
     }
     return { ok: true, steps: ['credentials'] };
   } catch (error) {
-    return { ok: false, steps: ['credentials'], step: 'credentials', field: 'cookie', reason: getErrorMessage(error) || '登录已失效' };
+    return { ok: false, steps: ['credentials'], step: 'credentials', field: 'cookie', reason: getErrorMessage(error) || '登录失效' };
   }
 }
 

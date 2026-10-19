@@ -68,12 +68,12 @@ const batchHostFailures = computed(() => hostMisses(props.items).flatMap(({ host
   const others = (props.items[0]?.enabledServices ?? []).filter((id) => id !== hostId).map(nameOf).join('与');
   const reason = loginExpired ? `${nameOf(hostId)}登录已过期` : `${nameOf(hostId)}上传失败`;
   if (running.value) {
-    return loginExpired ? [{ hostId, text: `${reason}，本批不会上传到${nameOf(hostId)}；${others}正常上传。`, action: '重新登录', relogin: true }] : [];
+    return loginExpired ? [{ hostId, text: `${reason}，本批不会上传到${nameOf(hostId)}；${others}正常上传。`, action: '重新登录…', relogin: true }] : [];
   }
   return [{
     hostId,
     text: `${reason}，${items.length} 张未上传到${nameOf(hostId)}；${others}均已完成。`,
-    action: loginExpired ? '重新登录后补传' : '补传',
+    action: loginExpired ? '重新登录后补传…' : '补传',
     relogin: loginExpired,
   }];
 }));

@@ -203,7 +203,7 @@ function copyHost(hostId: string) {
           <PnIcon name="failCircle" :size="14" :stroke="1.8" class="focus-card__danger" />
           <span class="focus-card__failure-text"><span class="focus-card__danger focus-card__strong">{{ nameOf(host.id) }}上传失败</span>：{{ reasonOf(host.id, host.error) }}</span>
           <div class="focus-card__spacer" />
-          <PnButton v-if="isCookieHost(host.id)" variant="secondary" size="sm" @click="emit('relogin', host.id)">重新登录</PnButton>
+          <PnButton v-if="isCookieHost(host.id)" variant="secondary" size="sm" @click="emit('relogin', host.id)">重新登录…</PnButton>
           <PnButton variant="ghost" size="sm" @click="emit('retryHost', host.id)">重试此图床</PnButton>
         </div>
       </template>

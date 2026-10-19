@@ -29,17 +29,17 @@ import HostDetail from '@/views/hosts/HostDetail.vue';
 const primaries = (wrapper: ReturnType<typeof mount>) => wrapper.findAll('.pn-button--primary, .host-head__use:not(.host-head__use--on)');
 
 describe('HostDetail', () => {
-  it('停用的微博登录失效：「启用」是唯一的主按钮，「重新登录」用次要按钮', () => {
+  it('停用的微博登录失效：「启用」是唯一的主按钮，「重新登录…」用次要按钮', () => {
     m.rows = [{ id: 'weibo', name: '微博', enabled: false, problem: '登录失效', sub: '登录失效', testing: false }];
     const wrapper = mount(HostDetail, { props: { hostId: 'weibo', draft: false, narrow: false } });
-    expect(wrapper.text()).toContain('重新登录');
+    expect(wrapper.text()).toContain('重新登录…');
     expect(primaries(wrapper)).toHaveLength(1);
   });
 
-  it('启用中的微博登录失效：「重新登录」是主按钮', () => {
+  it('启用中的微博登录失效：「重新登录…」是主按钮（开登录小窗，交接说明 9.8 加「…」）', () => {
     m.rows = [{ id: 'weibo', name: '微博', enabled: true, problem: '登录失效', sub: '登录失效', testing: false }];
     const wrapper = mount(HostDetail, { props: { hostId: 'weibo', draft: false, narrow: false } });
-    expect(wrapper.get('.pn-button--primary').text()).toBe('重新登录');
+    expect(wrapper.get('.pn-button--primary').text()).toBe('重新登录…');
   });
 
   it('Cookie 连接表单：没填写「登录…」，手动粘贴后「测试并连接」', async () => {

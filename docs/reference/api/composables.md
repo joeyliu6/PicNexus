@@ -13,7 +13,7 @@
 | useUpload | 上传流程编排 | `src/composables/upload/useUpload.ts` |
 | useUploadController | 首页、托盘、全局快捷键共用的上传入口（单例）：上传会话、「上传到」图床列表、复制格式与固定图床、压缩、重试。`pickAndUpload({ showHint })` 只在首页按钮选文件时出「更快的方法」提示；`setFormat(format, { recopy })` 托盘传 `recopy: false`，只改格式不动剪贴板；`applyConfigPatch(patch)` 在最新配置上一次改好几处并重算「上传到」（新手引导用） | `src/composables/upload/useUploadController.ts` |
 | useRecentUploads | 首页「最近上传」与命令面板用的最近 8 张，监听 `history-updated` 刷新；`reserve(n)` 让它多读本次会话已在首页显示的 n 张，「更早」不会被一大批新图挤空 | `src/composables/history/useRecentUploads.ts` |
-| useCookieLogin | Cookie 登录小窗：登录成功后保存 Cookie 并回调（上传中「重新登录」也走这里） | `src/composables/useCookieLogin.ts` |
+| useCookieLogin | Cookie 登录小窗：登录成功后保存 Cookie 并回调（上传中「重新登录…」也走这里） | `src/composables/useCookieLogin.ts` |
 | useOnboarding | 新手引导状态（单例）：启动时没完成过引导就弹（`checkAndShow`），设置 › 关于重新打开（`reopen`）；第几步、勾了哪些免配置图床与格式；`finish` 一次写入并返回是否成功，`skip` 只记已完成。步骤规则在 `src/components/onboarding/onboardingModel.ts` | `src/composables/useOnboarding.ts` |
 | usePublicRiskConfirm | 第一次启用公共图床前的风险确认（交接说明第 9 节文案） | `src/composables/usePublicRiskConfirm.ts` |
 | useConfirmedHttpHosts | 已确认可走明文 HTTP 的图床域名，交给每个 `ThumbnailImage` | `src/composables/image/useConfirmedHttpHosts.ts` |

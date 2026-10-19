@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnSwitch from '@/components/pn/PnSwitch.vue';
-import { useHistoryManager } from '@/composables/history/useHistory';
+import { CLEAR_UNDO_SECONDS, useHistoryManager } from '@/composables/history/useHistory';
 import { useConfirm } from '@/composables/useConfirm';
 import { useToast } from '@/composables/useToast';
 import { historyDB } from '@/services/database';
@@ -106,7 +106,7 @@ const recordsDesc = computed(() => (recordCount.value === null
       </SettingsCard>
     </SettingsSection>
 
-    <SettingsSection title="重置" note="以上操作无法撤销，建议先在「备份与同步」中导出配置。">
+    <SettingsSection title="重置" :note="`清空记录后 ${CLEAR_UNDO_SECONDS} 秒内可撤销；恢复默认设置无法撤销，建议先在「备份与同步」中导出配置。`">
       <SettingsCard>
         <SettingRow row-id="clearRecords" title="清空全部记录" :desc="recordsDesc" truncate>
           <PnButton variant="secondary" size="sm" class="privacy__btn privacy__btn--danger" :disabled="recordCount === 0" @click="clearRecords">清空…</PnButton>

@@ -15,7 +15,7 @@ import {
 const HOSTS: UploadHost[] = [
   { id: 'jd', name: '京东', selected: true, warning: null, cookieLogin: false },
   { id: 'r2', name: 'Cloudflare R2', selected: true, warning: null, cookieLogin: false },
-  { id: 'weibo', name: '微博', selected: true, warning: '登录已失效', cookieLogin: true },
+  { id: 'weibo', name: '微博', selected: true, warning: '登录失效', cookieLogin: true },
   { id: 'webdav', name: '家里 NAS', selected: false, warning: null, cookieLogin: false },
 ];
 

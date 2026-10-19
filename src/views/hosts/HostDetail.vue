@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 图床详情（HostsScreen.dc.html、P01–P12）：头部 → 结果条 → 使用情况 → 设置 → 断开连接。
 // 同一个组件也画连接表单（未连接的图床，P03）：没有状态按钮、使用情况与断开连接，底部是「测试并连接」/「连接」/「登录…」。
-// Cookie 图床有问题时把「重新登录」放在设置区最上面（P02）。测试结果不弹通知（页面上已经写着）。
+// Cookie 图床有问题时把「重新登录…」放在设置区最上面（P02）。测试结果不弹通知（页面上已经写着）。
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import PnButton from '@/components/pn/PnButton.vue';
@@ -48,7 +48,7 @@ const pill = computed<HostPill | null>(() => {
 const fail = computed(() => (test.value.phase === 'fail' ? failSummary(descriptor.value, test.value) : null));
 const okText = computed(() => (test.value.phase === 'ok' ? okDetail(descriptor.value, test.value.steps) : ''));
 
-/** Cookie 图床出了问题：「重新登录」放最上面 */
+/** Cookie 图床出了问题：「重新登录…」放最上面 */
 const loginExpired = computed(() => !props.draft && descriptor.value.kind === 'cookie' && !!row.value?.problem);
 
 function commit(key: string, value: string): void {
@@ -123,7 +123,7 @@ const disconnectNote = computed(() => (multi.value
         <span class="host-detail__muted">{{ joinCjk('重新登录前无法上传到', name, '。登录后可补传未完成的图片。') }}</span>
       </div>
       <!-- 一页一个主按钮：停用时头部的「启用」是主按钮，这里退为次要按钮 -->
-      <PnButton :variant="row?.enabled ? 'primary' : 'secondary'" @click="hosts.login(hostId)">重新登录</PnButton>
+      <PnButton :variant="row?.enabled ? 'primary' : 'secondary'" @click="hosts.login(hostId)">重新登录…</PnButton>
     </div>
 
     <HostSettings

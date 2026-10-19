@@ -41,8 +41,8 @@ function messageOf(id: HotkeyId): { text: string; danger: boolean } | null {
   <div class="shortcut">
     <SettingsSection title="全局快捷键" note="点击组合键可重新录制；与其他软件冲突时将立即提示。">
       <SettingsCard>
-        <SettingRow row-id="globalShortcut" title="启用全局快捷键" desc="关闭后，以下快捷键在其他程序中不再生效">
-          <PnSwitch :model-value="shortcuts.enabled" label="启用全局快捷键" @update:model-value="setEnabled" />
+        <SettingRow row-id="globalShortcut" title="全局快捷键" desc="关闭后，以下快捷键在其他程序中不再生效">
+          <PnSwitch :model-value="shortcuts.enabled" label="全局快捷键" @update:model-value="setEnabled" />
         </SettingRow>
         <SettingRow v-for="hotkey in HOTKEYS" :key="hotkey.id" :row-id="hotkey.rowId" :title="hotkey.name" :disabled="!shortcuts.enabled">
           <template v-if="messageOf(hotkey.id)" #desc>

@@ -32,7 +32,7 @@ describe('useNavBadges', () => {
   it('图床：已添加的图床有问题时一个琥珀点', () => {
     state.update = ref(false);
     state.dead = ref(0);
-    state.hosts = ref([{ id: 'jd', warning: null }, { id: 'weibo', warning: '登录已失效' }]);
+    state.hosts = ref([{ id: 'jd', warning: null }, { id: 'weibo', warning: '登录失效' }]);
     const badges = useNavBadges();
     expect(badges.value).toEqual({ hosts: 'warning' });
     state.hosts.value = [{ id: 'jd', warning: null }];

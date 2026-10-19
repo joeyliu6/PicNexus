@@ -21,7 +21,7 @@ import { installTray, TRAY_CLIPBOARD_EVENT, TRAY_HOVER_EVENT } from '@/tray/inst
 
 const HOSTS: UploadHost[] = [
   { id: 'jd', name: '京东', selected: true, warning: null, cookieLogin: false },
-  { id: 'weibo', name: '微博', selected: false, warning: '登录已失效', cookieLogin: true },
+  { id: 'weibo', name: '微博', selected: false, warning: '登录失效', cookieLogin: true },
   { id: 'qiyu', name: '七鱼', selected: false, warning: null, cookieLogin: false },
 ];
 

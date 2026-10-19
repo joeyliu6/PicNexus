@@ -105,7 +105,7 @@ function presetById(id: string | null): CompressionPreset | null {
               <span class="upload__preset-name">{{ preset.name }}</span>
               <span class="upload__preset-desc">{{ describePreset(preset) }}</span>
             </label>
-            <PnButton variant="ghost" size="sm" class="upload__preset-edit" :aria-label="`编辑方案「${preset.name}」`" @click="editingId = preset.id">编辑</PnButton>
+            <PnButton variant="ghost" size="sm" class="upload__preset-edit" :aria-label="`编辑方案「${preset.name}」`" @click="editingId = preset.id">编辑…</PnButton>
           </div>
         </RadioGroupRoot>
         <div class="upload__preset-foot">

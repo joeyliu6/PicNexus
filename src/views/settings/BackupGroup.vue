@@ -208,10 +208,10 @@ const MANUAL = computed(() => [
           <span class="backup__desc">{{ passwordSet ? '导出的配置将加密，在新设备上还原时需要此密码' : '导出的配置为明文，包含所有图床密钥' }}</span>
         </div>
         <template v-if="passwordSet">
-          <PnButton variant="secondary" size="md" class="backup__btn" @click="openPassword('change')">修改</PnButton>
-          <PnButton variant="secondary" size="md" class="backup__btn backup__btn--danger" @click="openPassword('disable')">关闭</PnButton>
+          <PnButton variant="secondary" size="md" class="backup__btn" @click="openPassword('change')">修改…</PnButton>
+          <PnButton variant="secondary" size="md" class="backup__btn backup__btn--danger" @click="openPassword('disable')">关闭…</PnButton>
         </template>
-        <PnButton v-else variant="secondary" size="md" class="backup__btn" @click="openPassword('set')">设置密码</PnButton>
+        <PnButton v-else variant="secondary" size="md" class="backup__btn" @click="openPassword('set')">设置密码…</PnButton>
       </SettingsCard>
     </SettingsSection>
 

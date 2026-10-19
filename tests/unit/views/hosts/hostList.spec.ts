@@ -11,7 +11,7 @@ describe('buildHostRows', () => {
       host('webdav:nas', '家里 NAS', false),
       host('jd', '京东', true),
       host('r2', 'Cloudflare R2', true),
-      host('weibo', '微博', true, '登录已失效'),
+      host('weibo', '微博', true, '登录失效'),
     ], new Set());
     expect(rows.map((r) => r.id)).toEqual(['weibo', 'jd', 'r2', 'webdav:nas']);
     expect(rows.map((r) => r.sub)).toEqual(['登录失效', '公共图床', '对象存储', '已停用']);
