@@ -174,6 +174,7 @@ sequenceDiagram
             deactivate UP
 
             MSU-->>UU: onServiceResult（实时回调，不等其他图床）
+            Note over UV: 这个图床的那片花瓣此刻点亮或变红（③，首页焦点卡 / 最近上传 / 托盘共用 petalStates）
         end
 
         deactivate MSU
@@ -192,6 +193,7 @@ sequenceDiagram
 
     UU->>UU: copyLinks 复制到剪贴板（单张在复制来源确定时已复制）
     UU->>UV: onCopied → 首页卡片显示「已复制」；showUploadSessionSummary（首页在屏时不弹）
+    Note over UV: 复制成功的这一刻焦点卡花瓣绽放一次（⑥）；单张在第一个图床传完时就到这里
     deactivate UU
 ```
 
@@ -341,6 +343,8 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 未知扩展名的文件上传后类型是 `application/octet-stream` | `mime_guess` 无法识别该扩展名，按设计回退 | S3 系图床 → Content-Type |
 | 在图库 / 设置等页按 Ctrl+V 也上传了 | 预期行为：粘贴是全局上传入口（交接说明 8.1），监听在 `src/shell/useGlobalUploadInput.ts` | 图1 节点 A3 |
 | 按 Ctrl+V 没反应 | 焦点在输入框里，或有弹窗开着（`.pn-dialog[data-state="open"]`）——这两种情况有意不接 | 图1 节点 A3 |
+| 花瓣不渐亮、复制后没有绽放、拖入时 Logo 不张开 | 系统开着「减少动态效果」时一律不动（预期）；离开首页期间完成的复制回来不补播；没选图床或拖的不是图片时 Logo 不张开。规则见 [decisions/motion.md](../design/redesign/decisions/motion.md) | 图2 onServiceResult / onCopied |
+| 超过 8 个图床时花瓣顺序和图床顺序对不上 | 预期：8 瓣按状态比例分配，传完在前、失败在后，出现过的状态至少 1 瓣（`allocatePetals`，`src/utils/petals.ts`） | 图2 onServiceResult |
 | 拖进窗口没出现遮罩 | 有弹窗或命令面板开着（`modalOpen`）——有意不接，免得在弹窗背后悄悄传图 | 图1 节点 A1 |
 | 单张传完复制的不是想要的图床 | 复制来源 = 固定的图床（传上了才算），否则最先完成的；不按配置顺序 | 重试 → 不变量 4 |
 | 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关；上传同样走 `useUploadController`，首页「最近上传」与托盘都看得到 | `src/composables/useGlobalShortcut.ts` |

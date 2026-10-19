@@ -48,6 +48,7 @@ AI 按交接说明的规则自行补的做法，每页一份，全部阶段做�
 | 设置 | [decisions/settings.md](./decisions/settings.md) |
 | 托盘 | [decisions/tray.md](./decisions/tray.md) |
 | 引导·弹窗 | [decisions/onboarding.md](./decisions/onboarding.md) |
+| 动效 | [decisions/motion.md](./decisions/motion.md) |
 
 ## 按交接说明去掉的旧功能
 
@@ -70,7 +71,7 @@ AI 按交接说明的规则自行补的做法，每页一份，全部阶段做�
 | 7 设置 | 7 个分组、快捷键录制、云同步、更新卡片、自动上传剪贴板 | S01–S21 K05 K10 | 已完成 |
 | 8 托盘 | 原生菜单、托盘图标进度 | T01–T08 K11 | 已完成 |
 | 9 引导·弹窗 | 新手引导、备份密码弹窗、启动还原 | O01–O03 D01–D05 | 已完成（D01–D05 弹窗随阶段 7 做完，本阶段在真应用里核对 D01 D02） |
-| 10 动效 | ③ 逐片点亮、⑥ 完成绽放、⑦ 拖入感应优先 | M01–M08 | 未开始 |
+| 10 动效 | ③ 逐片点亮、⑥ 完成绽放、⑦ 拖入感应；其余五个的去留见 [decisions/motion.md](./decisions/motion.md) | M01–M08 | 已完成 |
 | 11 收尾 | 卸载 PrimeVue、删旧主题、改写 `docs/design/*.md` 与相关 flows、跑验收清单 | 全部 | 未开始 |
 
 ## 平台限制记录
