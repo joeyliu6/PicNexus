@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 通知叠放（T05-Toasts.dc.html）：右下角 20px，宽 360，圆角 14，间距 8；新的在最下面，旧的略淡
+// 通知叠放（T05-Toasts.dc.html）：右下角 20px，宽 360，圆角 14，间距 8；新的在最下面，只有最旧的一条略淡
 import { pauseToasts, resumeToasts, runToastAction, useToastItems, type ToastKind } from './toastStore';
 
 const toasts = useToastItems();
@@ -15,7 +15,7 @@ const GLYPH: Record<ToastKind, string> = { success: '✓', error: '✕', warn: '
         :key="toast.id"
         :role="toast.kind === 'error' ? 'alert' : 'status'"
         class="pn-toast"
-        :class="{ 'pn-toast--older': index < toasts.length - 1 }"
+        :class="{ 'pn-toast--older': index === 0 && toasts.length > 1 }"
       >
         <span class="pn-toast__glyph" :class="`pn-toast__glyph--${toast.kind}`" aria-hidden="true">{{ GLYPH[toast.kind] }}</span>
         <div class="pn-toast__text">
