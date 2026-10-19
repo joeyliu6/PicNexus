@@ -96,3 +96,32 @@ test('after skipping a restore, the long notice waits until onboarding closes so
   await dialog(page).getByRole('button', { name: '跳过' }).click();
   await expect(page.locator('.pn-toast', { hasText: '已使用默认配置启动' })).toContainText('picnexus-encrypted-settings-20261019-083404.json');
 });
+
+// 待拍板 ㉜（选 B）：欢迎页插图也守规则 4、5——「失效」用琥珀色（需要留意的状态，不是红色的「操作失败」），
+// 「正常」不标颜色（不画绿色）
+test('the welcome art paints 失效 amber and leaves 正常 uncoloured', async ({ page }) => {
+  await openApp(page, { config: FIRST_RUN });
+  await expect(dialog(page)).toBeVisible();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+    const colors = await page.evaluate(() => {
+      const token = (name: string) => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${name})`;
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      };
+      const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).color;
+      return {
+        dead: of('.welcome__row--bad .welcome__status'),
+        ok: of('.welcome__row--ok .welcome__status'),
+        warning: token('--pn-warning'),
+        neutral: token('--pn-text3'),
+      };
+    });
+    expect(colors.dead, theme).toBe(colors.warning);
+    expect(colors.ok, theme).toBe(colors.neutral);
+  }
+});

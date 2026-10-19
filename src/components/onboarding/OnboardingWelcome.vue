@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 引导 1 / 3 · 欢迎（O01）：一张图讲清产品——一张图片同时存到三个图床，其中一份失效时改用另一份。
-// 背景装饰只用在这一页（交接说明规则 7）；插图是示意，状态词照设计稿（失效 / 改用此副本 / 正常）。
+// 背景装饰只用在这一页（交接说明规则 7）；插图是示意，状态词照设计稿（失效 / 改用此副本 / 正常），
+// 颜色守规则 4、5：「失效」琥珀色，「正常」不标颜色（设计稿画的红字、绿字不照搬）。
 import BgDecor from '@/components/biz/BgDecor.vue';
 import HostIcon from '@/components/biz/HostIcon.vue';
 
@@ -142,9 +143,9 @@ const ROWS = [
 
 .welcome__name { flex: 1; text-align: left; }
 .welcome__row--pick .welcome__name { font-weight: var(--pn-weight-medium); }
-.welcome__row--bad .welcome__status { color: var(--pn-danger); }
+.welcome__row--bad .welcome__status { color: var(--pn-warning); }
 .welcome__row--pick .welcome__status { color: var(--pn-brand-text); font-weight: var(--pn-weight-medium); }
-.welcome__row--ok .welcome__status { color: var(--pn-success); }
+.welcome__row--ok .welcome__status { color: var(--pn-text3); }
 
 .welcome__title {
   margin: var(--pn-space-onboarding-gap) 0 0;
