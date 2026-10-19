@@ -40,7 +40,7 @@ export class NowcoderUploader extends BaseUploader<NowcoderServiceConfig> {
       return {
         valid: false,
         missingFields: ['Cookie'],
-        errors: ['请先在设置中配置牛客 Cookie']
+        errors: ['请先在图床页登录牛客']
       };
     }
 

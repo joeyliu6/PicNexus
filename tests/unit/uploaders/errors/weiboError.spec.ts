@@ -63,11 +63,11 @@ describe('convertToWeiboError', () => {
 });
 
 describe('convertToStructuredWeiboError', () => {
-  it('COOKIE_EXPIRED 映射到结构化码并提示前往设置', () => {
+  it('COOKIE_EXPIRED 映射到结构化码并提示到图床页重新登录', () => {
     const se = convertToStructuredWeiboError(new Error('Cookie expired'));
     expect(se.code).toBe(UploadErrorCode.COOKIE_EXPIRED);
     expect(se.retryable).toBe(false);
-    expect(se.solution).toContain('设置页面');
+    expect(se.solution).toBe('请到图床页重新登录微博');
     expect(se.serviceId).toBe('weibo');
   });
 

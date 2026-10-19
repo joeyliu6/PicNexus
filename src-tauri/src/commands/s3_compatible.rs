@@ -97,7 +97,7 @@ pub(super) fn validate_public_domain(public_domain: &str, confirmed_for: Option<
             return Ok(());
         }
         return Err(AppError::config(
-            "公开访问域名是明文 HTTP，需要先在设置页「测试连接」里确认一次才能使用",
+            "公开访问域名是明文 HTTP，需要先在图床页「测试连接」里确认一次才能使用",
         ));
     }
 

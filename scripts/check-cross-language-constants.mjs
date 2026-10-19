@@ -210,7 +210,7 @@ const PAIRS = [
   },
   {
     name: 'UPYUN_S3_ENDPOINT',
-    why: '又拍云 S3 兼容端点。GUI 上传由前端把它传进 upload_to_s3_compatible，设置页「测试连接」由 Rust 自己拼；两边漂移会让测试连接验的不是上传真正会去的那台服务器，绿灯退化成没有意义的绿灯——那正是这个图床的缺陷长期潜伏的形态',
+    why: '又拍云 S3 兼容端点。GUI 上传由前端把它传进 upload_to_s3_compatible，图床页「测试连接」由 Rust 自己拼；两边漂移会让测试连接验的不是上传真正会去的那台服务器，绿灯退化成没有意义的绿灯——那正是这个图床的缺陷长期潜伏的形态',
     sources: [
       {
         file: 'src-tauri/src/commands/s3_compatible.rs',

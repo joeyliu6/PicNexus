@@ -40,7 +40,7 @@ export class ZhihuUploader extends BaseUploader<ZhihuServiceConfig> {
       return {
         valid: false,
         missingFields: ['Cookie'],
-        errors: ['请先在设置中配置知乎 Cookie']
+        errors: ['请先在图床页登录知乎']
       };
     }
 

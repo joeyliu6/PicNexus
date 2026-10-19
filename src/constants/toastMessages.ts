@@ -68,11 +68,11 @@ export const TOAST_MESSAGES = {
     /**
      * 存量孤儿密文清理告知
      *
-     * `life: 0`（不自动消失）：用户必须去设置里手动重填，一闪而过的提示等于没提示。
+     * `life: 0`（不自动消失）：用户必须去图床页手动重填，一闪而过的提示等于没提示。
      */
     orphanSecretsCleared: (labels: string[]): ToastMessageConfig => ({
       summary: '部分密码已失效，需要重新填写',
-      detail: `${labels.join('、')} 的密码因早前设置备份密码而无法解密，已清空。请到设置里重新填写。`,
+      detail: `${labels.join('、')} 的密码因早前设置备份密码而无法解密，已清空。请到图床页重新填写。`,
       life: 0
     }),
     /**
@@ -86,7 +86,7 @@ export const TOAST_MESSAGES = {
      */
     orphanSecretsKept: (action: string, labels: string[]): ToastMessageConfig => ({
       summary: `${action}，但部分密码需要重新填写`,
-      detail: `${labels.join('、')} 的密码在此之前就已无法解密，没能迁移到新密钥。请到设置里重新填写。`,
+      detail: `${labels.join('、')} 的密码在此之前就已无法解密，没能迁移到新密钥。请到图床页重新填写。`,
       life: 0
     })
   },
@@ -115,10 +115,10 @@ export const TOAST_MESSAGES = {
       summary: '未选择图床',
       detail: '请选择至少一个图床服务'
     } as StaticMessage,
-    notConfigured: (serviceName: string): ToastMessageConfig => ({
-      summary: '未配置',
-      detail: `${serviceName} 图床未配置，请先在设置中配置`
-    }),
+    noHost: {
+      summary: '先启用一个图床',
+      detail: '请在首页「上传到」或图床页启用一个图床。'
+    } as StaticMessage,
     invalidFormat: (count: number): ToastMessageConfig => ({
       summary: '部分格式不支持',
       detail: `已自动忽略 ${count} 个不支持的文件`

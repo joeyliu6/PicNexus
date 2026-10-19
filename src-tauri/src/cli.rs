@@ -205,7 +205,7 @@ pub fn print_help() {
     eprintln!("  picnexus --service webdav:profile-1 ./image.png");
     eprintln!();
     eprintln!("配置:");
-    eprintln!("  请先打开 PicNexus GUI，在设置中配置图床并保存。CLI 会使用导出的可用图床配置。");
+    eprintln!("  请先打开 PicNexus，在图床页添加图床。CLI 会使用导出的可用图床配置。");
 }
 
 /// 显示版本号
@@ -322,7 +322,7 @@ fn available_services(config: &LoadedCliConfig) -> Vec<String> {
 fn format_available_services(config: &LoadedCliConfig) -> String {
     let services = available_services(config);
     if services.is_empty() {
-        "当前没有可用图床。请先在 PicNexus 设置中配置并保存图床。".to_string()
+        "当前没有可用图床。请先在 PicNexus 的图床页添加图床。".to_string()
     } else {
         format!("可用图床: {}", services.join(", "))
     }
@@ -340,7 +340,7 @@ fn format_missing_service_message(config_path: &std::path::Path) -> String {
             None => "无法读取可用图床。请在 PicNexus 设置中重新保存图床配置。".to_string(),
         }
     } else {
-        "当前没有可用图床。请先在 PicNexus 设置中配置并保存图床。".to_string()
+        "当前没有可用图床。请先在 PicNexus 的图床页添加图床。".to_string()
     };
 
     format!(
@@ -452,7 +452,7 @@ pub fn run_cli_upload(
 
         if !config_path.exists() {
             eprintln!("[PicNexus] 未找到配置文件: {}", config_path.display());
-            eprintln!("[PicNexus] 请先打开 PicNexus，在设置中配置图床并保存。");
+            eprintln!("[PicNexus] 请先打开 PicNexus，在图床页添加图床。");
             std::process::exit(1);
         }
 

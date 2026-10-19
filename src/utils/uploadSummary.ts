@@ -59,7 +59,7 @@ export function buildUploadSummaryToast(
       return {
         severity: 'warn',
         summary: '已忽略重复文件',
-        detail: `${skipped} 张文件已在上传队列中，无需重复添加。`,
+        detail: `${skipped} 张文件正在上传，无需重复添加。`,
       };
     }
     return null;
@@ -108,7 +108,7 @@ export function buildUploadSummaryToast(
   // 场景二：有整张图失败（所有图床都挂了）
   if (summary.failed > 0) {
     const summaryText = `${summary.success} 张成功，${summary.failed} 张失败`;
-    const parts = [copyDetail, '失败项可在队列中重试。'].filter(Boolean);
+    const parts = [copyDetail, '可在首页重试失败的图片。'].filter(Boolean);
     return {
       severity: 'warn',
       summary: summaryText,
@@ -126,7 +126,7 @@ export function buildUploadSummaryToast(
     ? `上传完成，${failedLabel}`
     : `${summary.success} 张图片上传完成，${failedLabel}`;
 
-  const parts = [copyDetail, '可在队列中对失败项重试。'].filter(Boolean);
+  const parts = [copyDetail, '可在首页重试失败的图片。'].filter(Boolean);
   return {
     severity: 'warn',
     summary: summaryText,

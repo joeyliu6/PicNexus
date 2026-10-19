@@ -40,7 +40,7 @@ describe('ZhihuUploader.validateConfig', () => {
     const r = await uploader.validateConfig({ cookie: '' } as ZhihuServiceConfig);
     expect(r.valid).toBe(false);
     expect(r.missingFields).toContain('Cookie');
-    expect(r.errors?.[0]).toContain('知乎 Cookie');
+    expect(r.errors?.[0]).toBe('请先在图床页登录知乎');
   });
 
   it('cookie 仅空白 → invalid', async () => {

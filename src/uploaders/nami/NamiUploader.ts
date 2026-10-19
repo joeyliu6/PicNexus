@@ -64,7 +64,7 @@ export class NamiUploader extends BaseUploader<NamiServiceConfig> {
       return {
         valid: false,
         missingFields: ['Cookie'],
-        errors: ['请先在设置中配置纳米 Cookie']
+        errors: ['请先在图床页登录纳米']
       };
     }
 
@@ -73,7 +73,7 @@ export class NamiUploader extends BaseUploader<NamiServiceConfig> {
       return {
         valid: false,
         missingFields: ['Auth-Token'],
-        errors: ['请先在设置中配置纳米 Auth-Token（通过自动获取 Cookie 获得）']
+        errors: ['请先在图床页登录纳米（登录后自动获取 Auth-Token）']
       };
     }
 

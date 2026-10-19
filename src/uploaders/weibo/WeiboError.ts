@@ -61,15 +61,15 @@ export function convertToStructuredWeiboError(error: unknown): StructuredError {
   switch (weiboError.code) {
     case 'COOKIE_EXPIRED':
       code = UploadErrorCode.COOKIE_EXPIRED;
-      solution = '请前往设置页面更新微博 Cookie';
+      solution = '请到图床页重新登录微博';
       break;
     case 'INVALID_COOKIE':
       code = UploadErrorCode.COOKIE_INVALID;
-      solution = '请前往设置页面更新微博 Cookie';
+      solution = '请到图床页重新登录微博';
       break;
     case 'EMPTY_COOKIE':
       code = UploadErrorCode.COOKIE_EMPTY;
-      solution = '请前往设置页面配置微博 Cookie';
+      solution = '请到图床页登录微博';
       break;
     case 'UPLOAD_ERROR':
     default:

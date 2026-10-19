@@ -148,7 +148,7 @@ describe('WebDAVUploader.upload', () => {
   it('密码密文损坏时给出可操作的提示', async () => {
     await expect(
       uploader.upload('/tmp/a.png', makeOptions({ passwordEncrypted: 'not-a-cipher' })),
-    ).rejects.toThrow('请在设置中重新填写密码');
+    ).rejects.toThrow('请到图床页重新填写密码');
   });
 
   /**

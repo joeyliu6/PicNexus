@@ -125,7 +125,7 @@ export class MultiServiceUploader {
 
       throw new Error(
         `已启用的图床尚未配置：${unconfiguredList}\n` +
-        `请前往设置页面完成配置`
+        `请到图床页完成配置`
       );
     }
 

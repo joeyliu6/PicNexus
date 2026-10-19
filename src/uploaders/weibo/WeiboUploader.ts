@@ -41,7 +41,7 @@ export class WeiboUploader extends BaseUploader<WeiboServiceConfig> {
       return {
         valid: false,
         missingFields: ['Cookie'],
-        errors: ['请先在设置中配置微博 Cookie']
+        errors: ['请先在图床页登录微博']
       };
     }
 

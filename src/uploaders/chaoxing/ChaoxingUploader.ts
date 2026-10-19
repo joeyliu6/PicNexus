@@ -38,7 +38,7 @@ export class ChaoxingUploader extends BaseUploader<ChaoxingServiceConfig> {
       return {
         valid: false,
         missingFields: ['Cookie'],
-        errors: ['请先在设置中配置超星 Cookie']
+        errors: ['请先在图床页登录超星']
       };
     }
 

@@ -91,7 +91,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '已忽略重复文件',
-      detail: '3 张文件已在上传队列中，无需重复添加。',
+      detail: '3 张文件正在上传，无需重复添加。',
     });
   });
 
@@ -137,7 +137,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '2 张图片上传完成，又拍云上传失败',
-      detail: '成功的链接已复制。可在队列中对失败项重试。已忽略 4 张重复文件。',
+      detail: '成功的链接已复制。可在首页重试失败的图片。已忽略 4 张重复文件。',
     });
   });
 
@@ -152,7 +152,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '3 张成功，2 张失败',
-      detail: '成功的链接已复制。失败项可在队列中重试。',
+      detail: '成功的链接已复制。可在首页重试失败的图片。',
     });
   });
 
@@ -165,7 +165,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '3 张成功，2 张失败',
-      detail: '失败项可在队列中重试。',
+      detail: '可在首页重试失败的图片。',
     });
   });
 
@@ -186,7 +186,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '上传完成，又拍云上传失败',
-      detail: '成功的链接已复制。可在队列中对失败项重试。',
+      detail: '成功的链接已复制。可在首页重试失败的图片。',
     });
   });
 
@@ -205,7 +205,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '2 张图片上传完成，又拍云（2 张）上传失败',
-      detail: '成功的链接已复制。可在队列中对失败项重试。',
+      detail: '成功的链接已复制。可在首页重试失败的图片。',
     });
   });
 
@@ -227,7 +227,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '上传完成，腾讯云、又拍云上传失败',
-      detail: '成功的链接已复制。可在队列中对失败项重试。',
+      detail: '成功的链接已复制。可在首页重试失败的图片。',
     });
   });
 
@@ -246,7 +246,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '上传完成，又拍云上传失败',
-      detail: '可在队列中对失败项重试。',
+      detail: '可在首页重试失败的图片。',
     });
   });
 });

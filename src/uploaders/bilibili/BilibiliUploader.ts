@@ -38,7 +38,7 @@ export class BilibiliUploader extends BaseUploader<BilibiliServiceConfig> {
       return {
         valid: false,
         missingFields: ['Cookie'],
-        errors: ['请先在设置中配置哔哩哔哩 Cookie']
+        errors: ['请先在图床页登录哔哩哔哩']
       };
     }
 

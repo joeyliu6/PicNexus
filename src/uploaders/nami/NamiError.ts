@@ -33,7 +33,7 @@ export function convertToNamiError(error: unknown): StructuredError {
       {
         details: msg,
         retryable: false,
-        solution: '请前往设置页面重新登录获取 Cookie',
+        solution: '请到图床页重新登录纳米',
         originalError: error,
         serviceId: 'nami'
       }
@@ -47,7 +47,7 @@ export function convertToNamiError(error: unknown): StructuredError {
       {
         details: msg,
         retryable: false,
-        solution: '请前往设置页面重新登录获取 Cookie',
+        solution: '请到图床页重新登录纳米',
         originalError: error,
         serviceId: 'nami'
       }
@@ -62,7 +62,7 @@ export function convertToNamiError(error: unknown): StructuredError {
       {
         details: msg,
         retryable: false,
-        solution: '请前往设置页面重新获取 Token',
+        solution: '请到图床页重新登录纳米',
         originalError: error,
         serviceId: 'nami'
       }

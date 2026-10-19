@@ -201,7 +201,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
         if (blockedRiskServices.length > 0) {
           toast.showConfig('warn', {
             summary: '需要确认公共图床风险',
-            detail: '京东、七鱼等非官方公共图床需先在设置中确认风险后才能上传。',
+            detail: '京东、七鱼等公共图床需先确认风险：请在首页「上传到」重新勾选。',
             life: 6000,
           });
           return;
@@ -217,7 +217,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
           toast.showConfig('error', TOAST_MESSAGES.upload.noService);
         } else {
           // 没有任何已配置的图床
-          toast.showConfig('error', TOAST_MESSAGES.upload.notConfigured('任何'));
+          toast.showConfig('error', TOAST_MESSAGES.upload.noHost);
         }
         return;
       }
@@ -225,7 +225,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       if (blockedRiskServices.length > 0) {
         toast.showConfig('warn', {
           summary: '已跳过未确认风险的图床',
-          detail: '部分公共图床需先在设置中确认风险，本次仅上传到已允许的图床。',
+          detail: '部分公共图床还没确认风险，本次只上传到其余图床；在首页「上传到」重新勾选即可确认。',
           life: 6000,
         });
       }

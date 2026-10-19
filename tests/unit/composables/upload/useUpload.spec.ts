@@ -516,7 +516,7 @@ describe('useUploadManager', () => {
 
     expect(toastWarnMock).toHaveBeenCalledWith(
       '上传完成，又拍云上传失败',
-      '成功的链接已复制。可在队列中对失败项重试。'
+      '成功的链接已复制。可在首页重试失败的图片。'
     );
     expect(toastSuccessMock).not.toHaveBeenCalled();
   });

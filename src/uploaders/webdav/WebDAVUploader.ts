@@ -30,7 +30,7 @@ async function decryptPassword(profile: WebDAVStorageProfile): Promise<string> {
   try {
     return await secureStorage.decrypt(profile.passwordEncrypted);
   } catch {
-    throw new Error('WebDAV 密码解密失败，请在设置中重新填写密码');
+    throw new Error('WebDAV 密码解密失败，请到图床页重新填写密码');
   }
 }
 
