@@ -100,3 +100,17 @@ describe('useGalleryActions — recheck', () => {
     expect(mocks.toast.success).not.toHaveBeenCalled();
   });
 });
+
+describe('useGalleryActions — announceSwitch', () => {
+  // 交接说明规则 3 / 第 14 节：「改用」备份不弹确认，立即生效，通知带「撤销」与倒计时细线
+  it('announces the switch with an undo countdown, and undo runs the given rollback', async () => {
+    const undo = vi.fn();
+    await useGalleryActions().announceSwitch('weibo', undo);
+
+    expect(mocks.toast.withAction).toHaveBeenCalledWith(
+      'success', '已改用备份', '复制的链接将来自微博', expect.objectContaining({ label: '撤销' }), { countdown: true },
+    );
+    mocks.toast.withAction.mock.calls[0][3].run();
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+});
