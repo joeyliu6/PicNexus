@@ -85,15 +85,8 @@ function onDismissAttempt(event: Event) {
   </DialogRoot>
 </template>
 
-<!-- 传送到 body，用不带 scoped 的类名 -->
+<!-- 传送到 body，用不带 scoped 的类名；遮罩与进场动画是新手引导共用的，在 pn-base.css -->
 <style>
-.pn-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--pn-z-dialog);
-  background: var(--pn-scrim);
-}
-
 .pn-dialog {
   position: fixed;
   top: 50%;
@@ -115,17 +108,6 @@ function onDismissAttempt(event: Event) {
 }
 
 .pn-dialog[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
-.pn-dialog-overlay[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
-
-@keyframes pn-dialog-in {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-@keyframes pn-dialog-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .pn-dialog[data-state='open'] { animation-name: pn-dialog-fade; }

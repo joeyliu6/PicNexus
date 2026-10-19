@@ -15,3 +15,23 @@
   line-height: 1.45;
   color: var(--pn-text1);
 }
+
+/* 弹窗遮罩与进场动画：PnDialog 与新手引导（大弹窗）共用 */
+.pn-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pn-z-dialog);
+  background: var(--pn-scrim);
+}
+
+.pn-dialog-overlay[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
+
+@keyframes pn-dialog-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes pn-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
