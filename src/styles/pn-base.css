@@ -121,6 +121,11 @@ button { font-family: inherit; }
 
 .pn-dialog-overlay[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
 
+/* 「减少动态效果」时遮罩照样淡入（交接说明 5.3：位移改淡入，淡入不取消） */
+@media (prefers-reduced-motion: reduce) {
+  .pn-dialog-overlay[data-state='open'] { animation-duration: var(--pn-dur-fade-expressive); }
+}
+
 @keyframes pn-dialog-in {
   from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }

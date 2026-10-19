@@ -136,3 +136,33 @@ test('the shared spinner turns, and stands still with reduced motion (LoadingRul
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await spinnerTransform(page)).toBe('none');
 });
+
+// 待拍板 ㉞（选 A）：交接说明 5.3「减少动态效果时位移改淡入」——弹窗、弹出层不再浮起，但淡入照样有时长，
+// 不是直接出现（时长令牌归零只管位移类动画）
+test('with reduced motion dialogs and popovers fade in instead of popping up', async ({ page }) => {
+  await openHome(page, 'reduce', UPLOAD);
+  const animation = (selector: string) => page.locator(selector).evaluate((el) => {
+    const style = getComputedStyle(el);
+    return `${style.animationName} ${style.animationDuration}`;
+  });
+
+  await page.locator('.home-options__trigger').filter({ hasText: '上传到' }).click();
+  await expect(page.locator('.pn-popover')).toBeVisible();
+  expect(await animation('.pn-popover')).toBe('pn-popover-fade 0.2s');
+  await page.keyboard.press('Escape');
+
+  await page.locator('.drop-bar__more').click();
+  await page.locator('.pn-menu').getByText('从 URL 下载…').click();
+  await expect(page.locator('.pn-dialog')).toBeVisible();
+  expect(await animation('.pn-dialog')).toBe('pn-dialog-fade 0.25s');
+  expect(await animation('.pn-dialog-overlay')).toBe('pn-dialog-fade 0.25s');
+});
+
+test('without reduced motion dialogs rise into place', async ({ page }) => {
+  await openHome(page, 'no-preference', UPLOAD);
+  await page.locator('.drop-bar__more').click();
+  await page.locator('.pn-menu').getByText('从 URL 下载…').click();
+  await expect(page.locator('.pn-dialog')).toBeVisible();
+  expect(await page.locator('.pn-dialog').evaluate((el) => `${getComputedStyle(el).animationName} ${getComputedStyle(el).animationDuration}`))
+    .toBe('pn-dialog-in 0.25s');
+});

@@ -114,7 +114,7 @@ function onEscape(event: KeyboardEvent): void {
 .onboarding[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
 
 @media (prefers-reduced-motion: reduce) {
-  .onboarding[data-state='open'] { animation-name: pn-dialog-fade; }
+  .onboarding[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-fade-expressive) var(--pn-ease-in); }
 }
 
 .onboarding__sr {

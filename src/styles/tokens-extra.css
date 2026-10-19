@@ -762,6 +762,12 @@
   --pn-dur-receive: 600ms;
   --pn-receive-petal-shift: 10px;
   --pn-receive-frame-from: 0.96;
+  /*
+   * 「减少动态效果」时弹窗、弹出层、通知的淡入（交接说明 5.3「位移改淡入」）：tokens.css 在那时把时长令牌归零，
+   * 淡入另用这两个，值同「标准」「舒展」，不归零
+   */
+  --pn-dur-fade-standard: 200ms;
+  --pn-dur-fade-expressive: 250ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

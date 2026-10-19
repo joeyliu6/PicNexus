@@ -136,6 +136,7 @@ const GLYPH: Record<ToastKind, string> = { success: '✓', error: '✕', warn: '
 .pn-toast-leave-to { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
+  .pn-toast-enter-active { transition: opacity var(--pn-dur-fade-standard) var(--pn-ease-in); }
   .pn-toast-enter-from { transform: none; }
 }
 </style>

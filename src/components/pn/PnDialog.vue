@@ -106,7 +106,7 @@ function onDismissAttempt(event: Event) {
 .pn-dialog[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
 
 @media (prefers-reduced-motion: reduce) {
-  .pn-dialog[data-state='open'] { animation-name: pn-dialog-fade; }
+  .pn-dialog[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-fade-expressive) var(--pn-ease-in); }
 }
 
 .pn-dialog__head {

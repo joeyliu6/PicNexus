@@ -63,7 +63,7 @@ withDefaults(defineProps<{
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pn-popover[data-state='open'] { animation-name: pn-popover-fade; }
+  .pn-popover[data-state='open'] { animation: pn-popover-fade var(--pn-dur-fade-standard) var(--pn-ease-in); }
 }
 
 @keyframes pn-popover-fade {

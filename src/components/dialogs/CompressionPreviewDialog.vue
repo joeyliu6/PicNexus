@@ -368,6 +368,7 @@ onBeforeUnmount(cleanupZoom);
 .compress-view__button:hover { background: var(--pn-lightbox-button-hover); }
 
 @media (prefers-reduced-motion: reduce) {
+  .compress-view[data-state='open'] { animation-duration: var(--pn-dur-fade-expressive); }
   .compress-view__chip { transition: none; }
 }
 </style>

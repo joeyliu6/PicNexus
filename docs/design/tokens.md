@@ -112,13 +112,14 @@
 | `--pn-dur-standard` | 200ms | 菜单出现 |
 | `--pn-dur-expressive` | 250ms | 对话框、抽屉、灯箱 |
 | `--pn-dur-spin` | 900ms | 转圈一周 |
+| `--pn-dur-fade-standard` / `--pn-dur-fade-expressive` | 200 / 250ms | 「减少动态效果」时弹出层、通知 / 弹窗的淡入（不归零） |
 | `--pn-dur-petal-light` / `--pn-dur-bloom` / `--pn-dur-receive` | 300 / 600 / 600ms | 花瓣逐片点亮、完成绽放、拖入感应（[decisions/motion.md](./redesign/decisions/motion.md)） |
 
 缓动：进场 `--pn-ease-in`（`cubic-bezier(.2,0,0,1)`），退场 `--pn-ease-out`（`(.4,0,1,1)`）且快 30%。灯箱开关时长要传给 PhotoSwipe 的 JS 选项，数值写在 `usePhotoSwipeBridge.ts`，对齐这里的令牌。
 
 ### 减少动态效果
 
-系统开着「减少动态效果」时：`--pn-dur-fast / standard / expressive` 与三个花瓣时长归零；位移、缩放类的进场改用 `pn-dialog-fade` 这类纯淡入（各组件的 `@media (prefers-reduced-motion: reduce)`）；共用的转圈 `pn-spin` 停住；`--pn-dur-instant` 不归零（只用于悬停变色）。JS 里写死的时长走 `src/utils/reducedMotion.ts` 的 `motionDuration()`。
+系统开着「减少动态效果」时：`--pn-dur-fast / standard / expressive` 与三个花瓣时长归零；位移、缩放类的进场改用 `pn-dialog-fade` 这类纯淡入（各组件的 `@media (prefers-reduced-motion: reduce)`），淡入时长用不归零的 `--pn-dur-fade-*`（弹窗与遮罩 250ms，弹出层、通知 200ms），不是直接出现；共用的转圈 `pn-spin` 停住；`--pn-dur-instant` 不归零（只用于悬停变色）。JS 里写死的时长走 `src/utils/reducedMotion.ts` 的 `motionDuration()`。
 
 ## 首屏副本（唯一允许抄写色值的地方）
 
