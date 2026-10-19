@@ -182,6 +182,36 @@ if (duplicates.length > 0) {
   process.exit(1);
 }
 
+// ---- 3b. 写在 :root 的令牌引用了随主题变的令牌 ----
+// 自定义属性里的 var() 在定义它的元素上就算好了，子元素继承算好的值。`:root` 里写
+// `--a: linear-gradient(var(--b) …)` 而 --b 浅深两套不同：--a 按根元素的主题算死，灯箱、压缩预览这类
+// 容器上另写 data-theme="dark" 的区域拿到的仍是根主题的颜色（压缩预览的棋盘格在浅色主题下就成了深浅交替）。
+// 这类令牌要和它引用的颜色一样，在浅色、深色两段里各写一次。
+
+const TOKEN_FILES = ['src/styles/tokens.css', 'src/styles/tokens-extra.css'];
+const themedNames = new Set();
+const rootOnly = [];
+for (const rel of TOKEN_FILES) {
+  postcss.parse(fs.readFileSync(path.join(root, rel), 'utf8')).walkRules((rule) => {
+    if (rule.parent?.type === 'atrule') return;
+    const isDark = rule.selector.includes('data-theme="dark"');
+    const isLight = rule.selector.includes('data-theme="light"');
+    rule.walkDecls(/^--/, (decl) => {
+      if (isDark) themedNames.add(decl.prop);
+      else if (!isLight) rootOnly.push({ rel, line: decl.source?.start?.line ?? 0, prop: decl.prop, value: decl.value });
+    });
+  });
+}
+const frozen = rootOnly
+  .map((d) => ({ ...d, refs: [...d.value.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]).filter((n) => themedNames.has(n)) }))
+  .filter((d) => d.refs.length > 0 && !themedNames.has(d.prop));
+if (frozen.length > 0) {
+  console.error('\n❌ 写在 :root 的令牌引用了浅深两套取值不同的令牌 —— 在 data-theme="dark" 的区域里会拿到根主题的颜色：\n');
+  for (const d of frozen) console.error(`  ${d.rel}:${d.line}  ${d.prop} 引用了 ${d.refs.join('、')}`);
+  console.error('\n修复方式：把这条令牌挪进 tokens-extra.css 的浅色、深色两段，各写一次。\n');
+  process.exit(1);
+}
+
 // ---- 4. 报告 ----
 
 if (failures.length > 0) {

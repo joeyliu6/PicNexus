@@ -47,6 +47,11 @@
   /* 透明图片底下的棋盘格（ImageRatios.dc.html），深色模式同步变暗 */
   --pn-checker-a: #FFFFFF;
   --pn-checker-b: #EDEDED;
+  /* 引用 --pn-checker-b 的渐变要和颜色写在同一段：写在 :root 会在根元素上按根的主题算死，压缩预览这类 data-theme="dark" 的区域拿到的仍是浅色格子 */
+  --pn-checker: linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%), linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%);
+  /* 同理：总进度条渐变、日历选中格的外圈 */
+  --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
+  --pn-calendar-pick-ring: 0 0 0 2px var(--pn-surface), 0 0 0 3.5px var(--pn-text1);
   /* 图床页（HostsScreen.dc.html）：状态标签底色、左栏悬停行、近 14 天柱子（今天用品牌蓝） */
   --pn-host-pill-ok: #ECF7EF;
   --pn-host-pill-bad: #FEF4E6;
@@ -93,6 +98,9 @@
   --pn-seg-track: #2A2A2D;
   --pn-checker-a: #2A2A2D;
   --pn-checker-b: #333337;
+  --pn-checker: linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%), linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%);
+  --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
+  --pn-calendar-pick-ring: 0 0 0 2px var(--pn-surface), 0 0 0 3.5px var(--pn-text1);
   --pn-host-pill-ok: rgba(34, 197, 94, 0.14);
   --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
@@ -268,7 +276,6 @@
   --pn-tile-failed-ring: #B91C1C;
   /* 设计稿没画批量缩略图点了复制之后的样子：照失败那层的做法，换成成功色 */
   --pn-tile-copied-veil: rgba(22, 163, 74, 0.62);
-  --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
   --pn-opacity-tile-waiting: 0.35;
 
   /* 拖放遮罩里的两张小照片插画（HomeScreen.dc.html H07），数值照抄设计稿 */
@@ -360,9 +367,8 @@
   --pn-radius-tile-tag: 5px;
   --pn-media-fade-long: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(0, 0, 0, 0.28));
   --pn-size-tile-fade: 34%;
-  /* 透明图片底下的棋盘格：每格 16，第二层错开 8（两色随主题，见 --pn-checker-a / -b） */
+  /* 透明图片底下的棋盘格：每格 16，第二层错开 8（格子本身写在浅、深两段里，见 --pn-checker） */
   --pn-size-checker: 16px;
-  --pn-checker: linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%), linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%);
   --pn-checker-position: 0 0, 8px 8px;
 
   /* 焦点卡「+N」展开的图床列表（CopyMulti.dc.html ②）：外宽 330 含浮层内边距 8 */
@@ -487,7 +493,6 @@
   --pn-size-calendar-month-row: 14px;
   /* 星期标签 10px：字号刻度外的例外（设计稿原值，同花瓣角标 9px） */
   --pn-size-calendar-weekday-text: 10px;
-  --pn-calendar-pick-ring: 0 0 0 2px var(--pn-surface), 0 0 0 3.5px var(--pn-text1);
   /* 工具卡：内边距 14、间距 14（窄 10）；插画 60 × 52、圆角 12；说明行高 18 */
   --pn-space-tool-card: 14px;
   --pn-space-tool-card-gap-narrow: 10px;
