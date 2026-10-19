@@ -268,7 +268,8 @@ export function useHistoryManager() {
         return;
       }
 
-      const proceed = await undoToast.show('将清空所有历史记录', 5);
+      // 还没清，5 秒后才执行（确认框里写了「确认后有 5 秒可以撤销」）：用琥珀色，不用「已完成」的绿色
+      const proceed = await undoToast.show('将清空所有历史记录', 5, 'warn');
       if (!proceed) {
         return;
       }
