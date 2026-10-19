@@ -21,8 +21,10 @@ const router = useRouter();
 const settingsTargetSection = inject<Ref<string | null> | null>('settingsTargetSection', null);
 const active = ref(false);
 
-const showList = computed(() => !narrow.value || !hosts.narrowDetail.value);
-const showMain = computed(() => !narrow.value || hosts.narrowDetail.value);
+// 窄窗口两级：先清单、点进去才是详情。一个图床都没有时清单是空的，直接给目录（与宽窗口右侧一样），不留一整页空白
+const noHosts = computed(() => hosts.rows.value.length === 0);
+const showList = computed(() => !narrow.value || (!hosts.narrowDetail.value && !noHosts.value));
+const showMain = computed(() => !narrow.value || hosts.narrowDetail.value || noHosts.value);
 const detailId = computed(() => (hosts.pane.value === 'detail' ? hosts.selectedId.value : null));
 
 function applyTarget(): void {
@@ -80,7 +82,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     />
     <section v-if="showMain" class="hosts__main" aria-label="图床详情">
       <header class="hosts__bar" data-tauri-drag-region>
-        <button v-if="narrow" type="button" class="hosts__back" @click="hosts.back()">
+        <button v-if="narrow && !(noHosts && hosts.pane.value === 'catalog')" type="button" class="hosts__back" @click="hosts.back()">
           <PnIcon name="chevronLeft" :size="16" :stroke="2" />图床
         </button>
         <div class="hosts__spacer" data-tauri-drag-region />

@@ -46,3 +46,16 @@ test('connecting a WebDAV host switches the right side to its detail', async ({ 
   await expect(page.locator('.hosts-list').getByRole('option', { name: /WebDAV 1/ })).toBeVisible();
   await expect(page.locator('[id$="-url"]')).toHaveValue('https://dav.example.com/dav');
 });
+
+// 800×600、一个图床都没有：窄窗口平时先列清单、点进去才是详情；清单是空的时候直接给目录，不留一整页空白
+test('at 800×600 with no host yet the page opens on the catalog, not an empty list', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 600 });
+  await openApp(page, { config: { availableServices: ['r2'], enabledServices: [] } });
+  await page.getByRole('navigation').getByRole('link', { name: '图床', exact: true }).click();
+  await expect(page.locator('.host-catalog')).toBeVisible();
+  await expect(page.locator('.hosts__back')).toHaveCount(0);
+  // 点进连接表单有「‹ 图床」回到目录
+  await page.locator('.host-catalog__card', { hasText: 'WebDAV' }).click();
+  await page.locator('.hosts__back').click();
+  await expect(page.locator('.host-catalog')).toBeVisible();
+});
