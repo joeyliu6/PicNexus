@@ -105,6 +105,13 @@ describe('useGlobalUploadInput', () => {
     layer.className = 'command-palette';
     m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
     expect(m.uploadFiles).not.toHaveBeenCalled();
+
+    // 新手引导是自己的大弹窗（不是 .pn-dialog）：开着时拖入、粘贴都不接
+    layer.className = 'onboarding';
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
+    expect(m.uploadFiles).not.toHaveBeenCalled();
+    pressPaste(wrapper.get('.plain').element);
+    expect(m.pasteClipboard).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 

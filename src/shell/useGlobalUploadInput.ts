@@ -16,9 +16,9 @@ export interface DropOverlayState {
   skippedText: string;
 }
 
-/** 有对话框或命令面板开着：拖入、粘贴都不接，免得在弹窗背后悄悄传图 */
+/** 有对话框、命令面板或新手引导开着：拖入、粘贴都不接，免得在弹窗背后悄悄传图 */
 function modalOpen(): boolean {
-  return !!document.querySelector('.pn-dialog[data-state="open"], .command-palette[data-state="open"]');
+  return !!document.querySelector('.pn-dialog[data-state="open"], .command-palette[data-state="open"], .onboarding[data-state="open"]');
 }
 
 function isTextTarget(target: EventTarget | null): boolean {
