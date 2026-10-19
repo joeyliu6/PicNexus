@@ -138,9 +138,6 @@
   --pn-space-nav-icon-gap: 10px;
   --pn-size-status-dot: 6px;
   --pn-size-icon-sm: 14px;
-  --pn-size-icon-md: 16px;
-  --pn-size-logo: 18px;
-  --pn-size-logo-rail: 20px;
 
   /* 窗口按钮 */
   --pn-size-win-button-w: 46px;
@@ -170,7 +167,6 @@
   --pn-size-seg-icon: 34px;
   --pn-size-icon-button: 28px;
   --pn-radius-button-sm: 7px;
-  --pn-radius-check: 4px;
   --pn-radius-switch: 10px;
   --pn-radius-seg: 9px;
   --pn-radius-seg-item: 7px;
@@ -178,9 +174,6 @@
   --pn-space-button-x: 14px;
   --pn-space-button-dialog-x: 16px;
   --pn-space-input-x: 10px;
-  --pn-space-tab-gap: 24px;
-  --pn-space-tab-top: 6px;
-  --pn-space-tab-bottom: 10px;
   --pn-ring-soft-width: 3px;
   --pn-switch-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   --pn-opacity-disabled: 0.45;
@@ -546,7 +539,6 @@
   --pn-radius-host-row: 9px;
   --pn-space-host-row-gap: 10px;
   --pn-size-host-plate: 30px;
-  --pn-size-host-glyph: 17px;
   /* 左栏行里名字与第二行的行高 1.35；详情头部与目录卡片里名字与说明之间 3 */
   --pn-leading-host-row: 1.35;
   --pn-space-host-text-gap: 3px;
@@ -559,7 +551,6 @@
   --pn-space-host-head-gap: 14px;
   --pn-size-host-head-icon: 48px;
   --pn-radius-host-head-icon: 12px;
-  --pn-size-host-head-glyph: 28px;
   --pn-size-host-pill: 22px;
   --pn-space-host-pill: 0 9px 0 8px;
   --pn-radius-host-pill: 11px;
@@ -587,7 +578,6 @@
   --pn-size-catalog-card: 72px;
   --pn-space-catalog-card: 0 14px 0 12px;
   --pn-size-catalog-plate: 36px;
-  --pn-size-catalog-glyph: 20px;
   --pn-size-catalog-ring: 1.5px;
   --pn-space-catalog-hint: 12px 14px;
   /* 窄窗口「‹ 图床」：高 28、内边距 0 8 0 4、左 12 */
@@ -640,9 +630,8 @@
   --pn-size-settings-editor-mark: 32px;
   --pn-space-settings-editor-body: 12px 16px 14px;
   --pn-space-settings-editor-code: 0 4px 0 12px;
-  /* 「上传到」菜单按钮高 24、左右 6；端口输入框宽 72 */
+  /* 「上传到」菜单按钮高 24、左右 6 */
   --pn-size-settings-picker: 24px;
-  --pn-size-settings-port: 72px;
   /* 云同步 / 备份密码卡：头部间距 14、图标块 36（圆角 10）；同步内容行内边距 8 16 8 66（与标题对齐）；手动备份行高 46；最近操作行高 40 */
   --pn-space-cloud-head-gap: 14px;
   /* 更新卡片：发布说明行距 3；公众号二维码 180 */

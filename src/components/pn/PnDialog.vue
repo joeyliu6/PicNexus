@@ -17,14 +17,11 @@ const props = withDefaults(defineProps<{
   tone?: 'brand' | 'warning' | 'danger';
   /** 阻塞弹窗：不选就进不了应用，Esc 与点遮罩都不关 */
   blocking?: boolean;
-  /** 弹窗宽度（px），默认 520 */
-  width?: number;
 }>(), {
   eyebrow: undefined,
   icon: 'info',
   tone: 'brand',
   blocking: false,
-  width: undefined,
 });
 
 const emit = defineEmits<{ dismiss: [] }>();
@@ -57,7 +54,6 @@ function onDismissAttempt(event: Event) {
       <DialogContent
         ref="contentRef"
         class="pn-layer pn-dialog"
-        :style="width ? { width: `${width}px` } : undefined"
         @open-auto-focus="onOpenAutoFocus"
         @escape-key-down="onDismissAttempt"
         @pointer-down-outside="onDismissAttempt"
