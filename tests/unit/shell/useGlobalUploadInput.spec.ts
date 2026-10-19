@@ -150,6 +150,15 @@ describe('useGlobalUploadInput', () => {
     expect(m.uploadFiles).not.toHaveBeenCalled();
     pressPaste(wrapper.get('.plain').element);
     expect(m.pasteClipboard).not.toHaveBeenCalled();
+
+    // 压缩预览、图库灯箱是整窗的查看器，拖入遮罩在它们下面看不见：同样不接
+    layer.className = 'compress-view';
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
+    layer.className = 'pswp pswp--open';
+    m.dragHandler!({ payload: { type: 'drop', paths: ['C:/a.png'] } });
+    pressPaste(wrapper.get('.plain').element);
+    expect(m.uploadFiles).not.toHaveBeenCalled();
+    expect(m.pasteClipboard).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
