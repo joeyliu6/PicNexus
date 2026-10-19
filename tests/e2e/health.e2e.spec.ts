@@ -68,3 +68,42 @@ test('the backup card counts usable hosts instead of always saying one', async (
   await expect(page.locator('.health-status')).toContainText('2 张图片失效');
   await expect(page.locator('.health')).toContainText('需要至少 2 个图床，当前没有可用图床');
 });
+
+// 待拍板 ⑤（选 A）：交接说明规则 4.7 把「链接健康从未检测」列为背景装饰的空状态，L01 漏画；
+// 检测过之后（有问题、全部正常）不铺装饰
+test('the never-checked page carries the background decoration, a checked one does not', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openApp(page, { historyRows: [historyRow(1, '没检测过.png', 60, 'jd')], config: { availableServices: ['jd'], enabledServices: ['jd'] } });
+  await page.getByRole('navigation').getByRole('link', { name: '链接健康', exact: true }).click();
+  await expect(page.locator('.health-status')).toContainText('尚未检测');
+  await expect(page.locator('.health .bg-decor')).toHaveCount(1);
+
+  await page.goto('about:blank');
+  await openHealth(page);
+  await expect(page.locator('.health .bg-decor')).toHaveCount(0);
+});
+
+// 待拍板 ⑥（选 A）：全部正常、只有「可能受限」的图时，状态栏写了张数，也要能看到是哪几张
+test('a limited-only page offers the list of limited images', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const checked = NOW.getTime() - 86_400_000;
+  const ok = { ...historyRow(1, '正常那张.png', 60, 'jd'), link_check_status: JSON.stringify({ jd: { isValid: true, lastCheckTime: checked } }) };
+  const limited = {
+    ...historyRow(2, '受限那张.png', 120, 'jd'),
+    link_check_status: JSON.stringify({ jd: { isValid: false, browserMightWork: true, errorType: 'http_4xx', statusCode: 403, lastCheckTime: checked } }),
+  };
+  await openApp(page, { historyRows: [ok, limited], config: { availableServices: ['jd'], enabledServices: ['jd'] } });
+  await page.getByRole('navigation').getByRole('link', { name: '链接健康', exact: true }).click();
+  await expect(page.locator('.health-status')).toContainText('另有 1 张可能受限');
+  await expect(page.locator('.dead-row')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '查看可能受限的图片' }).click();
+  await expect(page.locator('.dead-row')).toHaveCount(1);
+  await expect(page.locator('.dead-row')).toContainText('受限那张.png');
+  const chip = page.locator('.dead-list__chip');
+  await expect(chip).toContainText('可能受限');
+
+  await chip.getByRole('button', { name: '移除这个筛选' }).click();
+  await expect(page.locator('.dead-row')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '查看可能受限的图片' })).toBeVisible();
+});

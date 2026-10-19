@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // 链接健康（HealthScreen.dc.html，交接说明 8.3）：标题行 → 状态栏 → 上传日历 → 三张工具卡 → 全部失效图片。
 // 没有二级页面；文档修复、补充备份是弹窗。这里只接线：数据与动作在 useLinkHealth / useHealthRepair / useHealthRowActions。
-import { computed, onActivated, onDeactivated, ref, watch } from 'vue';
+// 从未检测是空状态，铺背景装饰（交接说明规则 4.7）。
+import { computed, nextTick, onActivated, onDeactivated, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
+import BgDecor from '@/components/biz/BgDecor.vue';
 import UploadCalendar from '@/components/biz/UploadCalendar.vue';
 import YearPills from '@/components/biz/YearPills.vue';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
@@ -88,6 +90,8 @@ const listYear = ref<YearFilter>('all');
 const day = ref<string | null>(null);
 /** 「找不回的图片 → 查看」：只看无可用备份 */
 const onlyUnfixable = ref(false);
+/** 全部正常时状态栏「查看可能受限的图片」：只看可能受限（筛选按钮藏起来时也生效，同上） */
+const onlyLimited = ref(false);
 
 function pickDay(key: string): void {
   day.value = day.value === key ? null : key;
@@ -95,7 +99,7 @@ function pickDay(key: string): void {
 
 const busy = computed(() => state.value === 'checking' || state.value === 'paused');
 /** 筛选按钮藏起来（检测中、窄窗口）时，原因 / 图床 / 年份三个筛选也不生效：看不见的条件不该卡住清单 */
-const showFilters = computed(() => !busy.value && !narrow.value);
+const showFilters = computed(() => !busy.value && !narrow.value && !onlyLimited.value);
 const filters = computed<DeadFilters>(() => ({
   ...NO_FILTERS,
   ...(showFilters.value ? {
@@ -104,15 +108,18 @@ const filters = computed<DeadFilters>(() => ({
     year: listYear.value === 'all' ? null : listYear.value === 'sync' ? shownYear.value : listYear.value,
   } : {}),
   day: day.value,
+  ...(onlyLimited.value ? { reason: 'limited' as const } : {}),
 }));
 const pool = computed(() => images.value.filter((i) => i.state === 'fixable' || i.state === 'unfixable' || i.state === 'limited'));
 const groups = computed(() => deadGroups(pool.value, filters.value, getDayKey).filter((g) => !onlyUnfixable.value || g.key === 'unfixable'));
-const showList = computed(() => ['problems', 'checking', 'paused', 'fixing'].includes(state.value)
-  && (summary.value.dead > 0 || (reason.value === 'limited' && summary.value.limited > 0)));
+const showList = computed(() => (['problems', 'checking', 'paused', 'fixing'].includes(state.value)
+  && (summary.value.dead > 0 || (reason.value === 'limited' && summary.value.limited > 0)))
+  || (state.value === 'good' && onlyLimited.value && summary.value.limited > 0));
 const listCount = computed(() => `${formatCount(groups.value.reduce((n, g) => n + g.images.length, 0))} 张`);
 /** 日期标签由日期键直接算（不看眼前是哪一年的日历）：换了年份，标签照样在、照样能移除 */
 const dayLabel = computed(() => {
   if (onlyUnfixable.value) return '无可用备份';
+  if (onlyLimited.value) return '可能受限';
   if (!day.value) return null;
   const [y, m, d] = day.value.split('-').map(Number);
   return fullDate(new Date(y, m, d).getTime());
@@ -120,6 +127,7 @@ const dayLabel = computed(() => {
 
 function clearChip(): void {
   if (onlyUnfixable.value) onlyUnfixable.value = false;
+  else if (onlyLimited.value) onlyLimited.value = false;
   else day.value = null;
 }
 
@@ -129,9 +137,23 @@ function showLost(): void {
   host.value = 'all';
   listYear.value = 'all';
   day.value = null;
+  onlyLimited.value = false;
   onlyUnfixable.value = true;
   (list.value?.$el as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+async function showLimited(): Promise<void> {
+  host.value = 'all';
+  listYear.value = 'all';
+  day.value = null;
+  onlyUnfixable.value = false;
+  onlyLimited.value = true;
+  await nextTick();
+  (list.value?.$el as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 检测出新的失效后回到平常的清单
+watch(state, (next) => { if (next !== 'good') onlyLimited.value = false; });
 
 // ---- 文档 ----
 const problems = computed(() => docProblems(repair.index.value, images.value));
@@ -200,6 +222,7 @@ function enter(): void {
     listYear.value = 'all';
     day.value = null;
     onlyUnfixable.value = false;
+    onlyLimited.value = false;
     void router.replace({ path: route.path });
   }
   refreshNow();
@@ -216,6 +239,7 @@ onDeactivated(() => {
 
 <template>
   <div ref="page" class="health">
+    <BgDecor v-if="state === 'never'" fade-from="52px" fade-to="104px" />
     <TitleRow title="链接健康" />
     <div class="health__scroll">
       <div class="health__top">
@@ -228,6 +252,8 @@ onDeactivated(() => {
           :dead="summary.dead"
           :fixable="summary.fixable"
           :lost="summary.lostForGood"
+          :limited="summary.limited"
+          :showing-limited="onlyLimited"
           :can-export="summary.everChecked"
           :auto-check-value="autoCheck.value.value"
           :auto-check-label="autoCheck.label.value"
@@ -242,6 +268,7 @@ onDeactivated(() => {
           @export="actions.exportResults()"
           @clean-lost="actions.cleanLost(images)"
           @auto-check="autoCheck.set"
+          @show-limited="showLimited"
         />
         <section class="health__calendar" :class="{ 'health__calendar--narrow': narrow }" aria-label="上传日历">
           <div class="health__calendar-head">
@@ -270,7 +297,7 @@ onDeactivated(() => {
         v-model:year="listYear"
         :groups="groups"
         :pool="pool"
-        :title="busy ? '已发现的失效图片' : '全部失效图片'"
+        :title="busy ? '已发现的失效图片' : state === 'good' ? '可能受限的图片' : '全部失效图片'"
         :count="listCount"
         :day-label="dayLabel"
         :show-filters="showFilters"
@@ -309,10 +336,12 @@ onDeactivated(() => {
 
 <style scoped>
 .health {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-width: 0;
+  isolation: isolate;
 }
 
 .health__scroll {

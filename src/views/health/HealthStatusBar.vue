@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 状态栏（HealthScreen.dc.html，交接说明 8.3）：与图库工具栏同级，40 高，一句状态 + 操作。
 // 有失效：琥珀点；检测中 / 修复中：转圈 + 细进度条；已暂停：暂停符号、进度条变灰。全部正常不加对勾或绿色。
-// 「修复 N 张」是全页唯一主按钮；「⋯」里数量为 0 的项不出现。
+// 「修复 N 张」是全页唯一主按钮；「⋯」里数量为 0 的项不出现。全部正常但有可能受限的图时给「查看可能受限的图片」。
 import { computed } from 'vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
@@ -24,6 +24,9 @@ const props = defineProps<{
   dead: number;
   fixable: number;
   lost: number;
+  limited: number;
+  /** 清单正在只看可能受限的图：入口按钮收起 */
+  showingLimited: boolean;
   canExport: boolean;
   autoCheckValue: string;
   autoCheckLabel: string;
@@ -41,6 +44,7 @@ const emit = defineEmits<{
   export: [];
   cleanLost: [];
   autoCheck: [value: string];
+  showLimited: [];
 }>();
 
 const autoCheckModel = computed({
@@ -89,6 +93,7 @@ const busy = computed(() => props.state === 'checking' || props.state === 'pause
       <PnButton variant="primary" size="md" @click="emit('resume')">继续</PnButton>
     </template>
     <template v-else-if="state === 'problems' || state === 'good'">
+      <PnButton v-if="state === 'good' && limited > 0 && !showingLimited" size="md" @click="emit('showLimited')">查看可能受限的图片</PnButton>
       <PnButton size="md" @click="emit('recheck')">重新检测</PnButton>
       <PnButton v-if="fixable > 0" variant="primary" size="md" @click="emit('repair')">修复 {{ formatCount(fixable) }} 张</PnButton>
     </template>
