@@ -19,7 +19,7 @@ import { isIpv4Address, normalizeHost } from '@/security/networkPolicy';
 import { readFreshConfig } from '@/store/instances';
 import { joinCjk } from '@/utils/cjkSpacing';
 import { createLogger } from '@/utils/logger';
-import { getErrorMessage } from '@/types/errors';
+import { TOAST_MESSAGES } from '@/constants/toastMessages';
 import { describeHost, type HostDescriptor } from './hostCatalog';
 import {
   addProfile, blankProfile, connectHost, disconnectHost, firstMissingField, hostRecord, migrateLegacyCustomS3, readHostValues, renameProfile,
@@ -125,7 +125,8 @@ function create() {
     } catch (error) {
       log.warn('保存图床配置失败', error);
       // 红 = 刚才的操作失败了：改动没写进去，界面不能装作已保存
-      toast.error('未能保存', `${getErrorMessage(error) || '配置文件写入失败'}，请重试`);
+      const message = TOAST_MESSAGES.config.notSaved(error);
+      toast.error(message.summary, message.detail);
       return false;
     }
     config.value = next;

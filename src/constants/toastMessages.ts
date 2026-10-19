@@ -1,4 +1,5 @@
 // 集中管理所有通知文案，便于维护和国际化
+import { getErrorMessage } from '@/types/errors';
 import { UI_COPY } from './uiCopy';
 
 // 类型定义
@@ -52,6 +53,11 @@ export const TOAST_MESSAGES = {
     saveSuccess: {
       summary: '已保存'
     } as StaticMessage,
+    /** 改动即保存的地方（设置页、图床页、首页与托盘的「上传到 / 复制为 / 压缩」）没写进去：红色，原因 + 重试 */
+    notSaved: (error: unknown): ToastMessageConfig => ({
+      summary: '未能保存',
+      detail: `${getErrorMessage(error) || '配置文件写入失败'}，请重试`
+    }),
     saveFailed: (error: string): ToastMessageConfig => ({
       summary: '保存失败',
       detail: error

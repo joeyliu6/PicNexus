@@ -21,6 +21,7 @@ import { useServiceHealth } from '@/composables/service/useServiceHealth';
 import { resolveActivePreset } from '@/composables/image/useImageCompress';
 import type { LinkFormat } from '@/utils/linkFormatter';
 import { createLogger } from '@/utils/logger';
+import { TOAST_MESSAGES } from '@/constants/toastMessages';
 import { isStatusSuccess } from '@/utils/uploadStatus';
 import { useUploadManager, type UploadRequestOptions } from './useUpload';
 import { useClipboardImage } from './useClipboardImage';
@@ -137,6 +138,19 @@ function createController() {
     config.value = next;
   }
 
+  /** 首页与托盘改「复制为 / 压缩 / 固定复制」：写不进去时说出来（与设置页同一句），返回是否写进去了 */
+  async function saveOption(patch: (config: UserConfig) => UserConfig): Promise<boolean> {
+    try {
+      await saveConfigPatch(patch);
+      return true;
+    } catch (error) {
+      log.warn('保存首页选项失败', error);
+      const message = TOAST_MESSAGES.config.notSaved(error);
+      toast.error(message.summary, message.detail);
+      return false;
+    }
+  }
+
   // ---- 发起上传 ----
 
   async function uploadFiles(filePaths: string[], request: UploadRequestOptions = {}): Promise<void> {
@@ -215,7 +229,7 @@ function createController() {
   }
 
   async function setCopyFrom(hostId: string | undefined): Promise<void> {
-    await saveConfigPatch((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), copyFromService: hostId } }));
+    await saveOption((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), copyFromService: hostId } }));
   }
 
   /**
@@ -224,8 +238,8 @@ function createController() {
    * recopy = false 只改格式（托盘：下一次上传才按新格式复制，不动剪贴板里现有的内容，T04）。
    */
   async function setFormat(format: LinkFormat, { recopy = true }: { recopy?: boolean } = {}): Promise<void> {
-    await saveConfigPatch((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), defaultFormat: format } }));
-    if (!recopy) return;
+    const saved = await saveOption((c) => ({ ...c, linkOutput: { ...DEFAULT_CONFIG.linkOutput!, ...(c.linkOutput ?? {}), defaultFormat: format } }));
+    if (!saved || !recopy) return;
     const focus = sessions[0];
     if (!focus || (!focus.finished && focus.itemIds.length > 1)) return;
     await copySession(focus.id, true);
@@ -233,7 +247,7 @@ function createController() {
 
   /** presetId = null 表示「关」（原图上传） */
   async function setCompression(presetId: string | null): Promise<void> {
-    await saveConfigPatch((c) => {
+    await saveOption((c) => {
       const current = c.imageCompression ?? DEFAULT_CONFIG.imageCompression!;
       return { ...c, imageCompression: presetId === null ? { ...current, enabled: false } : { ...current, enabled: true, activePresetId: presetId } };
     });

@@ -6,7 +6,7 @@ import { DEFAULT_CONFIG, type ImageCompressionConfig, type UserConfig } from '@/
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
 import { readFreshConfig } from '@/store/instances';
-import { getErrorMessage } from '@/types/errors';
+import { TOAST_MESSAGES } from '@/constants/toastMessages';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('SettingsConfig');
@@ -47,7 +47,8 @@ function patch(rowId: string | null, mutate: (draft: UserConfig) => void): Promi
       await useConfigManager().saveConfig(draft, true);
     } catch (error) {
       log.warn('保存设置失败', error);
-      useToast().error('未能保存', `${getErrorMessage(error) || '配置文件写入失败'}，请重试`);
+      const message = TOAST_MESSAGES.config.notSaved(error);
+      useToast().error(message.summary, message.detail);
       await reload().catch((reloadError) => log.warn('保存失败后重新读取配置失败', reloadError));
       return false;
     }

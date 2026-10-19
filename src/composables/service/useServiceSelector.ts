@@ -136,8 +136,8 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       }
     },
     500,
-    (_error) => {
-      toast.showConfig('warn', TOAST_MESSAGES.config.saveFailed('图床选择保存失败，请重试'));
+    (error) => {
+      toast.showConfig('error', TOAST_MESSAGES.config.notSaved(error));
     }
   );
 

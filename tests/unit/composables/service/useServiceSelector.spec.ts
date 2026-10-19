@@ -8,13 +8,15 @@ const serviceAvailabilityMock = vi.hoisted(() => ({
 const storeMock = vi.hoisted(() => ({
   configGet: vi.fn(),
   readFreshConfig: vi.fn(),
+  configSave: vi.fn().mockResolvedValue(undefined),
+  showConfig: vi.fn(),
 }));
 
 vi.mock('@/store/instances', () => ({
   configStore: {
     get: storeMock.configGet,
     set: vi.fn().mockResolvedValue(undefined),
-    save: vi.fn().mockResolvedValue(undefined),
+    save: storeMock.configSave,
     invalidateCache: vi.fn().mockResolvedValue(undefined),
   },
   syncStatusStore: { get: vi.fn(), set: vi.fn(), save: vi.fn() },
@@ -34,7 +36,7 @@ vi.mock('@/composables/service/useServiceAvailability', () => ({
 
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
-    showConfig: vi.fn(),
+    showConfig: storeMock.showConfig,
   }),
 }));
 
@@ -243,6 +245,19 @@ describe('useServiceSelector - toggleServiceSelection', () => {
     api.toggleServiceSelection('weibo');
     api.toggleServiceSelection('weibo');
     expect(api.selectedServices.value).not.toContain('weibo');
+  });
+
+  it('写不进配置时与设置页同一句：红色「未能保存」+ 原因 + 重试', async () => {
+    vi.useFakeTimers();
+    try {
+      storeMock.configGet.mockResolvedValue(cloneDefault());
+      storeMock.configSave.mockRejectedValueOnce(new Error('磁盘已满'));
+      useServiceSelector().toggleServiceSelection('weibo');
+      await vi.advanceTimersByTimeAsync(500);
+      expect(storeMock.showConfig).toHaveBeenCalledWith('error', { summary: '未能保存', detail: '磁盘已满，请重试' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -156,6 +156,15 @@ describe('useUploadController', () => {
     expect(m.saveConfig).toHaveBeenLastCalledWith(expect.objectContaining({ imageCompression: expect.objectContaining({ enabled: false }) }), true);
   });
 
+  it('says 未能保存 in red when a home or tray option cannot be written', async () => {
+    const upload = useUploadController();
+    m.saveConfig.mockRejectedValue(new Error('磁盘已满'));
+    await upload.setCompression('default');
+    await upload.setCopyFrom('jd');
+    expect(m.toastError).toHaveBeenCalledTimes(2);
+    expect(m.toastError).toHaveBeenLastCalledWith('未能保存', '磁盘已满，请重试');
+  });
+
   it('asks about public-host risk before enabling one, and does nothing when declined', async () => {
     const upload = useUploadController();
     m.ensureAccepted.mockResolvedValueOnce(false);
@@ -295,6 +304,14 @@ describe('useUploadController', () => {
 
       await controller.setFormat('markdown');
       expect(m.copyLinks).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not re-copy in the new format when the format could not be saved', async () => {
+      const { controller } = await upload(item('one', { jd: 'done' }));
+      m.saveConfig.mockRejectedValue(new Error('磁盘已满'));
+      await controller.setFormat('markdown');
+      expect(m.copyLinks).not.toHaveBeenCalled();
+      expect(m.toastError).toHaveBeenCalledWith('未能保存', '磁盘已满，请重试');
     });
 
     it('clears the list but keeps the newest upload on its card', async () => {
