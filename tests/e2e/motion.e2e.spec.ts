@@ -115,3 +115,24 @@ test('③ ⑥ with reduced motion the petals do not fade or bloom, the words sti
   await expect(page.locator('.focus-card .petals__petal--ok')).toHaveCount(1);
   expect((await motionLog(page)).filter((entry) => /petals|brand-mark|drop-overlay/.test(entry))).toEqual([]);
 });
+
+/** 所有转圈共用 pn-base.css 的 pn-spin：转半拍后读它的 transform */
+async function spinnerTransform(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    const spinner = document.createElement('span');
+    spinner.style.cssText = 'display:inline-block;width:12px;height:12px;animation:pn-spin var(--pn-dur-spin) linear infinite';
+    document.body.append(spinner);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    spinner.getAnimations()[0].currentTime = 200;
+    const transform = getComputedStyle(spinner).transform;
+    spinner.remove();
+    return transform;
+  });
+}
+
+test('the shared spinner turns, and stands still with reduced motion (LoadingRules)', async ({ page }) => {
+  await openHome(page, 'no-preference');
+  expect(await spinnerTransform(page)).not.toBe('none');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await spinnerTransform(page)).toBe('none');
+});
