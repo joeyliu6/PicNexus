@@ -34,5 +34,9 @@ export default defineConfig({
   },
   server: {
     strictPort: true,
+    watch: {
+      // Rust 构建和测试产物会产生海量文件变动，留在后台的测试服务器监听它们会把 CPU 吃满
+      ignored: ['**/src-tauri/**', '**/coverage/**', '**/test-results/**', '**/playwright-report/**', '**/dist/**'],
+    },
   },
 });
