@@ -256,6 +256,13 @@ async function prepareAnalytics(generation: number): Promise<boolean> {
     }
 
     isEnabled.value = true;
+    // 开发版（含走查用的隔离库）每次都是新身份，上报会把测试算成新用户；
+    // 也不动 analytics_data，正式版首次运行时照常补发 first_run
+    if (import.meta.env.DEV) {
+      log.debug('开发版不上报统计');
+      return false;
+    }
+
     const stored = await configStore.get<unknown>('analytics_data');
     if (!isCurrentOperation(generation)) return false;
 

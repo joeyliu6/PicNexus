@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeOsInfo } from '@/utils/platform';
 import {
   getInvokeMock,
@@ -131,6 +131,28 @@ describe('useAnalytics', () => {
     setStoreState({
       config: { analytics: { enabled: true } },
     });
+    // 默认按正式版测；开发版不上报另有一条
+    vi.stubEnv('DEV', false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('sends nothing and leaves the stored identity alone in a dev build', async () => {
+    vi.stubEnv('DEV', true);
+    const stored = { schemaVersion: 2, clientId: '123.456', firstRunPending: true };
+    setStoreState({
+      config: { analytics: { enabled: true } },
+      analytics_data: stored,
+    });
+
+    const { useAnalytics } = await importFreshAnalytics();
+    await expect(useAnalytics().initialize()).resolves.toBe(false);
+
+    expect(getSentBatches()).toEqual([]);
+    expect(getHeartbeatStarts()).toEqual([]);
+    expect(getStoredAnalyticsData()).toEqual(stored);
   });
 
   it('creates v2 state and sends first_run plus app_start for a new install', async () => {
