@@ -65,16 +65,15 @@ export function useCompressionTask(
    * @returns 用户是否选择了文件（false = 用户取消了选择）
    */
   async function selectAndCompress(): Promise<boolean> {
-    const mySeq = ++activeSeq;
-    resetState();
-
     const selected = await dialogOpen({
       multiple: false,
       filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }],
     });
-
-    if (mySeq !== activeSeq) return true;
+    // 取消选择：状态不动（「换一张…」时留着上一张的结果）
     if (!selected) return false;
+
+    const mySeq = ++activeSeq;
+    resetState();
 
     const filePath = Array.isArray(selected) ? selected[0] : selected;
     fileName.value = filePath.split(/[/\\]/).pop() || filePath;

@@ -54,7 +54,7 @@ describe('useCompressionTask', () => {
     vi.clearAllMocks();
   });
 
-  it('用户取消选择时返回 false，并保持重置后的空状态', async () => {
+  it('用户取消选择时返回 false，状态不动', async () => {
     dialogOpenMock.mockResolvedValue(null);
     const api = useCompressionTask(ref(makePreset()));
 
@@ -64,6 +64,22 @@ describe('useCompressionTask', () => {
     expect(api.fileName.value).toBe('');
     expect(api.result.value).toBeNull();
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  // 「换一张…」后在选文件窗口点取消：留着刚才那张的对比结果，不卡在「正在选择图片…」
+  it('取消「换一张」时保留上一张的结果', async () => {
+    const compressResult = { outputPath: 'C:/tmp/a.webp', originalSize: 2048, compressedSize: 1024, ratio: 0.5, width: 10, height: 10, format: 'webp' };
+    setupInvokeHandler(async (cmd) => (cmd === 'compress_image' ? compressResult : cmd === 'read_image_as_base64' ? 'b64' : undefined));
+    const api = useCompressionTask(ref(makePreset({ scalePercent: 100 })));
+    dialogOpenMock.mockResolvedValueOnce('C:/photos/a.png');
+    await api.selectAndCompress();
+    expect(api.status.value).toBe('done');
+
+    dialogOpenMock.mockResolvedValueOnce(null);
+    await expect(api.selectAndCompress()).resolves.toBe(false);
+    expect(api.status.value).toBe('done');
+    expect(api.fileName.value).toBe('a.png');
+    expect(api.result.value).toEqual(compressResult);
   });
 
   it('成功压缩：读取元数据计算缩放最长边、加载预览、清理临时文件并触发 onDone', async () => {
