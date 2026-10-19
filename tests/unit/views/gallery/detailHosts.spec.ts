@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detailBanner, hostRows, linkHealth } from '@/views/gallery/detailHosts';
+import { detailBanner, hostRows, lightboxFailure, linkHealth } from '@/views/gallery/detailHosts';
 import type { MirrorInfo } from '@/composables/history/useMirrorFallback';
 
 const mirror = (serviceId: string, checkState: MirrorInfo['checkState'], isPrimary = false): MirrorInfo => ({
@@ -65,5 +65,25 @@ describe('linkHealth', () => {
       queued: { isValid: false, lastCheckTime: 1, errorType: 'pending' },
     } as const;
     expect(['ok', 'dead', 'limited', 'queued', 'never'].map((id) => linkHealth(status, id))).toEqual(['ok', 'dead', 'limited', 'unchecked', 'unchecked']);
+  });
+});
+
+// 灯箱这次没加载出来（G08）：只有检测过、确认失效的那份才说「已失效 / 已不存在」；断网、超时、没检测过只说加载失败
+describe('lightboxFailure', () => {
+  const rows = hostRows(
+    [mirror('weibo', 'invalid', true), mirror('jd', 'valid'), mirror('nas', 'unchecked')],
+    { weibo: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' } },
+    null,
+  );
+
+  it('keeps the design copy when the shown host was checked and found dead', () => {
+    expect(lightboxFailure(rows, 'weibo', name)).toEqual({ banner: '微博链接已失效，可切换图床查看', body: '微博上的图片已不存在' });
+  });
+
+  it.each(['jd', 'nas'])('does not call a %s load failure a dead link', (hostId) => {
+    expect(lightboxFailure(rows, hostId, name)).toEqual({
+      banner: `${name(hostId)}图片加载失败，可切换图床查看`,
+      body: `${name(hostId)}上的图片加载失败`,
+    });
   });
 });

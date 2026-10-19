@@ -82,3 +82,15 @@ export function detailBanner(rows: readonly HostRow[], name: (hostId: string) =>
     useName,
   };
 }
+
+/**
+ * 灯箱这次没加载出来（G08）：顶部提示与中间那行字。
+ * 只有检测确认失效的那份照设计稿说「链接已失效 / 图片已不存在」；断网、超时、没检测过的只说加载失败，不替检测下结论
+ */
+export function lightboxFailure(rows: readonly HostRow[], hostId: string, name: (hostId: string) => string): { banner: string; body: string } {
+  const host = name(hostId);
+  if (rows.find((row) => row.id === hostId)?.health === 'dead') {
+    return { banner: `${host}链接已失效，可切换图床查看`, body: `${host}上的图片已不存在` };
+  }
+  return { banner: `${host}图片加载失败，可切换图床查看`, body: `${host}上的图片加载失败` };
+}

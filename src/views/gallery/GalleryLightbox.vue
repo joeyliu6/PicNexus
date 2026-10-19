@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 灯箱（GalleryScreen.dc.html G08）：双击或空格打开，从缩略图位置连续放大；Esc 缩回原位。
 // ← → 切换、滚轮缩放、拖动平移交给 PhotoSwipe（usePhotoSwipeBridge），这里只画顶栏、翻页按钮、底栏。
-// 当前图床没加载出来：顶栏提示 +「换个图床」，各备份带状态，Enter 切到选中的那份（只换这次看的，不改「复制时使用」）。
+// 当前图床没加载出来：顶栏提示 +「换个图床」（检测确认失效才说「已失效」，否则只说加载失败），各备份带状态，Enter 切到选中的那份（只换这次看的，不改「复制时使用」）。
 // 灯箱不随主题：自绘部分标 data-theme="dark" 取深色令牌。
 // 顶栏、底栏是实心深色底：长图、放大的图平移时从它们下面经过，不盖住按钮。
 import 'photoswipe/style.css';
@@ -25,7 +25,7 @@ import { formatCount, formatFileSize, formatTimestampFull } from '@/utils/format
 import { getPrimaryImageUrl } from '@/utils/imageUrl';
 import type { LinkFormat } from '@/utils/linkFormatter';
 import type { PetalState } from '@/utils/petals';
-import { hostRows } from './detailHosts';
+import { hostRows, lightboxFailure } from './detailHosts';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
 import type { GalleryLightboxApi } from './useGalleryLightbox';
@@ -66,6 +66,7 @@ watch(() => item.value?.id, () => {
   loadFailed.value = false;
 });
 const shownHost = computed(() => viewHost.value ?? item.value?.primaryService ?? null);
+const failure = computed(() => (loadFailed.value && shownHost.value ? lightboxFailure(rows.value, shownHost.value, name) : null));
 
 const rawImageSrc = computed(() => {
   const it = item.value;
@@ -172,9 +173,9 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         </button>
         <span v-if="position" class="lightbox__muted">{{ formatCount(position) }} / {{ formatCount(grid.totalCount.value) }}</span>
         <div class="lightbox__spacer" />
-        <div v-if="loadFailed && shownHost" class="lightbox__banner">
+        <div v-if="failure" class="lightbox__banner">
           <PnIcon name="warning" :size="14" :stroke="2.2" class="lightbox__warn" />
-          <span>{{ name(shownHost) }}链接已失效，可切换图床查看</span>
+          <span>{{ failure.banner }}</span>
           <DropdownMenuRoot v-model:open="menuOpen" :modal="false">
             <DropdownMenuTrigger as-child>
               <button type="button" class="lightbox__chip" aria-haspopup="menu">
@@ -211,9 +212,9 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         <PnIcon name="chevronRight" :size="16" :stroke="2" />
       </button>
 
-      <div v-if="loadFailed && shownHost" class="lightbox__failed">
+      <div v-if="failure" class="lightbox__failed">
         <PnIcon name="imageGone" :size="40" :stroke="1.3" />
-        <span>{{ name(shownHost) }}上的图片已不存在</span>
+        <span>{{ failure.body }}</span>
       </div>
       <div v-else-if="isLoading" class="lightbox__spinner" role="status" aria-label="图片加载中" />
 
