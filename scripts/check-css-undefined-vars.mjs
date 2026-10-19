@@ -25,7 +25,7 @@
  *   - 引用集 = src/** 的 .css / .vue 里所有 `var(--name`（含带 fallback 的写法：
  *     fallback 只是掩盖问题，不是定义，同样要报）。
  *   - 引用集 − 定义集 非空即失败。
- *   - `--p-*`（PrimeVue）与 `--reka-*`（Reka UI 写在浮层上的触发器尺寸等）由库在运行时定义，跳过。
+ *   - `--reka-*`（Reka UI 写在浮层上的触发器尺寸等）由库在运行时定义，跳过。
  *   - 注释里的内容先剥掉（CSS 块注释、HTML 注释），避免示例代码误报。
  *
  * 另查一类同样静默的错：同一选择器下把同名变量定义两次且取值不同（见第 3 节）。
@@ -52,8 +52,8 @@ const REFERENCE_SCAN = {
   extensions: /\.(css|vue)$/,
 };
 
-/** 由第三方库在运行时定义、项目源码里不会出现声明的前缀（PrimeVue / Reka UI 的浮层尺寸变量） */
-const LIBRARY_PREFIXES = ['--p-', '--reka-'];
+/** 由第三方库在运行时定义、项目源码里不会出现声明的前缀（Reka UI 的浮层尺寸变量） */
+const LIBRARY_PREFIXES = ['--reka-'];
 
 function walk(dir, onFile) {
   let entries;
@@ -191,10 +191,9 @@ if (failures.length > 0) {
   }
   console.error('\n为什么不报错：引用未定义变量属于 IACVT（计算值阶段无效），浏览器不抛错、');
   console.error('stylelint 不查跨文件定义、jsdom 不解析样式，三道门禁都看不见。');
-  console.error('\n修复方式：到 docs/design/tokens.md 或 src/styles/app.css、src/theme/*.css 里');
-  console.error('找那个真正存在的令牌名（多半是名字记错了：--weight-normal → --weight-regular，');
-  console.error('--border-color → --border-subtle）。确实需要新令牌时在 app.css 定义深色默认值、');
-  console.error('light-theme.css 定义浅色覆盖，两边都要有。\n');
+  console.error('\n修复方式：到 docs/design/tokens.md 或 src/styles/tokens.css、tokens-extra.css 里');
+  console.error('找那个真正存在的令牌名（多半是名字记错了）。确实需要新令牌时写进 tokens-extra.css：');
+  console.error('随主题变的颜色浅色、深色两段都要有。\n');
   process.exit(1);
 }
 

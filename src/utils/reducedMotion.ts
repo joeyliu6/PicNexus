@@ -1,6 +1,6 @@
 /**
  * prefers-reduced-motion 工具
- * CSS 侧的 duration 已在 styles/motion.css 通过 @media 查询归零，
+ * CSS 侧的动效时长已在 styles/tokens.css、tokens-extra.css 通过 @media 查询归零，
  * 本模块负责补齐 JS 侧硬编码的动画时长，让"减弱动效"偏好贯穿整个代码库。
  */
 

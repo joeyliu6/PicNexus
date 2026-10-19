@@ -234,7 +234,7 @@ onBeforeUnmount(cleanupZoom);
 
 .compress-view__spinner {
   color: var(--pn-brand);
-  animation: k-spin var(--pn-dur-spin) linear infinite;
+  animation: pn-spin var(--pn-dur-spin) linear infinite;
 }
 
 .compress-view__muted {

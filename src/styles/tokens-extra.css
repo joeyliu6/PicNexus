@@ -22,6 +22,10 @@
   --pn-petal-empty: #EDEDED;
   --pn-petal-wait: #D4D4D4;
   --pn-skeleton: #E8E8E8;
+  /* 滚动条与选中文字（设计没画）：品牌蓝 / 中性灰的半透明 */
+  --pn-scrollbar-thumb: rgba(100, 116, 139, 0.3);
+  --pn-scrollbar-thumb-hover: rgba(100, 116, 139, 0.5);
+  --pn-selection: rgba(57, 133, 237, 0.2);
   --pn-kbd-bg: #FAFAFA;
   --pn-drag-veil: rgba(255, 255, 255, 0.72);
   --pn-scrim-light: rgba(23, 23, 23, 0.12);
@@ -67,6 +71,9 @@
   --pn-petal-empty: #36363A;
   --pn-petal-wait: #55555A;
   --pn-skeleton: #36363A;
+  --pn-scrollbar-thumb: rgba(161, 161, 170, 0.3);
+  --pn-scrollbar-thumb-hover: rgba(161, 161, 170, 0.5);
+  --pn-selection: rgba(76, 147, 245, 0.3);
   --pn-kbd-bg: #252528;
   --pn-drag-veil: rgba(28, 28, 30, 0.72);
   --pn-scrim-light: rgba(0, 0, 0, 0.35);
@@ -330,6 +337,7 @@
   --pn-window-close-hover: #C42B1C;
   --pn-window-close-fg: var(--pn-on-fill);
   --pn-dur-spin: 900ms;
+  --pn-size-scrollbar: 6px;
 
   /* 图库格子（GalleryScreen.dc.html）：盖在图片上的元素不随主题变 */
   --pn-media-fg: #FFFFFF;

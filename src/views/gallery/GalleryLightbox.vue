@@ -365,11 +365,10 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   border-top-color: var(--pn-text1);
   border-radius: 50%;
   translate: -50% -50%;
-  animation: pn-lightbox-spin var(--pn-dur-spin) linear infinite;
+  animation: pn-spin var(--pn-dur-spin) linear infinite;
   pointer-events: none;
 }
 
-@keyframes pn-lightbox-spin { to { transform: rotate(360deg); } }
 
 .lightbox__bottom {
   position: absolute;

@@ -230,5 +230,5 @@ function finishRename(): void {
   cursor: default;
 }
 
-.host-head__spinner { animation: k-spin var(--pn-dur-spin) linear infinite; }
+.host-head__spinner { animation: pn-spin var(--pn-dur-spin) linear infinite; }
 </style>

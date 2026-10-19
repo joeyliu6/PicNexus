@@ -23,15 +23,11 @@ import { useAnalytics } from '@/composables/useAnalytics';
 // 备份文件清理
 import { cleanupStoreBackups } from '@/store/storeCleanup';
 
-// 全局样式
-import './theme/dark-theme.css';
-import './theme/light-theme.css';
-import './styles/motion.css';
+// 全局样式：令牌在前，引用令牌的基础样式在后
 import './styles/tokens.css';
 import './styles/tokens-extra.css';
 import './styles/pn-base.css';
 import './styles/pn-menu.css';
-import './styles/bottom-bar-buttons.css';
 
 const log = createLogger('Init');
 

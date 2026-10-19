@@ -2,23 +2,19 @@
  * 首屏主题令牌副本一致性检查
  *
  * 有几个文件跑在 Vue 挂载之前（`login-webview.html` 的 <style>、`public/preload.css`），
- * 那一刻 `src/theme/*.css` 还没加载，`var(--bg-app)` 解析不出来，只能把色值**手抄一份**
- * 写死在里面。抄下来的值一旦和主题文件分叉，用户看到的就是首屏一个颜色、挂载后跳成
- * 另一个颜色——这类闪烁没人会报障，只会觉得"这软件有点糙"。
- *
- * 这条约定以前只写在源码注释里（"值必须与 src/theme/dark-theme.css 保持一致"）。
- * 注释拦不住任何东西：改了主题色不会红、测试不会挂、CI 不会拦。本脚本把它变成硬门禁。
+ * 那一刻 `src/styles/tokens*.css` 还没加载，`var(--pn-canvas)` 解析不出来，只能把色值**手抄一份**
+ * 写死在里面。抄下来的值一旦和令牌分叉，用户看到的就是首屏一个颜色、挂载后跳成
+ * 另一个颜色——这类闪烁没人会报障，只会觉得"这软件有点糙"。注释拦不住，本脚本把它变成硬门禁。
  *
  * ── 真相源 ──
- * 按浏览器里的层叠顺序把 `:root` 变量摞起来：app.css 的全局别名 → dark-theme.css →
- * （亮色时再叠）light-theme.css，再叠新界面的 `src/styles/tokens*.css`（--pn-*，按 data-theme 取浅 / 深）。
- * `var(--x)` 会被递归解开，所以副本里可以直接抄 `--state-info-bg` 展开后的 rgba 字面量。
+ * `src/styles/tokens*.css` 的 --pn-* 令牌，按层叠顺序摞起来，按 data-theme 取浅 / 深。
+ * `var(--x)` 会被递归解开，所以副本里可以直接抄展开后的字面量。
  *
  * ── 新增一处副本 ──
  * 往 COPIES 里加一条。两种写法：
- *   1. `kind: 'custom-properties'`：副本块里重定义同名变量（如 `--bg-app: #131316`），
+ *   1. `kind: 'custom-properties'`：副本块里重定义同名变量（如 `--pn-canvas: #1C1C1E`），
  *      块内每条 `--x` 声明都会自动和真相源的 `--x` 比对，不用手写映射。
- *   2. `kind: 'declarations'`：副本块里写的是真实属性（如 `background-color: #131316`），
+ *   2. `kind: 'declarations'`：副本块里写的是真实属性（如 `background-color: #1C1C1E`），
  *      需要用 `map` 声明"这条属性抄的是哪个令牌"。
  *
  */
@@ -29,7 +25,6 @@ import path from 'node:path';
 const root = process.cwd();
 
 /** 真相源：数组顺序 = 层叠顺序，后者覆盖前者 */
-// 新界面的 --pn-* 令牌（src/styles/tokens*.css）与旧页面的主题变量并存，名字不重叠，摞在同一张表里
 const PN_LIGHT = [
   { file: 'src/styles/tokens.css', selector: ':root, [data-theme="light"]' },
   // 不分主题的尺寸、字号、窗口按钮色在 tokens-extra.css 的几段 `:root` 里
@@ -42,25 +37,13 @@ const PN_DARK = [
   { file: 'src/styles/tokens-extra.css', selector: '[data-theme="dark"]' },
 ];
 
-const TOKEN_LAYERS = {
-  dark: [
-    { file: 'src/styles/app.css', selector: ':root' },
-    { file: 'src/theme/dark-theme.css', selector: ':root, :root.dark-theme' },
-    ...PN_DARK,
-  ],
-  light: [
-    { file: 'src/styles/app.css', selector: ':root' },
-    { file: 'src/theme/dark-theme.css', selector: ':root, :root.dark-theme' },
-    { file: 'src/theme/light-theme.css', selector: ':root.light-theme' },
-    ...PN_LIGHT,
-  ],
-};
+const TOKEN_LAYERS = { dark: PN_DARK, light: PN_LIGHT };
 
 /** 手抄副本清单 */
 const COPIES = [
   {
     file: 'login-webview.html',
-    why: '登录 WebView 首屏在 Vue 挂载前渲染，app.css 未加载，只能就地重定义同名变量兜住骨架屏',
+    why: '登录 WebView 首屏在 Vue 挂载前渲染，tokens.css 未加载，只能就地重定义同名变量兜住首屏底色',
     blocks: [
       { selector: ':root', theme: 'dark', kind: 'custom-properties' },
       { selector: ':root.light-theme', theme: 'light', kind: 'custom-properties' },
@@ -139,7 +122,7 @@ function parseTopLevelBlocks(css) {
       depth -= 1;
       if (depth === 0) {
         if (!currentSelector.startsWith('@')) {
-          // 同一个选择器可能出现多次（app.css 就有两段 `:root`），按源码顺序拼起来，
+          // 同一个选择器可能出现多次（tokens-extra.css 就有几段 `:root`），按源码顺序拼起来，
           // 与浏览器里"后写的覆盖先写的"一致；只留最后一段会把前面的变量整批丢掉。
           const previous = blocks.get(currentSelector);
           const body = source.slice(blockStart, i);
@@ -297,12 +280,12 @@ for (const copy of COPIES) {
 }
 
 if (failures.length > 0) {
-  console.error('\n❌ 首屏主题令牌副本与 src/theme/ 已分叉 —— 用户会看到首屏一个颜色、Vue 挂载后跳成另一个：\n');
+  console.error('\n❌ 首屏主题令牌副本与 src/styles/tokens*.css 已分叉 —— 用户会看到首屏一个颜色、Vue 挂载后跳成另一个：\n');
   for (const failure of failures) {
     console.error(`  ${failure}`);
   }
   console.error('\n修复方式：把副本里的值改回真相源的值；若确实是主题色本身变了，两边一起改。');
-  console.error('参考：src/styles/tokens.css、src/styles/tokens-extra.css（新界面）；src/theme/*.css（旧页面）\n');
+  console.error('参考：src/styles/tokens.css、src/styles/tokens-extra.css\n');
   process.exit(1);
 }
 

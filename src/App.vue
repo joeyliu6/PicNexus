@@ -283,24 +283,3 @@ onUnmounted(() => {
     <PnConfirmHost />
   </div>
 </template>
-
-<style>
-/* 全局样式 - 不需要 scoped */
-#app {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* 确保深色主题类应用到根元素 */
-#app.dark-theme {
-  color-scheme: dark;
-}
-
-#app.light-theme {
-  color-scheme: light;
-}
-</style>

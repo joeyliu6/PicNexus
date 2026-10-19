@@ -104,9 +104,8 @@ if (failures.length > 0) {
   console.error('\n修复方式（三选一）：');
   console.error('  1. 去掉 :deep() 包装，直接写普通全局选择器 —— 全局样式表本来就能命中所有元素；');
   console.error('  2. 把规则搬进对应 .vue 的 <style scoped> 块，或用 <style src="./x.css" scoped> 引入；');
-  console.error('  3. 若目标是 PrimeVue Dialog 内部元素，必须写成全局选择器：');
-  console.error('     Dialog 会 Teleport 到 body，根节点不带 data-v 属性，scoped :deep() 同样命中不了。');
-  console.error('\n参考：src/styles/app.css 第 3 节「弹窗统一外壳」\n');
+  console.error('  3. 目标在传送到 body 的浮层里（对话框、菜单）：根节点不带 data-v 属性，scoped :deep() 也命中不了，');
+  console.error('     改用不带 scoped 的唯一类名（见 PnDialog.vue、pn-menu.css）。\n');
   process.exit(1);
 }
 

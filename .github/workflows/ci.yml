@@ -163,7 +163,6 @@ jobs:
               - 'src/config/**'
               - 'src/constants/**'
               - 'src/main.ts'
-              - 'src/styles/app.css'
               - 'src/styles/**'
               - 'src/theme/**'
               - 'src/types/**'

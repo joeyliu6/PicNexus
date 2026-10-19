@@ -338,7 +338,7 @@ button.focus-card__pill { padding-right: var(--pn-space-8); cursor: pointer; }
 .focus-card__pill--failed { background: var(--pn-danger-soft); color: var(--pn-danger); }
 .focus-card__pill-caret { opacity: 0.7; }
 
-.focus-card__spin { animation: pn-button-spin var(--pn-dur-spin) linear infinite; }
+.focus-card__spin { animation: pn-spin var(--pn-dur-spin) linear infinite; }
 
 .focus-card__hosts {
   display: flex;
@@ -487,7 +487,6 @@ button.focus-card__pill { padding-right: var(--pn-space-8); cursor: pointer; }
 
 .focus-card__more-all:hover { background: var(--pn-menu-sel); }
 
-@keyframes pn-button-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
   .focus-card__spin { animation: none; }

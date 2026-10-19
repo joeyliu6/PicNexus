@@ -98,9 +98,8 @@ withDefaults(defineProps<{
 .pn-button--danger:not(:disabled):hover { background: var(--pn-danger-button-hover); }
 .pn-button--danger:not(:disabled):active { background: var(--pn-danger-button-press); }
 
-.pn-button__spinner { animation: pn-button-spin var(--pn-dur-spin) linear infinite; }
+.pn-button__spinner { animation: pn-spin var(--pn-dur-spin) linear infinite; }
 
-@keyframes pn-button-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
   .pn-button__spinner { animation: none; }

@@ -134,7 +134,7 @@ const busy = computed(() => props.state === 'checking' || props.state === 'pause
   width: var(--pn-size-health-spinner);
   height: var(--pn-size-health-spinner);
   color: var(--pn-brand-text);
-  animation: k-spin var(--pn-dur-spin) linear infinite;
+  animation: pn-spin var(--pn-dur-spin) linear infinite;
 }
 
 .health-status__spin-track { fill: none; stroke: currentcolor; stroke-opacity: 0.22; stroke-width: 2; }

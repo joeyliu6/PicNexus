@@ -227,7 +227,7 @@ watch(() => props.confirmedHttpHosts, () => {
     <!-- 占位符：错误或无可用源时显示 -->
     <div v-if="isError" class="thumbnail-placeholder">
       <slot name="placeholder">
-        <PnIcon name="imageGone" :size="16" :stroke="1.6" class="placeholder-icon" />
+        <PnIcon name="imageGone" :size="20" :stroke="1.5" class="placeholder-icon" />
       </slot>
     </div>
   </div>

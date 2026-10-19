@@ -1,9 +1,103 @@
 /*
- * 新界面的全局基础样式
- * 焦点环：品牌蓝 2px 外环（交接说明 3.4）。外壳内的元素和传送到 body 的浮层（.pn-layer）都适用。
+ * 全局基础样式：字体、页面底、滚动条、焦点环、共用的遮罩与转圈动画。
+ * 令牌在 tokens.css / tokens-extra.css，本文件只引用 var(--pn-*)。
  */
-.app-shell :focus-visible,
-.pn-layer :focus-visible {
+
+/* 西文字体随应用打包（中文字体用系统自带，见 --pn-font-cjk） */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/Inter-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/Inter-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/Inter-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+}
+
+/* 宽高含内边距与边框：设计稿的尺寸都按这个算（PrimeVue 的全局样式原先替我们注入过这条，卸载后在这里明写） */
+*,
+::before,
+::after { box-sizing: border-box; }
+
+:root { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--pn-canvas);
+  color: var(--pn-text1);
+  font-family: var(--pn-font-ui);
+  font-size: var(--pn-text-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Windows 上 button 默认不继承字体（回退 Arial） */
+button { font-family: inherit; }
+
+::selection { background: var(--pn-selection); }
+
+/* 滚动条（设计没画）：6px 细条、轨道透明，悬停加深 */
+::-webkit-scrollbar {
+  width: var(--pn-size-scrollbar);
+  height: var(--pn-size-scrollbar);
+}
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  border-radius: var(--pn-size-scrollbar);
+  background-color: var(--pn-scrollbar-thumb);
+}
+
+::-webkit-scrollbar-thumb:hover { background-color: var(--pn-scrollbar-thumb-hover); }
+
+/* 焦点环：品牌蓝 2px 外环（交接说明 3.4），只在键盘操作时出现。外壳内的元素和传送到 body 的浮层（.pn-layer）都适用。
+   输入框不套这一圈：点进去就算 focus-visible，各自的框已经画了焦点样式（PnInput 等），再套一圈就成了双框 */
+:focus:not(:focus-visible) { outline: none; }
+
+.app-shell :focus-visible:not(input, textarea),
+.pn-layer :focus-visible:not(input, textarea) {
   outline: var(--pn-ring-width) solid var(--pn-ring);
   outline-offset: var(--pn-ring-offset);
 }
@@ -34,4 +128,11 @@
 @keyframes pn-dialog-fade {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* 转圈（加载中）：全应用共用一份；「减少动态效果」时停住（LoadingRules.dc.html） */
+@keyframes pn-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pn-spin { to { transform: none; } }
 }
