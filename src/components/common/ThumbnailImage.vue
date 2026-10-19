@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
+import PnIcon from '@/components/pn/PnIcon.vue';
 import { safeImageUrl } from '@/security/networkPolicy';
 import { reportThumbnailUrlFailed, reportThumbnailUrlLoaded } from '@/composables/image/useThumbCache';
 import { hasUrlListChanged } from '@/composables/image/useThumbnailFallbackChain';
@@ -226,7 +227,7 @@ watch(() => props.confirmedHttpHosts, () => {
     <!-- 占位符：错误或无可用源时显示 -->
     <div v-if="isError" class="thumbnail-placeholder">
       <slot name="placeholder">
-        <i class="pi pi-image placeholder-icon"></i>
+        <PnIcon name="imageGone" :size="16" :stroke="1.6" class="placeholder-icon" />
       </slot>
     </div>
   </div>
@@ -253,14 +254,7 @@ watch(() => props.confirmedHttpHosts, () => {
 .thumbnail-skeleton {
   width: 100%;
   height: 100%;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 渐变回退色无对应 token */
-  background: linear-gradient(90deg,
-    var(--bg-input, #f3f4f6) 25%,
-    var(--bg-card, #fff) 50%,
-    var(--bg-input, #f3f4f6) 75%
-  );
-  background-size: 200% 100%;
-  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+  background: var(--pn-skeleton);
 }
 
 .thumbnail-placeholder {
@@ -269,12 +263,7 @@ watch(() => props.confirmedHttpHosts, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-input, #f3f4f6);
-  color: var(--text-muted, #9ca3af);
-}
-
-.placeholder-icon {
-  font-size: var(--text-2xl);
-  opacity: 0.5;
+  background-color: var(--pn-skeleton);
+  color: var(--pn-text3);
 }
 </style>
