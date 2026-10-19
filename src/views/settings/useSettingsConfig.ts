@@ -2,7 +2,7 @@
 // 不握一份表单副本——副本整份回写会用旧值盖掉图床页、托盘、云同步刚写进去的东西；图床字段这里从来不碰。
 // 保存成功在改动的那一行闪「已保存」（交接说明第 4 节规则 10）；失败红色通知，界面回到磁盘上的值。
 import { computed, reactive, ref, toRaw } from 'vue';
-import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
+import { DEFAULT_CONFIG, type ImageCompressionConfig, type UserConfig } from '@/config/types';
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
 import { readFreshConfig } from '@/store/instances';
@@ -59,12 +59,24 @@ function patch(rowId: string | null, mutate: (draft: UserConfig) => void): Promi
   return run;
 }
 
+/**
+ * 改压缩方案（S02）：mutate 返回 null 表示不用改。放在模块里而不在组件里，
+ * 「删除方案」的撤销要在对话框、甚至整个「上传与链接」分组卸载之后还能写回去
+ */
+function patchCompression(mutate: (c: ImageCompressionConfig) => ImageCompressionConfig | null): Promise<boolean> {
+  return patch('compression', (c) => {
+    const next = mutate(c.imageCompression ?? structuredClone(DEFAULT_CONFIG.imageCompression!));
+    if (next) c.imageCompression = next;
+  });
+}
+
 export function useSettingsConfig() {
   return {
     /** 磁盘上的配置（只读；改动一律走 patch） */
     config: view,
     reload,
     patch,
+    patchCompression,
     flashSaved,
     isSaved: (rowId: string) => saved.has(rowId),
   };

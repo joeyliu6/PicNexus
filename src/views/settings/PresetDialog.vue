@@ -7,20 +7,21 @@ import PnDialog from '@/components/pn/PnDialog.vue';
 import PnInput from '@/components/pn/PnInput.vue';
 import PnSegmented, { type PnSegment } from '@/components/pn/PnSegmented.vue';
 import PnSwitch from '@/components/pn/PnSwitch.vue';
-import type { CompressionOutputFormat, CompressionPreset, ImageCompressionConfig } from '@/config/types';
+import type { CompressionOutputFormat, CompressionPreset } from '@/config/types';
 import { useUndoToast } from '@/composables/useUndoToast';
 import { FORMAT_LABELS } from '@/utils/compressionPresetText';
 import { normalizePreset, removePreset, uniquePresetName } from './compressionPresets';
+import { useSettingsConfig } from './useSettingsConfig';
 
 const props = defineProps<{
   preset: CompressionPreset | null;
   presets: readonly CompressionPreset[];
 }>();
 
-const emit = defineEmits<{
-  close: [];
-  patch: [mutate: (c: ImageCompressionConfig) => ImageCompressionConfig | null];
-}>();
+const emit = defineEmits<{ close: [] }>();
+
+// 直接写配置，不经父组件：删掉方案后切到别的设置分组，对话框和父组件都已卸载，撤销照样要写回去
+const { patchCompression } = useSettingsConfig();
 
 type NumberField = 'quality' | 'maxLongSide' | 'scalePercent' | 'skipIfSmallerKB';
 
@@ -52,7 +53,7 @@ watch(() => props.preset, (preset) => {
 function update(patch: Partial<CompressionPreset>): void {
   const id = props.preset?.id;
   if (!id) return;
-  emit('patch', (c) => ({ ...c, presets: c.presets.map((p) => (p.id === id ? normalizePreset({ ...p, ...patch }) : p)) }));
+  void patchCompression((c) => ({ ...c, presets: c.presets.map((p) => (p.id === id ? normalizePreset({ ...p, ...patch }) : p)) }));
 }
 
 function commitName(): void {
@@ -75,14 +76,14 @@ async function remove(): Promise<void> {
   if (!preset) return;
   const index = props.presets.findIndex((p) => p.id === preset.id);
   let wasActive = false;
-  emit('patch', (c) => {
+  void patchCompression((c) => {
     wasActive = c.activePresetId === preset.id;
     return removePreset(c, preset.id);
   });
   emit('close');
   const kept = await undo.show(`已删除方案「${preset.name}」`);
   if (kept) return;
-  emit('patch', (c) => {
+  void patchCompression((c) => {
     if (c.presets.some((p) => p.id === preset.id)) return null;
     const presets = [...c.presets];
     presets.splice(Math.min(index, presets.length), 0, preset);

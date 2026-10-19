@@ -42,12 +42,7 @@ function setAutoUploadClipboard(on: boolean): void {
   void settings.patch('autoUploadClipboard', (c) => { c.appBehavior = { ...(c.appBehavior ?? DEFAULT_CONFIG.appBehavior!), autoUploadClipboard: on }; });
 }
 
-function patchCompression(mutate: (c: ImageCompressionConfig) => ImageCompressionConfig | null): Promise<boolean> {
-  return settings.patch('compression', (c) => {
-    const next = mutate(c.imageCompression ?? structuredClone(DEFAULT_CONFIG.imageCompression!));
-    if (next) c.imageCompression = next;
-  });
-}
+const { patchCompression } = settings;
 
 const templateOpen = ref(false);
 const editingId = ref<string | null>(null);
@@ -127,7 +122,6 @@ function presetById(id: string | null): CompressionPreset | null {
       :preset="presetById(editingId)"
       :presets="compression.presets"
       @close="editingId = null"
-      @patch="patchCompression"
     />
     <CompressionPreviewDialog :visible="previewOpen" :preset="activePreset" @update:visible="previewOpen = $event" />
   </div>

@@ -6,6 +6,16 @@ import { DEFAULT_COMPRESSION_PRESET, type CompressionPreset, type ImageCompressi
 
 const undo = vi.hoisted(() => ({ show: vi.fn() }));
 vi.mock('@/composables/useUndoToast', () => ({ useUndoToast: () => undo }));
+// 对话框直接写设置模块里的配置（不经父组件），这里用一份内存配置代替
+const store = vi.hoisted(() => ({ config: null as unknown as ImageCompressionConfig }));
+vi.mock('@/views/settings/useSettingsConfig', () => ({
+  useSettingsConfig: () => ({
+    patchCompression: async (mutate: (c: ImageCompressionConfig) => ImageCompressionConfig | null) => {
+      store.config = mutate(store.config) ?? store.config;
+      return true;
+    },
+  }),
+}));
 
 import PresetDialog from '@/views/settings/PresetDialog.vue';
 
@@ -13,16 +23,12 @@ const a: CompressionPreset = { ...DEFAULT_COMPRESSION_PRESET, id: 'a', name: 'We
 const b: CompressionPreset = { ...DEFAULT_COMPRESSION_PRESET, id: 'b', name: '高清', quality: 92 };
 
 function setup(preset: CompressionPreset) {
-  let config: ImageCompressionConfig = { enabled: true, presets: [a, b], activePresetId: 'a' };
+  store.config = { enabled: true, presets: [a, b], activePresetId: 'a' };
   const wrapper = mount(PresetDialog, {
-    props: {
-      preset,
-      presets: config.presets,
-      onPatch: (mutate: (c: ImageCompressionConfig) => ImageCompressionConfig | null) => { config = mutate(config) ?? config; },
-    },
+    props: { preset, presets: store.config.presets },
     attachTo: document.body,
   });
-  return { wrapper, get config() { return config; } };
+  return { wrapper, get config() { return store.config; } };
 }
 
 const field = (label: string) => [...document.body.querySelectorAll<HTMLLabelElement>('.preset__field')]
@@ -54,5 +60,19 @@ describe('PresetDialog', () => {
     await vi.waitFor(() => expect(s.config.presets.map((p) => p.id)).toEqual(['a', 'b']));
     expect(s.config.activePresetId).toBe('a');
     expect(s.wrapper.emitted('close')).toBeTruthy();
+  });
+
+  // 删掉方案后切到别的设置分组：对话框和「上传与链接」都卸载了，点「撤销」仍要放回去，不能只弹「已撤销」
+  it('still puts the preset back when 撤销 comes after the dialog is gone', async () => {
+    let settle!: (kept: boolean) => void;
+    undo.show.mockReturnValueOnce(new Promise<boolean>((resolve) => { settle = resolve; }));
+    const s = setup(a);
+    await nextTick();
+    [...document.body.querySelectorAll('button')].find((el) => el.textContent === '删除方案')!.click();
+    expect(s.config.presets.map((p) => p.id)).toEqual(['b']);
+
+    s.wrapper.unmount();
+    settle(false);
+    await vi.waitFor(() => expect(s.config.presets.map((p) => p.id)).toEqual(['a', 'b']));
   });
 });
