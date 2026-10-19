@@ -17,7 +17,7 @@ export interface ToastOptions {
   title: string;
   desc?: string;
   action?: ToastAction;
-  /** 停留毫秒数；不给按种类取默认值 */
+  /** 停留毫秒数；不给按种类取默认值；0 = 不自动消失（只会被更新的通知挤掉） */
   life?: number;
   /** 底部画倒计时细线（「撤销」类） */
   countdown?: boolean;
@@ -42,6 +42,8 @@ interface Timer {
   handle: ReturnType<typeof setTimeout> | null;
   remaining: number;
   startedAt: number;
+  /** life 为 0：不计时 */
+  sticky: boolean;
   onExpire?: () => void;
 }
 
@@ -51,6 +53,7 @@ let nextId = 1;
 let paused = false;
 
 function startTimer(id: number, timer: Timer): void {
+  if (timer.sticky) return;
   timer.startedAt = Date.now();
   timer.handle = setTimeout(() => expire(id), timer.remaining);
 }
@@ -80,7 +83,7 @@ export function pushToast(options: ToastOptions): number {
     countdown: options.countdown ?? false,
     life,
   });
-  const timer: Timer = { handle: null, remaining: life, startedAt: 0, onExpire: options.onExpire };
+  const timer: Timer = { handle: null, remaining: life, startedAt: 0, sticky: life === 0, onExpire: options.onExpire };
   timers.set(id, timer);
   if (!paused) startTimer(id, timer);
 

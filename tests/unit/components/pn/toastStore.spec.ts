@@ -30,6 +30,18 @@ describe('toastStore', () => {
     expect(onExpire).not.toHaveBeenCalled();
   });
 
+  it('life 0 means it stays until pushed out, also across pause and resume', () => {
+    pushToast({ kind: 'warn', title: 'sticky', life: 0 });
+    vi.advanceTimersByTime(60_000);
+    pauseToasts();
+    resumeToasts();
+    vi.advanceTimersByTime(60_000);
+    expect(toasts.map((t) => t.title)).toEqual(['sticky']);
+
+    for (const title of ['b', 'c', 'd']) pushToast({ kind: 'info', title });
+    expect(toasts.map((t) => t.title)).toEqual(['b', 'c', 'd']);
+  });
+
   it('uses 4 s for every plain toast, errors included, and 6 s for undo toasts', () => {
     for (const kind of ['info', 'warn', 'error'] as const) pushToast({ kind, title: kind });
     expect(toasts.map((t) => t.life)).toEqual([4000, 4000, 4000]);
