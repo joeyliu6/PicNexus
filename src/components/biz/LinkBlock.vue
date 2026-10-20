@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 链接块（Patterns.dc.html）：浅灰底、等宽 12px，按格式语法分色，网址用蓝色文字。
-// compact = 图库详情里那块（11px、最多三行）；broken = 这条链接已失效：网址变红、其余变灰（GalleryScreen.dc.html G06）
+// compact = 图库详情里那块（11px、只占一行，过长省略，高度与旁边的按钮一致）；broken = 这条链接已失效：网址变红、其余变灰（GalleryScreen.dc.html G06）
 import { computed } from 'vue';
 import { splitLinkSegments } from '@/utils/linkSegments';
 
@@ -36,12 +36,16 @@ const segments = computed(() => splitLinkSegments(props.text, props.url, props.f
 .link-block__syntax { color: var(--pn-text3); }
 
 .link-block--compact {
-  max-height: var(--pn-size-link-compact-max);
+  height: var(--pn-size-control);
+  box-sizing: border-box;
   overflow: hidden;
-  padding: var(--pn-space-link-compact-y) var(--pn-space-button-sm-x);
+  padding: 0 var(--pn-space-button-sm-x);
   border-radius: var(--pn-radius-md);
   font-size: var(--pn-text-caption);
-  line-height: 1.55;
+  line-height: var(--pn-size-control);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .link-block--broken .link-block__url { color: var(--pn-danger); }

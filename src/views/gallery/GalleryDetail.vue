@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// 图库详情（GalleryScreen.dc.html G05–G07，宽 340，Esc 关闭）：从上到下只有三件事——
-// 这张图长什么样 → 链接（一键复制）→ 存放在哪几个图床。
+// 图库详情（GalleryScreen.dc.html G05–G07，宽 340，Esc 或右上角 × 关闭）：从上到下只有三件事——
+// 文件名与尺寸 → 链接（一键复制）→ 存放在哪几个图床。不放预览图：图就在左边的网格 / 列表里，看大图双击它。
+// 链接只占一行（过长省略，悬停看全文），「复制」按钮与它同高，不随链接长短变形。
 // 「复制时使用」那份失效、有可用备份时顶上一条琥珀提示 + 唯一主按钮「改用 X」：立即生效、不弹确认，通知带撤销。
 // 「移除记录」只放在底部。
 import { computed, ref, watch } from 'vue';
 import LinkBlock from '@/components/biz/LinkBlock.vue';
-import PreviewFrame from '@/components/biz/PreviewFrame.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import PnMenu from '@/components/pn/PnMenu.vue';
@@ -13,13 +13,11 @@ import PnMenuItem from '@/components/pn/PnMenuItem.vue';
 import type { HistoryItem } from '@/config/types';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { useMirrorFallback } from '@/composables/history/useMirrorFallback';
-import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import { applyConfiguredUrlWithConfig, formatLinkWithConfig, useCopyLink } from '@/composables/useCopyLink';
 import { useUploadController } from '@/composables/upload/useUploadController';
 import { openUserExternalUrl } from '@/security/shellOpen';
 import { historyDB } from '@/services/database';
-import type { ImageMeta } from '@/types/image-meta';
 import { formatCalendarDate, formatFileSize } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 import { createLogger } from '@/utils/logger';
@@ -38,7 +36,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  openLightbox: [meta: ImageMeta];
   removed: [ids: string[]];
 }>();
 
@@ -77,7 +74,6 @@ const meta = computed(() => {
   return parts.join(' · ');
 });
 
-const thumbs = computed(() => (item.value ? getThumbnailCandidates(item.value, config.value) : []));
 const favorited = computed(() => historyManager.favoriteSet.value.has(props.itemId));
 
 const linkItem = computed(() => (item.value && source.value
@@ -130,11 +126,6 @@ async function backupTo(hostId: string): Promise<void> {
   }
 }
 
-function openLightbox(): void {
-  const found = props.grid.allLoadedMetas.value.find((m) => m.id === props.itemId);
-  if (found) emit('openLightbox', found);
-}
-
 async function removeRecord(): Promise<void> {
   if (await actions.removeRecords([props.itemId], item.value?.localFileName)) emit('removed', [props.itemId]);
 }
@@ -144,12 +135,6 @@ async function removeRecord(): Promise<void> {
   <aside class="detail" aria-label="图片详情">
     <template v-if="item">
       <div class="detail__head">
-        <button type="button" class="detail__preview" aria-label="查看大图" @click="openLightbox">
-          <PreviewFrame
-            v-if="thumbs.length" :srcs="thumbs" :name="item.localFileName" :format="item.format" :ratio="item.aspectRatio"
-            :natural-width="item.width" :confirmed-http-hosts="grid.confirmedHttpHosts.value"
-          />
-        </button>
         <div class="detail__title-row">
           <div class="detail__title">
             <span class="detail__name">{{ item.localFileName }}</span>
@@ -157,6 +142,9 @@ async function removeRecord(): Promise<void> {
           </div>
           <button type="button" class="detail__star" :class="{ 'detail__star--on': favorited }" :aria-label="favorited ? '取消收藏' : '收藏'" @click="grid.toggleFavorite(itemId)">
             <PnIcon name="star" :size="16" :stroke="1.8" :filled="favorited" />
+          </button>
+          <button type="button" class="detail__star" aria-label="关闭详情" title="关闭  Esc" @click="emit('close')">
+            <PnIcon name="close" :size="13" :stroke="2" />
           </button>
         </div>
       </div>
@@ -167,7 +155,7 @@ async function removeRecord(): Promise<void> {
           <span class="detail__muted">{{ FORMAT_NAMES[format] }}</span>
         </div>
         <div v-if="linkItem" class="detail__link-row">
-          <LinkBlock compact :broken="source?.health === 'dead'" :text="linkText" :url="shownUrl" :filename="item.localFileName" class="detail__link" />
+          <LinkBlock compact :broken="source?.health === 'dead'" :text="linkText" :url="shownUrl" :filename="item.localFileName" :title="linkText" class="detail__link" />
           <button type="button" class="detail__copy" :class="{ 'detail__copy--done': copiedKey === 'link' }" @click="copyLink('link')">
             {{ copiedKey === 'link' ? '已复制' : '复制' }}
           </button>
@@ -234,6 +222,9 @@ async function removeRecord(): Promise<void> {
   box-shadow: inset 1px 0 0 var(--pn-border);
 }
 
+/* 滚动条平时透明、鼠标移上来才露出：不和左边的分隔线挤在一起 */
+.detail:not(:hover)::-webkit-scrollbar-thumb { background-color: transparent; }
+
 .detail__head {
   display: flex;
   flex-direction: column;
@@ -241,20 +232,7 @@ async function removeRecord(): Promise<void> {
   padding: var(--pn-space-16) var(--pn-space-20) 0;
 }
 
-.detail__preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--pn-size-detail-preview);
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--pn-radius-lg);
-  background: var(--pn-subtle);
-  cursor: zoom-in;
-}
-
-.detail__title-row { display: flex; align-items: flex-start; gap: var(--pn-space-8); }
+.detail__title-row { display: flex; align-items: flex-start; gap: var(--pn-space-2); }
 
 .detail__title {
   display: flex;
@@ -310,12 +288,13 @@ async function removeRecord(): Promise<void> {
   font-weight: var(--pn-weight-semibold);
 }
 
-.detail__link-row { display: flex; align-items: stretch; gap: var(--pn-space-6); }
+.detail__link-row { display: flex; align-items: center; gap: var(--pn-space-6); }
 .detail__link { flex: 1; min-width: 0; }
 
 .detail__copy {
   flex: none;
   width: var(--pn-size-detail-copy);
+  height: var(--pn-size-control);
   padding: 0;
   border: 0;
   border-radius: var(--pn-radius-md);

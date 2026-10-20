@@ -133,7 +133,7 @@ const DOUBLE_CLICK_MS = 500;
 /** 刚打开详情的那张：双击的第一下已经打开了详情、网格随之变窄重排，第二下可能落到另一张上 */
 let lastOpened: { meta: ImageMeta; at: number } | null = null;
 
-/** 单击 / Enter 打开详情；再点正开着的那张就收起（设计稿的详情没有关闭按钮，鼠标也要关得掉） */
+/** 单击 / Enter 打开详情；再点正开着的那张就收起（详情右上角另有 ×） */
 function openDetail(meta: ImageMeta): void {
   focusedId.value = meta.id;
   detailId.value = detailId.value === meta.id ? null : meta.id;
@@ -355,10 +355,10 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         />
         <GallerySelectionBar v-if="viewState.hasSelection.value" :grid="grid" :format="format" @removed="onRemoved" />
       </div>
-      <GalleryDetail v-if="detailId" :key="detailId" :item-id="detailId" :grid="grid" :format="format" @close="detailId = null" @open-lightbox="openLightbox" @removed="onRemoved" />
+      <GalleryDetail v-if="detailId" :key="detailId" :item-id="detailId" :grid="grid" :format="format" @close="detailId = null" @removed="onRemoved" />
     </div>
 
-    <GalleryLightbox :grid="grid" :nav="lightbox" :format="format" @removed="onRemoved" @show-info="(id: string) => { detailId = id; focusedId = id; }" />
+    <GalleryLightbox :grid="grid" :nav="lightbox" :format="format" @removed="onRemoved" />
   </div>
 </template>
 

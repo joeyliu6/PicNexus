@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ImageMeta } from '@/types/image-meta';
-import { badgeOf, petalLabelOf, petalsOf, statusOf } from '@/views/gallery/galleryMeta';
+import { badgeOf, listLayout, petalLabelOf, petalsOf, statusOf } from '@/views/gallery/galleryMeta';
 
 const meta = (copyLinkHealth: ImageMeta['copyLinkHealth'], copies = 2): ImageMeta => ({
   id: 'a',
@@ -37,5 +37,15 @@ describe('gallery tile and row rules', () => {
     expect(statusOf(meta('ok')).text).toBe('');
     expect(statusOf(meta('unchecked'))).toEqual({ text: '尚未检测', warn: false });
     expect(statusOf(meta('dead'))).toEqual({ text: '失效', warn: true });
+  });
+});
+
+// 列表列数按列表自己的宽度：打开详情后（1300px 窗口里列表约 665px）文件名列不能被挤没
+describe('gallery list layout', () => {
+  it('drops columns as the list itself gets narrower', () => {
+    expect(listLayout(0)).toBe('wide');
+    expect(listLayout(1200)).toBe('wide');
+    expect(listLayout(1000)).toBe('narrow');
+    expect(listLayout(665)).toBe('compact');
   });
 });

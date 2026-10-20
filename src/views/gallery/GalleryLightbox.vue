@@ -4,10 +4,10 @@
 // 当前图床没加载出来：顶栏提示 +「换个图床」（检测确认失效才说「已失效」，否则只说加载失败），各备份带状态，Enter 切到选中的那份（只换这次看的，不改「复制时使用」）。
 // 灯箱不随主题：自绘部分标 data-theme="dark" 取深色令牌。
 // 顶栏、底栏是实心深色底：长图、放大的图平移时从它们下面经过，不盖住按钮。
+// 底栏不放「信息」按钮：文件名、尺寸、大小、图床已写在底栏，跳去详情会先把大图缩回去。
 import 'photoswipe/style.css';
 import './galleryLightbox.css';
 import { computed, ref, watch } from 'vue';
-import { useEventListener } from '@vueuse/core';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
 import HostIcon from '@/components/biz/HostIcon.vue';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
@@ -39,8 +39,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   removed: [ids: string[]];
-  /** 底栏「信息」：关掉灯箱、在详情里看这张 */
-  showInfo: [id: string];
 }>();
 
 const lightbox = props.nav;
@@ -150,18 +148,6 @@ async function removeRecord(): Promise<void> {
   }
 }
 
-function showInfo(): void {
-  const id = item.value?.id;
-  if (!id) return;
-  lightbox.lightboxVisible.value = false;
-  emit('showInfo', id);
-}
-
-// 焦点在 PhotoSwipe 自己的根元素上，按键挂在窗口上、只在灯箱开着时生效
-useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if (!lightbox.lightboxVisible.value || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (event.key.toLowerCase() === 'i') showInfo();
-});
 </script>
 
 <template>
@@ -234,9 +220,6 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
           <PnIcon name="star" :size="15" :stroke="1.8" :filled="favorited" :class="{ 'lightbox__star--on': favorited }" />
         </button>
         <button type="button" class="lightbox__button lightbox__button--danger" @click="removeRecord">移除记录</button>
-        <button type="button" class="lightbox__button lightbox__button--icon" aria-label="信息" title="信息  I" @click="showInfo">
-          <PnIcon name="info" :size="15" :stroke="1.8" />
-        </button>
       </div>
     </div>
   </Teleport>

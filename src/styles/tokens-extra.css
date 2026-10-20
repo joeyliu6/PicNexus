@@ -427,6 +427,8 @@
   --pn-size-list-thumb-h: 40px;
   --pn-grid-gallery-list: 56px minmax(0, 1fr) 190px 150px 130px 110px 72px;
   --pn-grid-gallery-list-narrow: 56px minmax(0, 1fr) 150px 120px 90px 64px;
+  /* 再窄（打开详情时常见）：缩略图 · 文件名（下面一行写图床）· 上传时间 · 操作 */
+  --pn-grid-gallery-list-compact: 56px minmax(0, 1fr) 110px 64px;
 
   /* 图库灯箱（G08）：不随主题的深色底；在拖放遮罩之上、菜单与对话框之下；顶栏 52、底栏 64 */
   --pn-z-lightbox: 950;
@@ -454,16 +456,12 @@
   --pn-size-compare-line: 2px;
   --pn-compare-line-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 
-  /* 图库详情（G05–G07）：宽 340，预览区高 188 */
+  /* 图库详情（G05–G07）：宽 340（不放预览图） */
   --pn-size-gallery-detail: 340px;
-  --pn-size-detail-preview: 188px;
-  /* 预览框（详情、首页焦点卡）：图片完整显示，空白处铺这张图的模糊放大版——外扩 20、模糊 18、不透明度 0.9（ImageRatios.dc.html） */
+  /* 预览框（首页焦点卡）：图片完整显示，空白处铺这张图的模糊放大版——外扩 20、模糊 18、不透明度 0.9（ImageRatios.dc.html） */
   --pn-preview-fill-inset: -20px;
   --pn-preview-fill-blur: blur(18px);
   --pn-preview-fill-opacity: 0.9;
-  /* 详情里的链接块：上下 7，最多三行（54） */
-  --pn-space-link-compact-y: 7px;
-  --pn-size-link-compact-max: 54px;
   /* 详情「存放在」：每行至少 50，图床图标底板 22 */
   --pn-size-detail-host-row: 50px;
   --pn-size-detail-host-plate: 22px;

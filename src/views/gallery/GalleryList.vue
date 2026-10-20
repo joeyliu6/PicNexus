@@ -4,6 +4,8 @@
 // 单击打开详情，双击看大图，Ctrl/⌘ / Shift 单击多选（与网格一致）。
 // 键盘：整张表只有一个 Tab 停留点（焦点那行），↑ ↓ / Home / End / PageUp / PageDown 换行，Enter 详情、空格大图；
 // 这一行的「复制」「⋯」接在它后面，其余行的按钮不进 Tab 顺序。
+// 列数按列表自己的宽度定（打开详情、收起侧栏都会变）：放不下七列先去掉「尺寸 · 大小」；再窄把图床写到文件名下面一行、
+// 「状态」收成文件名旁的 ⚠，文件名始终有地方显示。
 import { computed, nextTick, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import { useVirtualizer } from '@tanstack/vue-virtual';
@@ -18,7 +20,7 @@ import { openUserExternalUrl } from '@/security/shellOpen';
 import type { GalleryListRow, GalleryListSort, GalleryListSortKey } from '@/services/database/TimelineQueryService';
 import type { ImageMeta } from '@/types/image-meta';
 import { formatFileSize, formatListTime } from '@/utils/formatters';
-import { petalLabelOf, petalsOf, statusOf } from './galleryMeta';
+import { listLayout, petalLabelOf, petalsOf, statusOf } from './galleryMeta';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
 import type { GalleryListApi } from './useGalleryList';
@@ -64,8 +66,9 @@ const { viewState, historyManager } = props.grid;
 const root = ref<HTMLElement | null>(null);
 const scroller = ref<HTMLElement | null>(null);
 const { width } = useElementSize(root);
-/** 窄窗口放不下七列：去掉「尺寸 · 大小」 */
-const narrow = computed(() => width.value > 0 && width.value < 900);
+const layout = computed(() => listLayout(width.value));
+const narrow = computed(() => layout.value !== 'wide');
+const compact = computed(() => layout.value === 'compact');
 
 const virtualizer = useVirtualizer(computed(() => ({
   count: props.grid.totalCount.value,
@@ -154,20 +157,20 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
 </script>
 
 <template>
-  <div ref="root" class="list" :class="{ 'list--narrow': narrow }" role="grid" aria-label="图片列表" aria-multiselectable="true" :aria-rowcount="grid.totalCount.value + 1">
+  <div ref="root" class="list" :class="{ 'list--narrow': narrow, 'list--compact': compact }" role="grid" aria-label="图片列表" aria-multiselectable="true" :aria-rowcount="grid.totalCount.value + 1">
     <div class="list__head" role="row" aria-rowindex="1">
       <span role="columnheader" aria-label="缩略图" />
       <span role="columnheader" :aria-sort="ariaSort('name')">
         <button type="button" class="list__sort" :class="{ 'list__sort--on': sort.key === 'name' }" @click="sortBy('name')">文件名{{ arrow('name') }}</button>
       </span>
-      <span role="columnheader">图床</span>
+      <span v-if="!compact" role="columnheader">图床</span>
       <span v-if="!narrow" role="columnheader" :aria-sort="ariaSort('size')">
         <button type="button" class="list__sort" :class="{ 'list__sort--on': sort.key === 'size' }" @click="sortBy('size')">尺寸 · 大小{{ arrow('size') }}</button>
       </span>
       <span role="columnheader" :aria-sort="ariaSort('time')">
         <button type="button" class="list__sort" :class="{ 'list__sort--on': sort.key === 'time' }" @click="sortBy('time')">上传时间{{ arrow('time') }}</button>
       </span>
-      <span role="columnheader">状态</span>
+      <span v-if="!compact" role="columnheader">状态</span>
       <span role="columnheader" aria-label="操作" />
     </div>
 
@@ -196,16 +199,25 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
               <ThumbnailImage :srcs="grid.getThumbnailUrls(row)" alt="" :confirmed-http-hosts="grid.confirmedHttpHosts.value" />
             </span>
             <span class="list__name-cell" role="gridcell">
-              <span class="list__name">{{ row.localFileName }}</span>
-              <PnIcon v-if="historyManager.favoriteSet.value.has(row.id)" name="star" filled :size="12" class="list__fav" />
+              <span class="list__name-line">
+                <span class="list__name">{{ row.localFileName }}</span>
+                <PnIcon v-if="historyManager.favoriteSet.value.has(row.id)" name="star" filled :size="12" class="list__fav" />
+                <span v-if="compact && statusOf(row).warn" class="list__status list__status--warn" :title="statusOf(row).text">
+                  <PnIcon name="warning" :size="12" :stroke="2.2" />
+                </span>
+              </span>
+              <span v-if="compact" class="list__hosts">
+                <PetalGlyph :states="petalsOf(row)" :size="13" :label="petalLabelOf(row)" />
+                <span class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
+              </span>
             </span>
-            <span class="list__hosts" role="gridcell">
+            <span v-if="!compact" class="list__hosts" role="gridcell">
               <PetalGlyph :states="petalsOf(row)" :size="15" :label="petalLabelOf(row)" />
               <span class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
             </span>
             <span v-if="!narrow" class="list__muted" role="gridcell">{{ sizeText(row) }}</span>
             <span class="list__muted" role="gridcell">{{ formatListTime(row.timestamp, props.now) }}</span>
-            <span class="list__status" :class="{ 'list__status--warn': statusOf(row).warn }" role="gridcell">
+            <span v-if="!compact" class="list__status" :class="{ 'list__status--warn': statusOf(row).warn }" role="gridcell">
               <PnIcon v-if="statusOf(row).warn" name="warning" :size="12" :stroke="2.2" />
               {{ statusOf(row).text }}
             </span>
@@ -258,12 +270,16 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
 .list--narrow .list__head,
 .list--narrow .list__row { grid-template-columns: var(--pn-grid-gallery-list-narrow); }
 
+.list--compact .list__head,
+.list--compact .list__row { grid-template-columns: var(--pn-grid-gallery-list-compact); }
+
 .list__head {
   flex: none;
   height: var(--pn-size-list-head);
   box-shadow: inset 0 -1px 0 var(--pn-border);
   color: var(--pn-text3);
   font-size: var(--pn-text-footnote);
+  white-space: nowrap;
 }
 
 .list__sort {
@@ -282,6 +298,9 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
   min-height: 0;
   overflow: hidden auto;
 }
+
+/* 滚动条平时透明、鼠标在列表上才露出：不和右边详情栏的分隔线并排成两道竖线 */
+.list__scroll:not(:hover)::-webkit-scrollbar-thumb { background-color: transparent; }
 
 .list__body { position: relative; }
 
@@ -320,7 +339,8 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
   background: var(--pn-skeleton);
 }
 
-.list__name-cell { display: flex; align-items: center; gap: var(--pn-space-6); min-width: 0; }
+.list__name-cell { display: flex; flex-direction: column; justify-content: center; gap: var(--pn-space-2); min-width: 0; }
+.list__name-line { display: flex; align-items: center; gap: var(--pn-space-6); min-width: 0; }
 
 .list__name,
 .list__ellipsis {

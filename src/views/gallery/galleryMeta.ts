@@ -39,3 +39,15 @@ export function statusOf(meta: ImageMeta): { text: string; warn: boolean } {
   if (meta.copyLinkHealth === 'unchecked') return { text: '尚未检测', warn: false };
   return { text: '', warn: false };
 }
+
+export type ListLayout = 'wide' | 'narrow' | 'compact';
+
+/**
+ * 列表视图按自己的宽度分三档（打开详情、收起侧栏都会变）：七列都放 / 去掉「尺寸 · 大小」/
+ * 图床写到文件名下面、状态收成 ⚠。分界按各档列宽之和 + 文件名至少约 180px 定（列宽见 --pn-grid-gallery-list*）。
+ * 还没量出宽度（0）时按最宽的画。
+ */
+export function listLayout(width: number): ListLayout {
+  if (width <= 0 || width >= 1080) return 'wide';
+  return width >= 820 ? 'narrow' : 'compact';
+}
