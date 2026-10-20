@@ -54,7 +54,7 @@ export interface HostDescriptor {
 
 const PUBLIC_DOMAIN_HELP = '建议 HTTPS；填 HTTP 时会确认一次，只对这个地址生效';
 
-const COOKIE_FIELDS: HostField[] = [{ key: 'cookie', label: 'Cookie', secret: true, wide: true }];
+const COOKIE_FIELDS: HostField[] = [{ key: 'cookie', label: 'Cookie', secret: true, wide: true, help: '登录后自动填入，也可点击输入框粘贴' }];
 
 function cookieHost(id: string, name: string): HostDescriptor {
   return {

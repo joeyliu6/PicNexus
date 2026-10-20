@@ -2,7 +2,7 @@
 // 图床表单（HostsScreen.dc.html 的 ghFields / r2Fields / nasFields）：两列网格，窄窗口单列；
 // 普通字段失焦且有改动即提交，敏感字段走 HostSecretField；测试失败的那一格红框 + 红字原因；
 // 明文 HTTP 地址标「HTTP · 已允许」（只对这个地址生效）；输入框里的链接（「在 GitHub 生成」）用系统浏览器打开。
-import { reactive, ref, watch } from 'vue';
+import { reactive, watch } from 'vue';
 import PnInput from '@/components/pn/PnInput.vue';
 import { openTrustedExternalUrl } from '@/security/shellOpen';
 import type { HostField } from './hostCatalog';
@@ -45,14 +45,6 @@ function cookieName(cookie: string | undefined): string {
   return match ? `${match[1]}=` : '';
 }
 
-const secretRefs = ref<Record<string, InstanceType<typeof HostSecretField> | null>>({});
-
-/** Cookie「手动粘贴」：把那一格切成编辑态 */
-function editSecret(key: string): void {
-  secretRefs.value[key]?.beginEdit();
-}
-
-defineExpose({ editSecret });
 </script>
 
 <template>
@@ -61,7 +53,6 @@ defineExpose({ editSecret });
       <HostSecretField
         v-if="field.secret"
         :id="`${idPrefix}-${field.key}`"
-        :ref="(el) => { secretRefs[field.key] = el as InstanceType<typeof HostSecretField> | null; }"
         :label="field.label"
         :required="field.required"
         :link="field.link"
@@ -72,7 +63,9 @@ defineExpose({ editSecret });
         :help="invalidField === field.key ? invalidReason : field.help"
         :placeholder="field.placeholder"
         @commit="(value) => emit('commit', field.key, value)"
-      />
+      >
+        <template v-if="$slots.aside" #aside><slot name="aside" :field="field" /></template>
+      </HostSecretField>
       <template v-else>
         <label class="host-fields__label" :for="`${idPrefix}-${field.key}`">
           {{ field.label }}<span v-if="field.required" class="host-fields__required"> *</span>

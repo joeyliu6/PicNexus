@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 图床详情（HostsScreen.dc.html、P01–P12）：头部 → 结果条 → 使用情况 → 设置 → 断开连接。
 // 同一个组件也画连接表单（未连接的图床，P03）：没有状态按钮、使用情况与断开连接，底部是「测试并连接」/「连接」/「登录…」。
-// Cookie 图床有问题时把「重新登录…」放在设置区最上面（P02）。测试结果不弹通知（页面上已经写着）。
-import { computed } from 'vue';
+// Cookie 图床有问题时把「重新登录…」放在设置区最上面（P02），平时放在 Cookie 字段旁。测试结果不弹通知（页面上已经写着）。
+// 检测进行中仍显示上一次的结果（变淡）：结果条、状态标签、红框、展开的高级选项不在开始检测时消失、出结果时再出现，页面不跳。
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
@@ -12,7 +13,7 @@ import { describeHost } from './hostCatalog';
 import { readHostValues } from './hostConfig';
 import HostHeader, { type HostPill } from './HostHeader.vue';
 import HostSettings from './HostSettings.vue';
-import { failSummary, okDetail } from './hostTestText';
+import { failSummary, okDetail, type HostTestState } from './hostTestText';
 import HostUsage from './HostUsage.vue';
 import { useHostUsage } from './useHostUsage';
 import { useHosts } from './useHosts';
@@ -33,20 +34,24 @@ const name = computed(() => (props.draft ? hosts.draft.value?.name ?? '' : hosts
 const values = computed(() => (props.draft ? hosts.draft.value?.values ?? {} : readHostValues(hosts.config.value, props.hostId)));
 const test = computed(() => hosts.tester.stateOf(props.hostId));
 const testing = computed(() => test.value.phase === 'testing');
+const lastResult = ref<HostTestState>(test.value.phase === 'testing' ? { phase: 'idle' } : test.value);
+watch(test, (state) => { if (state.phase !== 'testing') lastResult.value = state; });
+/** 页面上画的那份结果：检测中沿用上一次的 */
+const shown = computed<HostTestState>(() => (testing.value ? lastResult.value : test.value));
 const multi = computed(() => isWebDAVId(props.hostId) || isCustomS3Id(props.hostId));
 
 const { usage } = useHostUsage(computed(() => (props.draft ? null : props.hostId)));
 
 const pill = computed<HostPill | null>(() => {
   if (props.draft) return { text: '未连接', tone: 'off' };
-  if (test.value.phase === 'ok') return { text: `正常 · ${test.value.ms}ms`, tone: 'ok' };
-  if (test.value.phase === 'fail') return { text: row.value?.problem ?? '连接异常', tone: 'bad' };
-  if (test.value.phase !== 'testing' && row.value?.problem) return { text: row.value.problem, tone: 'bad' };
+  if (shown.value.phase === 'ok') return { text: `正常 · ${shown.value.ms}ms`, tone: 'ok' };
+  if (shown.value.phase === 'fail') return { text: row.value?.problem ?? '连接异常', tone: 'bad' };
+  if (row.value?.problem) return { text: row.value.problem, tone: 'bad' };
   return null;
 });
 
-const fail = computed(() => (test.value.phase === 'fail' ? failSummary(descriptor.value, test.value) : null));
-const okText = computed(() => (test.value.phase === 'ok' ? okDetail(descriptor.value, test.value.steps) : ''));
+const fail = computed(() => (shown.value.phase === 'fail' ? failSummary(descriptor.value, shown.value) : null));
+const okText = computed(() => (shown.value.phase === 'ok' ? okDetail(descriptor.value, shown.value.steps) : ''));
 
 /** Cookie 图床出了问题：「重新登录…」放最上面 */
 const loginExpired = computed(() => !props.draft && descriptor.value.kind === 'cookie' && !!row.value?.problem);
@@ -107,10 +112,10 @@ const disconnectNote = computed(() => (multi.value
       @rename="(n) => (draft && hosts.draft.value ? (hosts.draft.value.name = n) : hosts.rename(hostId, n))"
     />
 
-    <div v-if="test.phase === 'ok'" class="host-detail__result host-detail__result--ok" role="status">
-      <PnIcon name="check" :size="14" :stroke="2.4" />服务可用 · {{ test.ms }}ms<span v-if="okText" class="host-detail__result-more">· {{ okText }}</span>
+    <div v-if="shown.phase === 'ok'" class="host-detail__result host-detail__result--ok" :class="{ 'host-detail__result--stale': testing }" role="status">
+      <PnIcon name="check" :size="14" :stroke="2.4" />服务可用 · {{ shown.ms }}ms<span v-if="okText" class="host-detail__result-more">· {{ okText }}</span>
     </div>
-    <div v-else-if="fail" class="host-detail__result host-detail__result--fail" role="alert">
+    <div v-else-if="fail" class="host-detail__result host-detail__result--fail" :class="{ 'host-detail__result--stale': testing }" role="alert">
       <PnIcon name="failRound" :size="14" :stroke="2" class="host-detail__fail-icon" />
       <b class="host-detail__fail-title">{{ fail.title }}</b><span v-if="fail.detail" class="host-detail__result-more">{{ fail.detail }}</span>
     </div>
@@ -131,9 +136,11 @@ const disconnectNote = computed(() => (multi.value
       :descriptor="descriptor"
       :values="values"
       :draft="draft"
-      :test="test"
+      :test="shown"
       :narrow="narrow"
+      :login-action="!draft && !loginExpired"
       @commit="commit"
+      @login="hosts.login(hostId)"
     />
 
     <div v-if="draft" class="host-detail__connect">
@@ -160,6 +167,7 @@ const disconnectNote = computed(() => (multi.value
   gap: var(--pn-space-8);
   padding: var(--pn-space-host-result);
   border-radius: var(--pn-radius-lg);
+  transition: opacity var(--pn-dur-standard) var(--pn-ease-in);
 }
 
 .host-detail__result--ok {
@@ -174,6 +182,9 @@ const disconnectNote = computed(() => (multi.value
 }
 
 .host-detail__fail-icon { flex: none; color: var(--pn-danger); }
+
+/* 检测中：上一次的结果留在原处变淡，不消失 */
+.host-detail__result--stale { opacity: var(--pn-opacity-disabled); }
 
 .host-detail__fail-title {
   color: var(--pn-danger);

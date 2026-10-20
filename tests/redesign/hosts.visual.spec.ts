@@ -114,6 +114,16 @@ const STATES: Record<string, State> = {
     },
   },
   'P02-weibo': { act: async (page) => { await pick(page, '微博'); } },
+  // 登录正常的 Cookie 图床点进输入框：「重新登录…」与输入框同一行，下面的说明换成编辑提示，按钮不跟着上下跳
+  'P02b-weibo-editing': {
+    data: { files: { '/mock/appdata/.sync-status.dat': JSON.stringify({ serviceHealth: {} }) } },
+    act: async (page) => {
+      await pick(page, '微博');
+      await expect(detail(page).getByRole('button', { name: '重新登录…' })).toBeVisible();
+      await detail(page).getByRole('button', { name: '修改Cookie' }).click();
+      await expect(detail(page)).toContainText('失焦后自动保存并测试');
+    },
+  },
   'P03-github': {
     act: async (page) => {
       await list(page).getByRole('button', { name: '添加图床' }).click();

@@ -127,7 +127,7 @@ flowchart TD
 
     %% 超时分支：计时与轮询兜底同时启动，两条通道共用同一个超时预算
     I & J -.-> TIMEOUT{超时?<br/>默认 60秒}
-    TIMEOUT -- 是 --> TIMEOUT1[发 cookie-monitoring-timeout<br/>Toast: X登录超时<br/>处理办法指向重新登录 / 手动粘贴]
+    TIMEOUT -- 是 --> TIMEOUT1[发 cookie-monitoring-timeout<br/>Toast: X登录超时<br/>处理办法指向重新登录 / 粘贴 Cookie]
 
     style U fill:#e8f5e9,stroke:#2e7d32
     style TIMEOUT1 fill:#ffebee,stroke:#c62828

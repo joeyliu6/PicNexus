@@ -1,4 +1,4 @@
-// 设置区：测试指到收在「高级选项」里的那一格时展开；用户改那一格时不能边改边收起
+// 设置区：测试指到收在「高级选项」里的那一格时展开；用户改那一格时不能边改边收起；Cookie 字段旁是「重新登录…」
 import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { mount } from '@vue/test-utils';
@@ -37,5 +37,20 @@ describe('HostSettings', () => {
     expect(badges(mountWebdav(lan))).toBe(1);
     expect(badges(mountWebdav({ ...lan, lanHttpConfirmed: 'true' }))).toBe(2);
     expect(badges(mountWebdav({ url: 'https://dav.example.com', publicDomain: 'http://img.example.com' }))).toBe(0);
+  });
+
+  it('已连接的 Cookie 图床：「重新登录…」与输入框同一行，点它发 login；没有「手动粘贴」', async () => {
+    const IDLE = { phase: 'idle' } as const;
+    const wrapper = mount(HostSettings, {
+      props: { hostId: 'weibo', descriptor: describeHost('weibo')!, values: { cookie: 'SUB=1' }, draft: false, test: IDLE, narrow: false, loginAction: true },
+    });
+    const button = wrapper.get('.host-secret__row .pn-button');
+    expect(button.text()).toBe('重新登录…');
+    await button.trigger('click');
+    expect(wrapper.emitted('login')).toHaveLength(1);
+    expect(wrapper.text()).not.toContain('手动粘贴');
+
+    await wrapper.setProps({ loginAction: false });
+    expect(wrapper.find('.host-secret__row .pn-button').exists()).toBe(false);
   });
 });

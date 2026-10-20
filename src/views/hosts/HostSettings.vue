@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 图床详情的设置区（HostsScreen.dc.html 按图床类型分块）：免配置说明；Cookie 字段 +「手动粘贴」+ 微博链接前缀 / 知乎参数；
+// 图床详情的设置区（HostsScreen.dc.html 按图床类型分块）：免配置说明；Cookie 字段 +「重新登录…」+ 微博链接前缀 / 知乎参数；
 // Token 与对象存储的表单；「高级选项」收起（摘要写在按钮旁）；R2 缩略图加速、WebDAV 防覆盖的开关写明代价。
 // 已连接的图床逐项即存（父组件保存后自动测试）；连接表单里只改草稿。
 import { computed, ref } from 'vue';
+import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import PnSwitch from '@/components/pn/PnSwitch.vue';
 import {
@@ -27,14 +28,15 @@ const props = defineProps<{
   draft: boolean;
   test: HostTestState;
   narrow: boolean;
+  /** Cookie 字段旁放「重新登录…」（已连接、且登录没过期时；过期时详情顶上已有这个按钮） */
+  loginAction?: boolean;
 }>();
 
-const emit = defineEmits<{ commit: [key: string, value: string] }>();
+const emit = defineEmits<{ commit: [key: string, value: string]; login: [] }>();
 
 const hosts = useHosts();
 const config = hosts.config;
 const showAdvanced = ref(false);
-const fieldsRef = ref<InstanceType<typeof HostFields> | null>(null);
 
 const invalidField = computed(() => (props.test.phase === 'fail' && !props.test.edited ? props.test.field : undefined));
 const invalidReason = computed(() => (props.test.phase === 'fail' ? props.test.reason : undefined));
@@ -157,8 +159,6 @@ function setService(id: string, patch: Record<string, unknown>): void {
 function setUniqueName(value: boolean): void {
   void hosts.saveSetting((c) => ({ ...c, webdav_profiles: (c.webdav_profiles ?? []).map((p) => (`webdav:${p.id}` === props.hostId ? { ...p, uniqueFileName: value } : p)) }));
 }
-
-defineExpose({ pasteCookie: () => fieldsRef.value?.editSecret('cookie') });
 </script>
 
 <template>
@@ -169,24 +169,22 @@ defineExpose({ pasteCookie: () => fieldsRef.value?.editSecret('cookie') });
       <span class="host-settings__muted">无需账号。此为非官方适配的公共图床，可能随时失效，建议同时上传到自有存储（如 Cloudflare R2）作为备份。</span>
     </div>
 
-    <!-- Cookie：字段 +「手动粘贴」 -->
+    <!-- Cookie：字段（点进去即可粘贴）+「重新登录…」（打开官方登录页，登录后自动填入） -->
     <template v-else-if="descriptor.kind === 'cookie'">
-      <div class="host-settings__cookie">
-        <HostFields
-          ref="fieldsRef"
-          class="host-settings__cookie-field"
-          :fields="descriptor.fields"
-          :values="values"
-          :invalid-field="invalidField"
-          :invalid-reason="invalidReason"
-          :reveal="reveal"
-          :narrow="true"
-          :id-prefix="`host-${descriptor.id}`"
-          @commit="(k, v) => emit('commit', k, v)"
-        />
-        <button type="button" class="host-settings__paste" @click="fieldsRef?.editSecret('cookie')">手动粘贴</button>
-      </div>
-      <span v-if="!invalidField" class="host-settings__hint">登录信息将自动填入</span>
+      <HostFields
+        :fields="descriptor.fields"
+        :values="values"
+        :invalid-field="invalidField"
+        :invalid-reason="invalidReason"
+        :reveal="reveal"
+        :narrow="true"
+        :id-prefix="`host-${descriptor.id}`"
+        @commit="(k, v) => emit('commit', k, v)"
+      >
+        <template v-if="loginAction" #aside>
+          <PnButton variant="secondary" @click="emit('login')">重新登录…</PnButton>
+        </template>
+      </HostFields>
       <HostTemplateList
         v-if="descriptor.id === 'weibo'"
         title="链接前缀"
@@ -307,33 +305,6 @@ defineExpose({ pasteCookie: () => fieldsRef.value?.editSecret('cookie') });
 
 .host-settings__box-title { font-weight: var(--pn-weight-semibold); }
 .host-settings__muted { color: var(--pn-text2); }
-
-.host-settings__cookie {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--pn-space-8);
-}
-
-.host-settings__cookie-field { flex: 1; min-width: 0; }
-
-.host-settings__paste {
-  flex: none;
-  height: var(--pn-size-control);
-  padding: 0 var(--pn-space-12);
-  border: 0;
-  border-radius: var(--pn-radius-md);
-  background: var(--pn-secondary-bg);
-  box-shadow: var(--pn-secondary-ring);
-  color: var(--pn-text1);
-  font: inherit;
-  cursor: pointer;
-}
-
-.host-settings__hint {
-  margin-top: calc(var(--pn-space-16) * -1 + var(--pn-space-6));
-  color: var(--pn-text3);
-  font-size: var(--pn-text-footnote);
-}
 
 .host-settings__advanced {
   display: flex;

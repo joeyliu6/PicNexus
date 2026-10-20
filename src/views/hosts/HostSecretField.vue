@@ -68,7 +68,7 @@ function hide(): void {
   if (mode.value === 'revealed') mode.value = 'masked';
 }
 
-/** 点进字段（含 Cookie 的「手动粘贴」）：清空等待粘贴 */
+/** 点进字段：清空等待粘贴 */
 function beginEdit(): void {
   if (mode.value === 'editing') return;
   hide();
@@ -110,36 +110,40 @@ onBeforeUnmount(() => clearTimeout(timer));
 <template>
   <div class="host-secret">
     <label class="host-secret__label" :for="id">{{ label }}<span v-if="required" class="host-secret__required"> *</span></label>
-    <div class="host-secret__box" :class="{ 'host-secret__box--invalid': invalid, 'host-secret__box--editing': mode === 'editing' }">
-      <input
-        v-if="mode === 'editing'"
-        :id="id"
-        ref="input"
-        v-model="draft"
-        class="host-secret__input"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        :placeholder="placeholder"
-        @input="onInput"
-        @blur="finish"
-        @keydown.enter.prevent="input?.blur()"
-        @keydown.esc.prevent="cancel"
-      >
-      <button
-        v-else
-        :id="id"
-        type="button"
-        class="host-secret__value"
-        :class="{ 'host-secret__value--empty': empty }"
-        :aria-label="`修改${label}`"
-        @click="beginEdit"
-      >
-        {{ mode === 'revealed' ? plain : hasValue ? maskPrefix + MASK : placeholder }}
-      </button>
-      <a v-if="link && mode !== 'editing'" class="host-secret__link" href="#" @click.prevent="openTrustedExternalUrl(link.url)">{{ link.label }}</a>
-      <button v-if="mode === 'editing'" type="button" class="host-secret__action host-secret__action--muted" @mousedown.prevent @click="cancel">取消</button>
-      <button v-else-if="hasValue" type="button" class="host-secret__action" @click="toggleReveal">{{ mode === 'revealed' ? '隐藏' : '查看' }}</button>
+    <div class="host-secret__row">
+      <div class="host-secret__box" :class="{ 'host-secret__box--invalid': invalid, 'host-secret__box--editing': mode === 'editing' }">
+        <input
+          v-if="mode === 'editing'"
+          :id="id"
+          ref="input"
+          v-model="draft"
+          class="host-secret__input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          :placeholder="placeholder"
+          @input="onInput"
+          @blur="finish"
+          @keydown.enter.prevent="input?.blur()"
+          @keydown.esc.prevent="cancel"
+        >
+        <button
+          v-else
+          :id="id"
+          type="button"
+          class="host-secret__value"
+          :class="{ 'host-secret__value--empty': empty }"
+          :aria-label="`修改${label}`"
+          @click="beginEdit"
+        >
+          {{ mode === 'revealed' ? plain : hasValue ? maskPrefix + MASK : placeholder }}
+        </button>
+        <a v-if="link && mode !== 'editing'" class="host-secret__link" href="#" @click.prevent="openTrustedExternalUrl(link.url)">{{ link.label }}</a>
+        <button v-if="mode === 'editing'" type="button" class="host-secret__action host-secret__action--muted" @mousedown.prevent @click="cancel">取消</button>
+        <button v-else-if="hasValue" type="button" class="host-secret__action" @click="toggleReveal">{{ mode === 'revealed' ? '隐藏' : '查看' }}</button>
+      </div>
+      <!-- 框右边的按钮（Cookie 的「重新登录…」）：和框同一行，下面的说明文字变化不会带着它上下跳 -->
+      <slot name="aside" />
     </div>
     <span v-if="invalid && help" class="host-secret__help host-secret__help--error">{{ help }}</span>
     <span v-else-if="mode === 'editing'" class="host-secret__help">{{ joinCjk('粘贴新的', label, '，失焦后自动保存并测试') }}</span>
@@ -162,8 +166,17 @@ onBeforeUnmount(() => clearTimeout(timer));
   font-weight: var(--pn-weight-medium);
 }
 
+.host-secret__row {
+  display: flex;
+  align-items: center;
+  gap: var(--pn-space-8);
+  min-width: 0;
+}
+
 .host-secret__box {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: var(--pn-space-8);
   height: var(--pn-size-control);
