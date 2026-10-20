@@ -49,9 +49,9 @@
   --pn-checker-b: #EDEDED;
   /* 引用 --pn-checker-b 的渐变要和颜色写在同一段：写在 :root 会在根元素上按根的主题算死，压缩预览这类 data-theme="dark" 的区域拿到的仍是浅色格子 */
   --pn-checker: linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%), linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%);
-  /* 同理：总进度条渐变、日历选中格的外圈 */
+  /* 同理：总进度条渐变、日历选中格的外圈（整圈落在格子间 2px 的空隙里：不盖住邻格，也不被邻格盖住；隔开色那圈画在格子里面） */
   --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
-  --pn-calendar-pick-ring: 0 0 0 2px var(--pn-surface), 0 0 0 3.5px var(--pn-text1);
+  --pn-calendar-pick-ring: inset 0 0 0 1px var(--pn-surface), 0 0 0 1.5px var(--pn-text1);
   /* 图床页（HostsScreen.dc.html）：状态标签底色、左栏悬停行、近 14 天柱子（今天用品牌蓝） */
   --pn-host-pill-ok: #ECF7EF;
   --pn-host-pill-bad: #FEF4E6;
@@ -100,7 +100,7 @@
   --pn-checker-b: #333337;
   --pn-checker: linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%), linear-gradient(45deg, var(--pn-checker-b) 25%, transparent 25%, transparent 75%, var(--pn-checker-b) 75%);
   --pn-progress-fill: linear-gradient(90deg, var(--pn-grad-a), var(--pn-grad-b));
-  --pn-calendar-pick-ring: 0 0 0 2px var(--pn-surface), 0 0 0 3.5px var(--pn-text1);
+  --pn-calendar-pick-ring: inset 0 0 0 1px var(--pn-surface), 0 0 0 1.5px var(--pn-text1);
   --pn-host-pill-ok: rgba(34, 197, 94, 0.14);
   --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
