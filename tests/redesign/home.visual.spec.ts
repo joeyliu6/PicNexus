@@ -215,7 +215,7 @@ const STATES: Record<string, HomeState> = {
       await untilVisible(page, page.getByRole('button', { name: '+2' }));
       await untilIdle(page);
       await page.getByRole('button', { name: '+2' }).click();
-      await expect(page.locator('.focus-card__more')).toBeVisible();
+      await expect(page.locator('.focus-chips__more')).toBeVisible();
     },
   },
   'H21-menu-upload-to-many': {

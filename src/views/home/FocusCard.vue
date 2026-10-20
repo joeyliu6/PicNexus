@@ -3,8 +3,9 @@
 // 第一个图床完成 → 链接出现、自动复制，卡片变「已复制 · Markdown」（这个标签同时是格式开关）。
 // 部分失败：链接照常来自最先成功的图床，失败图床的花瓣变红，一行写原因 + 两个下一步。
 // 全部失败：不显示链接，并明说剪贴板没有变。
+// 图框跟着图片的比例与原图大小变（最大 288 × 162），不留两边的空；显示原图（加载不出来退到缩略图），点开看大图。
 import { computed, ref, watch } from 'vue';
-import HostIcon from '@/components/biz/HostIcon.vue';
+import ImageViewer from '@/components/biz/ImageViewer.vue';
 import LinkBlock from '@/components/biz/LinkBlock.vue';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
 import PreviewFrame from '@/components/biz/PreviewFrame.vue';
@@ -19,11 +20,11 @@ import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
 import { getImageMetadata } from '@/composables/image/useImageMetadata';
 import { formatLinkWithConfig } from '@/composables/useCopyLink';
-import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import type { UploadHost } from '@/composables/upload/useUploadController';
 import { hasLink, hostFailureText, hostViews, itemPhase, petalStates, type UploadSession } from '@/composables/upload/uploadSessions';
 import { formatRelativeTime, formatSizeChange } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
+import FocusHostChips from './FocusHostChips.vue';
 import UploadToPanel from './UploadToPanel.vue';
 
 const props = defineProps<{
@@ -48,10 +49,8 @@ const emit = defineEmits<{
   retryHost: [hostId: string];
   retryItem: [];
   uploadAgainWith: [hostIds: string[]];
-  openInGallery: [];
 }>();
 
-const { markCopied, isCopied } = useCopyBadgeFeedback(1500);
 
 const phase = computed(() => itemPhase(props.item));
 const linkReady = computed(() => hasLink(props.item));
@@ -62,10 +61,6 @@ const doneHosts = computed(() => hostRows.value.filter((h) => h.state === 'done'
 const failedHosts = computed(() => hostRows.value.filter((h) => h.state === 'failed'));
 const finishedCount = computed(() => doneHosts.value.length);
 const hostsTitle = computed(() => doneHosts.value.map((h) => nameOf(h.id)).join('、'));
-/** CopyMulti.dc.html ②：4 个以上只露前 3 个，其余收进「+N」 */
-const SHOWN_HOSTS = 3;
-const shownHosts = computed(() => (doneHosts.value.length > SHOWN_HOSTS ? doneHosts.value.slice(0, SHOWN_HOSTS) : doneHosts.value));
-const moreHosts = computed(() => (doneHosts.value.length > SHOWN_HOSTS ? doneHosts.value.slice(SHOWN_HOSTS) : []));
 /** 只勾了一个图床时不说「均」 */
 const failedAllTitle = computed(() => (hostRows.value.length === 1 ? `${nameOf(hostRows.value[0].id)}上传失败` : `${hostRows.value.length} 个图床均上传失败`));
 /** 「已复制 · X」写实际复制时的格式，不是现在的默认格式 */
@@ -85,7 +80,14 @@ const copiedLink = computed(() => {
 });
 
 const baseName = computed(() => props.item.fileName.replace(/\.[^.]+$/, ''));
-const thumbSrcs = computed(() => getThumbnailCandidates(props.item, props.config));
+/** 原图在前（复制的那份，再是其他完成的图床），缩略图垫后 */
+const imageSrcs = computed(() => {
+  const links = [props.copySource, ...doneHosts.value.map((h) => h.id)]
+    .map((hostId) => (hostId ? props.item.serviceProgress[hostId]?.link : undefined))
+    .filter((link): link is string => !!link);
+  return [...new Set([...links, ...getThumbnailCandidates(props.item, props.config)])];
+});
+const viewerOpen = ref(false);
 const confirmedHttpHosts = useConfirmedHttpHosts(() => props.config);
 const reasonOf = (hostId: string, error?: string) => hostFailureText(hostId, error, props.hosts).reason;
 /** 整张失败：原因 + 处理办法（「网络超时。请检查网络后重试。」） */
@@ -107,6 +109,11 @@ watch(() => props.item.filePath, async (filePath) => {
   }
 }, { immediate: true });
 
+/** 图框按图片比例与原图大小（CSS 里算，见 .focus-card__thumb） */
+const frameStyle = computed(() => (meta.value?.width && meta.value.height
+  ? { '--focus-w': meta.value.width, '--focus-h': meta.value.height, '--focus-cap-w': `${meta.value.width}px`, '--focus-cap-h': `${meta.value.height}px` }
+  : {}));
+
 const metaLine = computed(() => {
   const parts = [formatRelativeTime(props.session.startedAt)];
   if (meta.value?.width && meta.value.height) parts.push(`${meta.value.width} × ${meta.value.height}`);
@@ -120,17 +127,13 @@ const formatOptions = (['url', 'markdown', 'html', 'bbcode', 'custom'] as const)
 const formatModel = computed({ get: () => copiedFormat.value, set: (value: LinkFormat) => emit('setFormat', value) });
 
 const changeHostsOpen = ref(false);
-function copyHost(hostId: string) {
-  emit('copyHost', hostId);
-  markCopied(hostId);
-}
 </script>
 
 <template>
   <section class="focus-card" :aria-label="failedAll ? '上传失败' : linkReady ? '刚刚上传' : '正在上传'">
-    <button type="button" class="focus-card__thumb" title="在图库中查看" :disabled="!linkReady" @click="emit('openInGallery')">
+    <button type="button" class="focus-card__thumb" :style="frameStyle" title="查看大图" :disabled="!linkReady" @click="viewerOpen = true">
       <PreviewFrame
-        v-if="linkReady" :srcs="thumbSrcs" :name="item.fileName" :ratio="meta ? meta.width / meta.height : undefined"
+        v-if="linkReady" :srcs="imageSrcs" :name="item.fileName" :ratio="meta ? meta.width / meta.height : undefined"
         :natural-width="meta?.width" :confirmed-http-hosts="confirmedHttpHosts"
       />
       <span v-else class="focus-card__placeholder"><PnIcon name="gallery" :size="28" :stroke="1.4" /></span>
@@ -207,51 +210,20 @@ function copyHost(hostId: string) {
           <PnButton variant="ghost" size="sm" @click="emit('retryHost', host.id)">重试此图床</PnButton>
         </div>
       </template>
-      <div v-else-if="linkReady && doneHosts.length" class="focus-card__chips">
-        <span class="focus-card__muted focus-card__chips-label">按图床复制</span>
-        <button
-          v-for="host in shownHosts"
-          :key="host.id"
-          type="button"
-          class="focus-card__chip"
-          :title="isCopied(host.id) ? `已复制${nameOf(host.id)}链接` : `复制 ${nameOf(host.id)} 链接`"
-          @click="copyHost(host.id)"
-        >
-          <HostIcon :host="host.id" :name="nameOf(host.id)" :size="14" class="focus-card__chip-icon" />
-          {{ nameOf(host.id) }}
-          <PnIcon v-if="isCopied(host.id) || (session.copied && host.id === copySource)" name="check" :size="12" :stroke="2.6" class="focus-card__success" />
-          <PnIcon v-else name="copy" :size="12" :stroke="1.9" class="focus-card__muted" />
-        </button>
-        <!-- 「+N」是这一行最后一个，右对齐才不会伸出卡片 -->
-        <PnPopover v-if="moreHosts.length" align="end" label="其他图床">
-          <template #trigger>
-            <button type="button" class="focus-card__chip focus-card__chip--more">
-              +{{ moreHosts.length }}
-              <PnIcon name="chevronDown" :size="11" :stroke="2.2" />
-            </button>
-          </template>
-          <div class="focus-card__more">
-            <span class="focus-card__more-title">其他 {{ moreHosts.length }} 个图床</span>
-            <div v-for="host in moreHosts" :key="host.id" class="focus-card__more-row">
-              <HostIcon :host="host.id" :name="nameOf(host.id)" :size="16" class="focus-card__chip-icon" />
-              <span class="focus-card__more-name">{{ nameOf(host.id) }}</span>
-              <span class="focus-card__muted">正常</span>
-              <button type="button" class="focus-card__more-copy" :aria-label="`复制${nameOf(host.id)}的链接`" @click="copyHost(host.id)">
-                <PnIcon :name="isCopied(host.id) ? 'check' : 'copy'" :size="12" :stroke="isCopied(host.id) ? 2.4 : 1.9" />
-                {{ isCopied(host.id) ? '已复制' : '复制' }}
-              </button>
-            </div>
-            <span class="focus-card__more-line" />
-            <button type="button" class="focus-card__more-all" @click="emit('copyAllHosts'); markCopied('all')">
-              <PnIcon :name="isCopied('all') ? 'check' : 'copy'" :size="12" :stroke="isCopied('all') ? 2.4 : 1.9" />
-              <span class="focus-card__more-name">{{ isCopied('all') ? '已复制' : `复制全部 ${doneHosts.length} 条（每行一条）` }}</span>
-              <span class="focus-card__muted">按图床顺序</span>
-            </button>
-          </div>
-        </PnPopover>
-      </div>
+      <FocusHostChips
+        v-else-if="linkReady && doneHosts.length"
+        :host-ids="doneHosts.map((h) => h.id)"
+        :name-of="nameOf"
+        :auto-copied-id="session.copied ? copySource : undefined"
+        @copy-host="emit('copyHost', $event)"
+        @copy-all="emit('copyAllHosts')"
+      />
       <span v-else-if="!linkReady && autoCopy" class="focus-card__hint">首个图床完成后自动复制链接</span>
     </div>
+    <ImageViewer
+      v-model:open="viewerOpen" :srcs="imageSrcs" :name="item.fileName" :width="meta?.width" :height="meta?.height"
+      :meta="metaLine" :confirmed-http-hosts="confirmedHttpHosts"
+    />
   </section>
 </template>
 
@@ -267,10 +239,16 @@ function copyHost(hostId: string) {
 }
 
 .focus-card__thumb {
+  --focus-w: 16;
+  --focus-h: 9;
+
   position: relative;
   flex: none;
-  width: var(--pn-size-focus-thumb-w);
-  height: var(--pn-size-focus-thumb-h);
+  align-self: flex-start;
+
+  /* 最大 288 × 162、不超过原图、按比例；太窄太小的不小于 96（空处铺模糊衬底） */
+  width: max(var(--pn-size-focus-thumb-min), min(var(--pn-size-focus-thumb-w), var(--focus-cap-w, 100vw), calc(var(--pn-size-focus-thumb-h) * var(--focus-w) / var(--focus-h))));
+  height: max(var(--pn-size-focus-thumb-min), min(var(--pn-size-focus-thumb-h), var(--focus-cap-h, 100vh), calc(var(--pn-size-focus-thumb-w) * var(--focus-h) / var(--focus-w))));
   padding: 0;
   overflow: hidden;
   border: 0;
@@ -405,87 +383,9 @@ button.focus-card__pill { padding-right: var(--pn-space-8); cursor: pointer; }
 .focus-card__muted { color: var(--pn-text3); }
 .focus-card__success { color: var(--pn-success); }
 
-.focus-card__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pn-space-6); }
-.focus-card__chips-label { margin-right: var(--pn-space-4); font-size: var(--pn-text-footnote); }
-
-.focus-card__chip {
-  display: flex;
-  align-items: center;
-  gap: var(--pn-space-6);
-  height: var(--pn-size-chip);
-  padding: 0 var(--pn-space-sidebar-x) 0 var(--pn-space-8);
-  border: 0;
-  border-radius: var(--pn-size-chip);
-  background: var(--pn-subtle);
-  color: var(--pn-text1);
-  font: inherit;
-  font-size: var(--pn-text-footnote);
-  cursor: pointer;
-}
-
-.focus-card__chip:hover { background: var(--pn-ghost-press); }
-.focus-card__chip-icon { color: var(--pn-text2); }
-
 .focus-card__hint { font-size: var(--pn-text-footnote); color: var(--pn-text2); }
 
-/* 「+N」展开的完整列表（CopyMulti.dc.html ②：宽 330、行高 36） */
-.focus-card__chip--more { gap: var(--pn-space-4); background: var(--pn-selected); font-weight: var(--pn-weight-medium); }
 
-.focus-card__more {
-  display: flex;
-  flex-direction: column;
-  width: var(--pn-size-copy-more);
-}
-
-.focus-card__more-title {
-  padding: var(--pn-space-6) var(--pn-space-8) var(--pn-space-4);
-  color: var(--pn-text3);
-  font-size: var(--pn-text-caption);
-  font-weight: var(--pn-weight-medium);
-}
-
-.focus-card__more-row {
-  display: flex;
-  align-items: center;
-  gap: var(--pn-space-copy-more-gap);
-  height: var(--pn-size-copy-more-row);
-  padding: 0 var(--pn-space-8);
-  border-radius: var(--pn-radius-button-sm);
-}
-
-.focus-card__more-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.focus-card__more-copy {
-  display: flex;
-  align-items: center;
-  gap: var(--pn-space-4);
-  height: var(--pn-size-copy-more-button);
-  padding: 0 var(--pn-space-8);
-  border: 0;
-  border-radius: var(--pn-radius-sm);
-  background: var(--pn-subtle);
-  color: var(--pn-text1);
-  font: inherit;
-  font-size: var(--pn-text-footnote);
-}
-
-.focus-card__more-line { height: 1px; margin: var(--pn-space-6) var(--pn-space-8); background: var(--pn-border); }
-
-.focus-card__more-all {
-  display: flex;
-  align-items: center;
-  gap: var(--pn-space-8);
-  height: var(--pn-size-button-lg);
-  padding: 0 var(--pn-space-8);
-  border: 0;
-  border-radius: var(--pn-radius-button-sm);
-  background: transparent;
-  color: var(--pn-text1);
-  font: inherit;
-  text-align: left;
-}
-
-.focus-card__more-all:hover { background: var(--pn-menu-sel); }
 
 
 @media (prefers-reduced-motion: reduce) {

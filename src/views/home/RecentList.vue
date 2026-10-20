@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// 「最近上传」（HomeScreen.dc.html）：这次打开应用后的上传（焦点卡之外的），再往下是「更早」的图库记录。
+// 「最近上传」（HomeScreen.dc.html）：这次打开应用后的上传（含焦点卡里那一次），再往下是「更早」的图库记录。
+// 点缩略图看大图（原图在前、缩略图垫后）；点第二行的链接直接复制，原地变「已复制」。
 // 每行平时只写状态（花瓣）；悬停或键盘聚焦时右侧换成「复制 ⋯」。失败、部分失败、上传中的行一直露着自己的下一步。
 // 「清空」只清这个列表，不影响图库记录；上传中不可清空。单条复制在按钮上原地显示「已复制」，不弹通知。
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import CopyButton from '@/components/biz/CopyButton.vue';
+import ImageViewer from '@/components/biz/ImageViewer.vue';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
@@ -13,11 +15,12 @@ import type { HistoryItem, UserConfig } from '@/config/types';
 import type { QueueItem } from '@/core/UploadQueue';
 import { getThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
+import { getImageMetadata } from '@/composables/image/useImageMetadata';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import { formatLinkWithConfig, type CopyLinkResult } from '@/composables/useCopyLink';
 import type { UploadHost } from '@/composables/upload/useUploadController';
 import { firstFailure, hostFailureText, hostViews, itemPhase, petalStates, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
-import { formatRelativeTime, formatShortDateTime } from '@/utils/formatters';
+import { formatFileSize, formatRelativeTime, formatShortDateTime } from '@/utils/formatters';
 import type { LinkFormat } from '@/utils/linkFormatter';
 import type { PetalState } from '@/utils/petals';
 import RecentRow from './RecentRow.vue';
@@ -114,6 +117,39 @@ async function copy(key: string, run: () => Promise<CopyLinkResult | boolean | n
   if (result === true || (result && typeof result === 'object' && result.ok)) markCopied(key);
 }
 
+// ---- 看大图 ----
+const viewer = ref<{ srcs: string[]; name: string; width?: number; height?: number; meta?: string } | null>(null);
+const viewerOpen = computed({ get: () => !!viewer.value, set: (open: boolean) => { if (!open) viewer.value = null; } });
+const dims = (width?: number, height?: number, size?: number) => [width && height ? `${width} × ${height}` : '', size ? formatFileSize(size) : ''].filter(Boolean).join(' · ');
+
+async function viewItem(item: QueueItem): Promise<void> {
+  const source = props.copySourceOf(item);
+  const links = [source, ...hostViews(item).filter((h) => h.state === 'done').map((h) => h.id)]
+    .map((hostId) => (hostId ? item.serviceProgress[hostId]?.link : undefined))
+    .filter((link): link is string => !!link);
+  const meta = await getImageMetadata(item.filePath).catch(() => null);
+  viewer.value = {
+    srcs: [...new Set([...links, ...getThumbnailCandidates(item, props.config)])],
+    name: item.fileName,
+    width: meta?.width,
+    height: meta?.height,
+    meta: dims(meta?.width, meta?.height, meta?.file_size),
+  };
+}
+
+function viewHistory(item: HistoryItem): void {
+  const links = [item.primaryService, ...item.results.map((r) => r.serviceId)]
+    .map((hostId) => item.results.find((r) => r.serviceId === hostId && r.status === 'success')?.result?.url)
+    .filter((link): link is string => !!link);
+  viewer.value = {
+    srcs: [...new Set([...links, ...getThumbnailCandidates(item, props.config)])],
+    name: item.localFileName,
+    width: item.width,
+    height: item.height,
+    meta: dims(item.width, item.height, item.fileSize),
+  };
+}
+
 function truncated(name: string): string {
   return name.length > 28 ? `${name.slice(0, 20)}…${name.slice(-8)}` : name;
 }
@@ -166,11 +202,23 @@ function truncated(name: string): string {
           :time="formatRelativeTime(row.session.startedAt)"
           :thumb-srcs="itemPhase(row.items[0]) === 'failed' ? [] : getThumbnailCandidates(row.items[0], config)"
           :confirmed-http-hosts="confirmedHttpHosts"
+          :viewable="itemPhase(row.items[0]) !== 'uploading'"
+          @view="viewItem(row.items[0])"
         >
           <template #second>
             <span v-if="itemPhase(row.items[0]) === 'failed'" class="recent__danger">
               上传失败 · {{ firstFailure(row.items[0]) ? failureLine(firstFailure(row.items[0])!.id, firstFailure(row.items[0])!.error) : '请稍后重试' }}
             </span>
+            <button
+              v-else-if="itemPhase(row.items[0]) !== 'uploading' && linkText(row.items[0])"
+              type="button"
+              class="recent__mono recent__link"
+              :class="{ 'recent__link--done': copiedKey === `item:${row.items[0].id}` }"
+              title="点击复制"
+              @click="copy(`item:${row.items[0].id}`, () => copyItem(row.items[0].id))"
+            >
+              {{ copiedKey === `item:${row.items[0].id}` ? '已复制' : linkText(row.items[0]) }}
+            </button>
             <span v-else class="recent__mono">{{ linkText(row.items[0]) }}</span>
           </template>
           <template #action>
@@ -211,8 +259,21 @@ function truncated(name: string): string {
         :time="formatShortDateTime(item.timestamp)"
         :thumb-srcs="getThumbnailCandidates(item, config)"
         :confirmed-http-hosts="confirmedHttpHosts"
+        viewable
+        @view="viewHistory(item)"
       >
-        <template #second><span class="recent__mono">{{ historyLink(item) }}</span></template>
+        <template #second>
+          <button
+            v-if="historyLink(item)"
+            type="button"
+            class="recent__mono recent__link"
+            :class="{ 'recent__link--done': copiedKey === `history:${item.id}` }"
+            title="点击复制"
+            @click="copy(`history:${item.id}`, () => copyHistory(item))"
+          >
+            {{ copiedKey === `history:${item.id}` ? '已复制' : historyLink(item) }}
+          </button>
+        </template>
         <template #action>
           <span class="recent__status">
             <PetalGlyph :states="historyPetals(item)" :size="16" :label="`${historyPetals(item).length} 份`" />
@@ -232,6 +293,11 @@ function truncated(name: string): string {
         </template>
       </RecentRow>
     </div>
+
+    <ImageViewer
+      v-model:open="viewerOpen" :srcs="viewer?.srcs ?? []" :name="viewer?.name ?? ''" :width="viewer?.width" :height="viewer?.height"
+      :meta="viewer?.meta" :confirmed-http-hosts="confirmedHttpHosts"
+    />
   </section>
 </template>
 
@@ -259,6 +325,7 @@ function truncated(name: string): string {
   cursor: pointer;
 }
 
+.recent__ghost:last-child { margin-right: calc(-1 * var(--pn-space-8)); }
 .recent__ghost:hover { background: var(--pn-selected); }
 .recent__ghost--off { color: var(--pn-disabled); cursor: default; }
 .recent__ghost--off:hover { background: transparent; }
@@ -266,6 +333,26 @@ function truncated(name: string): string {
 .recent__rows { display: flex; flex-direction: column; gap: var(--pn-space-2); }
 
 .recent__mono { font-family: var(--pn-font-mono); font-size: var(--pn-text-mono); }
+
+/* 第二行的链接：点击复制（悬停变品牌色，复制后原地写「已复制」） */
+.recent__link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: copy;
+}
+
+.recent__link:hover { color: var(--pn-brand-text); }
+
+.recent__link--done,
+.recent__link--done:hover { color: var(--pn-success); font-family: var(--pn-font-ui); }
 .recent__danger { color: var(--pn-danger); }
 
 .recent__status {

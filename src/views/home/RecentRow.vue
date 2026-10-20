@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 「最近上传」的一行（HomeScreen.dc.html）：44px 缩略图 · 文件名 + 时间 · 第二行（链接 / 原因）· 右侧 120px 操作
+// viewable：点缩略图看大图（发 view）
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 
@@ -12,7 +13,10 @@ withDefaults(defineProps<{
   /** 一组多张：缩略图画成叠放的三块 */
   stacked?: boolean;
   confirmedHttpHosts?: ReadonlySet<string>;
-}>(), { fullName: undefined, thumbSrcs: () => [], stacked: false, confirmedHttpHosts: undefined });
+  viewable?: boolean;
+}>(), { fullName: undefined, thumbSrcs: () => [], stacked: false, confirmedHttpHosts: undefined, viewable: false });
+
+defineEmits<{ view: [] }>();
 </script>
 
 <template>
@@ -24,6 +28,9 @@ withDefaults(defineProps<{
         <ThumbnailImage v-if="thumbSrcs.length" :srcs="[...thumbSrcs]" alt="" :confirmed-http-hosts="confirmedHttpHosts" />
       </span>
     </div>
+    <button v-else-if="viewable && thumbSrcs.length" type="button" class="recent-row__thumb recent-row__thumb--button" :aria-label="`查看大图：${fullName ?? name}`" @click="$emit('view')">
+      <ThumbnailImage :srcs="[...thumbSrcs]" :alt="name" :confirmed-http-hosts="confirmedHttpHosts" />
+    </button>
     <div v-else class="recent-row__thumb">
       <ThumbnailImage v-if="thumbSrcs.length" :srcs="[...thumbSrcs]" :alt="name" :confirmed-http-hosts="confirmedHttpHosts" />
       <PnIcon v-else name="gallery" :size="18" :stroke="1.4" class="recent-row__thumb-empty" />
@@ -54,7 +61,7 @@ withDefaults(defineProps<{
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.recent-row:hover { background: var(--pn-row-hover); }
+.recent-row:hover { background: var(--pn-recent-row-hover); }
 
 .recent-row__thumb {
   display: flex;
@@ -67,6 +74,12 @@ withDefaults(defineProps<{
   border-radius: var(--pn-radius-md);
   background: var(--pn-subtle);
   box-shadow: 0 0 0 1px var(--pn-hairline);
+}
+
+.recent-row__thumb--button {
+  padding: 0;
+  border: 0;
+  cursor: zoom-in;
 }
 
 .recent-row__thumb-empty { color: var(--pn-text3); }

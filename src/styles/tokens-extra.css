@@ -56,6 +56,8 @@
   --pn-host-pill-ok: #ECF7EF;
   --pn-host-pill-bad: #FEF4E6;
   --pn-host-row-hover: rgba(0, 0, 0, 0.035);
+  /* 首页「最近上传」悬停行：半透明，叠在背景装饰上不发灰 */
+  --pn-recent-row-hover: rgba(0, 0, 0, 0.04);
   --pn-host-bar: rgba(57, 133, 237, 0.38);
   /* 备份密码强度条的底色（Dialogs.dc.html） */
   --pn-backup-strength-track: #E5E5E5;
@@ -104,6 +106,7 @@
   --pn-host-pill-ok: rgba(34, 197, 94, 0.14);
   --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
+  --pn-recent-row-hover: rgba(255, 255, 255, 0.045);
   --pn-host-bar: rgba(76, 147, 245, 0.45);
   --pn-backup-strength-track: #3A3A3E;
 }
@@ -226,6 +229,8 @@
   --pn-space-drop-bar-left: 18px;
   --pn-size-focus-thumb-w: 288px;
   --pn-size-focus-thumb-h: 162px;
+  /* 焦点卡的图框跟着图片的比例变，极窄 / 极小的图不小于这么大（空出来的铺模糊衬底） */
+  --pn-size-focus-thumb-min: 96px;
   --pn-size-pill: 24px;
   --pn-size-chip: 28px;
   --pn-size-host-chip: 30px;

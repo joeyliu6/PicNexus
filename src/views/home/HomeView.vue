@@ -37,7 +37,6 @@ const copyFrom = computed(() => upload.linkOutput.value.copyFromService);
 const shown = computed(() => upload.sessions.filter((s) => upload.itemsOf(s).length > 0));
 const focus = computed(() => shown.value[0] ?? null);
 const focusItems = computed(() => (focus.value ? upload.itemsOf(focus.value) : []));
-const restSessions = computed(() => shown.value.slice(1));
 
 /** 这次打开应用后传的那些已经在列表上面了，「更早」里去掉它们；「清空」之前的也不再列出 */
 const inSession = computed(() => new Set(upload.sessions.flatMap((s) => upload.itemsOf(s)).map((item) => item.historyId).filter(Boolean)));
@@ -170,13 +169,13 @@ async function openInBrowser(item: HistoryItem) {
               @retry-host="upload.retryHost(focusItems[0].id, $event)"
               @retry-item="upload.retryItem(focusItems[0].id)"
               @upload-again-with="upload.uploadAgainWith(focusItems[0].id, $event)"
-              @open-in-gallery="goGallery"
             />
           </template>
 
+          <!-- 列表也列出焦点卡里那一次：刚传的图马上能在列表里找到、复制 -->
           <RecentList
-            v-if="restSessions.length || older.length"
-            :sessions="restSessions"
+            v-if="shown.length || older.length"
+            :sessions="shown"
             :items-of="upload.itemsOf"
             :older="older"
             :hosts="hosts"
