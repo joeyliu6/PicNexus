@@ -56,6 +56,9 @@
     }
   },
   "plugins": {
+    "fs": {
+      "requireLiteralLeadingDot": false
+    },
     "shell": {
       "open": "^https://github\\.com/joeyliu6/PicNexus(?:/.*)?$|^https://sm\\.ms/home/apitoken(?:\\?.*)?$|^https://github\\.com/settings/tokens/new(?:\\?.*)?$|^https://api\\.imgur\\.com/oauth2/addclient(?:\\?.*)?$"
     },
