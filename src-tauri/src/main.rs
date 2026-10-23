@@ -15,6 +15,7 @@ mod portable;
 mod secure_key;
 mod server;
 mod url_policy;
+mod window_fit;
 
 #[cfg(test)]
 mod acl_tests;
@@ -311,52 +312,8 @@ fn main() {
                 }
             }
 
-            // --- 最佳适配方案逻辑 Start ---
-            if let Ok(Some(monitor)) = window.current_monitor() {
-                let screen_size = monitor.size();
-                let sw = screen_size.width;
-                let sh = screen_size.height;
-
-                log::debug!("[Display] 检测到屏幕尺寸: {}x{}", sw, sh);
-
-                // Tier 1: 4K / 2K 大屏 (宽度大于 1920 或 高度大于 1200)
-                if sw > 1920 || sh > 1200 {
-                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                        width: 1600,
-                        height: 1200,
-                    })) {
-                        log::warn!("[Display] 设置窗口大小失败: {:?}", e);
-                    } else {
-                        log::debug!("[Display] 已设置为 Tier 1: 1600x1200");
-                        if let Err(e) = window.center() {
-                            log::warn!("[Display] 居中窗口失败: {:?}", e);
-                        }
-                    }
-                }
-                // Tier 2: 标准 1080P (宽度在 1366~1920 之间)
-                else if sw >= 1366 && sh >= 900 {
-                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                        width: 1280,
-                        height: 900,
-                    })) {
-                        log::warn!("[Display] 设置窗口大小失败: {:?}", e);
-                    } else {
-                        log::debug!("[Display] 已设置为 Tier 2: 1280x900");
-                        if let Err(e) = window.center() {
-                            log::warn!("[Display] 居中窗口失败: {:?}", e);
-                        }
-                    }
-                }
-                // Tier 3: 小屏幕
-                else if let Err(e) = window.maximize() {
-                    log::warn!("[Display] 最大化窗口失败: {:?}", e);
-                } else {
-                    log::debug!("[Display] 已设置为 Tier 3: 最大化");
-                }
-            } else {
-                log::warn!("[Display] 无法获取显示器信息，使用默认窗口大小");
-            }
-            // --- 最佳适配方案逻辑 End ---
+            // 窗口大小：按屏幕可用区域挑
+            window_fit::fit_main_window(&window);
 
             // 5. 窗口事件处理：关闭最小化到托盘 + 后台内存优化
             {

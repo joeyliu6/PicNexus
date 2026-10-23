@@ -52,7 +52,7 @@ flowchart TD
     H --> S[.setup app handler]
     S --> S1[commands::tray::setup_tray<br/>托盘图标 + 兜底菜单]
     S1 --> S2[注册 on_window_event<br/>关闭到托盘]
-    S2 --> S3[根据屏幕分辨率<br/>自适应窗口大小]
+    S2 --> S3[window_fit:按屏幕可用区域<br/>定窗口大小]
     S3 --> R[.run generate_context!]
 
     %% 权限校验

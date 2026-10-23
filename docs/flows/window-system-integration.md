@@ -6,7 +6,7 @@
 
 PicNexus 是**单窗口 + 系统托盘** 架构:
 
-- **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),根据屏幕分辨率自适应初始大小
+- **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),界面准备好才显示。初始大小由 `window_fit.rs` 按这块屏幕扣掉任务栏后的可用区域、用逻辑像素挑:放得下就是 1400×900,放不下就取可用区域的九成,九成还不到 1100×700 就铺满(不最大化:Windows 上隐藏的窗口一最大化就会弹出来)。居中与铺满都按内容区算,Windows 给无边框窗口留的那圈看不见的拖拽边露在外面
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
 - **系统托盘**:三个平台都有,点开是系统原生菜单(交接说明 8.6,T01–T08)。Rust 建图标与点击行为,菜单由主窗口前端按配置画;Windows 左键 / 双击打开主界面、右键菜单,macOS / Linux 点开即菜单(见图 2)
 - **全局快捷键**:默认 `Ctrl+Shift+C` 上传剪贴板图片、`Ctrl+Shift+O` 选择文件上传,可在设置 › 快捷键改或整体关闭;上传走应用级上传控制器,与首页、托盘同一条路
@@ -29,15 +29,14 @@ stateDiagram-v2
     [*] --> Starting: cargo tauri dev / 双击启动
 
     Starting --> ConfigLoad: 读取 tauri.conf.json<br/>(visible:false 启动隐藏)
-    ConfigLoad --> ScreenDetect: setup 回调
-    ScreenDetect --> SizeAdjust: 读取屏幕分辨率
-    SizeAdjust --> W4K: 4K → 1600×1200
-    SizeAdjust --> W1080: 1080P → 1280×900
-    SizeAdjust --> WSmall: 小屏 → 800×600
+    ConfigLoad --> Fit: setup 回调<br/>window_fit 按可用区域(逻辑像素)挑
+    Fit --> WRoomy: 放得下 → 1400×900 居中
+    Fit --> WMedium: 放不下 → 可用区域的九成
+    Fit --> WFill: 九成还不到 1100×700 → 铺满
 
-    W4K --> Visible: window.show()
-    W1080 --> Visible
-    WSmall --> Visible
+    WRoomy --> Visible: 界面准备好后 window.show()
+    WMedium --> Visible
+    WFill --> Visible
 
     Visible --> Focused: 用户操作
 
@@ -227,7 +226,7 @@ flowchart LR
 | 托盘里上传后什么提示都没有 | 主窗口隐藏时 `appPresence` 仍判「在屏」,通知进了看不见的应用内;或系统通知权限被拒 | 图2 同步契约 |
 | Windows 上「打开 PicNexus」没加粗 | `set_tray_default_item` 失败(看日志「设置托盘默认项失败」),或默认项的位置算错 | 图2 AM |
 | 托盘图标在任务栏上看不清 | Windows 任务栏深浅读取失败(按深色任务栏画了白色);Linux 浅色面板固定白色是已知限制 | 图2 IC |
-| 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
+| 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示;或在隐藏的窗口上调了 `maximize()`(Windows 上会直接把窗口显示出来,所以小屏用铺满) | 图1 Visible |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | CLI 裸路径调用不上传 | 普通 CLI 必须传 `--service <serviceId>`;裸路径会打印可用图床和示例后退出 | 图3 D7 |
 | `picnexus --service r2` 报未知图床 | 设置页尚未保存对应图床配置,或该图床不支持 CLI 导出 | 图3 F1 |
