@@ -91,6 +91,15 @@
 
 **当前处置**：方案已出，等维护者定
 
+### [ ] 压缩产生的临时文件在 Windows 上从不删除
+
+- **来源**：2026-10-24 量上传前等待时发现：上传后 `%TEMP%\picnexus_compress` 里的压缩 / 去 EXIF 副本一个都没删，里面还有维护者平时使用留下的 3 个（10 月 17、19、20 日）
+- **根因**：`cleanup_compressed_files`（`src-tauri/src/commands/image_compress.rs`）用 `canonicalize()` 后的路径和没规范化的临时目录比前缀；Windows 上规范化后带 `\\?\` 前缀，`starts_with` 永远不成立，每个文件都被当成「非临时目录文件」拒绝删除（用小程序实测：`starts_with = false`）。`clipboard.rs` 的 `is_clipboard_temp_path` 两边都规范化，所以剪贴板临时文件删得掉
+- **要做的**：把临时目录也 `canonicalize` 再比（照 `is_clipboard_temp_path`），先写一个在 Windows 上会红的 Rust 测试；顺手清掉已经攒下的旧副本时先问维护者
+- **优先级**：中（每次开压缩上传都多留一份图，越攒越多）
+
+**当前处置**：待处理
+
 ### [ ] 阶段 11 之前就没人用的导出函数
 
 - **来源**：2026-10-19 阶段 11 清死代码时发现，不是这次改动造成的，按「不顺手改范围外的文件」没删
