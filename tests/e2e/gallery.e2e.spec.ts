@@ -458,3 +458,91 @@ test('a GIF shows its first frame inside its tile', async ({ page }) => {
   expect(frameBox?.y).toBeCloseTo(tileBox!.y, 0);
   expect(frameBox?.height).toBeCloseTo(tileBox!.height, 0);
 });
+
+// 图库按 Delete（macOS ⌘⌫）移除记录（同资源管理器）：不弹确认、通知带「撤销」，焦点挪到相邻那张
+const FOUR = Array.from({ length: 4 }, (_, i) => historyRow(i + 1, `第${i + 1}张.png`, i * 30));
+
+/** 「移除记录」按哪个键：Playwright 的 WebKit 把自己报成 macOS（navigator.platform 是 MacIntel），应用照 macOS 用 ⌘⌫ */
+async function pressRemove(page: Page): Promise<void> {
+  const mac = await page.evaluate(() => navigator.platform.startsWith('Mac'));
+  await page.keyboard.press(mac ? 'Meta+Backspace' : 'Delete');
+}
+
+test('delete removes the focused picture, hands focus to the next one and can be undone', async ({ page }) => {
+  await openApp(page, { historyRows: FOUR });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const gallery = page.locator('.gallery');
+  const tile = (name: string) => gallery.locator(`.tile[aria-label="${name}"]`);
+  await tile('第2张.png').click();
+
+  // 焦点在按钮上：Delete 不归图库
+  await page.locator('.detail .detail__copy').focus();
+  await pressRemove(page);
+  await expect(tile('第2张.png')).toBeVisible();
+
+  await tile('第2张.png').focus();
+  await pressRemove(page);
+  await expect(tile('第2张.png')).toHaveCount(0);
+  const toast = page.locator('.pn-toast').filter({ hasText: '已移除记录' });
+  await expect(toast).toContainText('第2张.png');
+  await expect(tile('第3张.png')).toBeFocused();
+  await expect(page.locator('.gallery__detail')).toHaveCount(0);
+
+  await toast.getByRole('button', { name: '撤销' }).click();
+  await expect(tile('第2张.png')).toBeVisible();
+});
+
+test('delete removes every selected picture at once', async ({ page }) => {
+  await openApp(page, { historyRows: FOUR });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const gallery = page.locator('.gallery');
+  await gallery.locator('.tile[aria-label="第1张.png"]').click({ modifiers: ['Control'] });
+  await gallery.locator('.tile[aria-label="第3张.png"]').click({ modifiers: ['Control'] });
+  await expect(page.locator('.selection-bar')).toContainText('已选 2 张');
+
+  await pressRemove(page);
+  await expect(page.locator('.pn-toast')).toContainText('已移除 2 条记录');
+  await expect(gallery.locator('.tile')).toHaveCount(2);
+  await expect(page.locator('.selection-bar')).toHaveCount(0);
+});
+
+test('delete on a list row removes it and moves to the row that takes its place', async ({ page }) => {
+  await openApp(page, { historyRows: FOUR });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  await page.locator('.gallery').getByLabel('列表', { exact: true }).click();
+  const row = (name: string) => page.locator(`.list__row[aria-label="${name}"]`);
+  await row('第2张.png').click();
+
+  await pressRemove(page);
+  await expect(row('第2张.png')).toHaveCount(0);
+  await expect(page.locator('.pn-toast')).toContainText('已移除记录');
+  await expect(row('第3张.png')).toBeFocused();
+
+  // 最后一行没有下一行：焦点给上一行
+  await row('第4张.png').click();
+  await pressRemove(page);
+  await expect(row('第4张.png')).toHaveCount(0);
+  await expect(row('第3张.png')).toBeFocused();
+});
+
+test('on macOS ⌘⌫ removes the focused picture, and in the search box it only edits the text', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'MacIntel' });
+    Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => ({ platform: 'macOS' }) });
+  });
+  await openApp(page, { historyRows: FOUR });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const gallery = page.locator('.gallery');
+  const tile = (name: string) => gallery.locator(`.tile[aria-label="${name}"]`);
+  const search = gallery.getByPlaceholder('搜索文件名');
+  await search.fill('第');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(gallery.locator('.tile')).toHaveCount(4);
+
+  await tile('第1张.png').click();
+  await page.keyboard.press('Delete');
+  await expect(tile('第1张.png')).toBeVisible();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(tile('第1张.png')).toHaveCount(0);
+  await expect(tile('第2张.png')).toBeFocused();
+});

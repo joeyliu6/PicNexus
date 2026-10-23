@@ -15,6 +15,7 @@ import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
 import type { GalleryListSort } from '@/services/database/TimelineQueryService';
 import type { ImageMeta } from '@/types/image-meta';
 import type { LinkFormat } from '@/utils/linkFormatter';
+import { uiPlatform } from '@/utils/platform';
 import GalleryChips from './GalleryChips.vue';
 import GalleryDetail from './GalleryDetail.vue';
 import GalleryEmpty, { type GalleryEmptyKind } from './GalleryEmpty.vue';
@@ -27,8 +28,10 @@ import GallerySkeleton from './GallerySkeleton.vue';
 import GalleryToolbar, { type GalleryViewMode } from './GalleryToolbar.vue';
 import { EMPTY_FILTERS, countText, filterChips, hasActiveFilters, toQueryFilter, type GalleryFilters } from './galleryFilters';
 import { neighborTile, type GridDirection } from './gridNavigation';
+import { focusAfterRemoval, isRemoveKey } from './keyboardRemove';
 import { scrubberTicks } from './scrubberTicks';
 import { GALLERY_GRID, useGalleryGrid } from './useGalleryGrid';
+import { useGalleryActions } from './useGalleryActions';
 import { useGalleryLightbox } from './useGalleryLightbox';
 import { useGalleryList } from './useGalleryList';
 import { useListLightbox } from './useListLightbox';
@@ -36,6 +39,8 @@ import { useListLightbox } from './useListLightbox';
 const router = useRouter();
 const { copyLinks } = useCopyLink();
 const { narrow } = useSidebarCollapse();
+const actions = useGalleryActions();
+const platform = uiPlatform();
 
 /** KeepAlive 留着这一页：只在它显示时接键盘、加载数据 */
 const active = ref(true);
@@ -271,6 +276,35 @@ function moveFocus(direction: GridDirection): void {
   if (keyboardInGrid) gridView.value?.focusTile(next);
 }
 
+/** 眼前网格的先后顺序（布局算好的行） */
+const gridOrder = () => (grid.virtual.layoutResult.value?.allRows ?? []).flatMap(({ row }) => row.items.map((item) => item.id));
+
+/** Delete（macOS ⌘⌫）移除哪些：有选中的就是选中的；网格里没有选中时是焦点那张（得在眼前）。列表的焦点行由它自己接 */
+function removalTargets(): string[] {
+  if (viewState.hasSelection.value) return [...viewState.selectedIdList.value];
+  return view.value === 'grid' && focusedId.value && gridOrder().includes(focusedId.value) ? [focusedId.value] : [];
+}
+
+/** 同「移除记录」：不弹确认、通知带「撤销」；网格里焦点挪到相邻那张。移除还没回来时再按不重复移除 */
+let removingByKey = false;
+async function removeByKey(ids: string[]): Promise<void> {
+  if (removingByKey) return;
+  removingByKey = true;
+  const next = view.value === 'grid' ? focusAfterRemoval(gridOrder(), new Set(ids), focusedId.value) : null;
+  const keyboardInGrid = gridView.value?.ownsFocus() ?? false;
+  try {
+    if (!(await actions.removeRecords(ids))) return;
+  } finally {
+    removingByKey = false;
+  }
+  viewState.clearSelection();
+  onRemoved(ids);
+  if (!next) return;
+  focusedId.value = next;
+  reveal(next);
+  if (keyboardInGrid) gridView.value?.focusTile(next);
+}
+
 /** 列表里用方向键走到另一行：详情开着就跟过去（同网格） */
 function onListNavigate(meta: ImageMeta): void {
   focusedId.value = meta.id;
@@ -297,6 +331,13 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   if (mod && key === 'a') {
     event.preventDefault();
     void grid.selectAll();
+    return;
+  }
+  // 焦点在按钮上不管；按住不放不连着删
+  if (isRemoveKey(event, platform) && !isControlTarget(event.target)) {
+    const ids = removalTargets();
+    if (ids.length > 0) event.preventDefault();
+    if (ids.length > 0 && !event.repeat) void removeByKey(ids);
     return;
   }
   if (view.value !== 'grid' || isControlTarget(event.target)) return;

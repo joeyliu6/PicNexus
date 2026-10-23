@@ -2,12 +2,12 @@
 // 列表视图（GalleryScreen.dc.html G02）：缩略图 · 文件名 · 图床（花瓣 + 名称）· 尺寸与大小 · 上传时间 · 状态 · 操作。
 // 行高 54、虚拟滚动；点表头按文件名 / 大小 / 上传时间排序；「状态」列平时为空，出问题才写「⚠ 失效」。
 // 单击打开详情，双击看大图，Ctrl/⌘ / Shift 单击多选（与网格一致）。
-// 键盘：整张表只有一个 Tab 停留点（焦点那行），↑ ↓ / Home / End / PageUp / PageDown 换行，Enter 详情、空格大图；
-// 这一行的「复制」「⋯」接在它后面，其余行的按钮不进 Tab 顺序。
+// 键盘：整张表只有一个 Tab 停留点（焦点那行），↑ ↓ / Home / End / PageUp / PageDown 换行，Enter 详情、空格大图，
+// Delete（macOS ⌘⌫）移除记录；这一行的「复制」「⋯」接在它后面，其余行的按钮不进 Tab 顺序。
 // 列数按列表自己的宽度定（打开详情、收起侧栏都会变）：放不下七列先去掉「尺寸 · 大小」；再窄把图床写到文件名下面一行、
 // 「状态」收成文件名旁的 ⚠，文件名始终有地方显示。
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
-import { useElementSize } from '@vueuse/core';
+import { until, useElementSize } from '@vueuse/core';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
@@ -20,7 +20,9 @@ import { openUserExternalUrl } from '@/security/shellOpen';
 import type { GalleryListRow, GalleryListSort, GalleryListSortKey } from '@/services/database/TimelineQueryService';
 import type { ImageMeta } from '@/types/image-meta';
 import { formatFileSize, formatListTime } from '@/utils/formatters';
+import { uiPlatform } from '@/utils/platform';
 import { listLayout, petalLabelOf, petalsOf, statusOf } from './galleryMeta';
+import { focusAfterRemoval, isRemoveKey } from './keyboardRemove';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
 import type { GalleryListApi } from './useGalleryList';
@@ -149,8 +151,40 @@ function onRowFocus(index: number, row: GalleryListRow | null, event: FocusEvent
   if (row && (event.target as HTMLElement).matches(':focus-visible')) emit('navigate', row);
 }
 
+const platform = uiPlatform();
+
+/** Delete（macOS ⌘⌫）：有选中的移除选中的，没有就移除这一行；行按序号画，等移除后的行读回来再把焦点给相邻那行 */
+let removingByKey = false;
+async function removeByKey(row: GalleryListRow): Promise<void> {
+  if (removingByKey) return;
+  removingByKey = true;
+  const ids = viewState.hasSelection.value ? [...viewState.selectedIdList.value] : [row.id];
+  const next = focusAfterRemoval(list.loadedRows.value.map((r) => r.id), new Set(ids), row.id);
+  try {
+    if (!(await actions.removeRecords(ids))) return;
+    viewState.clearSelection();
+    emit('removed', ids);
+    if (!next) return;
+    await until(() => ids.some((id) => list.indexOf(id) >= 0)).toBe(false, { timeout: 5000 });
+    const at = list.indexOf(next);
+    const nextRow = list.rowAt(at);
+    if (at < 0 || !nextRow) return;
+    moveTo(at);
+    emit('navigate', nextRow);
+  } finally {
+    removingByKey = false;
+  }
+}
+
 function onRowKeydown(index: number, row: GalleryListRow | null, event: KeyboardEvent): void {
-  if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.target !== event.currentTarget) return;
+  // 在「带 Ctrl / ⌘ 就不管」之前判断（macOS 是 ⌘⌫）；按住不放不连着删
+  if (row && isRemoveKey(event, platform)) {
+    event.preventDefault();
+    if (!event.repeat) void removeByKey(row);
+    return;
+  }
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
   const page = Math.max(1, Math.floor((scroller.value?.clientHeight ?? ROW_HEIGHT) / ROW_HEIGHT) - 1);
   const moves: Record<string, number> = { ArrowDown: index + 1, ArrowUp: index - 1, PageDown: index + page, PageUp: index - page, Home: 0, End: list.total.value - 1 };
   if (event.key in moves) {
