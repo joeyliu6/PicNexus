@@ -21,6 +21,7 @@ import { shortcutLabel } from './commandIndex';
 import { requestLocate } from './galleryLocate';
 import { useCommandPalette, type CommandEntry } from './useCommandPalette';
 import { useUrlDialog } from './useUrlDialog';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const palette = useCommandPalette();
 const upload = useUploadController();
@@ -155,7 +156,7 @@ function hintOf(entry: CommandEntry): string {
               </span>
               <span v-else class="command-palette__icon"><PnIcon :name="entry.icon ?? 'arrowRight'" :size="15" :stroke="1.6" /></span>
               <span class="command-palette__text">
-                <span class="command-palette__label">
+                <span v-overflow-title class="command-palette__label">
                   <template v-if="entry.match">{{ entry.match[0] }}<b class="command-palette__hit">{{ entry.match[1] }}</b>{{ entry.match[2] }}</template>
                   <template v-else>{{ entry.label }}</template>
                 </span>

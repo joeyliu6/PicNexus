@@ -24,6 +24,7 @@ import { listLayout, petalLabelOf, petalsOf, statusOf } from './galleryMeta';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
 import type { GalleryListApi } from './useGalleryList';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   grid: GalleryGridApi;
@@ -208,7 +209,7 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
             </span>
             <span class="list__name-cell" role="gridcell">
               <span class="list__name-line">
-                <span class="list__name">{{ row.localFileName }}</span>
+                <span v-overflow-title class="list__name">{{ row.localFileName }}</span>
                 <PnIcon v-if="historyManager.favoriteSet.value.has(row.id)" name="star" filled :size="12" class="list__fav" />
                 <span v-if="compact && statusOf(row).warn" class="list__status list__status--warn" :title="statusOf(row).text">
                   <PnIcon name="warning" :size="12" :stroke="2.2" />

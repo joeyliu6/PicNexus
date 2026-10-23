@@ -17,6 +17,7 @@ import { minutesText } from '@/views/health/healthModel';
 import { useLinkHealth } from '@/views/health/useLinkHealth';
 import { useSupplementBackup } from '@/views/health/useSupplementBackup';
 import { useTransferCenter } from './useTransferCenter';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const transfer = useTransferCenter();
 const upload = useUploadController();
@@ -87,7 +88,7 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
             </span>
             <div class="transfer-center__item-body">
               <div class="transfer-center__item-line">
-                <span class="transfer-center__name">{{ row.items[0].fileName }}</span>
+                <span v-overflow-title class="transfer-center__name">{{ row.items[0].fileName }}</span>
                 <span class="transfer-center__faint">{{ hostViews(row.items[0]).filter((h) => h.state === 'done').length }} / {{ hostViews(row.items[0]).length }}</span>
               </div>
               <div class="transfer-center__bar"><span :style="{ width: `${itemProgress(row.items[0])}%` }" /></div>

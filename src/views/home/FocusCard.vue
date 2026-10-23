@@ -26,6 +26,7 @@ import { formatRelativeTime, formatSizeChange } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 import FocusHostChips from './FocusHostChips.vue';
 import UploadToPanel from './UploadToPanel.vue';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   item: QueueItem;
@@ -177,7 +178,7 @@ const changeHostsOpen = ref(false);
       </div>
 
       <div>
-        <div class="focus-card__name">{{ item.fileName }}</div>
+        <div v-overflow-title class="focus-card__name">{{ item.fileName }}</div>
         <div class="focus-card__meta">{{ metaLine }}</div>
       </div>
 

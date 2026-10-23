@@ -19,6 +19,7 @@ import type { UploadHost } from '@/composables/upload/useUploadController';
 import { firstFailure, hostFailureText, hostMisses, hostViews, itemPhase, sessionCounts, type UploadSession } from '@/composables/upload/uploadSessions';
 import { formatRelativeTime } from '@/utils/formatters';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   session: UploadSession;
@@ -163,7 +164,7 @@ const RING = 37.7;
     </div>
     <ul v-else class="batch-card__list">
       <li v-for="tile in tiles" :key="tile.item.id" class="batch-card__list-row">
-        <span class="batch-card__list-name">{{ tile.item.fileName }}</span>
+        <span v-overflow-title class="batch-card__list-name">{{ tile.item.fileName }}</span>
         <span :class="tile.phase === 'failed' ? 'batch-card__danger' : 'batch-card__note'">{{ tile.title.split(' · ')[1] }}</span>
         <CopyButton v-if="tile.phase === 'done' || tile.phase === 'partial'" :copied="copiedKey === tile.item.id" @click="copyTile(tile.item.id)" />
       </li>

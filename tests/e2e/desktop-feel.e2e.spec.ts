@@ -86,3 +86,18 @@ test('thumbnails and nav items cannot be dragged away', async ({ page }) => {
   expect(await startsDrag(page, page.locator('.recent-row__thumb img').first())).toBe(false);
   expect(await startsDrag(page, navItem(page, '图床'))).toBe(false);
 });
+
+// 被省略号截断的文件名，悬停时用系统提示补全名；放得下的名字不出提示（同资源管理器）
+test('a cut-off file name shows its full name on hover, a short one does not', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const long = '微信图片_20261023152233_一张名字特别特别特别特别长的截图_1234567890abcdef.png';
+  await openApp(page, { historyRows: [historyRow(1, long, 30), historyRow(2, '短名字.png', 60)] });
+  await navItem(page, '图库').click();
+  await page.locator('.gallery').getByLabel('列表', { exact: true }).click();
+  const name = (text: string) => page.locator('.list__name', { hasText: text });
+
+  await name('短名字.png').hover();
+  await expect(name('短名字.png')).not.toHaveAttribute('title');
+  await name('微信图片').hover();
+  await expect(name('微信图片')).toHaveAttribute('title', long);
+});
