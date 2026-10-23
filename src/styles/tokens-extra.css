@@ -665,14 +665,7 @@
   --pn-size-theme-note: 6px;
   --pn-radius-theme-line: 2px;
   --pn-radius-theme-card: 5px;
-  /* 首页背景装饰行：内边距 12 16；两张缩略图 64×42、圆角 7、间距 6；缩略图里的花瓣 22（右 5 上 6） */
-  --pn-space-decor-row: 12px 16px;
-  --pn-size-decor-thumb-w: 64px;
-  --pn-size-decor-thumb-h: 42px;
-  --pn-radius-decor-thumb: 7px;
-  --pn-size-decor-petals: 22px;
-  --pn-space-decor-petals-right: 5px;
-  /* 外观预览与背景装饰缩略图画的是固定的浅 / 深两种样子，不随当前主题变 */
+  /* 外观预览画的是固定的浅 / 深两种样子，不随当前主题变 */
   --pn-theme-light-side: #F3F3F3;
   --pn-theme-light-main: #FFFFFF;
   --pn-theme-light-line: #E5E5E5;
@@ -682,18 +675,6 @@
   --pn-theme-dark-line: #3D3D42;
   --pn-theme-dark-card: #2A2A2D;
   --pn-theme-auto-line: #A3A3A3;
-  --pn-decor-thumb-light: radial-gradient(60% 70% at 85% 25%, rgba(46, 166, 242, 0.16), transparent 70%), #FFFFFF;
-  --pn-decor-thumb-light-ring: 0 0 0 1px rgba(0, 0, 0, 0.08);
-  --pn-decor-thumb-dark: #1C1C1E;
-  --pn-decor-thumb-dark-ring: 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --pn-decor-thumb-petal-fill: #2EA6F2;
-  --pn-decor-thumb-petal-line: #4D63F0;
-  --pn-decor-thumb-petal-fill-opacity: 0.18;
-  --pn-decor-thumb-petal-line-opacity: 0.35;
-  --pn-decor-thumb-petal-stroke: 5;
-  --pn-decor-thumb-aurora-a: radial-gradient(closest-side, rgba(46, 166, 242, 0.55), transparent);
-  --pn-decor-thumb-aurora-b: radial-gradient(closest-side, rgba(124, 92, 246, 0.5), transparent);
-  --pn-decor-thumb-blur: 6px;
 }
 
 :root {

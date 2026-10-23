@@ -98,7 +98,7 @@ async function openInBrowser(item: HistoryItem) {
 <template>
   <div class="home">
     <TitleRow />
-    <BgDecor v-if="config.theme?.homeDecor !== false" fade-from="52px" fade-to="104px" />
+    <BgDecor fade-from="52px" fade-to="104px" />
     <div class="home__scroll">
       <div class="home__column">
         <HomeNoHost v-if="ready && noHost" @enable-jd="upload.enableNoConfigHost('jd')" @connect="goHosts" />

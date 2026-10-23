@@ -10,7 +10,7 @@ describe('resetPreferences', () => {
     services: { r2: { enabled: true, accountId: 'a', accessKeyId: 'k', secretAccessKey: 's', bucketName: 'b', path: '', publicDomain: 'https://img.example.com' } },
     webdav: { profiles: [{ id: 'p', name: '坚果云', url: 'https://dav.example.com', username: 'u', passwordEncrypted: 'x', remotePath: '/PicNexus/' }], activeId: 'p' },
     linkOutput: { defaultFormat: 'markdown', customTemplate: '<img src="{url}">', autoCopy: false, copyFromService: 'r2' },
-    theme: { mode: 'dark', enableTransitions: false, transitionDuration: 300, homeDecor: false },
+    theme: { mode: 'dark', enableTransitions: false, transitionDuration: 300 },
     editorServer: { ...DEFAULT_CONFIG.editorServer!, enabled: true, port: 40000, authToken: 'token' },
     linkHealth: { docFolders: ['D:/notes'], autoCheck: { enabled: false, intervalDays: 30 } },
     onboardingCompleted: true,

@@ -138,7 +138,7 @@ flowchart LR
 flowchart TD
     S[SettingsView<br/>二级栏 + 标题行 + 滚动区 + 刷新横幅] --> N[SettingsNav 7 组]
 
-    N --> G1[GeneralGroup 通用] --> G1A[theme.mode / theme.homeDecor<br/>appBehavior 开机自启 静默启动 关闭到托盘]
+    N --> G1[GeneralGroup 通用] --> G1A[theme.mode<br/>appBehavior 开机自启 静默启动 关闭到托盘]
     N --> G2[UploadGroup 上传与链接] --> G2A[linkOutput 默认格式 / 自定义模板 / 自动复制<br/>appBehavior.autoUploadClipboard<br/>imageCompression 方案]
     N --> G3[ShortcutGroup 快捷键] --> G3A[globalShortcut<br/>录制见 useShortcutRecorder]
     N --> G4[EditorGroup 编辑器与命令行] --> G4A[editorServer<br/>Typora / Obsidian / CLI]

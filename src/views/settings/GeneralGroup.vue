@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 通用（S01）：外观三卡（浅色 / 深色 / 跟随系统）+ 首页背景装饰；启动三项。改动即保存。
+// 通用（S01）：外观三卡（浅色 / 深色 / 跟随系统）；启动三项。改动即保存。
 import { computed } from 'vue';
 import PnSwitch from '@/components/pn/PnSwitch.vue';
 import { DEFAULT_CONFIG, type ThemeMode } from '@/config/types';
@@ -22,12 +22,6 @@ const THEMES: { mode: ThemeMode; name: string }[] = [
 
 const behavior = computed(() => settings.config.value.appBehavior ?? DEFAULT_CONFIG.appBehavior!);
 const autoStart = computed(() => effects.autoStartActual.value ?? behavior.value.autoStart);
-const homeDecor = computed(() => settings.config.value.theme?.homeDecor !== false);
-
-function setHomeDecor(on: boolean): void {
-  void settings.patch('homeDecor', (c) => { c.theme = { ...(c.theme ?? DEFAULT_CONFIG.theme!), homeDecor: on }; });
-}
-
 function setSilentStart(on: boolean): void {
   void settings.patch('silentStart', (c) => { c.appBehavior = { ...(c.appBehavior ?? DEFAULT_CONFIG.appBehavior!), minimizeToTrayOnStart: on }; });
 }
@@ -70,25 +64,6 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
           <span class="general__theme-name">{{ theme.name }}</span>
         </button>
       </div>
-      <SettingsCard class="general__decor">
-        <SettingRow row-id="homeDecor" title="首页背景装饰" desc="浅色为花瓣，深色为极光；只在快传页显示">
-          <template #lead>
-            <span class="general__thumbs" aria-hidden="true">
-              <span class="general__thumb general__thumb--light">
-                <svg class="general__thumb-petals" viewBox="-4 -4 136 136">
-                  <g class="general__thumb-fill"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" /><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" /><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" /><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" /></g>
-                  <g class="general__thumb-line"><path d="M64 58L44 29Q40 22 45 16L57 4Q64 -2 71 4L83 16Q88 22 84 29Z" /><path d="M70 64L99 44Q106 40 112 45L124 57Q130 64 124 71L112 83Q106 88 99 84Z" /><path d="M64 70L84 99Q88 106 83 112L71 124Q64 130 57 124L45 112Q40 106 44 99Z" /><path d="M58 64L29 84Q22 88 16 83L4 71Q-2 64 4 57L16 45Q22 40 29 44Z" /></g>
-                </svg>
-              </span>
-              <span class="general__thumb general__thumb--dark">
-                <span class="general__aurora general__aurora--a" />
-                <span class="general__aurora general__aurora--b" />
-              </span>
-            </span>
-          </template>
-          <PnSwitch :model-value="homeDecor" label="首页背景装饰" @update:model-value="setHomeDecor" />
-        </SettingRow>
-      </SettingsCard>
     </SettingsSection>
 
     <SettingsSection title="启动" note="关闭窗口后 PicNexus 仍在托盘运行，全局快捷键和后台检测照常可用。">
@@ -183,44 +158,4 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
 .general__theme--auto .general__preview-line,
 .general__theme--auto .general__preview-note { background: var(--pn-theme-auto-line); }
 .general__theme--auto .general__preview-card { background: linear-gradient(90deg, var(--pn-theme-light-card) 50%, var(--pn-theme-dark-card) 50%); }
-
-.general__decor { margin-top: var(--pn-space-4); }
-.general__decor :deep(.setting-row) { padding: var(--pn-space-decor-row); }
-
-.general__thumbs {
-  display: flex;
-  flex: none;
-  gap: var(--pn-space-6);
-}
-
-.general__thumb {
-  position: relative;
-  width: var(--pn-size-decor-thumb-w);
-  height: var(--pn-size-decor-thumb-h);
-  border-radius: var(--pn-radius-decor-thumb);
-  overflow: hidden;
-}
-
-.general__thumb--light { background: var(--pn-decor-thumb-light); box-shadow: var(--pn-decor-thumb-light-ring); }
-.general__thumb--dark { background: var(--pn-decor-thumb-dark); box-shadow: var(--pn-decor-thumb-dark-ring); }
-
-.general__thumb-petals {
-  position: absolute;
-  top: var(--pn-space-6);
-  right: var(--pn-space-decor-petals-right);
-  width: var(--pn-size-decor-petals);
-  height: var(--pn-size-decor-petals);
-}
-
-.general__thumb-fill { fill: var(--pn-decor-thumb-petal-fill); opacity: var(--pn-decor-thumb-petal-fill-opacity); }
-.general__thumb-line { fill: none; stroke: var(--pn-decor-thumb-petal-line); stroke-width: var(--pn-decor-thumb-petal-stroke); opacity: var(--pn-decor-thumb-petal-line-opacity); }
-
-.general__aurora {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(var(--pn-decor-thumb-blur));
-}
-
-.general__aurora--a { top: 45%; left: -20%; width: 90%; height: 60%; background: var(--pn-decor-thumb-aurora-a); }
-.general__aurora--b { top: 55%; left: 35%; width: 80%; height: 50%; background: var(--pn-decor-thumb-aurora-b); }
 </style>

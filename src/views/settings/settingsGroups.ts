@@ -25,7 +25,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
 /** 每一行的 id → 所在分组（命令面板的设置项、托盘与首页的跳转都用它） */
 export const SETTING_ROWS = {
   theme: 'general',
-  homeDecor: 'general',
   autoStart: 'general',
   silentStart: 'general',
   closeToTray: 'general',

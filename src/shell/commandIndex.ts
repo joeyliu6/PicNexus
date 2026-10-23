@@ -38,7 +38,6 @@ export const ACTION_COMMANDS: (StaticCommand & { action: ActionId })[] = [
 /** 设置的每一项（交接说明 8.5：设置页不放搜索框，命令面板能搜到每一项）；Enter 跳到那一组并高亮这一行 */
 const SETTING_ROWS: [section: string, label: string, group: string][] = [
   ['theme', '外观（浅色 / 深色 / 跟随系统）', '通用'],
-  ['homeDecor', '首页背景装饰', '通用'],
   ['autoStart', '开机自动启动', '通用'],
   ['silentStart', '静默启动', '通用'],
   ['closeToTray', '关闭窗口时最小化到托盘', '通用'],
