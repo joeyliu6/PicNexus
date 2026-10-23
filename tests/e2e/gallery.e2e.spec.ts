@@ -361,9 +361,9 @@ test('a slow double-click still opens the picture the first click hit', async ({
 
   await page.locator('.gallery .tile[aria-label="第2张.png"]').click();
   await expect(page.locator('.detail')).toContainText('第2张.png');
+  // 第二下（第二次按下就算双击）按在第 3 张上
   const other = page.locator('.gallery .tile[aria-label="第3张.png"]');
-  await other.dispatchEvent('click', { detail: 2 });
-  await other.dispatchEvent('dblclick', { detail: 2 });
+  await secondPress(page, other, other);
   await expect(page.locator('.lightbox-chrome')).toContainText('第2张.png');
 });
 
