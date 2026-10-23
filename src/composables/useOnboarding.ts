@@ -56,7 +56,9 @@ export function useOnboarding() {
     if (stepIndex.value < ONBOARDING_STEPS.length - 1) stepIndex.value++;
   }
 
+  /** 「开始使用」保存中不退回：否则弹窗先跳回上一步再关掉 */
   function back(): void {
+    if (saving.value) return;
     if (stepIndex.value > 0) stepIndex.value--;
   }
 

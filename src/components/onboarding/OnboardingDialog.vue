@@ -81,7 +81,7 @@ function onEscape(event: KeyboardEvent): void {
           <div class="onboarding__dots" :aria-label="`第 ${stepIndex + 1} 步，共 ${ONBOARDING_STEPS.length} 步`" role="img">
             <span v-for="(name, i) in ONBOARDING_STEPS" :key="name" class="onboarding__dot" :class="{ 'onboarding__dot--on': i === stepIndex }" />
           </div>
-          <PnButton v-if="buttons.back" variant="secondary" @click="onBack">上一步</PnButton>
+          <PnButton v-if="buttons.back" variant="secondary" :disabled="saving" @click="onBack">上一步</PnButton>
           <PnButton variant="primary" class="onboarding__next" data-autofocus :loading="saving" @click="onNext">{{ buttons.next }}</PnButton>
         </div>
       </DialogContent>

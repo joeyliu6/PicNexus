@@ -105,6 +105,23 @@ describe('useOnboarding', () => {
     expect(api.saving.value).toBe(false);
   });
 
+  // 「开始使用」保存中退回上一步，弹窗会先跳回第 2 步再关掉
+  it('「开始使用」保存中「上一步」不起作用', async () => {
+    m.loadConfig.mockResolvedValue(config());
+    let release!: () => void;
+    m.applyConfigPatch.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve; }));
+    const api = useOnboarding();
+    await api.checkAndShow();
+    api.next();
+    api.next();
+    const saving = api.finish();
+    api.back();
+    const stepWhileSaving = api.stepIndex.value;
+    release();
+    await saving;
+    expect(stepWhileSaving).toBe(2);
+  });
+
   it('保存失败：弹窗留着、选择不丢，通知写原因与处理办法', async () => {
     m.loadConfig.mockResolvedValue(config());
     m.applyConfigPatch.mockRejectedValueOnce(new Error('磁盘已满'));
