@@ -177,7 +177,7 @@ function truncated(name: string): string {
       </button>
     </div>
 
-    <div class="recent__rows">
+    <TransitionGroup name="recent-row" tag="div" class="recent__rows">
       <template v-for="row in rows" :key="row.session.id">
         <RecentRow
           v-if="row.batch"
@@ -251,7 +251,7 @@ function truncated(name: string): string {
         </RecentRow>
       </template>
 
-      <div v-if="rows.length && older.length" class="recent__divider">
+      <div v-if="rows.length && older.length" key="divider" class="recent__divider">
         <span>更早</span>
         <span class="recent__divider-line" />
       </div>
@@ -296,7 +296,7 @@ function truncated(name: string): string {
           </PnMenu>
         </template>
       </RecentRow>
-    </div>
+    </TransitionGroup>
 
     <ImageViewer
       v-model:open="viewerOpen" :srcs="viewer?.srcs ?? []" :name="viewer?.name ?? ''" :width="viewer?.width" :height="viewer?.height"
@@ -339,6 +339,34 @@ function truncated(name: string): string {
 .recent__ghost--off:active { background: transparent; }
 
 .recent__rows { display: flex; flex-direction: column; gap: var(--pn-space-2); }
+
+/* 新传的一张在最上面从 0 长到一行高并淡入，下面几行被它推下去；离开的收起并淡出，下面的跟着滑上来（decisions/motion.md）。
+   不用 TransitionGroup 的挪位（-move）：上传中这个列表几毫秒就重绘一次，挪位每次都会被打断；靠排版推开就不怕重绘。
+   「减少动态效果」时高度直接到位，只淡入淡出。前面加 .recent__rows：行自己的悬停变色也写在 transition 上，不加盖不过它 */
+.recent__rows > .recent-row-enter-active,
+.recent__rows > .recent-row-leave-active {
+  overflow: hidden;
+  transition: max-height var(--pn-dur-standard) var(--pn-ease-in), opacity var(--pn-dur-standard) var(--pn-ease-in);
+}
+
+.recent__rows > .recent-row-leave-active {
+  transition-duration: var(--pn-dur-fast);
+  transition-timing-function: var(--pn-ease-out);
+}
+
+.recent__rows > .recent-row-enter-from,
+.recent__rows > .recent-row-leave-to { max-height: 0; opacity: 0; }
+
+.recent__rows > .recent-row-enter-to,
+.recent__rows > .recent-row-leave-from { max-height: var(--pn-size-recent-row); }
+
+@media (prefers-reduced-motion: reduce) {
+  .recent__rows > .recent-row-enter-active,
+  .recent__rows > .recent-row-leave-active { transition: opacity var(--pn-dur-fade-standard) var(--pn-ease-in); }
+
+  .recent__rows > .recent-row-enter-from,
+  .recent__rows > .recent-row-leave-to { max-height: none; }
+}
 
 .recent__mono { font-family: var(--pn-font-mono); font-size: var(--pn-text-mono); }
 

@@ -116,6 +116,43 @@ test('③ ⑥ with reduced motion the petals do not fade or bloom, the words sti
   expect((await motionLog(page)).filter((entry) => /petals|brand-mark|drop-overlay/.test(entry))).toEqual([]);
 });
 
+// 「最近上传」（decisions/motion.md）：新传的一张在最上面从 0 长到一行高并淡入，下面几行被它推下去；
+// 「清空」时这几行收起淡出，「更早」那些跟着滑上来。页面时钟一下拨太多会提前触发 Vue 过渡的兜底计时，
+// 所以先只拨两帧（够 Vue 换上 -enter-to），按真实时间等过渡开始，再拨时钟让上传传完
+async function startUpload(page: Page): Promise<void> {
+  await page.locator('.drop-bar__pick').click();
+  await expect(page.locator('.focus-card')).toHaveAttribute('aria-label', '正在上传');
+  await page.clock.runFor(50);
+}
+
+test('a new upload grows into the recent list and pushes the rows below down', async ({ page }) => {
+  await openHome(page, 'no-preference', UPLOAD);
+  await expect(page.locator('.recent-row')).toHaveCount(1);
+  await startUpload(page);
+  await expect.poll(() => motionLog(page)).toEqual(expect.arrayContaining([
+    expect.stringMatching(/^transition max-height recent-row .*recent-row-enter-active/),
+    expect.stringMatching(/^transition opacity recent-row .*recent-row-enter-active/),
+  ]));
+
+  await page.clock.runFor(1000);
+  await expect(page.locator('.focus-card__pill')).toContainText('已复制');
+  await page.locator('.recent__ghost').filter({ hasText: '清空' }).click();
+  await page.clock.runFor(50);
+  await expect.poll(() => motionLog(page)).toEqual(expect.arrayContaining([
+    expect.stringMatching(/^transition max-height recent-row .*recent-row-leave-active/),
+  ]));
+  await expect(page.locator('.recent-row')).toHaveCount(1);
+});
+
+test('with reduced motion new rows in the recent list only fade in', async ({ page }) => {
+  await openHome(page, 'reduce', UPLOAD);
+  await startUpload(page);
+  await expect.poll(() => motionLog(page)).toEqual(expect.arrayContaining([
+    expect.stringMatching(/^transition opacity recent-row .*recent-row-enter-active/),
+  ]));
+  expect((await motionLog(page)).filter((entry) => /^transition (max-height|transform) recent-row/.test(entry))).toEqual([]);
+});
+
 /** 所有转圈共用 pn-base.css 的 pn-spin：转半拍后读它的 transform */
 async function spinnerTransform(page: Page): Promise<string> {
   return page.evaluate(async () => {
