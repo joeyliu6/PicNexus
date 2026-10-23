@@ -12,6 +12,7 @@ import SettingsSection from './SettingsSection.vue';
 import { APP_SHORTCUTS, appShortcutLabel } from './shortcutRecording';
 import { HOTKEYS, useShortcutRecorder, type HotkeyId } from './useShortcutRecorder';
 import { useSettingsConfig } from './useSettingsConfig';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const settings = useSettingsConfig();
 const recorder = useShortcutRecorder();
@@ -71,7 +72,7 @@ function messageOf(id: HotkeyId): { text: string; danger: boolean } | null {
     <SettingsSection title="应用内快捷键" note="应用内快捷键仅在 PicNexus 窗口中生效，不可修改。">
       <SettingsCard class="shortcut__grid" data-setting-row="appShortcuts">
         <div v-for="item in APP_SHORTCUTS" :key="item.name" class="shortcut__app">
-          <span class="shortcut__app-name">{{ item.name }}</span>
+          <span v-overflow-title class="shortcut__app-name">{{ item.name }}</span>
           <kbd class="shortcut__kbd">{{ appShortcutLabel(item.keys, platform) }}</kbd>
         </div>
       </SettingsCard>

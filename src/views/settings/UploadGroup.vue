@@ -18,6 +18,7 @@ import SettingsSection from './SettingsSection.vue';
 import TemplateDialog from './TemplateDialog.vue';
 import { addPreset, describePreset, MAX_PRESETS } from './compressionPresets';
 import { useSettingsConfig } from './useSettingsConfig';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const settings = useSettingsConfig();
 
@@ -73,7 +74,7 @@ function presetById(id: string | null): CompressionPreset | null {
           <template #title>
             <span class="upload__template">
               <span class="upload__template-name">自定义模板</span>
-              <code class="upload__template-text">{{ link.customTemplate || '{url}' }}</code>
+              <code v-overflow-title class="upload__template-text">{{ link.customTemplate || '{url}' }}</code>
             </span>
           </template>
           <PnButton variant="secondary" size="sm" class="upload__edit" @click="templateOpen = true">编辑…</PnButton>

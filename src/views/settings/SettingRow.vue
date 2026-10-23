@@ -5,6 +5,7 @@ import { computed } from 'vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import { useSettingsConfig } from './useSettingsConfig';
 import type { SettingRowId } from './settingsGroups';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = withDefaults(defineProps<{
   title?: string;
@@ -29,7 +30,7 @@ const saved = computed(() => !!props.rowId && settings.isSaved(props.rowId));
     <slot name="lead" />
     <div class="setting-row__text">
       <slot name="title"><span class="setting-row__title">{{ title }}</span></slot>
-      <span v-if="desc || $slots.desc" class="setting-row__desc" :class="{ 'setting-row__desc--truncate': truncate }">
+      <span v-if="desc || $slots.desc" v-overflow-title class="setting-row__desc" :class="{ 'setting-row__desc--truncate': truncate }">
         <slot name="desc">{{ desc }}</slot>
       </span>
     </div>

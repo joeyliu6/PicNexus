@@ -7,6 +7,7 @@ import { formatRelativeTime } from '@/utils/formatters';
 import { createLogger } from '@/utils/logger';
 import SettingsCard from './SettingsCard.vue';
 import SettingsSection from './SettingsSection.vue';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{ refreshKey: number }>();
 
@@ -54,7 +55,7 @@ watch(() => props.refreshKey, load);
     <SettingsCard large>
       <div v-for="entry in entries" :key="entry.id" class="recent" :title="entry.result === 'success' ? undefined : entry.details">
         <span class="recent__dot" :class="{ 'recent__dot--failed': entry.result !== 'success' }" aria-hidden="true" />
-        <span class="recent__what">{{ what(entry) }}</span>
+        <span v-overflow-title class="recent__what">{{ what(entry) }}</span>
         <span class="recent__when">{{ formatRelativeTime(entry.timestamp) }}</span>
       </div>
     </SettingsCard>
