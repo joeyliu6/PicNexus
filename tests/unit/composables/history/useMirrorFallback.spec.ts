@@ -512,6 +512,16 @@ describe('useMirrorFallback - checkMirror', () => {
     expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
+  // check_image_link 是 Rust 命令，失败时抛 { type, data: { message } }：读出原话，不能写成 [object Object]
+  it('Rust 报错时通知写它给的原因', async () => {
+    invokeMock.mockRejectedValueOnce({ type: 'VALIDATION', data: { message: '这个地址不允许检测' } });
+    const harness = mountHarness();
+
+    await harness.api().checkMirror('qiyu');
+
+    expect(toastErrorMock).toHaveBeenCalledWith('检测失败', '这个地址不允许检测，请稍后重试');
+  });
+
   it('两个不同 serviceId 并发：DB 写入串行化，前一笔结果不会被后一笔覆盖', async () => {
     // 让两次 invoke 都立刻 resolve；getById 返回的 baseline 始终是空 linkCheckStatus
     // （模拟"两个并发回写都拿到同一份 baseline"的最坏情况——若不串行化，

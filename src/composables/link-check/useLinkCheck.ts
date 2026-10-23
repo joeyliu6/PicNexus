@@ -28,6 +28,7 @@ import {
 import { updateHistoryCheckStatus } from './linkCheckPersistence';
 import { onCacheEvent, type HistoryEventData } from '@/events/cacheEvents';
 import { getConfirmedHttpHosts } from '@/security/networkPolicy';
+import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('LinkCheck');
 
@@ -107,10 +108,6 @@ interface RowStateSnapshot {
   checkedAt?: number;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** 清理进度监听器，防止累积泄漏 */
@@ -241,7 +238,7 @@ export function useLinkCheckManager() {
       await updateHistoryCheckStatus(result);
     } catch (err) {
       restoreRowsSnapshot(snapshot);
-      throw new LinkCheckPersistenceError(errorMessage(err));
+      throw new LinkCheckPersistenceError(getErrorMessage(err));
     }
   }
 
@@ -335,7 +332,7 @@ export function useLinkCheckManager() {
       loaded.value = true;
     } catch (err) {
       log.error('加载历史检测数据失败', err);
-      loadError.value = errorMessage(err);
+      loadError.value = getErrorMessage(err);
       toast.error('加载历史检测数据失败', loadError.value);
     } finally {
       isLoading.value = false;
@@ -445,7 +442,7 @@ export function useLinkCheckManager() {
       log.error('批量检测失败', err);
       toast.error(
         err instanceof LinkCheckPersistenceError ? '保存检测结果失败' : '检测失败',
-        errorMessage(err),
+        getErrorMessage(err),
       );
       return null;
     } finally {
@@ -469,7 +466,7 @@ export function useLinkCheckManager() {
       log.info('已发送取消请求');
     } catch (err) {
       log.error('取消失败', err);
-      toast.error('取消失败', errorMessage(err));
+      toast.error('取消失败', getErrorMessage(err));
     }
   }
 
@@ -482,7 +479,7 @@ export function useLinkCheckManager() {
       log.info('已发送暂停请求');
     } catch (err) {
       log.error('暂停失败', err);
-      toast.error('暂停失败', errorMessage(err));
+      toast.error('暂停失败', getErrorMessage(err));
     }
   }
 
@@ -495,7 +492,7 @@ export function useLinkCheckManager() {
       log.info('已发送恢复请求');
     } catch (err) {
       log.error('恢复失败', err);
-      toast.error('恢复失败', errorMessage(err));
+      toast.error('恢复失败', getErrorMessage(err));
     }
   }
 
@@ -605,7 +602,7 @@ export function useLinkCheckManager() {
       log.error('子集检测失败', err);
       toast.error(
         err instanceof LinkCheckPersistenceError ? '保存检测结果失败' : '检测失败',
-        errorMessage(err),
+        getErrorMessage(err),
       );
       return null;
     } finally {
@@ -723,7 +720,7 @@ export function useLinkCheckManager() {
         t.recheckResult = undefined;
       });
       log.error('单条检测失败', err);
-      toast.error('检测失败', errorMessage(err));
+      toast.error('检测失败', getErrorMessage(err));
     } finally {
       activeRecheckCount--;
     }

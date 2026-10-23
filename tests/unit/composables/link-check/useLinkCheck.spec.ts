@@ -264,6 +264,15 @@ describe('useLinkCheckManager.cancelCheck', () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
+  // Rust 命令失败时抛的是 { type, data: { message } }：通知要读出原话，不能是 [object Object]
+  it('取消失败时通知写 Rust 给的原因', async () => {
+    const m = await freshManager();
+    m.isChecking.value = true;
+    invokeMock.mockRejectedValueOnce({ type: 'EXTERNAL', data: { message: '检测任务已经结束' } });
+    await m.cancelCheck();
+    expect(toastErrorMock).toHaveBeenCalledWith('取消失败', '检测任务已经结束');
+  });
+
   it('isChecking=true 时调用 cancel_batch_check 并清状态', async () => {
     const m = await freshManager();
     m.isChecking.value = true;

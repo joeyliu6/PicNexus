@@ -25,6 +25,7 @@ import { getServiceDisplayName } from '@/constants/serviceNames';
 import { createLogger } from '@/utils/logger';
 import { isUsableMirror } from '@/utils/historyResults';
 import { getConfirmedHttpHosts } from '@/security/networkPolicy';
+import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('MirrorFallback');
 
@@ -391,7 +392,8 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
 
       await notifyUpdated(cur.id);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      // check_image_link 是 Rust 命令，失败时抛 { type, data: { message } }
+      const msg = getErrorMessage(err);
       log.error('检测图床链接失败:', err);
       toast.error('检测失败', `${msg}，请稍后重试`);
     } finally {
