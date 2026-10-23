@@ -2,6 +2,7 @@ import { JDRateLimiter } from './JDRateLimiter';
 import { BaseUploader } from '@/uploaders/base/BaseUploader';
 import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
 import type { JDServiceConfig } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
 
 /**
  * Rust 返回的京东上传结果
@@ -75,7 +76,7 @@ export class JDUploader extends BaseUploader<JDServiceConfig> {
 
       } catch (error) {
         lastError = error;
-        const errorMsg = String(error);
+        const errorMsg = getErrorMessage(error);
 
         // 3. 错误分析与熔断处理
         // 如果是 500 Forbidden (风控)，触发熔断
@@ -99,8 +100,8 @@ export class JDUploader extends BaseUploader<JDServiceConfig> {
       }
     }
 
-    // 重试耗尽
-    throw new Error(`京东图床上传失败: ${lastError}`);
+    // 重试耗尽：uploadViaRust 抛出的已经是「京东图床上传失败: 原因」，原样抛出，不再套一层
+    throw lastError instanceof Error ? lastError : new Error(`京东图床上传失败: ${getErrorMessage(lastError)}`);
   }
 
   /**

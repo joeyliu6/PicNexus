@@ -170,6 +170,17 @@ describe('JDUploader.upload - 重试与熔断', () => {
     expect((err as Error).message).toMatch(/京东图床上传失败/);
     expect(invokeMock).toHaveBeenCalledTimes(3); // MAX_RETRIES=2 → 尝试 0,1,2 共 3 次
   });
+
+  // 失败行照原话显示认不出的原因：最终错误不能套成「京东图床上传失败: Error: 京东图床上传失败: …」
+  it('重试耗尽后的错误只说一遍原因', async () => {
+    invokeMock.mockRejectedValue(new Error('文件名含有不支持的字符'));
+
+    const p = new JDUploader().upload('/tmp/a.jpg', makeOptions());
+    const settled = p.catch((err: unknown) => err);
+    await vi.runAllTimersAsync();
+
+    expect(((await settled) as Error).message).toBe('京东图床上传失败: 文件名含有不支持的字符');
+  });
 });
 
 describe('JDUploader.validateConfig', () => {
