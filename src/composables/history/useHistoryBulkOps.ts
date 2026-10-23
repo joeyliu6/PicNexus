@@ -25,6 +25,7 @@ export function createBulkOps(ctx: BulkOpsContext) {
   const toast = useToast();
 
   async function bulkExportJSON(selectedIds: string[]): Promise<void> {
+    let stage: 'read' | 'write' = 'read';
     try {
       if (selectedIds.length === 0) {
         toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
@@ -43,6 +44,7 @@ export function createBulkOps(ctx: BulkOpsContext) {
         return;
       }
       const jsonContent = JSON.stringify(selectedItems, null, 2);
+      stage = 'write';
       const filePath = await exportTextFile(
         `picnexus-history-${Date.now()}.json`,
         [{ name: 'JSON', extensions: ['json'] }],
@@ -52,7 +54,7 @@ export function createBulkOps(ctx: BulkOpsContext) {
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(selectedItems.length));
     } catch (error) {
       log.error('[批量操作] 导出失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error instanceof Error ? error.message : String(error)));
+      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error, stage));
     }
   }
 

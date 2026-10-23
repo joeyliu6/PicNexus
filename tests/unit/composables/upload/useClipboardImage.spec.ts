@@ -9,6 +9,7 @@ import { useQueueState } from '@/composables/upload/useQueueState';
 
 const toastWarnMock = vi.hoisted(() => vi.fn());
 const toastInfoMock = vi.hoisted(() => vi.fn());
+const toastErrorMock = vi.hoisted(() => vi.fn());
 const invokeMock = getInvokeMock();
 const readTextMock = getClipboardMocks().readText;
 
@@ -16,6 +17,7 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     warn: toastWarnMock,
     info: toastInfoMock,
+    error: toastErrorMock,
   }),
 }));
 
@@ -194,11 +196,12 @@ describe('useClipboardImage.pasteAndUpload', () => {
     expect(toastWarnMock).not.toHaveBeenCalled();
   });
 
-  it('图片 URL 下载失败时提示下载失败，且不触发上传', async () => {
+  // 粘贴上传这次失败了：红色，原因 + 处理办法；Rust 报的错是对象，读出里面的话（不能显示成 [object Object]）
+  it('图片 URL 下载失败时说清原因与处理办法，且不触发上传', async () => {
     readTextMock.mockResolvedValue('https://example.com/a.png');
     setupInvokeHandler(async (cmd) => {
       if (cmd === 'clipboard_has_image') return false;
-      if (cmd === 'download_url_image') throw new Error('404');
+      if (cmd === 'download_url_image') throw { type: 'NETWORK', data: { message: '下载失败: HTTP 404' } };
       throw new Error(`unexpected command: ${cmd}`);
     });
     const uploadHandler = vi.fn(async () => undefined);
@@ -206,7 +209,8 @@ describe('useClipboardImage.pasteAndUpload', () => {
     await useClipboardImage().pasteAndUpload(uploadHandler);
 
     expect(uploadHandler).not.toHaveBeenCalled();
-    expect(toastWarnMock).toHaveBeenCalledWith('下载失败', '图片链接下载失败: Error: 404');
+    expect(toastErrorMock).toHaveBeenCalledWith('图片链接下载失败', '下载失败: HTTP 404，请检查链接后重试');
+    expect(toastWarnMock).not.toHaveBeenCalled();
   });
 
   // Patterns.dc.html 通知样例：「剪贴板里没有图片 / 复制一张图片后再按 Ctrl V」（灰色 i，不是警告）

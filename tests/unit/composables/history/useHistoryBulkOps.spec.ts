@@ -248,4 +248,31 @@ describe('createBulkOps', () => {
     expect(invokeMock).not.toHaveBeenCalled();
     expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
   });
+
+  // 大数字千分位（交接说明 9.6）
+  it('counts the exported records with thousands separators', async () => {
+    const { ctx, detailCache } = makeCtx();
+    detailCache.getDetails.mockResolvedValue(Array.from({ length: 1234 }, (_, i) => ({ id: `r${i}`, localFileName: `${i}.png` })));
+    invokeMock.mockResolvedValue('C:/out/picnexus-history.json');
+
+    const { bulkExportJSON } = createBulkOps(ctx);
+    await bulkExportJSON(['many']);
+
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', { summary: '已导出', detail: '1,234 条记录' });
+  });
+
+  // 写文件失败是 Rust 报的 { type, data: { message } }：读出原话再说怎么办，不显示成 [object Object]
+  it('says why the export failed and what to do', async () => {
+    const { ctx, detailCache } = makeCtx();
+    detailCache.getDetails.mockResolvedValue([{ id: 'a', localFileName: 'a.png' }]);
+    invokeMock.mockRejectedValue({ type: 'FILE_IO', data: { message: '写入所选文件失败: Access is denied' } });
+
+    const { bulkExportJSON } = createBulkOps(ctx);
+    await bulkExportJSON(['a']);
+
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', {
+      summary: '导出失败',
+      detail: '写入所选文件失败: Access is denied，请换个位置重试',
+    });
+  });
 });

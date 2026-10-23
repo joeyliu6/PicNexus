@@ -1,6 +1,7 @@
 // 集中管理所有通知文案，便于维护和国际化
 import { getErrorMessage } from '@/types/errors';
 import { UI_COPY } from './uiCopy';
+import { formatCount } from '@/utils/formatters';
 
 // 类型定义
 export interface ToastMessageConfig {
@@ -28,11 +29,12 @@ export const TOAST_MESSAGES = {
     }),
     exportSuccess: (count: number): ToastMessageConfig => ({
       summary: '已导出',
-      detail: `${count} 条记录`
+      detail: `${formatCount(count)} 条记录`
     }),
-    exportFailed: (error: string): ToastMessageConfig => ({
+    /** 读不出记录时请重试；写不进所选的文件（没有权限、磁盘满了）时换个位置 */
+    exportFailed: (error: unknown, stage: 'read' | 'write'): ToastMessageConfig => ({
       summary: '导出失败',
-      detail: error
+      detail: `${getErrorMessage(error)}，${stage === 'write' ? '请换个位置重试' : '请重试'}`
     }),
     noSelection: {
       summary: '未选择',
@@ -157,9 +159,10 @@ export const TOAST_MESSAGES = {
       summary: '无效 URL',
       detail: '请输入有效的图片链接（以 http:// 或 https:// 开头）'
     } as StaticMessage,
-    downloadFailed: (error: string): ToastMessageConfig => ({
+    /** 一个都没下载成功（对话框不关，改了地址可以再点） */
+    downloadFailed: (reason: string): ToastMessageConfig => ({
       summary: 'URL 下载失败',
-      detail: error
+      detail: `${reason}，请检查地址后重试`
     }),
     partialFailed: (success: number, failed: number): ToastMessageConfig => ({
       summary: '部分下载失败',

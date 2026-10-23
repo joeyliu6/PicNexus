@@ -9,6 +9,7 @@ import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 import { isStatusError } from '@/utils/uploadStatus';
 import { uiPlatform } from '@/utils/platform';
+import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('useClipboardImage');
 
@@ -116,7 +117,8 @@ export function useClipboardImage() {
           return;
         } catch (downloadError) {
           log.error('图片 URL 下载失败:', downloadError);
-          toast.warn('下载失败', `图片链接下载失败: ${String(downloadError)}`);
+          // 这次粘贴上传失败了（红），原因照 Rust 的原话
+          toast.error('图片链接下载失败', `${getErrorMessage(downloadError)}，请检查链接后重试`);
           return;
         }
       }

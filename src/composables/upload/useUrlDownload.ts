@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '@/composables/useToast';
 import { createLogger } from '@/utils/logger';
 import { TOAST_MESSAGES } from '@/constants';
+import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('useUrlDownload');
 
@@ -117,8 +118,7 @@ export function useUrlDownload() {
                 log.info(`下载成功: ${currentUrl}`);
               })
               .catch((error) => {
-                const msg = error instanceof Error ? error.message : String(error);
-                errors.push(`${currentUrl}: ${msg}`);
+                errors.push(getErrorMessage(error));
                 log.warn(`下载失败: ${currentUrl}`, error);
               })
               .finally(() => {
@@ -133,10 +133,8 @@ export function useUrlDownload() {
       // 结果处理
       const filePaths = filePathsByIndex.filter((path): path is string => Boolean(path));
       if (filePaths.length === 0) {
-        const detail = errors.length === 1
-          ? errors[0]
-          : `${errors.length} 个 URL 全部下载失败`;
-        toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(detail));
+        const reason = errors.length === 1 ? errors[0] : `${errors.length} 个地址都没有下载成功`;
+        toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(reason));
         return false;
       }
 
@@ -148,9 +146,8 @@ export function useUrlDownload() {
       await uploadHandler(filePaths);
       return true;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
       log.error('URL 下载流程异常:', error);
-      toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(msg));
+      toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(getErrorMessage(error)));
       return false;
     } finally {
       isDownloading.value = false;

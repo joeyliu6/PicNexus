@@ -117,8 +117,9 @@ describe('useUrlDownload', () => {
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.anything());
   });
 
-  it('returns false and skips upload when every download fails', async () => {
-    invokeMock.mockRejectedValue(new Error('network down'));
+  // 错误 = 原因 + 处理办法；Rust 报的错是 { type, data: { message } } 对象，要读出里面的话，不能显示成 [object Object]
+  it('returns false and skips upload when every download fails, saying why and what to do', async () => {
+    invokeMock.mockRejectedValue({ type: 'NETWORK', data: { message: '下载失败: HTTP 403' } });
     const uploadHandler = vi.fn(async () => undefined);
     const { downloadAndUpload } = useUrlDownload();
 
@@ -126,6 +127,21 @@ describe('useUrlDownload', () => {
 
     expect(success).toBe(false);
     expect(uploadHandler).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.anything());
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', {
+      summary: 'URL 下载失败',
+      detail: '下载失败: HTTP 403，请检查地址后重试',
+    });
+  });
+
+  it('sums up several failed addresses in one line', async () => {
+    invokeMock.mockRejectedValue(new Error('network down'));
+    const { downloadAndUpload } = useUrlDownload();
+
+    await downloadAndUpload('https://example.com/a.png\nhttps://example.com/b.png', vi.fn());
+
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', {
+      summary: 'URL 下载失败',
+      detail: '2 个地址都没有下载成功，请检查地址后重试',
+    });
   });
 });

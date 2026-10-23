@@ -12,6 +12,7 @@
 import { ref, type Ref } from 'vue';
 import { useToast } from '@/composables/useToast';
 import type { HistoryItem } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
 
 interface ToastLike {
   error: (title: string, detail?: string) => void;
@@ -44,6 +45,11 @@ export function useLightboxCore(options: UseLightboxCoreOptions = {}): LightboxC
   const lightboxVisible = ref(false);
   const lightboxItem = ref<HistoryItem | null>(null);
 
+  /** 读不出这张图的记录：原因照原话 + 处理办法 */
+  function reportLoadError(e: unknown): void {
+    toast.error('未能打开大图', `${getErrorMessage(e)}，请重试`);
+  }
+
   function closeLightbox() {
     lightboxVisible.value = false;
   }
@@ -53,7 +59,7 @@ export function useLightboxCore(options: UseLightboxCoreOptions = {}): LightboxC
       lightboxItem.value = await loader();
       lightboxVisible.value = true;
     } catch (e) {
-      toast.error('加载失败', String(e));
+      reportLoadError(e);
       if (!options.silentLoadError) throw e;
     }
   }
@@ -62,7 +68,7 @@ export function useLightboxCore(options: UseLightboxCoreOptions = {}): LightboxC
     try {
       lightboxItem.value = await loader();
     } catch (e) {
-      toast.error('加载失败', String(e));
+      reportLoadError(e);
       if (!options.silentLoadError) throw e;
     }
   }
