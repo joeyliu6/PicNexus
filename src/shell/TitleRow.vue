@@ -27,7 +27,6 @@ defineProps<{
   align-items: flex-start;
   height: var(--pn-size-page-title-row);
   padding-left: var(--pn-space-24);
-  user-select: none;
 }
 
 .title-row--bare {

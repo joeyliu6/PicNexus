@@ -142,7 +142,7 @@ function pickAnother() {
               @mousedown="pane.zoom.onImageDown"
               @dblclick="pane.zoom.onDoubleClick"
             >
-              <img :src="pane.src" :style="pane.zoom.imageTransformStyle.value" class="compress-view__img" :alt="pane.label" draggable="false" />
+              <img :src="pane.src" :style="pane.zoom.imageTransformStyle.value" class="compress-view__img" :alt="pane.label" />
               <span class="compress-view__chip">
                 {{ pane.label }}<template v-if="pane.zoom.scale.value !== 1"> · {{ pane.zoom.zoomPercent.value }}%</template>
               </span>
@@ -284,7 +284,6 @@ function pickAnother() {
   min-width: 0;
   overflow: hidden;
   cursor: grab;
-  user-select: none;
 }
 
 .compress-view__pane + .compress-view__pane { box-shadow: inset 1px 0 0 var(--pn-lightbox-rule); }

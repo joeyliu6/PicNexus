@@ -58,3 +58,10 @@
 - 滚动条：6px 细条、轨道透明，悬停加深（`pn-base.css`，设计稿没画）。
 - 最小窗口 800×600，任何页面不横向滚动；宽 < 1000px 侧栏收成 56px 图标栏（截图测试会量）。
 - 尺寸都按 `box-sizing: border-box` 算（`pn-base.css` 全局写了）。
+
+## 不像网页
+
+- 界面文字不能选：`pn-base.css` 给 `body` 写了 `user-select: none`（WebKit 只认 `-webkit-` 前缀，两种都写），双击、拖选、Ctrl+A 都不会把按钮和说明刷蓝；组件里不再各写一份。要拿去别处粘贴的内容（链接、路径、命令、模板预览）加 `pn-selectable`；输入框照常能选。
+- 右键不弹浏览器菜单（`src/shell/useNativeContextMenu.ts`）：输入框里、选中的字上照常弹（剪切、复制、粘贴）；要自己的右键菜单用 `PnContextMenu`。
+- 图片和链接拖不起来（`pn-base.css` 的 `-webkit-user-drag: none`），不用再写 `draggable="false"`。
+- 守门测试在 `tests/e2e/desktop-feel.e2e.spec.ts`（Chromium + WebKit）。

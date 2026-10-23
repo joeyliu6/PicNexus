@@ -45,7 +45,7 @@ function repair(): void {
         <div class="repair-dialog__scroll">
           <div v-for="folder in folders" :key="folder.path" class="repair-dialog__folder">
             <PnIcon name="folder" :size="15" :stroke="1.6" class="repair-dialog__muted-icon" />
-            <span class="repair-dialog__path" :title="folder.path">{{ folder.path }}</span>
+            <span class="repair-dialog__path pn-selectable" :title="folder.path">{{ folder.path }}</span>
             <span class="repair-dialog__meta" :class="{ 'repair-dialog__meta--warning': folder.status === 'missing' || folder.status === 'denied' }">{{ folderMeta(folder) }}</span>
             <PnIconButton icon="close" label="移除这个文件夹" :icon-size="12" :stroke="2.2" no-tooltip @click="emit('remove', folder.path)" />
           </div>

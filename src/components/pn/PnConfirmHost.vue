@@ -29,7 +29,7 @@ const icon = computed(() => (request.value?.tone === 'brand' ? 'info' : 'warning
     :icon="icon"
   >
     <span class="pn-confirm__message">{{ request.message }}</span>
-    <span v-if="request.code" class="pn-confirm__code">{{ request.code }}</span>
+    <span v-if="request.code" class="pn-confirm__code pn-selectable">{{ request.code }}</span>
     <template #footer>
       <PnButton variant="secondary" size="dialog" data-autofocus @click="finish('reject')">
         {{ request.rejectLabel }}

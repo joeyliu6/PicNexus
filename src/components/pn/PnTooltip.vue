@@ -39,6 +39,5 @@ withDefaults(defineProps<{
   font-size: var(--pn-text-footnote);
   line-height: var(--pn-leading-footnote);
   white-space: nowrap;
-  user-select: none;
 }
 </style>

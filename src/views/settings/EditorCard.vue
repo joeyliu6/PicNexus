@@ -57,7 +57,7 @@ async function copy(): Promise<void> {
     <div class="editor-card__body">
       <span class="editor-card__label">{{ label }}</span>
       <div class="editor-card__code">
-        <code class="editor-card__text" :title="code">{{ code }}</code>
+        <code class="editor-card__text pn-selectable" :title="code">{{ code }}</code>
         <CopyButton class="editor-card__copy" :copied="isCopied(rowId)" @click="copy" />
       </div>
       <div class="editor-card__foot"><slot /></div>

@@ -48,7 +48,6 @@ defineEmits<{ startLogin: []; close: [] }>();
   font-family: var(--pn-font-ui);
   font-size: var(--pn-text-body);
   line-height: var(--pn-leading-login);
-  user-select: none;
 }
 
 .login-panel__body {

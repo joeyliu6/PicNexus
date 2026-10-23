@@ -78,7 +78,7 @@ onBeforeUnmount(() => clearTimeout(timer));
       </div>
       <div class="template__preview">
         <span class="template__label">预览</span>
-        <code class="template__code">{{ preview }}</code>
+        <code class="template__code pn-selectable">{{ preview }}</code>
       </div>
       <p v-if="format !== 'custom'" class="template__note">
         当前默认复制为 {{ FORMAT_NAMES[format] }}；默认复制为「自定义」时使用这个模板。

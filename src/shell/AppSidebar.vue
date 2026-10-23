@@ -78,7 +78,6 @@ const collapseTitle = `收起侧栏  ${isMac ? '⌘' : 'Ctrl+'}\\`;
   width: var(--pn-size-sidebar);
   padding: 0 var(--pn-space-sidebar-x) var(--pn-space-12);
   background: var(--pn-sidebar);
-  user-select: none;
 }
 
 .app-sidebar__logo {

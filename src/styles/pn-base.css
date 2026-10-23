@@ -1,5 +1,5 @@
 /*
- * 全局基础样式：字体、页面底、滚动条、焦点环、共用的遮罩与转圈动画。
+ * 全局基础样式：字体、页面底、文字能不能选、滚动条、焦点环、共用的遮罩与转圈动画。
  * 令牌在 tokens.css / tokens-extra.css，本文件只引用 var(--pn-*)。
  */
 
@@ -82,6 +82,29 @@ body {
 button { font-family: inherit; }
 
 ::selection { background: var(--pn-selection); }
+
+/*
+ * 桌面应用的界面不像网页：双击、拖选、Ctrl+A 都不会把按钮和说明文字刷蓝；
+ * 要拿去别处粘贴的内容（链接、路径、命令）加 .pn-selectable，输入框照常能选。
+ * WebKit（macOS / Linux）只认带前缀的写法
+ */
+body {
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+.pn-selectable {
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 缩略图、侧栏导航项拖不起来（不会拖出一张半透明的图或一个链接） */
+img,
+a { -webkit-user-drag: none; }
 
 /* 滚动条（设计没画）：6px 细条、轨道透明，悬停加深 */
 ::-webkit-scrollbar {

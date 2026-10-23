@@ -144,7 +144,6 @@ function tabIndexOf(row: HostRow, index: number): number {
   height: var(--pn-size-title-bar);
   margin: var(--pn-space-host-list-head);
   padding-left: var(--pn-space-8);
-  user-select: none;
 }
 
 .hosts-list__title {

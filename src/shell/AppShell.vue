@@ -13,6 +13,7 @@ import { useNavBadges } from './useNavBadges';
 import { useAppNavigation } from './useAppNavigation';
 import { useAppShortcuts } from './useAppShortcuts';
 import { useGlobalUploadInput } from './useGlobalUploadInput';
+import { useNativeContextMenu } from './useNativeContextMenu';
 import CommandPalette from './CommandPalette.vue';
 import DropOverlay from './DropOverlay.vue';
 import TransferCenter from './TransferCenter.vue';
@@ -48,6 +49,7 @@ setUpdateInstallGate(() => new Promise<void>((resolve) => {
 }));
 const { overlay, receiving } = useGlobalUploadInput();
 useAppShortcuts();
+useNativeContextMenu();
 
 const disposers: UnlistenFn[] = [];
 onMounted(async () => {

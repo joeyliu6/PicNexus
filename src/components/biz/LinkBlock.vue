@@ -17,7 +17,7 @@ const segments = computed(() => splitLinkSegments(props.text, props.url, props.f
 </script>
 
 <template>
-  <div class="link-block" :class="{ 'link-block--compact': compact, 'link-block--broken': broken }"><span v-for="(segment, i) in segments" :key="i" :class="`link-block__${segment.kind}`">{{ segment.text }}</span></div>
+  <div class="link-block pn-selectable" :class="{ 'link-block--compact': compact, 'link-block--broken': broken }"><span v-for="(segment, i) in segments" :key="i" :class="`link-block__${segment.kind}`">{{ segment.text }}</span></div>
 </template>
 
 <style scoped>

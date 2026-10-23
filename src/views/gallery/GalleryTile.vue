@@ -173,7 +173,6 @@ function onClick(event: MouseEvent): void {
         v-if="currentSrc && displayMode !== 'fast'"
         :src="currentSrc"
         alt=""
-        draggable="false"
         class="tile__img"
         :class="{ 'tile__img--loaded': loaded, 'tile__img--checker': checker, 'tile__img--still': still }"
         :style="smallBox"

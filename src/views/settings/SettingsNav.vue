@@ -57,7 +57,6 @@ defineEmits<{ select: [id: SettingsGroupId] }>();
   height: var(--pn-size-title-bar);
   margin: var(--pn-space-settings-nav-head);
   padding-left: var(--pn-space-8);
-  user-select: none;
 }
 
 .settings-nav__title {

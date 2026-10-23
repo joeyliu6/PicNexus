@@ -92,7 +92,6 @@ withDefaults(defineProps<{
   border-radius: var(--pn-radius-sm);
   outline: none;
   cursor: pointer;
-  user-select: none;
 }
 
 .pn-select-menu__item[data-highlighted] { background: var(--pn-menu-sel); }

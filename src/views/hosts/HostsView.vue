@@ -144,7 +144,6 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   flex: none;
   align-items: center;
   height: var(--pn-size-title-bar);
-  user-select: none;
 }
 
 .hosts__spacer { flex: 1; align-self: stretch; }

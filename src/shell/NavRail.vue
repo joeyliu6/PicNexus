@@ -80,7 +80,6 @@ const isMac = uiPlatform() === 'macos';
   width: var(--pn-size-nav-rail);
   padding: 0 0 var(--pn-space-12);
   background: var(--pn-sidebar);
-  user-select: none;
 }
 
 .nav-rail__logo {

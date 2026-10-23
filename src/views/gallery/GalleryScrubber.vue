@@ -177,7 +177,6 @@ function onKeydown(event: KeyboardEvent): void {
   opacity: 0;
   pointer-events: none;
   touch-action: none;
-  user-select: none;
   transition: opacity var(--pn-dur-standard) var(--pn-ease-in);
 }
 

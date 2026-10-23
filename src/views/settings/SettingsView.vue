@@ -151,7 +151,6 @@ watch(() => [targetTab?.value, targetSection?.value], () => { if (active.value) 
   flex: none;
   align-items: center;
   height: var(--pn-size-title-bar);
-  user-select: none;
 }
 
 .settings__spacer { flex: 1; align-self: stretch; }
