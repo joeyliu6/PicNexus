@@ -21,6 +21,7 @@ export function petalLabelOf(meta: ImageMeta): string {
   const copies = copiesOf(meta);
   if (meta.copyLinkHealth === 'dead') return `${copies} 份，复制链接已失效`;
   if (meta.copyLinkHealth === 'limited') return `${copies} 份，复制链接可能受限`;
+  if (meta.copyLinkHealth === 'unchecked') return `${copies} 份，复制链接尚未检测`;
   return `${copies} 份均正常`;
 }
 

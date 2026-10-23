@@ -31,6 +31,8 @@ describe('gallery tile and row rules', () => {
     expect(petalsOf(meta('limited'))).toEqual(['ok', 'ok']);
     expect(petalLabelOf(meta('ok'))).toBe('2 份均正常');
     expect(petalLabelOf(meta('dead'))).toBe('2 份，复制链接已失效');
+    // 没检测过就不能读成「均正常」
+    expect(petalLabelOf(meta('unchecked'))).toBe('2 份，复制链接尚未检测');
   });
 
   it('leaves the list status empty while the link works', () => {
