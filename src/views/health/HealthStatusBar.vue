@@ -188,9 +188,12 @@ const busy = computed(() => props.state === 'checking' || props.state === 'pause
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.health-status__more:hover,
+/* 透明底图标按钮：悬停 ghost-hover、按住 ghost-press；菜单打开时是设计稿的 navSel（写在最后，打开期间压过悬停） */
+.health-status__more:hover { background: var(--pn-ghost-hover); }
+.health-status__more:active { background: var(--pn-ghost-press); }
 .health-status__more[data-state="open"] { background: var(--pn-selected); }
 
 @media (prefers-reduced-motion: reduce) {

@@ -54,6 +54,21 @@ function showTip(cell: CalendarCell, el: HTMLElement): void {
   const r = el.getBoundingClientRect();
   if (!box) return;
   tip.value = { text: describe(cell), x: r.left - box.left + r.width / 2, y: r.top - box.top };
+  void nextTick(keepTipInside);
+}
+
+/**
+ * 气泡默认在格子正上方居中；最左 / 最右几列居中会伸出日历（窄窗口被滚动区裁掉一截），横向收进日历以内。
+ * 在渲染后、绘制前量气泡宽度再挪，看不到先出界再挪回的一帧。
+ */
+function keepTipInside(): void {
+  const t = tip.value;
+  const width = root.value?.clientWidth;
+  const el = root.value?.querySelector<HTMLElement>('.upload-calendar__tip:not(.upload-calendar__tip-leave-active)');
+  if (!t || !width || !el) return;
+  const half = el.getBoundingClientRect().width / 2;
+  const x = Math.min(Math.max(t.x, half), width - half);
+  if (x !== t.x) tip.value = { ...t, x };
 }
 
 /** 键盘聚焦才出气泡；鼠标点完焦点留在格子上，移开后气泡不该一直挂着 */
@@ -126,7 +141,9 @@ watch(() => props.calendar.year, () => { focusKey.value = null; tip.value = null
         </div>
       </div>
     </div>
-    <div v-if="tip" class="pn-tooltip upload-calendar__tip" :style="{ left: `${tip.x}px`, top: `${tip.y}px` }" aria-hidden="true">{{ tip.text }}</div>
+    <Transition name="upload-calendar__tip">
+      <div v-if="tip" class="pn-tooltip upload-calendar__tip" :style="{ left: `${tip.x}px`, top: `${tip.y}px` }" aria-hidden="true">{{ tip.text }}</div>
+    </Transition>
   </div>
 </template>
 
@@ -193,6 +210,9 @@ watch(() => props.calendar.year, () => { focusKey.value = null; tip.value = null
   border-radius: var(--pn-radius-calendar-cell);
   background: var(--pn-cell-empty);
   cursor: pointer;
+
+  /* 换年份时格子换色、点选时外圈出现 / 消失：按「快」过渡，不硬切。点了就选中，不另加按下色 */
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .upload-calendar--narrow .upload-calendar__cell { border-radius: var(--pn-radius-calendar-cell-narrow); }
@@ -215,10 +235,26 @@ watch(() => props.calendar.year, () => { focusKey.value = null; tip.value = null
   outline-offset: var(--pn-ring-offset);
 }
 
+/*
+ * 气泡借用 .pn-tooltip 的样子，但不是 Reka 浮层（没有 data-state），进出场自己接：
+ * 出现同浮层「标准 200ms + 朝展开方向挪 4px」（在格子上方，从下往上浮），消失只淡出、快 30%。
+ * 定位用 translate 属性，不占 transform，关键帧里的位移才接得上。
+ */
 .upload-calendar__tip {
+  --pn-layer-shift-y: var(--pn-space-4);
+
   position: absolute;
   z-index: var(--pn-z-tooltip);
   pointer-events: none;
-  transform: translate(-50%, calc(-100% - var(--pn-space-6)));
+  translate: -50% calc(-100% - var(--pn-space-6));
+}
+
+.upload-calendar__tip-enter-active { animation: pn-layer-in var(--pn-dur-standard) var(--pn-ease-in); }
+.upload-calendar__tip-leave-active { animation: pn-fade-out calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out) forwards; }
+
+/* 「减少动态效果」：不挪，只淡入淡出，时长用不归零的 --pn-dur-fade-standard */
+@media (prefers-reduced-motion: reduce) {
+  .upload-calendar__tip-enter-active { animation: pn-layer-fade-in var(--pn-dur-fade-standard) var(--pn-ease-in); }
+  .upload-calendar__tip-leave-active { animation: pn-fade-out calc(var(--pn-dur-fade-standard) * 0.7) var(--pn-ease-out) forwards; }
 }
 </style>

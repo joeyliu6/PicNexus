@@ -114,9 +114,13 @@ function start(): void {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .backup-dialog__target + .backup-dialog__target { box-shadow: inset 0 1px 0 var(--pn-border); }
+
+/* 点了就选中的行：只有悬停底色（浮层底上用白底按钮的悬停色），不加按下色 */
+.backup-dialog__target:not([data-disabled]):hover { background: var(--pn-secondary-hover); }
 .backup-dialog__target[data-disabled] { opacity: var(--pn-opacity-target-disabled); cursor: default; }
 
 .backup-dialog__target:focus-visible {
@@ -151,6 +155,9 @@ function start(): void {
   box-sizing: border-box;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1.5px var(--pn-border-strong);
+
+  /* 选中 / 未选切换按「快」过渡 */
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .backup-dialog__target[data-state="checked"] .backup-dialog__radio { background: var(--pn-brand); box-shadow: none; }

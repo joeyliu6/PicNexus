@@ -78,6 +78,8 @@ const calendar = computed(() => buildCalendar(
   now.value,
 ));
 const yearSummary = computed(() => {
+  // 还没读到记录（读取中 / 读取失败）只留位置不写字，同状态栏与工具卡：不先闪一句「上传 0 张」
+  if (!health.linkCheck.loaded.value) return '';
   const ups = uploadsByYear.value.get(shownYear.value) ?? 0;
   const bad = deadByYear.value.get(shownYear.value) ?? 0;
   return `${shownYear.value} 年上传 ${formatCount(ups)} 张${bad ? ` · ${formatCount(bad)} 张失效` : ''}`;

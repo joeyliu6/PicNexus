@@ -146,7 +146,12 @@ function repair(): void {
   font-weight: var(--pn-weight-medium);
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+/* 弹窗是浮层底（深色 #2A2A2D），透明底按钮的 ghost-hover 在上面看不出来：用白底按钮的悬停 / 按下色 */
+.repair-dialog__add:hover { background: var(--pn-secondary-hover); }
+.repair-dialog__add:active { background: var(--pn-secondary-press); }
 
 .repair-dialog__add--alone { border-top: 0; }
 

@@ -144,9 +144,10 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
         <span class="dead-list__count">{{ formatCount(group.images.length) }} 张</span>
         <div class="dead-list__spacer" />
         <button
-          v-if="!fixing && group.images.length > visible(group).length"
+          v-if="group.images.length > visible(group).length"
           type="button"
           class="dead-list__more"
+          :class="{ 'dead-list__more--hidden': fixing }"
           @click="extra[group.key] = (extra[group.key] ?? 0) + MORE_ROWS"
         >
           显示其余 {{ formatCount(group.images.length - visible(group).length) }} 张
@@ -224,7 +225,12 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
   background: transparent;
   color: var(--pn-brand-text);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+/* 同图库筛选标签上的 ×：半透明叠在品牌浅底上 */
+.dead-list__chip-remove:hover { background: var(--pn-chip-remove-hover); }
+.dead-list__chip-remove:active { background: var(--pn-chip-remove-press); }
 
 .dead-list__spacer { flex: 1; }
 
@@ -243,8 +249,12 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
   font-size: var(--pn-text-footnote);
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 浅灰底按钮的阶梯：悬停 ghost-press、按住 subtle-press；菜单打开后回到设计稿的 navSel（写在最后，打开期间压过悬停） */
+.dead-list__filter:hover { background: var(--pn-ghost-press); }
+.dead-list__filter:active { background: var(--pn-subtle-press); }
 .dead-list__filter[data-state="open"] { background: var(--pn-selected); }
 
 .dead-list__filter-label,
@@ -262,16 +272,27 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
 
 .dead-list__group-title { font-size: var(--pn-text-footnote); font-weight: var(--pn-weight-semibold); color: var(--pn-text2); }
 
+/* 「显示其余 N 张」是文字按钮：悬停 / 按下垫透明底按钮的底色；左右各留 6 做热区，右边的 6 退回内边距里，文字位置不变 */
 .dead-list__more {
-  padding: 0;
+  height: var(--pn-size-dead-more);
+  margin-right: calc(-1 * var(--pn-space-6));
+  padding: 0 var(--pn-space-6);
   border: 0;
+  border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-brand-text);
   font: inherit;
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), opacity var(--pn-dur-fast) var(--pn-ease-in), visibility var(--pn-dur-fast);
 }
+
+.dead-list__more:hover { background: var(--pn-ghost-hover); }
+.dead-list__more:active { background: var(--pn-ghost-press); }
+
+/* 修复中不给（L10）：原地淡出再隐藏，修完淡回来，不一闪一闪 */
+.dead-list__more--hidden { visibility: hidden; opacity: 0; pointer-events: none; }
 
 .dead-list__empty { margin: 0; padding: var(--pn-space-12); font-size: var(--pn-text-footnote); color: var(--pn-text3); }
 </style>

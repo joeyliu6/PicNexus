@@ -565,6 +565,8 @@
   --pn-radius-dead-chip: 12px;
   --pn-space-dead-chip: 0 4px 0 10px;
   --pn-space-dead-filter: 0 8px 0 10px;
+  /* 「显示其余 N 张」悬停 / 按下垫底的高度 24（设计稿只画了文字，按日期标签的高补） */
+  --pn-size-dead-more: 24px;
   /* 两个弹窗里的列表：文件夹行 40（左 14、右 6）、「添加文件夹…」38、文档 / 图床行至少 44；图床图标底板 28、圆角 7；单选圈 18 */
   --pn-size-doc-folder-row: 40px;
   --pn-space-doc-folder-row: 0 6px 0 14px;

@@ -83,9 +83,19 @@ const docsText = computed(() => {
       <span class="dead-row__col">{{ docsText }}</span>
     </template>
     <div class="dead-row__action">
-      <span v-if="note" class="dead-row__note" :class="`dead-row__note--${note.tone}`">{{ note.text }}</span>
-      <PnButton v-else-if="action === 'switch'" size="sm" @click="emit('switch')">{{ cat('改用', shortHostName(image.fixTo!)) }}</PnButton>
-      <PnButton v-else-if="action === 'retry'" size="sm" :loading="retrying" @click="emit('retry')">{{ retrying ? '检测中' : '重试' }}</PnButton>
+      <!-- 按钮 ↔ 行内状态文字（「仍然失效」「已改用 X」）原地交叉淡入淡出。淡入淡出放在外面这层：
+           按钮、文字自己的 transition / opacity（PnButton 转圈时钉死不透明）会盖掉过渡类 -->
+      <Transition name="dead-row__swap">
+        <span v-if="note" key="note" class="dead-row__swap">
+          <span class="dead-row__note" :class="`dead-row__note--${note.tone}`">{{ note.text }}</span>
+        </span>
+        <span v-else-if="action === 'switch'" key="switch" class="dead-row__swap">
+          <PnButton size="sm" @click="emit('switch')">{{ cat('改用', shortHostName(image.fixTo!)) }}</PnButton>
+        </span>
+        <span v-else-if="action === 'retry'" key="retry" class="dead-row__swap">
+          <PnButton size="sm" :loading="retrying" @click="emit('retry')">{{ retrying ? '检测中' : '重试' }}</PnButton>
+        </span>
+      </Transition>
     </div>
     <PnMenu :width="250">
       <template #trigger>
@@ -116,6 +126,7 @@ const docsText = computed(() => {
   box-sizing: border-box;
   padding: var(--pn-space-dead-row);
   border-radius: var(--pn-radius-dead-row);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .dead-row:hover,
@@ -162,7 +173,25 @@ const docsText = computed(() => {
   white-space: nowrap;
 }
 
-.dead-row__action { display: flex; flex: none; justify-content: flex-end; width: var(--pn-size-dead-col); }
+.dead-row__action { position: relative; display: flex; flex: none; justify-content: flex-end; width: var(--pn-size-dead-col); }
+.dead-row__swap { display: flex; }
+
+/*
+ * 交叉淡入淡出：进场的照常占位，按「快」150ms 淡入；退场的脱离文档流、靠右叠在原位（两者同高 28），
+ * 只淡出、快 30%，淡出期间不接点击（免得点到正在消失的「改用 X」）。
+ */
+.dead-row__swap-enter-active { transition: opacity var(--pn-dur-fast) var(--pn-ease-in); }
+
+.dead-row__swap-leave-active {
+  position: absolute;
+  top: 0;
+  right: 0;
+  pointer-events: none;
+  transition: opacity calc(var(--pn-dur-fast) * 0.7) var(--pn-ease-out);
+}
+
+.dead-row__swap-enter-from,
+.dead-row__swap-leave-to { opacity: 0; }
 
 .dead-row__note {
   display: flex;
@@ -170,6 +199,9 @@ const docsText = computed(() => {
   height: var(--pn-size-button-sm);
   font-size: var(--pn-text-footnote);
   white-space: nowrap;
+
+  /* 修复中「等待中 → 正在修复… → 已改用 X」只换字色 */
+  transition: color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .dead-row__note--muted { color: var(--pn-text3); }
@@ -190,11 +222,19 @@ const docsText = computed(() => {
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), opacity var(--pn-dur-fast) var(--pn-ease-in), visibility var(--pn-dur-fast);
 }
 
-.dead-row__more:hover,
+/*
+ * 悬停这个按钮时行一定也在悬停，按钮落在行的浅灰底上：按浅灰底的级差，悬停 ghost-press、按住 subtle-press（同图库列表行）。
+ * 菜单打开时是设计稿的 navSel（写在最后，打开期间压过悬停）。
+ */
+.dead-row__more:hover { background: var(--pn-ghost-press); }
+.dead-row__more:active { background: var(--pn-subtle-press); }
 .dead-row__more[data-state="open"] { background: var(--pn-selected); }
-.dead-row--busy .dead-row__more { visibility: hidden; }
+
+/* 修复中藏起来（设计稿 moreOp 0）：先淡出再隐藏，修完原地淡回来 */
+.dead-row--busy .dead-row__more { visibility: hidden; opacity: 0; }
 
 .dead-row__divider {
   position: absolute;

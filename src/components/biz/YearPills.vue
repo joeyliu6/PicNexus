@@ -73,10 +73,20 @@ const earlierModel = computed({
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
+
+  /* 选中换到另一年：白底与阴影按「快」过渡；悬停只变字色，按「即时」 */
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .year-pills--narrow .year-pills__pill { padding: 0 var(--pn-space-year-pill-x-narrow); }
 .year-pills__pill:hover { color: var(--pn-text1); }
+
+/* 年份胶囊点了就选中（白色浮起胶囊立刻出现），不另加按下色；「更早」是菜单触发器：按住 / 打开时垫选中色，与本页其他触发器一致 */
+.year-pills__pill[aria-haspopup]:not(.year-pills__pill--on):active,
+.year-pills__pill[aria-haspopup]:not(.year-pills__pill--on)[data-state="open"] {
+  background: var(--pn-selected);
+  color: var(--pn-text1);
+}
 
 .year-pills__pill--on {
   background: var(--pn-btn-soft);
