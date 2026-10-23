@@ -138,8 +138,8 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
     </div>
 
     <p v-if="groups.length === 0" class="dead-list__empty">没有符合条件的失效图片</p>
-    <div v-for="group in groups" :key="group.key" class="dead-list__group">
-      <div class="dead-list__group-head">
+    <TransitionGroup v-for="group in groups" :key="group.key" name="dead-row" tag="div" class="dead-list__group">
+      <div key="head" class="dead-list__group-head">
         <span class="dead-list__group-title">{{ group.title }}</span>
         <span class="dead-list__count">{{ formatCount(group.images.length) }} 张</span>
         <div class="dead-list__spacer" />
@@ -174,7 +174,7 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
         @open-browser="emit('openBrowser', image.id)"
         @remove-dead="emit('removeDead', image.id)"
       />
-    </div>
+    </TransitionGroup>
   </section>
 </template>
 
@@ -261,6 +261,23 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
 .dead-list__caret { color: var(--pn-text3); }
 
 .dead-list__group { display: flex; flex-direction: column; }
+
+/* 修复（「修复 N 张」、行内「改用 X」）拿掉的行收起并淡出，下面的行跟着滑上来（decisions/motion.md）。认这一行的办法是
+   离开时还带着修复中的 --busy：改好与拿掉常在同一刻发生，来不及画出「已改用 X」；修复失败的行不会被拿掉。
+   换筛选拿掉的行不带 --busy，照旧立刻消失（LoadingRules ①）。「减少动态效果」时高度不变，只淡出。
+   前面加 .dead-list__group：行自己的悬停变色也写在 transition 上，不加盖不过它 */
+.dead-list__group > .dead-row--busy.dead-row-leave-active {
+  min-height: 0;
+  overflow: hidden;
+  transition: max-height var(--pn-dur-standard) var(--pn-ease-out), padding var(--pn-dur-standard) var(--pn-ease-out), opacity var(--pn-dur-fade-standard) var(--pn-ease-out);
+}
+
+.dead-list__group > .dead-row--busy.dead-row-leave-from { max-height: var(--pn-size-dead-row); }
+.dead-list__group > .dead-row--busy.dead-row-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dead-list__group > .dead-row--busy.dead-row-leave-to { max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
 
 .dead-list__group-head {
   display: flex;

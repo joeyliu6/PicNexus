@@ -124,6 +124,67 @@ test('the row button and its status text cross-fade both ways', async ({ page })
   await expect(row.getByRole('button', { name: '重试' })).toBeVisible();
 });
 
+/** 失效那份是微博、京东上还有一份好的：行上给「改用京东」 */
+function backedUp(index: number, name: string, at: string, state: State = 'gone'): Record<string, unknown> {
+  const row = deadRow(index, name, at, state);
+  const url = (host: string) => `https://mock.cdn/${host}/e${index}.png`;
+  return {
+    ...row,
+    results: JSON.stringify(['weibo', 'jd'].map((host) => ({ serviceId: host, status: 'success', result: { serviceId: host, fileKey: url(host), url: url(host) } }))),
+    success_count: 2,
+    successful_service_ids: JSON.stringify(['weibo', 'jd']),
+    link_check_status: JSON.stringify({ ...JSON.parse(row.link_check_status as string), jd: { isValid: true, lastCheckTime: NOW.getTime() - 86_400_000 } }),
+  };
+}
+
+/** 行离场换到 -leave-to 的那一刻，记下它身上真正在跑的过渡（页面时钟是假的，不靠 transitionend 的时机） */
+async function recordRowLeaves(page: Page): Promise<() => Promise<Record<string, string[]>>> {
+  await page.evaluate(() => {
+    const leaves: Record<string, string[]> = {};
+    (window as unknown as { __leaves: Record<string, string[]> }).__leaves = leaves;
+    new MutationObserver((records) => {
+      for (const { target } of records) {
+        const el = target as HTMLElement;
+        if (!el.classList?.contains('dead-row-leave-to')) continue;
+        leaves[el.querySelector('.dead-row__name')?.textContent ?? '?'] = el.getAnimations().map((a) => (a as CSSTransition).transitionProperty ?? 'animation');
+      }
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+  });
+  return () => page.evaluate(() => (window as unknown as { __leaves: Record<string, string[]> }).__leaves);
+}
+
+// 改用备份修好的一行收起并淡出，下面的行跟着滑上来（不是一下消失）；换筛选拿掉的行照旧立刻消失（LoadingRules ①）
+for (const motion of ['no-preference', 'reduce'] as const) {
+  test(`a fixed row folds away, rows hidden by a filter just go (${motion})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await openApp(page, {
+      historyRows: [
+        backedUp(1, '有备份那张.png', '2024-03-08T10:00'),
+        backedUp(3, '另一张有备份.png', '2024-03-09T10:00'),
+        backedUp(4, '超时有备份.png', '2024-03-10T10:00', 'timeout'),
+      ],
+      config: { availableServices: ['jd', 'weibo'], enabledServices: ['jd'] },
+    });
+    await page.emulateMedia({ reducedMotion: motion });
+    await page.getByRole('navigation').getByRole('link', { name: '链接健康', exact: true }).click();
+    await expect(page.locator('.dead-row')).toHaveCount(3);
+    const leaves = await recordRowLeaves(page);
+
+    await page.locator('.dead-row', { hasText: '有备份那张.png' }).getByRole('button', { name: '改用京东' }).click();
+    await expect.poll(async () => { await page.clock.runFor(100); return Object.keys(await leaves()); }, { timeout: 15_000 }).toContain('有备份那张.png');
+    expect((await leaves())['有备份那张.png']).toEqual(motion === 'reduce' ? ['opacity'] : expect.arrayContaining(['max-height', 'opacity']));
+    await expect(page.locator('.dead-row')).toHaveCount(2);
+
+    // 同一组里留下「超时有备份」，筛掉的那行是在组内离开（整组没了时连离场的类都不挂，量不到）
+    await page.locator('.dead-list__filter', { hasText: '原因' }).click();
+    await page.getByRole('menuitemradio', { name: '连接超时' }).click();
+    await expect.poll(async () => { await page.clock.runFor(100); return Object.keys(await leaves()); }, { timeout: 15_000 }).toContain('另一张有备份.png');
+    expect((await leaves())['另一张有备份.png']).toEqual([]);
+    await expect(page.locator('.dead-row')).toHaveCount(1);
+    await expect(page.locator('.dead-row')).toContainText('超时有备份.png');
+  });
+}
+
 // 界面验收：日历气泡在格子正上方居中，最左 / 最右几列会伸出日历（窄窗口里被滚动区裁掉一截）；要收进日历以内
 test('the calendar tooltip stays inside the calendar at the first and last columns', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 600 });
