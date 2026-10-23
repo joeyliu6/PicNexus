@@ -163,7 +163,11 @@ function onChip(hostId: string) {
   border-radius: var(--pn-radius-md);
   background: var(--pn-subtle);
   color: var(--pn-text3);
+  transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+/* 聚焦时同输入框的焦点环（Controls.dc.html） */
+.upload-to__search:focus-within { box-shadow: inset 0 0 0 1px var(--pn-brand), 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft); }
 
 .upload-to__search-input {
   flex: 1;
@@ -198,10 +202,12 @@ function onChip(hostId: string) {
   color: var(--pn-text2);
   font: inherit;
   cursor: pointer;
-  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
-.upload-to__chip-icon { color: var(--pn-text3); }
+.upload-to__chip:hover { background: var(--pn-ghost-press); }
+.upload-to__chip:active { background: var(--pn-subtle-press); }
+.upload-to__chip-icon { color: var(--pn-text3); transition: color var(--pn-dur-fast) var(--pn-ease-in); }
 
 .upload-to__chip--on {
   padding-right: var(--pn-space-sidebar-x);
@@ -210,6 +216,8 @@ function onChip(hostId: string) {
   font-weight: var(--pn-weight-medium);
 }
 
+.upload-to__chip--on:hover { background: var(--pn-chip-on-hover); }
+.upload-to__chip--on:active { background: var(--pn-chip-on-press); }
 .upload-to__chip--on .upload-to__chip-icon { color: var(--pn-brand-text); }
 
 .upload-to__dot {
@@ -230,9 +238,10 @@ function onChip(hostId: string) {
 
 .upload-to__warn-text { flex: 1; }
 
+/* 分隔线通到浮层边缘（设计稿 -14）：面板内距 6 + 浮层内距 8 */
 .upload-to__rule {
   height: 1px;
-  margin: 0 calc(-1 * var(--pn-space-12));
+  margin: 0 calc(-1 * (var(--pn-space-6) + var(--pn-space-8)));
   background: var(--pn-border);
 }
 
@@ -249,7 +258,7 @@ function onChip(hostId: string) {
   display: flex;
   align-items: center;
   gap: var(--pn-space-4);
-  height: var(--pn-size-icon-button);
+  height: var(--pn-size-seg-item);
   margin-left: calc(-1 * var(--pn-space-4));
   padding: 0 var(--pn-space-6);
   border: 0;
@@ -259,20 +268,29 @@ function onChip(hostId: string) {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.upload-to__copy-from:hover { background: var(--pn-selected); }
+.upload-to__copy-from:hover,
+.upload-to__copy-from[data-state='open'] { background: var(--pn-selected); }
+.upload-to__copy-from:active { background: var(--pn-ghost-press); }
 
+/* 蓝字链接（重新登录… / 管理图床）：悬停浮出小底；内边距用负外边距抵消，文字位置与行高都不变 */
 .upload-to__link {
-  padding: 0;
+  margin: calc(-1 * var(--pn-space-2)) calc(-1 * var(--pn-space-6));
+  padding: var(--pn-space-2) var(--pn-space-6);
   border: 0;
+  border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-brand-text);
   font: inherit;
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+.upload-to__link:hover { background: var(--pn-selected); }
+.upload-to__link:active { background: var(--pn-ghost-press); }
 .upload-to__manage { display: flex; align-items: center; gap: var(--pn-space-2); font-weight: var(--pn-weight-regular); }
 </style>

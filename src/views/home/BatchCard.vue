@@ -297,10 +297,12 @@ const RING = 37.7;
   color: var(--pn-on-fill);
 }
 
+/* 点了复制盖上来的那层：原地出现，150ms 淡入 */
 .batch-card__veil--copied {
   border-radius: var(--pn-radius-button-sm);
   background: var(--pn-tile-copied-veil);
   color: var(--pn-on-fill);
+  animation: pn-layer-fade-in var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .batch-card__ring-track { stroke: var(--pn-track); }
@@ -337,15 +339,22 @@ const RING = 37.7;
 
 .batch-card__notice { display: flex; align-items: center; gap: var(--pn-space-8); }
 
+/* 行内的蓝字链接：悬停浮出小底；内边距用负外边距抵消，文字位置与行高都不变 */
 .batch-card__link {
-  padding: 0;
+  margin: calc(-1 * var(--pn-space-2)) calc(-1 * var(--pn-space-6));
+  padding: var(--pn-space-2) var(--pn-space-6);
   border: 0;
+  border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-brand-text);
   font: inherit;
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.batch-card__link:hover { background: var(--pn-selected); }
+.batch-card__link:active { background: var(--pn-ghost-press); }
 
 .batch-card__foot {
   display: flex;
@@ -366,8 +375,10 @@ const RING = 37.7;
   color: var(--pn-text2);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .batch-card__ghost:hover,
 .batch-card__ghost[data-state='open'] { background: var(--pn-selected); }
+.batch-card__ghost:active { background: var(--pn-ghost-press); }
 </style>

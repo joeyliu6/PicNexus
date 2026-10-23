@@ -35,8 +35,9 @@ const frameStyle = computed(() => (props.width && props.height
         <DialogClose class="image-viewer__close" aria-label="关闭" title="关闭  Esc" @click.stop>
           <PnIcon name="close" :size="13" :stroke="2" />
         </DialogClose>
+        <!-- 关闭时图片留到淡出结束（Reka 等退场动画播完才卸掉内容），不先空一帧 -->
         <div class="image-viewer__frame" :style="frameStyle">
-          <ThumbnailImage v-if="open" :srcs="srcs" :alt="name" :confirmed-http-hosts="confirmedHttpHosts" />
+          <ThumbnailImage :srcs="srcs" :alt="name" :confirmed-http-hosts="confirmedHttpHosts" />
         </div>
         <div class="image-viewer__bottom">
           <span class="image-viewer__name">{{ name }}</span>
@@ -58,6 +59,9 @@ const frameStyle = computed(() => (props.width && props.height
 
 .image-viewer__overlay[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
 
+/* 关闭时淡出：ease-out、比进场快 30%（交接说明 5.3）；Reka 等这段动画播完才移除元素 */
+.image-viewer__overlay[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
 .image-viewer {
   --viewer-w: 1;
   --viewer-h: 1;
@@ -74,6 +78,16 @@ const frameStyle = computed(() => (props.width && props.height
 }
 
 .image-viewer[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
+.image-viewer[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
+/* 「减少动态效果」时照样淡入淡出（位移改淡入，淡入不取消），时长用不归零的那份 */
+@media (prefers-reduced-motion: reduce) {
+  .image-viewer__overlay[data-state='open'],
+  .image-viewer[data-state='open'] { animation-duration: var(--pn-dur-fade-expressive); }
+
+  .image-viewer__overlay[data-state='closed'],
+  .image-viewer[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-expressive) * 0.7) var(--pn-ease-out) forwards; }
+}
 
 .image-viewer__title {
   position: absolute;
@@ -99,9 +113,11 @@ const frameStyle = computed(() => (props.width && props.height
   background: var(--pn-lightbox-button);
   color: var(--pn-text1);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .image-viewer__close:hover { background: var(--pn-lightbox-button-hover); }
+.image-viewer__close:active { background: var(--pn-lightbox-button-press); }
 
 /* 能放下的最大：宽不超过窗口（留边）、高不超过顶栏与底栏之间、也不超过原图本身 */
 .image-viewer__frame {

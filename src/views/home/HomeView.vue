@@ -196,7 +196,10 @@ async function openInBrowser(item: HistoryItem) {
           />
         </template>
 
-        <FastUploadHint v-if="upload.showFastUploadHint.value && !firstUse" :hotkey="hotkey" @dismiss="upload.dismissFastUploadHint()" />
+        <!-- 渐进提示同浮层的进出：200ms 从上方 4px 淡入，140ms 淡出 -->
+        <Transition name="fast-hint" appear>
+          <FastUploadHint v-if="upload.showFastUploadHint.value && !firstUse" :hotkey="hotkey" @dismiss="upload.dismissFastUploadHint()" />
+        </Transition>
       </div>
     </div>
 
@@ -228,5 +231,17 @@ async function openInBrowser(item: HistoryItem) {
   max-width: calc(100% - 2 * var(--pn-space-24));
   margin: 0 auto;
   padding: var(--pn-space-12) 0 var(--pn-space-32);
+}
+
+/* 渐进提示的进出（规格同菜单 / 弹出层，pn-base.css）；「减少动态效果」时不挪，只淡入淡出 */
+.fast-hint-enter-active { transition: opacity var(--pn-dur-standard) var(--pn-ease-in), transform var(--pn-dur-standard) var(--pn-ease-in); }
+.fast-hint-leave-active { transition: opacity calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out); }
+.fast-hint-enter-from { opacity: 0; transform: translateY(calc(-1 * var(--pn-space-4))); }
+.fast-hint-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fast-hint-enter-active { transition: opacity var(--pn-dur-fade-standard) var(--pn-ease-in); }
+  .fast-hint-leave-active { transition: opacity calc(var(--pn-dur-fade-standard) * 0.7) var(--pn-ease-out); }
+  .fast-hint-enter-from { transform: none; }
 }
 </style>

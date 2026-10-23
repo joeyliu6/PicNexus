@@ -82,6 +82,7 @@ function onKeydown(event: KeyboardEvent) {
   border-radius: var(--pn-radius-md);
   background: var(--pn-field);
   box-shadow: inset 0 0 0 1px var(--pn-border-strong);
+  transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .url-dialog__box:focus-within {

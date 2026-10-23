@@ -105,7 +105,11 @@ const pasteKeys = uiPlatform() === 'macos' ? '⌘V' : 'Ctrl+V';
   color: var(--pn-text2);
 }
 
+/* 白底描边的分体按钮：悬停 / 按下同次按钮；箭头展开时同设计稿的展开态 */
 .drop-bar__pick:hover,
-.drop-bar__more:hover,
-.drop-bar__more[data-state='open'] { background: var(--pn-selected); }
+.drop-bar__more:hover { background: var(--pn-secondary-hover); }
+
+.drop-bar__pick:active,
+.drop-bar__more:active,
+.drop-bar__more[data-state='open'] { background: var(--pn-secondary-press); }
 </style>

@@ -39,7 +39,7 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); });
   width: var(--pn-size-fast-hint);
   box-sizing: border-box;
   padding: var(--pn-space-12) var(--pn-space-toast-left);
-  border-radius: var(--pn-radius-xl);
+  border-radius: var(--pn-radius-hint);
   background: var(--pn-tooltip-bg);
   box-shadow: var(--pn-shadow-hint);
   color: var(--pn-tooltip-fg);
@@ -70,5 +70,9 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer); });
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.fast-hint__button:hover { background: var(--pn-hint-button-hover); }
+.fast-hint__button:active { background: var(--pn-hint-button-press); }
 </style>

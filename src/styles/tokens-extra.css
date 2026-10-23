@@ -72,6 +72,12 @@
   --pn-host-row-hover: rgba(0, 0, 0, 0.035);
   /* 首页「最近上传」悬停行：半透明，叠在背景装饰上不发灰 */
   --pn-recent-row-hover: rgba(0, 0, 0, 0.04);
+  /* 首页「上传到」里已勾选的标签（品牌浅底 --pn-chip-on）悬停 / 按下：设计稿未画，往品牌蓝各混 8% / 16% */
+  --pn-chip-on-hover: #DCE9FC;
+  --pn-chip-on-press: #CEE1FA;
+  /* 焦点卡「✓ 已复制 · 格式」（成功浅底）是格式菜单的触发器，悬停 / 按下：设计稿未画，往成功绿各混 8% / 16% */
+  --pn-pill-success-hover: #DBF0E2;
+  --pn-pill-success-press: #CAEAD5;
   --pn-host-bar: rgba(57, 133, 237, 0.38);
   /* 图库筛选小标签上的 ×（设计稿未画）：半透明叠在品牌浅底上才不发灰；悬停同「选中」，按下再深一级 */
   --pn-chip-remove-hover: rgba(0, 0, 0, 0.065);
@@ -132,6 +138,11 @@
   --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
   --pn-recent-row-hover: rgba(255, 255, 255, 0.045);
+  /* 深色里品牌浅底是 16% 的蓝：悬停 24%、按下 32%（越靠上越亮） */
+  --pn-chip-on-hover: rgba(76, 147, 245, 0.24);
+  --pn-chip-on-press: rgba(76, 147, 245, 0.32);
+  --pn-pill-success-hover: #163622;
+  --pn-pill-success-press: #174227;
   --pn-host-bar: rgba(76, 147, 245, 0.45);
   --pn-chip-remove-hover: rgba(255, 255, 255, 0.08);
   --pn-chip-remove-press: rgba(255, 255, 255, 0.14);
@@ -306,6 +317,11 @@
   --pn-space-recent-top: 28px;
   --pn-shadow-hint: 0 12px 32px -8px rgba(0, 0, 0, 0.35);
   --pn-hint-button-bg: rgba(255, 255, 255, 0.16);
+  /* 渐进提示里「知道了」的悬停 / 按下：设计稿未画，白色半透明逐级加亮 */
+  --pn-hint-button-hover: rgba(255, 255, 255, 0.22);
+  --pn-hint-button-press: rgba(255, 255, 255, 0.28);
+  /* 渐进提示的圆角 12：设计稿原值，不在圆角刻度上 */
+  --pn-radius-hint: 12px;
   --pn-tile-uploading-veil: rgba(255, 255, 255, 0.6);
   --pn-tile-failed-veil: rgba(185, 28, 28, 0.62);
   --pn-tile-failed-ring: #B91C1C;

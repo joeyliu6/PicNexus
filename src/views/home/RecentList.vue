@@ -118,8 +118,9 @@ async function copy(key: string, run: () => Promise<CopyLinkResult | boolean | n
 }
 
 // ---- 看大图 ----
+// 关闭只收起，这张的数据留着：淡出期间图片还在，不先变成空框
 const viewer = ref<{ srcs: string[]; name: string; width?: number; height?: number; meta?: string } | null>(null);
-const viewerOpen = computed({ get: () => !!viewer.value, set: (open: boolean) => { if (!open) viewer.value = null; } });
+const viewerOpen = ref(false);
 const dims = (width?: number, height?: number, size?: number) => [width && height ? `${width} × ${height}` : '', size ? formatFileSize(size) : ''].filter(Boolean).join(' · ');
 
 async function viewItem(item: QueueItem): Promise<void> {
@@ -135,6 +136,7 @@ async function viewItem(item: QueueItem): Promise<void> {
     height: meta?.height,
     meta: dims(meta?.width, meta?.height, meta?.file_size),
   };
+  viewerOpen.value = true;
 }
 
 function viewHistory(item: HistoryItem): void {
@@ -148,6 +150,7 @@ function viewHistory(item: HistoryItem): void {
     height: item.height,
     meta: dims(item.width, item.height, item.fileSize),
   };
+  viewerOpen.value = true;
 }
 
 function truncated(name: string): string {
@@ -190,6 +193,7 @@ function truncated(name: string): string {
           <template #action>
             <CopyButton
               v-if="sessionCounts(row.items).done > 0"
+              ghost
               label="复制全部"
               :copied="copiedKey === `session:${row.session.id}`"
               @click="copy(`session:${row.session.id}`, () => copySession(row.session.id))"
@@ -323,12 +327,16 @@ function truncated(name: string): string {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .recent__ghost:last-child { margin-right: calc(-1 * var(--pn-space-8)); }
 .recent__ghost:hover { background: var(--pn-selected); }
+.recent__ghost:active { background: var(--pn-ghost-press); }
 .recent__ghost--off { color: var(--pn-disabled); cursor: default; }
-.recent__ghost--off:hover { background: transparent; }
+
+.recent__ghost--off:hover,
+.recent__ghost--off:active { background: transparent; }
 
 .recent__rows { display: flex; flex-direction: column; gap: var(--pn-space-2); }
 
@@ -347,6 +355,7 @@ function truncated(name: string): string {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: copy;
+  transition: color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .recent__link:hover { color: var(--pn-brand-text); }
@@ -376,9 +385,11 @@ function truncated(name: string): string {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .recent__failed-host:hover { background: var(--pn-danger-soft); }
+.recent__failed-host:active { background: var(--pn-danger-soft-press); }
 
 .recent__more {
   display: flex;
@@ -392,10 +403,12 @@ function truncated(name: string): string {
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .recent__more:hover,
 .recent__more[data-state='open'] { background: var(--pn-selected); }
+.recent__more:active { background: var(--pn-ghost-press); }
 
 .recent__divider {
   display: flex;

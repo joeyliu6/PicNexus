@@ -103,16 +103,26 @@ function copyAll(): void {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .focus-chips__chip:hover { background: var(--pn-ghost-press); }
+.focus-chips__chip:active { background: var(--pn-subtle-press); }
 
 .focus-chips__chip--done,
-.focus-chips__chip--done:hover { background: var(--pn-success-soft); color: var(--pn-success); }
+.focus-chips__chip--done:hover,
+.focus-chips__chip--done:active { background: var(--pn-success-soft); color: var(--pn-success); }
 .focus-chips__chip-icon { color: var(--pn-text2); }
 
 /* 「+N」展开的完整列表（CopyMulti.dc.html ②：宽 330、行高 36） */
-.focus-chips__chip--more { gap: var(--pn-space-4); background: var(--pn-selected); font-weight: var(--pn-weight-medium); }
+.focus-chips__chip--more {
+  gap: var(--pn-space-4);
+  padding: 0 var(--pn-space-sidebar-x);
+  background: var(--pn-selected);
+  font-weight: var(--pn-weight-medium);
+}
+
+.focus-chips__chip--more[data-state='open'] { background: var(--pn-ghost-press); }
 
 .focus-chips__more {
   display: flex;
@@ -150,7 +160,12 @@ function copyAll(): void {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
+  cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.focus-chips__more-copy:hover { background: var(--pn-ghost-press); }
+.focus-chips__more-copy:active { background: var(--pn-subtle-press); }
 
 .focus-chips__more-line { height: 1px; margin: var(--pn-space-6) var(--pn-space-8); background: var(--pn-border); }
 
@@ -166,9 +181,12 @@ function copyAll(): void {
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
+  cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .focus-chips__more-all:hover { background: var(--pn-menu-sel); }
+.focus-chips__more-all:active { background: var(--pn-ghost-press); }
 
 .focus-chips__muted { color: var(--pn-text3); }
 .focus-chips__success { color: var(--pn-success); }

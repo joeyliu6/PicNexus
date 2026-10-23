@@ -309,9 +309,20 @@ const changeHostsOpen = ref(false);
   font-weight: var(--pn-weight-medium);
 }
 
-button.focus-card__pill { padding-right: var(--pn-space-8); cursor: pointer; }
+button.focus-card__pill {
+  padding-right: var(--pn-space-8);
+  cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
+}
+
 .focus-card__pill--copied { background: var(--pn-success-soft); color: var(--pn-success); }
+
+.focus-card__pill--copied:hover,
+.focus-card__pill--copied[data-state='open'] { background: var(--pn-pill-success-hover); }
+.focus-card__pill--copied:active { background: var(--pn-pill-success-press); }
 .focus-card__pill--neutral { background: var(--pn-subtle); color: var(--pn-text1); }
+.focus-card__pill--neutral:hover { background: var(--pn-ghost-press); }
+.focus-card__pill--neutral:active { background: var(--pn-subtle-press); }
 .focus-card__pill--uploading { background: var(--pn-brand-soft); color: var(--pn-brand-text); }
 .focus-card__pill--failed { background: var(--pn-danger-soft); color: var(--pn-danger); }
 .focus-card__pill-caret { opacity: 0.7; }
@@ -359,11 +370,13 @@ button.focus-card__pill { padding-right: var(--pn-space-8); cursor: pointer; }
   background: var(--pn-subtle);
 }
 
+/* 等链接的骨架条：同骨架屏 1.4 秒明暗起伏（LoadingRules.dc.html），「减少动态效果」时停住 */
 .focus-card__bone {
   width: 64%;
   height: var(--pn-size-skeleton-line);
   border-radius: var(--pn-radius-xs);
   background: var(--pn-skeleton);
+  animation: pn-skeleton-pulse var(--pn-dur-skeleton) ease-in-out infinite;
 }
 
 .focus-card__bone--long { width: 92%; }

@@ -133,6 +133,7 @@ const compressionLabel = computed(() => (props.compression.enabled ? props.activ
 
 .home-options__trigger:hover,
 .home-options__trigger[data-state='open'] { background: var(--pn-selected); }
+.home-options__trigger:active { background: var(--pn-ghost-press); }
 
 .home-options__key { flex: none; color: var(--pn-text3); }
 .home-options__value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

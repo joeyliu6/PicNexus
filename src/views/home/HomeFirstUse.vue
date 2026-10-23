@@ -185,7 +185,13 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
   border-radius: var(--pn-size-chip);
   background: var(--pn-subtle);
   color: var(--pn-text2);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+/* 整组是一个按钮：悬停 / 展开 / 按下时两枚一起变色 */
+.first-use__chips:hover .first-use__chip,
+.first-use__chips[data-state='open'] .first-use__chip { background: var(--pn-ghost-press); }
+.first-use__chips:active .first-use__chip { background: var(--pn-subtle-press); }
 
 .first-use__chip--on {
   gap: var(--pn-space-6);
@@ -195,15 +201,28 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
   font-weight: var(--pn-weight-medium);
 }
 
+.first-use__chips:hover .first-use__chip--on,
+.first-use__chips[data-state='open'] .first-use__chip--on { background: var(--pn-chip-on-hover); }
+.first-use__chips:active .first-use__chip--on { background: var(--pn-chip-on-press); }
+
 .first-use__divider { width: 1px; height: var(--pn-size-icon-sm); margin: 0 var(--pn-space-4); background: var(--pn-border); }
 
+/* 「复制为 Markdown」是格式菜单的触发器：悬停浮出小底；内边距用负外边距抵消，文字位置不变 */
 .first-use__format {
-  padding: 0;
+  height: var(--pn-size-seg-item);
+  margin: 0 calc(-1 * var(--pn-space-6));
+  padding: 0 var(--pn-space-6);
   border: 0;
+  border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-text1);
   font: inherit;
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.first-use__format:hover,
+.first-use__format[data-state='open'] { background: var(--pn-selected); }
+.first-use__format:active { background: var(--pn-ghost-press); }
 </style>
