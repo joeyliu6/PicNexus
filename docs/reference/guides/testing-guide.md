@@ -154,6 +154,7 @@ portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥�
 - 测剪贴板相关（「剪贴板无图片」）前先把剪贴板里的内容存下来，测完放回；托盘、截图都会和你同时使用的鼠标打架，被打断就重来一次。
 - 走查中想摆出「上传中」等状态，不必真的上传：拿到应用那份 `useUploadController()` / `useQueueState()`，往队列里加一条、往 `sessions` 里塞一个未结束的会话。
 - 走查中改代码会热更新：外壳里常驻的组件（传输中心）重挂后，挂在它身上的东西会停掉，看到「数据库对、页面不对」先刷新页面重试一次再下结论。
+- 量时长（如拖入 / 粘贴到焦点卡换图）用正式版：开发版的 Rust 依赖不开优化，压缩这类图片处理慢很多。`npx tauri build --no-bundle` 后在 `target\release\data\` 放 `portable.json`、一把 `secure-key` 和明文 `.settings.dat`（关统计、`onboardingCompleted: true`、`linkOutput.autoCopy: false` 免得覆盖剪贴板），图床接本机假 WebDAV（`passwordEncrypted` 用这把密钥加密成 `PNXENC:` + Base64(iv + 密文)）。正式版页面是打包后的，导入不了应用模块：拖放用 `__TAURI_INTERNALS__.invoke('plugin:event|emit_to', { target: { kind: 'Webview', label: 'main' }, event: 'tauri://drag-drop', payload: { paths, position } })`，粘贴在页面里派发 Ctrl+V 的 `keydown`，用 `MutationObserver` 盯焦点卡的文件名停表。`target\release\data` 里原有的文件先备份：正式版启动会删掉过期日志。
 - 统计不用管：开发版不上报（`useAnalytics` 读完开关就返回）。走查正式版包时才需要在第一次启动前把 `.settings.dat` 写成明文 `{"config":{"analytics":{"enabled":false},"onboardingCompleted":false}}`（明文 JSON 照样读得进），之后任何「以默认配置启动」的路径（如启动还原时点「跳过」）都会把统计重新打开，走完马上再关。
 - 模拟「新电脑还原备份配置」（D01 / D02）：在设置里设好备份密码（`.settings.dat` 变成 `PNXPWD:` 开头），停掉应用，把隔离库里的 `secure-key` 换成一把随机密钥（32 字节 Base64），再启动就弹还原框；之后再测一遍只需再换一次密钥、刷新页面。隔离库的密钥是文件，不碰系统钥匙串。
 - 微博链接检测走百度中转，中转连不到本机，假图床模拟不了微博，造数据换别的图床。
@@ -181,6 +182,7 @@ Tauri 借用系统 WebView，三个平台不是同一个引擎：
 ### 现状
 
 - WebKit 这一层现在只有 mocked E2E 的 `webkit` project（`npm run test:e2e:webkit`）：跑得通主要流程，但不量排版。
+- Playwright 的 WebKit 把自己报成 macOS（`navigator.platform` 是 `MacIntel`，标识是 Mac 的 Safari），应用就按 macOS 换布局与快捷键：平台相关的按键按页面平台选（例：`tests/e2e/gallery.e2e.spec.ts` 的 `pressRemove`，Windows 按 Delete、这里按 ⌘⌫），要测 Windows 的写法只在 Chromium 里测。
 - 量排版的跨引擎布局哨兵（在 Chromium 与 WebKit 上各跑一遍、断言上面那些不变式）目前没有，接到 `tests/redesign/` 的新页面上记在 `docs/TODO.md`「不给 WebKit 建像素基准图」。
 
 ### 局限：它抓不到什么
