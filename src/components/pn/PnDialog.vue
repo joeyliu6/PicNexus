@@ -2,7 +2,8 @@
 // 对话框（Dialogs.dc.html，交接说明 6.2）：宽 520、圆角 16、内边距 24/28、垂直居中；
 // 左侧 40px 图标块（普通品牌蓝 / 警告琥珀 / 危险红），标题 17px + 12px 灰色上下文；按钮高 34。
 // 打开时焦点落在 [data-autofocus] 元素，没有就落在第一个输入框，再没有就落在主按钮；Esc 关闭。
-import { ref } from 'vue';
+// 关掉后焦点回到打开它的地方（交接说明 3.4）：从菜单项打开的，回到那个菜单的按钮。
+import { ref, watch } from 'vue';
 import { DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import PnIcon from './PnIcon.vue';
 import type { IconName } from './icons';
@@ -27,6 +28,28 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ dismiss: [] }>();
 
 const contentRef = ref<InstanceType<typeof DialogContent>>();
+
+/**
+ * 打开时焦点在哪，关掉后还给它。从菜单项打开的，菜单项随菜单一起没了，焦点会掉到 body：
+ * 这时还给菜单的按钮（菜单按钮的 aria-controls 指着菜单）
+ */
+let returnFocusTo: HTMLElement | null = null;
+function focusOrigin(): HTMLElement | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || active === document.body) return null;
+  const menu = active.closest<HTMLElement>('[role="menu"]');
+  const menuButton = menu?.id ? document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(menu.id)}"]`) : null;
+  return menuButton ?? active;
+}
+watch(open, (isOpen) => { if (isOpen) returnFocusTo = focusOrigin(); }, { flush: 'sync' });
+
+function onCloseAutoFocus(event: Event) {
+  const target = returnFocusTo;
+  returnFocusTo = null;
+  if (!target?.isConnected) return;
+  event.preventDefault();
+  target.focus({ preventScroll: true });
+}
 
 function onOpenAutoFocus(event: Event) {
   const root = (contentRef.value?.$el as HTMLElement | undefined) ?? null;
@@ -55,6 +78,7 @@ function onDismissAttempt(event: Event) {
         ref="contentRef"
         class="pn-layer pn-dialog"
         @open-auto-focus="onOpenAutoFocus"
+        @close-auto-focus="onCloseAutoFocus"
         @escape-key-down="onDismissAttempt"
         @pointer-down-outside="onDismissAttempt"
         @interact-outside="(event: Event) => { if (blocking) event.preventDefault(); }"
