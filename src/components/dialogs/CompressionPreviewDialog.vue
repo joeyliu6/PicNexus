@@ -1,10 +1,12 @@
 <script setup lang="ts">
 // 压缩预览（设置 › 上传与链接 ›「压缩预览…」）：设计稿没画，按图库灯箱（G08）的样子做成整窗深色查看器，
-// 左右拖动分割线对比原图与压缩后。做法记在 docs/design/redesign/decisions/settings.md。
-import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue';
+// 左右两栏对比：左原图、右压缩后，各自铺满自己那栏（两张显示得一样大），滚轮缩放、拖动平移默认各管各的；
+// 底栏「两侧同步」打开后两栏一起动（打开那一刻右栏先对齐左栏），方便对比同一处细节。
+// 做法记在 docs/design/redesign/decisions/settings.md。
+import { computed, ref, toRef, watch } from 'vue';
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import PnIcon from '@/components/pn/PnIcon.vue';
-import PnIconButton from '@/components/pn/PnIconButton.vue';
+import PnSwitch from '@/components/pn/PnSwitch.vue';
 import type { CompressionPreset } from '@/config/types';
 import { useImageZoom } from '@/composables/image/useImageZoom';
 import { useCompressionTask } from '@/composables/image/useCompressionTask';
@@ -18,22 +20,39 @@ const emit = defineEmits<{
   'update:visible': [value: boolean];
 }>();
 
-const containerRef = ref<HTMLElement | null>(null);
+const originalEl = ref<HTMLElement | null>(null);
+const compressedEl = ref<HTMLElement | null>(null);
+const originalZoom = useImageZoom(originalEl, { zoomAtCursor: true });
+const compressedZoom = useImageZoom(compressedEl, { zoomAtCursor: true });
 
-const {
-  scale,
-  sliderX,
-  isDraggingImage,
-  imageTransformStyle,
-  clipStyle,
-  zoomPercent,
-  resetView,
-  onSliderDown,
-  onImageDown,
-  onWheel,
-  onDoubleClick,
-  cleanup: cleanupZoom,
-} = useImageZoom(containerRef, { zoomAtCursor: true, enableSlider: true });
+type Zoom = typeof originalZoom;
+
+/** 两侧同步：开着时一栏的缩放、平移照抄到另一栏（照抄后两边相等，另一侧的 watch 不会再抄回来） */
+const linked = ref(false);
+
+function copyView(from: Zoom, to: Zoom) {
+  to.scale.value = from.scale.value;
+  to.translateX.value = from.translateX.value;
+  to.translateY.value = from.translateY.value;
+}
+
+function follow(from: Zoom, to: Zoom) {
+  watch([from.scale, from.translateX, from.translateY], () => {
+    if (linked.value) copyView(from, to);
+  });
+}
+follow(originalZoom, compressedZoom);
+follow(compressedZoom, originalZoom);
+
+function setLinked(on: boolean) {
+  linked.value = on;
+  if (on) copyView(originalZoom, compressedZoom);
+}
+
+function resetViews() {
+  originalZoom.resetView();
+  compressedZoom.resetView();
+}
 
 const {
   status,
@@ -45,13 +64,19 @@ const {
   getSaved,
   getIsLarger,
   selectAndCompress,
-} = useCompressionTask(toRef(props, 'preset'), { onDone: () => resetView() });
+} = useCompressionTask(toRef(props, 'preset'), { onDone: resetViews });
 
 const saved = computed(() => getSaved());
 const isLarger = computed(() => getIsLarger());
 const done = computed(() => status.value === 'done' && result.value !== null);
+const zoomed = computed(() => originalZoom.scale.value !== 1 || compressedZoom.scale.value !== 1);
 
-// 没有输入框和主按钮：打开时焦点落在查看器本身，不落在「关闭」上（否则它的气泡一打开就盖住「原图」标签）
+const panes = computed(() => [
+  { key: 'original', label: '原图', src: originalSrc.value, zoom: originalZoom, el: originalEl },
+  { key: 'compressed', label: '压缩后', src: compressedSrc.value, zoom: compressedZoom, el: compressedEl },
+]);
+
+// 没有输入框和主按钮：打开时焦点落在查看器本身，不落在「关闭」上（否则一打开关闭键就先亮起焦点环）
 function focusViewer(event: Event) {
   event.preventDefault();
   (event.currentTarget as HTMLElement | null)?.focus();
@@ -64,17 +89,15 @@ function setOpen(open: boolean) {
 // 打开时直接弹出选文件窗口；没选就关掉
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
-  resetView();
+  resetViews();
   const selected = await selectAndCompress();
   if (!selected) emit('update:visible', false);
 });
 
 function pickAnother() {
-  resetView();
+  resetViews();
   void selectAndCompress();
 }
-
-onBeforeUnmount(cleanupZoom);
 </script>
 
 <template>
@@ -82,9 +105,12 @@ onBeforeUnmount(cleanupZoom);
     <DialogPortal>
       <DialogContent class="pn-layer compress-view" data-theme="dark" tabindex="-1" :aria-describedby="undefined" @open-auto-focus="focusViewer">
         <div class="compress-view__top">
-          <PnIconButton icon="close" label="关闭" :icon-size="13" :stroke="2" class="compress-view__close" @click="setOpen(false)" />
           <DialogTitle class="compress-view__title">压缩预览</DialogTitle>
           <span v-if="done" class="compress-view__file">{{ fileName }}</span>
+          <div class="compress-view__spacer" />
+          <button type="button" class="compress-view__button compress-view__button--icon" aria-label="关闭" title="关闭  Esc" @click="setOpen(false)">
+            <PnIcon name="close" :size="13" :stroke="2" />
+          </button>
         </div>
 
         <div class="compress-view__stage">
@@ -104,32 +130,23 @@ onBeforeUnmount(cleanupZoom);
             <button type="button" class="compress-view__button" @click="pickAnother">重新选择…</button>
           </div>
 
-          <div
-            v-else-if="done && originalSrc && compressedSrc"
-            ref="containerRef"
-            class="compress-view__compare"
-            :class="{ 'compress-view__compare--dragging': isDraggingImage }"
-            @wheel.prevent="onWheel"
-            @mousedown="onImageDown"
-            @dblclick="onDoubleClick"
-          >
-            <div class="compress-view__layer">
-              <img :src="compressedSrc" :style="imageTransformStyle" class="compress-view__img" alt="压缩后" draggable="false" />
+          <div v-else-if="done && originalSrc && compressedSrc" class="compress-view__panes">
+            <div
+              v-for="pane in panes"
+              :key="pane.key"
+              :ref="(el) => (pane.el.value = el as HTMLElement | null)"
+              class="compress-view__pane"
+              :class="{ 'compress-view__pane--dragging': pane.zoom.isDraggingImage.value }"
+              :data-pane="pane.key"
+              @wheel.prevent="pane.zoom.onWheel"
+              @mousedown="pane.zoom.onImageDown"
+              @dblclick="pane.zoom.onDoubleClick"
+            >
+              <img :src="pane.src" :style="pane.zoom.imageTransformStyle.value" class="compress-view__img" :alt="pane.label" draggable="false" />
+              <span class="compress-view__chip">
+                {{ pane.label }}<template v-if="pane.zoom.scale.value !== 1"> · {{ pane.zoom.zoomPercent.value }}%</template>
+              </span>
             </div>
-            <!-- 原图盖在上面，按分割线位置裁掉右半边（裁切加在外层，百分比按容器算） -->
-            <div class="compress-view__layer" :style="clipStyle">
-              <img :src="originalSrc" :style="imageTransformStyle" class="compress-view__img" alt="原图" draggable="false" />
-            </div>
-
-            <div class="compress-view__divider" :style="{ left: `${sliderX}%` }">
-              <div class="compress-view__line" />
-              <div class="compress-view__handle" aria-hidden="true" @mousedown.stop="onSliderDown">
-                <PnIcon name="arrowsH" :size="14" :stroke="2" />
-              </div>
-            </div>
-
-            <span class="compress-view__chip compress-view__chip--left" :class="{ 'compress-view__chip--hidden': sliderX <= 8 }">原图</span>
-            <span class="compress-view__chip compress-view__chip--right" :class="{ 'compress-view__chip--hidden': sliderX >= 92 }">压缩后</span>
           </div>
         </div>
 
@@ -144,9 +161,10 @@ onBeforeUnmount(cleanupZoom);
           </div>
           <div class="compress-view__spacer" />
           <template v-if="done">
-            <span class="compress-view__zoom">{{ zoomPercent }}%</span>
-            <button v-if="scale !== 1" type="button" class="compress-view__button" @click="resetView">重置</button>
+            <label class="compress-view__link" for="compress-view-link">两侧同步</label>
+            <PnSwitch id="compress-view-link" :model-value="linked" label="两侧同步" @update:model-value="setLinked" />
           </template>
+          <button v-if="done && zoomed" type="button" class="compress-view__button" @click="resetViews">重置</button>
           <button v-if="status !== 'compressing'" type="button" class="compress-view__button" @click="pickAnother">
             <PnIcon name="gallery" :size="14" />
             换一张…
@@ -183,18 +201,13 @@ onBeforeUnmount(cleanupZoom);
 
 .compress-view__top {
   height: var(--pn-size-lightbox-top);
-  padding: 0 var(--pn-space-16) 0 var(--pn-space-12);
+  padding: 0 var(--pn-space-12) 0 var(--pn-space-20);
 }
 
 .compress-view__bottom {
   height: var(--pn-size-lightbox-bottom);
   padding: 0 var(--pn-space-16) 0 var(--pn-space-20);
   box-shadow: inset 0 1px 0 var(--pn-lightbox-rule);
-}
-
-.compress-view__close {
-  background: var(--pn-lightbox-button);
-  color: var(--pn-text1);
 }
 
 .compress-view__title {
@@ -252,73 +265,41 @@ onBeforeUnmount(cleanupZoom);
 .compress-view__danger { color: var(--pn-danger); }
 .compress-view__warn { color: var(--pn-warning); }
 
-.compress-view__compare {
+.compress-view__panes {
   position: absolute;
   inset: 0;
+  display: flex;
+}
+
+/* 两栏之间一条细线（与底栏分隔线同色） */
+.compress-view__pane {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   overflow: hidden;
   cursor: grab;
   user-select: none;
 }
 
-.compress-view__compare--dragging { cursor: grabbing; }
+.compress-view__pane + .compress-view__pane { box-shadow: inset 1px 0 0 var(--pn-lightbox-rule); }
+.compress-view__pane--dragging { cursor: grabbing; }
 
-.compress-view__layer {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
+/* 铺满自己那栏（小图也放大），原图和压缩后显示得一样大，换栏看时不会一大一小 */
 .compress-view__img {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   pointer-events: none;
   will-change: transform;
 }
 
-.compress-view__divider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.compress-view__line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: var(--pn-size-compare-line);
-  background: var(--pn-text1);
-  box-shadow: var(--pn-compare-line-shadow);
-  transform: translateX(-50%);
-}
-
-.compress-view__handle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--pn-size-button-lg);
-  height: var(--pn-size-button-lg);
-  border-radius: 50%;
-  background: var(--pn-elevated);
-  box-shadow: var(--pn-e3);
-  color: var(--pn-text1);
-  cursor: ew-resize;
-  pointer-events: auto;
-  transform: translate(-50%, -50%);
-}
-
 .compress-view__chip {
   position: absolute;
   top: var(--pn-space-12);
+  left: var(--pn-space-12);
   display: flex;
   align-items: center;
   height: var(--pn-size-lightbox-chip);
@@ -328,12 +309,7 @@ onBeforeUnmount(cleanupZoom);
   color: var(--pn-text1);
   font-size: var(--pn-text-footnote);
   pointer-events: none;
-  transition: opacity var(--pn-dur-fast) var(--pn-ease-in);
 }
-
-.compress-view__chip--left { left: var(--pn-space-12); }
-.compress-view__chip--right { right: var(--pn-space-12); }
-.compress-view__chip--hidden { opacity: 0; }
 
 .compress-view__info {
   display: flex;
@@ -343,10 +319,11 @@ onBeforeUnmount(cleanupZoom);
 
 .compress-view__spacer { flex: 1; }
 
-.compress-view__zoom {
-  color: var(--pn-text3);
-  font-family: var(--pn-font-mono);
-  font-size: var(--pn-text-mono);
+.compress-view__link {
+  margin-right: var(--pn-space-8);
+  color: var(--pn-text2);
+  font-size: var(--pn-text-footnote);
+  cursor: pointer;
 }
 
 .compress-view__button {
@@ -366,9 +343,9 @@ onBeforeUnmount(cleanupZoom);
 }
 
 .compress-view__button:hover { background: var(--pn-lightbox-button-hover); }
+.compress-view__button--icon { width: var(--pn-size-button-lg); padding: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .compress-view[data-state='open'] { animation-duration: var(--pn-dur-fade-expressive); }
-  .compress-view__chip { transition: none; }
 }
 </style>

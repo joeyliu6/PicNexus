@@ -452,9 +452,6 @@
   --pn-size-lightbox-failed-w: 420px;
   --pn-size-lightbox-failed-h: 560px;
 
-  /* 压缩预览（设计没画，照灯箱）：对比分割线 2px，加一圈阴影在浅色图片上也看得清 */
-  --pn-size-compare-line: 2px;
-  --pn-compare-line-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 
   /* 图库详情（G05–G07）：宽 340（不放预览图） */
   --pn-size-gallery-detail: 340px;

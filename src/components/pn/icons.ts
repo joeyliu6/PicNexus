@@ -75,8 +75,6 @@ export const ICONS = {
   // 备份密码弹窗（Dialogs.dc.html）：显示 / 隐藏密码
   eye: [p('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z'), circle(12, 12, 3)],
   eyeOff: [p('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z'), circle(12, 12, 3), p('M3 3l18 18')],
-  // 压缩预览左右对比的拖柄（设计未画，与箭头同一笔画）
-  arrowsH: [p('M8 7l-5 5 5 5M16 7l5 5-5 5M3 12h18')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

@@ -1,7 +1,7 @@
 /**
- * 通用图片缩放、平移、滑块拖拽交互逻辑
+ * 通用图片缩放、平移交互逻辑
  *
- * 用于 CompressionPreviewDialog（对比滑块 + 滚轮缩放）。
+ * 用于 CompressionPreviewDialog（原图、压缩后两栏各用一份，缩放平移互不影响）。
  */
 import { ref, computed, onBeforeUnmount, type Ref } from 'vue';
 
@@ -15,8 +15,6 @@ export interface ImageZoomOptions {
   wheelDelta?: number;
   /** 是否以鼠标位置为缩放中心，默认 false（纯增量缩放） */
   zoomAtCursor?: boolean;
-  /** 是否启用对比滑块功能，默认 false */
-  enableSlider?: boolean;
 }
 
 export function useImageZoom(
@@ -28,17 +26,12 @@ export function useImageZoom(
     maxScale = 5,
     wheelDelta = 0.12,
     zoomAtCursor = false,
-    enableSlider = false,
   } = options;
 
   // ---- 缩放 & 平移状态 ----
   const scale = ref(1);
   const translateX = ref(0);
   const translateY = ref(0);
-
-  // ---- 滑块状态（仅 enableSlider 时使用） ----
-  const sliderX = ref(50);
-  const isDraggingSlider = ref(false);
 
   // ---- 图片拖拽状态 ----
   const isDraggingImage = ref(false);
@@ -61,10 +54,6 @@ export function useImageZoom(
     `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value})`,
   );
 
-  const clipStyle = computed(() => ({
-    clipPath: `inset(0 ${100 - sliderX.value}% 0 0)`,
-  }));
-
   const zoomPercent = computed(() => Math.round(scale.value * 100));
 
   const imageCursor = computed(() =>
@@ -76,35 +65,10 @@ export function useImageZoom(
     scale.value = 1;
     translateX.value = 0;
     translateY.value = 0;
-    sliderX.value = 50;
-  }
-
-  // ======== 滑块拖拽 ========
-  function onSliderDown(e: MouseEvent) {
-    if (!enableSlider) return;
-    isDraggingSlider.value = true;
-    e.preventDefault();
-    e.stopPropagation();
-    document.addEventListener('mousemove', onSliderMove);
-    document.addEventListener('mouseup', onSliderUp);
-  }
-
-  function onSliderMove(e: MouseEvent) {
-    if (!isDraggingSlider.value || !containerRef.value) return;
-    const rect = containerRef.value.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    sliderX.value = Math.max(2, Math.min(98, x));
-  }
-
-  function onSliderUp() {
-    isDraggingSlider.value = false;
-    document.removeEventListener('mousemove', onSliderMove);
-    document.removeEventListener('mouseup', onSliderUp);
   }
 
   // ======== 图片拖拽 ========
   function onImageDown(e: MouseEvent) {
-    if (isDraggingSlider.value) return;
     isDraggingImage.value = true;
     dragMoveDistance = 0;
     dragStartX = e.clientX;
@@ -180,7 +144,6 @@ export function useImageZoom(
 
   // ---- 清理 ----
   function cleanup() {
-    onSliderUp();
     onImageUp();
   }
 
@@ -191,20 +154,16 @@ export function useImageZoom(
     scale,
     translateX,
     translateY,
-    sliderX,
-    isDraggingSlider,
     isDraggingImage,
 
     // 计算属性
     imageTransformStyle,
     imageTransformString,
-    clipStyle,
     zoomPercent,
     imageCursor,
 
     // 方法
     resetView,
-    onSliderDown,
     onImageDown,
     onWheel,
     onDoubleClick,

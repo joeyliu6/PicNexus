@@ -47,6 +47,9 @@ const EDITORS: E2ESeed = {
   },
 };
 
+/** 压缩预览的样图：横图，天空渐变 + 太阳 + 海面 */
+const SAMPLE_PHOTO = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b5bdb"/><stop offset="1" stop-color="#f59f00"/></linearGradient></defs><rect width="1600" height="620" fill="url(#s)"/><circle cx="800" cy="600" r="120" fill="#ffd43b"/><rect y="620" width="1600" height="280" fill="#1864ab"/></svg>')}`;
+
 /** 本机 3 条上传记录 */
 const LOCAL_ROWS = [1, 2, 3].map((n) => historyRow(n, `截图-${n}.png`, n * 90));
 
@@ -143,6 +146,26 @@ interface State {
 const STATES: Record<string, State> = {
   'S01-general': { group: '通用' },
   'S02-upload': { group: '上传与链接', data: UPLOAD },
+  // 压缩预览（设计没画，decisions/settings.md）：左原图、右压缩后各铺满一栏；左栏滚轮放大一格，右栏不跟着动
+  'S02b-compress-preview': {
+    group: '上传与链接',
+    data: {
+      ...UPLOAD,
+      dialogOpenResult: 'C:/Users/me/Pictures/海边日落.png',
+      invokeOverrides: {
+        read_image_as_base64: { result: SAMPLE_PHOTO },
+        compress_image: { result: { outputPath: 'C:/tmp/out.webp', originalSize: 2_480_000, compressedSize: 412_000, ratio: 0.166, width: 1600, height: 900, format: 'webp' } },
+      },
+    },
+    act: async (page) => {
+      await page$(page).getByRole('button', { name: '压缩预览…' }).click();
+      const view = page.locator('.compress-view');
+      await expect(view).toContainText('节省 83%');
+      await view.locator('[data-pane="original"]').hover();
+      await page.mouse.wheel(0, -100);
+      await expect(view.locator('[data-pane="original"]')).toContainText('原图 · 112%');
+    },
+  },
   'S03-shortcut': { group: '快捷键', data: SHORTCUTS_ON },
   'S04-editor': { group: '编辑器与命令行', data: EDITORS },
   'S05-backup': { group: '备份与同步', data: backup(), before: async (page) => { await passwordSet(page); await recentLogs(page); } },
