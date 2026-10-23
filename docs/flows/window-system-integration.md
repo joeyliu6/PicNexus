@@ -1,3 +1,4 @@
+| 按 F5 整个界面刷新了、Ctrl+F 弹出浏览器的查找栏 | `disable_browser_accelerator_keys` 没装上(看日志「关闭浏览器快捷键失败」),或 WebView2 Runtime 低于 1.0.2210.55(逐键关闭要这个版本) | 概览 |
 # 窗口 / 托盘 / 快捷键 / 文件关联流程
 
 > 桌面集成层:窗口生命周期、关闭到托盘、系统托盘菜单、CLI 启动参数、以及全局快捷键/文件关联的实现状态。修改这些行为时优先查看此文档。
@@ -10,6 +11,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
 - **系统托盘**:三个平台都有,点开是系统原生菜单(交接说明 8.6,T01–T08)。Rust 建图标与点击行为,菜单由主窗口前端按配置画;Windows 左键 / 双击打开主界面、右键菜单,macOS / Linux 点开即菜单(见图 2)
 - **全局快捷键**:默认 `Ctrl+Shift+C` 上传剪贴板图片、`Ctrl+Shift+O` 选择文件上传,可在设置 › 快捷键改或整体关闭;上传走应用级上传控制器,与首页、托盘同一条路
+- **浏览器快捷键**:主窗口不响应 WebView2 自带的 F5 / Ctrl+R 刷新、Ctrl+P 打印、Ctrl+F 查找栏(`browser_keys.rs`:建窗后在 `AcceleratorKeyPressed` 里逐键告诉浏览器别管,按键照常交给网页,图库的 Ctrl+F 才能聚焦搜索框);开发版留着 F12 等开发者工具键。右键菜单、文字能不能选由前端管,见 [ui-patterns.md](../design/ui-patterns.md)「不像网页」
 - **单实例**:`tauri-plugin-single-instance`,再次启动只把已运行的主窗口唤起
 - **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
 - **CLI PATH**:设置页的 CLI 开关会同步管理命令入口。Windows 写入用户级注册表;macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接,AppImage 优先链接到 `$APPIMAGE`。
