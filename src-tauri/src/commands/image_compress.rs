@@ -252,6 +252,16 @@ pub async fn compress_image(
     .map_err(|e| AppError::external(format!("压缩任务执行失败: {}", e)))?
 }
 
+/// 这个文件是不是压缩临时目录里的（只许删这里面的）。
+/// 两边都要 canonicalize：Windows 上规范化后的路径带 verbatim 前缀，和没规范化的目录比前缀永远不成立
+/// （同 clipboard.rs 的 is_clipboard_temp_path）
+fn is_compress_temp_file(path: &Path, compress_dir: &Path) -> bool {
+    match (path.canonicalize(), compress_dir.canonicalize()) {
+        (Ok(file), Ok(dir)) => file.starts_with(dir),
+        _ => false,
+    }
+}
+
 /// 清理压缩临时文件
 #[tauri::command]
 pub async fn cleanup_compressed_files(
@@ -267,15 +277,16 @@ pub async fn cleanup_compressed_files(
     let mut cleaned = 0u32;
     for file_path in &file_paths {
         let path = Path::new(file_path);
+        if !path.exists() {
+            continue;
+        }
         // 安全检查：只删除压缩临时目录下的文件
-        if let Ok(canonical) = path.canonicalize() {
-            if canonical.starts_with(&compress_dir) {
-                if fs::remove_file(&canonical).is_ok() {
-                    cleaned += 1;
-                }
-            } else {
-                log::warn!("[清理] 拒绝删除非临时目录文件: {}", safe_path(file_path));
+        if is_compress_temp_file(path, &compress_dir) {
+            if fs::remove_file(path).is_ok() {
+                cleaned += 1;
             }
+        } else {
+            log::warn!("[清理] 拒绝删除非临时目录文件: {}", safe_path(file_path));
         }
     }
 
@@ -711,6 +722,40 @@ pub async fn read_image_as_base64(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // -------- is_compress_temp_file --------
+
+    /// 系统临时目录下建一个本测试独占的「压缩临时目录」和它旁边的一个目录
+    fn compress_dirs(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = std::env::temp_dir().join(format!("picnexus_cleanup_test_{}_{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let compress_dir = root.join("picnexus_compress");
+        let outside = root.join("elsewhere");
+        fs::create_dir_all(&compress_dir).expect("compress dir");
+        fs::create_dir_all(&outside).expect("outside dir");
+        (compress_dir, outside)
+    }
+
+    #[test]
+    fn cleanup_accepts_files_inside_the_compress_dir() {
+        let (compress_dir, _) = compress_dirs("inside");
+        let file = compress_dir.join("photo_1_0.jpg");
+        fs::write(&file, b"x").expect("temp file");
+        // Windows 上 canonicalize 会带 \\?\ 前缀：两边都要规范化，否则这里永远判成「不在临时目录里」
+        assert!(is_compress_temp_file(&file, &compress_dir));
+        let _ = fs::remove_dir_all(compress_dir.parent().unwrap());
+    }
+
+    #[test]
+    fn cleanup_refuses_files_outside_or_escaping_the_compress_dir() {
+        let (compress_dir, outside) = compress_dirs("outside");
+        let other = outside.join("keep.jpg");
+        fs::write(&other, b"x").expect("outside file");
+        assert!(!is_compress_temp_file(&other, &compress_dir));
+        assert!(!is_compress_temp_file(&compress_dir.join("..").join("elsewhere").join("keep.jpg"), &compress_dir));
+        assert!(!is_compress_temp_file(&compress_dir.join("missing.jpg"), &compress_dir));
+        let _ = fs::remove_dir_all(compress_dir.parent().unwrap());
+    }
 
     // -------- calculate_target_size --------
 

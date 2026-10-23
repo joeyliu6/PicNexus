@@ -35,6 +35,7 @@
 | [sleep-resume-white-screen.md](./troubleshooting/sleep-resume-white-screen.md) | 休眠白屏（SQLite 连接丢失 + WebView reload 失败） |
 | [tauri-async-runtime-spawn-no-abort-handle.md](./troubleshooting/tauri-async-runtime-spawn-no-abort-handle.md) | Tauri async_runtime::spawn 无 abort_handle（改用 tokio） |
 | [tauri-csp-nonce-inline-styles.md](./troubleshooting/tauri-csp-nonce-inline-styles.md) | Tauri 2 正式版的 CSP nonce 挡掉运行时插入的样式 |
+| [windows-canonicalize-prefix.md](./troubleshooting/windows-canonicalize-prefix.md) | Windows 上 canonicalize 后比前缀永远不成立（压缩临时文件从不删除） |
 
 ### 网络 / 图床
 
