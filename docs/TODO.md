@@ -91,14 +91,6 @@
 
 **当前处置**：待处理
 
-### [ ] 输入框的右键菜单里有 Edge 的「Import passwords」
-
-- **来源**：2026-10-23 真机验证右键时看到：WebView2 输入框的默认菜单是 Emoji、Import passwords、撤销、剪切、复制、粘贴、粘贴为纯文本、全选、书写方向（开发版还有「检查」）
-- **要做的**：主窗口在 Rust 里接 `ContextMenuRequested`（与 `src-tauri/src/browser_keys.rs` 同一处挂），只留编辑相关的几项；网页里删不掉单个菜单项
-- **优先级**：低
-
-**当前处置**：待处理
-
 ### [ ] 阶段 11 之前就没人用的导出函数
 
 - **来源**：2026-10-19 阶段 11 清死代码时发现，不是这次改动造成的，按「不顺手改范围外的文件」没删
@@ -325,6 +317,10 @@
 ## 已完成
 
 更早完成的条目原样搬到了 [archive/TODO-done.md](./archive/TODO-done.md)，按标题搜。
+
+### [x] 输入框的右键菜单里有 Edge 的「Import passwords」
+
+2026-10-23 主窗口的原生右键菜单只留编辑项，见 [window-system-integration.md](./flows/window-system-integration.md)「原生右键菜单」。
 
 ### [x] 开发版不往统计里报数据
 

@@ -6,6 +6,7 @@
 
 mod analytics;
 mod browser_keys;
+mod browser_menu;
 mod cli;
 mod commands;
 mod error;
@@ -296,8 +297,9 @@ fn main() {
                 }
             };
 
-            // 主窗口不响应 F5 刷新、Ctrl+P 打印、Ctrl+F 查找栏这类浏览器快捷键（只有 Windows 的 WebView2 有）
+            // 主窗口不响应 F5 刷新、Ctrl+P 打印、Ctrl+F 查找栏这类浏览器快捷键，原生右键菜单只留编辑用的几项（只有 Windows 的 WebView2 有）
             browser_keys::disable_browser_accelerator_keys(&window);
+            browser_menu::trim_browser_context_menu(&window);
 
             // 6. 设置高分辨率窗口图标（修复 Windows 高分屏任务栏图标模糊问题）
             // Tauri 默认只读取 ICO 的第一个条目（16x16），导致任务栏图标模糊

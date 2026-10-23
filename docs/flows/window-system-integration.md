@@ -10,7 +10,8 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
 - **系统托盘**:三个平台都有,点开是系统原生菜单(交接说明 8.6,T01–T08)。Rust 建图标与点击行为,菜单由主窗口前端按配置画;Windows 左键 / 双击打开主界面、右键菜单,macOS / Linux 点开即菜单(见图 2)
 - **全局快捷键**:默认 `Ctrl+Shift+C` 上传剪贴板图片、`Ctrl+Shift+O` 选择文件上传,可在设置 › 快捷键改或整体关闭;上传走应用级上传控制器,与首页、托盘同一条路
-- **浏览器快捷键**:主窗口不响应 WebView2 自带的 F5 / Ctrl+R 刷新、Ctrl+P 打印、Ctrl+F 查找栏(`browser_keys.rs`:建窗后在 `AcceleratorKeyPressed` 里逐键告诉浏览器别管,按键照常交给网页,图库的 Ctrl+F 才能聚焦搜索框);开发版留着 F12 等开发者工具键。右键菜单、文字能不能选由前端管,见 [ui-patterns.md](../design/ui-patterns.md)「不像网页」
+- **浏览器快捷键**:主窗口不响应 WebView2 自带的 F5 / Ctrl+R 刷新、Ctrl+P 打印、Ctrl+F 查找栏(`browser_keys.rs`:建窗后在 `AcceleratorKeyPressed` 里逐键告诉浏览器别管,按键照常交给网页,图库的 Ctrl+F 才能聚焦搜索框);开发版留着 F12 等开发者工具键
+- **原生右键菜单**:前端只在输入框里、选中的字上放行原生菜单(其余地方不弹,文字能不能选也由前端管,见 [ui-patterns.md](../design/ui-patterns.md)「不像网页」);放行的菜单再由 `browser_menu.rs` 在 `ContextMenuRequested` 里按菜单项名字过滤,只留撤销、重做、剪切、复制、粘贴、粘贴为纯文本、全选、Emoji、拼写建议(开发版另留「检查」),删完不剩就不弹。Edge 的「Import passwords」「Writing direction」名字都是 `other`,选中文字时的「复制链接到高亮」「打印」也去掉
 - **单实例**:`tauri-plugin-single-instance`,再次启动只把已运行的主窗口唤起
 - **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
 - **CLI PATH**:设置页的 CLI 开关会同步管理命令入口。Windows 写入用户级注册表;macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接,AppImage 优先链接到 `$APPIMAGE`。
@@ -235,6 +236,7 @@ flowchart LR
 | macOS 打开 CLI 后仍提示 PATH 未生效 | `~/.local/bin` 不在当前 shell PATH;按设置页 message 把 export 行加入 `~/.zshrc` 后新开终端 | CLI PATH 管理 |
 | AppImage 打开 CLI 后命令失效 | 符号链接可能指向旧的 `/tmp/.mount_*` 临时挂载;应确认当前运行时存在 `$APPIMAGE`,再手动移走旧链接后重新打开 CLI | CLI PATH 管理 |
 | 按 F5 整个界面刷新了、Ctrl+F 弹出浏览器的查找栏 | `disable_browser_accelerator_keys` 没装上(看日志「关闭浏览器快捷键失败」),或 WebView2 Runtime 低于 1.0.2210.55(逐键关闭要这个版本) | 概览 |
+| 输入框右键菜单里又出现 Edge 的项(导入密码、打印……) | `trim_browser_context_menu` 没装上(看日志「精简右键菜单失败」);或新版 WebView2 改了菜单项名字,对照开发版日志「右键菜单原有 …」改 `KEPT_ITEMS` | 概览 |
 | 全局快捷键按了没反应 | 设置 › 快捷键里关掉了;或组合键被别的程序占用(启动时会提示「全局快捷键未生效」) | 概览 |
 | 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,还要在单实例回调里转发 `argv` | 图4 |
 
