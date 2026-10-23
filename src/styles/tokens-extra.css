@@ -9,6 +9,9 @@
 :root,
 [data-theme="light"] {
   --pn-nav-text: #404040;
+  /* 侧栏 / 图标栏导航项悬停：设计稿未画宽侧栏的悬停，图标栏画的 #F5F5F5 比侧栏底还浅、几乎看不出；
+     取比当前页（--pn-selected 6.5%）浅一半的半透明灰，悬停与当前页分得开 */
+  --pn-nav-hover: rgba(0, 0, 0, 0.035);
   --pn-search-bg: rgba(255, 255, 255, 0.75);
   --pn-field: #FFFFFF;
   --pn-check-border: #A3A3A3;
@@ -31,18 +34,29 @@
   --pn-scrim-light: rgba(23, 23, 23, 0.12);
   --pn-chip-on: #EAF2FD;
   --pn-toast-action-bg: #F5F5F5;
+  /* 通知里的「撤销」等小按钮：悬停 / 按下（设计稿未画，同浅灰底按钮逐级加深） */
+  --pn-toast-action-hover: #EBEBEB;
+  --pn-toast-action-press: #E0E0E0;
   --pn-danger-button: #B91C1C;
   /* 按钮状态（Controls.dc.html V 表） */
   --pn-button-hover: #2558C4;
   --pn-button-press: #1F4CAE;
   --pn-secondary-hover: #F5F5F5;
   --pn-secondary-press: #EBEBEB;
-  --pn-ghost-hover: #F2F2F2;
-  --pn-ghost-press: #E8E8E8;
+  /* 透明底按钮的悬停 / 按下写成半透明：叠在页面底上正好是 V 表的 #F2F2F2 / #E8E8E8，
+     叠在弹窗、菜单、灰面板上也照样比底色深一级（实色在深色弹窗里与弹窗底同色，看不出悬停） */
+  --pn-ghost-hover: rgba(0, 0, 0, 0.051);
+  --pn-ghost-press: rgba(0, 0, 0, 0.09);
   --pn-danger-button-hover: #A11818;
   --pn-danger-button-press: #8A1414;
-  /* 白色浮起按钮的悬停：设计稿未画，取次按钮的悬停色 */
+  /* 白色浮起按钮的悬停 / 按下：设计稿未画，取次按钮的悬停 / 按下色 */
   --pn-btn-soft-hover: #F5F5F5;
+  --pn-btn-soft-press: #EBEBEB;
+  /* 浅灰底按钮（PnIconButton subtle 等）按下：设计稿未画，比悬停（--pn-ghost-press）再深一级；
+     同悬停一样写成半透明，叠在弹窗、菜单里也比悬停深（深色下亮）一级，不会倒过来 */
+  --pn-subtle-press: rgba(0, 0, 0, 0.12);
+  /* 红字文字按钮（移除图床、删除模板、「微博失败」等）按下：设计稿未画，悬停是 --pn-danger-soft，按下往红色填充混 8% */
+  --pn-danger-soft-press: #FADCDC;
   --pn-seg-track: #EFEFEF;
   /* 透明图片底下的棋盘格（ImageRatios.dc.html），深色模式同步变暗 */
   --pn-checker-a: #FFFFFF;
@@ -65,6 +79,8 @@
 
 [data-theme="dark"] {
   --pn-nav-text: #C4C4C6;
+  /* 当前页是 8% 白，悬停取一半 */
+  --pn-nav-hover: rgba(255, 255, 255, 0.04);
   --pn-search-bg: rgba(255, 255, 255, 0.04);
   --pn-field: #202023;
   --pn-check-border: #5C5C61;
@@ -86,17 +102,23 @@
   --pn-scrim-light: rgba(0, 0, 0, 0.35);
   --pn-chip-on: rgba(76, 147, 245, 0.16);
   --pn-toast-action-bg: #36363A;
+  --pn-toast-action-hover: #3E3E42;
+  --pn-toast-action-press: #46464A;
   --pn-danger-button: #C42B2B;
   --pn-button-hover: #3B7BEA;
   --pn-button-press: #2C62C7;
   --pn-secondary-hover: #323236;
   --pn-secondary-press: #3A3A3E;
-  --pn-ghost-hover: #2A2A2D;
-  --pn-ghost-press: #323236;
+  /* 叠在页面底 #1C1C1E 上正好是 V 表的 #2A2A2D / #323236 */
+  --pn-ghost-hover: rgba(255, 255, 255, 0.063);
+  --pn-ghost-press: rgba(255, 255, 255, 0.1);
   --pn-danger-button-hover: #D13838;
   --pn-danger-button-press: #A82424;
-  /* 深色「越靠上越亮」：浮起按钮 #36363A 悬停再亮一级 */
+  /* 深色「越靠上越亮」：浮起按钮 #36363A 悬停再亮一级、按下再亮一级（同次按钮每级 +8） */
   --pn-btn-soft-hover: #3E3E42;
+  --pn-btn-soft-press: #46464A;
+  --pn-subtle-press: rgba(255, 255, 255, 0.14);
+  --pn-danger-soft-press: #421C1D;
   --pn-seg-track: #2A2A2D;
   --pn-checker-a: #2A2A2D;
   --pn-checker-b: #333337;

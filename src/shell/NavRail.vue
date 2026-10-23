@@ -103,10 +103,11 @@ const isMac = uiPlatform() === 'macos';
   height: var(--pn-size-rail-item);
   border-radius: var(--pn-radius-rail-item);
   color: var(--pn-nav-text);
-  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.nav-rail__item:hover { background: var(--pn-row-hover); }
+/* 与宽侧栏同一个悬停色：比当前页浅一半（设计稿画的 #F5F5F5 比侧栏底还浅，浅色下几乎看不出） */
+.nav-rail__item:hover { background: var(--pn-nav-hover); }
 
 .nav-rail__item--active,
 .nav-rail__item--active:hover {
@@ -119,7 +120,10 @@ const isMac = uiPlatform() === 'macos';
   border: 0;
   background: transparent;
   color: var(--pn-text3);
+  cursor: pointer;
 }
+
+.nav-rail__expand:active { background: var(--pn-selected); }
 
 .nav-rail__dot {
   position: absolute;

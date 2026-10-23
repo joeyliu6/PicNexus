@@ -72,8 +72,11 @@ const hideToTray = () => { void appWindow.hide().then(refreshAppPresence); };
 }
 
 .window-controls__win:hover { background: var(--pn-selected); }
+.window-controls__win:active { background: var(--pn-ghost-press); }
 
-.window-controls__win--close:hover {
+/* 关闭键悬停与按下同为系统红（Windows 11 的按下只比悬停淡一点，这里不再分） */
+.window-controls__win--close:hover,
+.window-controls__win--close:active {
   background: var(--pn-window-close-hover);
   color: var(--pn-window-close-fg);
 }
@@ -86,4 +89,5 @@ const hideToTray = () => { void appWindow.hide().then(refreshAppPresence); };
 }
 
 .window-controls__linux:hover { background: var(--pn-border); }
+.window-controls__linux:active { background: var(--pn-border-strong); }
 </style>

@@ -44,6 +44,26 @@
 
 深色模式层级「越靠上越亮」：侧栏 < 页面 < 卡片 < 菜单；深色下阴影看不见，浮层用 1px 浅描边代替（已含在 e3 / e4 的深色值里）。
 
+### 可点元素的悬停与按下
+
+按元素长相取一对令牌，不新造颜色（`Controls.dc.html` 的按钮状态表；设计稿没画的按同一规律补，浅色逐级加深、深色逐级提亮）：
+
+| 长相 | 悬停 | 按下 |
+|---|---|---|
+| 主按钮 | `--pn-button-hover` | `--pn-button-press` |
+| 危险按钮 | `--pn-danger-button-hover` | `--pn-danger-button-press` |
+| 白底描边（secondary） | `--pn-secondary-hover` | `--pn-secondary-press` |
+| 白色浮起（soft） | `--pn-btn-soft-hover` | `--pn-btn-soft-press` |
+| 透明底（文字按钮、图标按钮、筛选按钮） | `--pn-ghost-hover` | `--pn-ghost-press` |
+| 浅灰底（subtle） | `--pn-ghost-press` | `--pn-subtle-press` |
+| 红字文字按钮（移除、删除、「X失败」） | `--pn-danger-soft` | `--pn-danger-soft-press` |
+| 菜单项、命令面板项 | `--pn-menu-sel` | `--pn-ghost-press` |
+| 侧栏 / 图标栏导航项 | `--pn-nav-hover`（当前页 `--pn-selected` 的一半） | 不加（点了就是当前页） |
+
+点了就选中的行（列表行、左栏项）只有悬停色，不加按下色；不用缩放之类设计稿没有的按下效果。当菜单、弹出层触发器的按钮，打开期间停在按下色（`[data-state='open']`）。
+
+`--pn-ghost-hover` / `--pn-ghost-press` 是半透明的：叠在页面底上正好等于 V 表的实色，叠在弹窗、菜单、灰面板上也照样深一级（深色弹窗底 #2A2A2D 与实色悬停同色，换成实色就看不出悬停）。
+
 ## Typography Scale
 
 字号只有六档，外加等宽一档；字重只有三档。行高与字号成对使用。

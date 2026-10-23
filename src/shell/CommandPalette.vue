@@ -278,6 +278,7 @@ function hintOf(entry: CommandEntry): string {
 
 .command-palette__item--tall { min-height: var(--pn-size-palette-item-tall); }
 .command-palette__item[data-active='true'] { background: var(--pn-menu-sel); }
+.command-palette__item:active { background: var(--pn-ghost-press); }
 
 .command-palette__thumb {
   flex: none;

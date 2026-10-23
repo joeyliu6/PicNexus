@@ -64,10 +64,19 @@ function onUpdate(value: unknown) {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
-  transition: background-color var(--pn-dur-fast) var(--pn-ease-in);
+
+  /* 选中块浮起 / 落下与文字变深一起渐变（交接说明 5.3「快 150ms：开关」） */
+  transition:
+    background-color var(--pn-dur-fast) var(--pn-ease-in),
+    box-shadow var(--pn-dur-fast) var(--pn-ease-in),
+    color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .pn-segmented__item--icon { width: var(--pn-size-seg-icon); padding: 0; }
+
+/* 未选的段：悬停字变深，按下底色比轨道深一级（深色下亮一级） */
+.pn-segmented__item:not([data-state='on']):hover { color: var(--pn-text1); }
+.pn-segmented__item:not([data-state='on']):active { background: var(--pn-ghost-press); }
 
 .pn-segmented__item[data-state='on'] {
   background: var(--pn-seg-on);

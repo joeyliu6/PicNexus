@@ -108,7 +108,11 @@ const GLYPH: Record<ToastKind, string> = { success: '✓', error: '✕', warn: '
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.pn-toast__action:hover { background: var(--pn-toast-action-hover); }
+.pn-toast__action:active { background: var(--pn-toast-action-press); }
 
 .pn-toast__countdown {
   position: absolute;

@@ -41,10 +41,13 @@ const transfer = useTransferCenter();
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .transfer-button:hover,
 .transfer-button--open { background: var(--pn-selected); }
+
+.transfer-button:active { background: var(--pn-ghost-press); }
 
 .transfer-button__track { stroke: var(--pn-track); }
 .transfer-button__ring { stroke: var(--pn-brand); transition: stroke-dasharray var(--pn-dur-standard) var(--pn-ease-in); }

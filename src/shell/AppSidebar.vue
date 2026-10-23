@@ -113,10 +113,11 @@ const collapseTitle = `收起侧栏  ${isMac ? '⌘' : 'Ctrl+'}\\`;
   border-radius: var(--pn-radius-md);
   color: var(--pn-nav-text);
   text-decoration: none;
-  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.app-sidebar__item:hover { background: var(--pn-hairline); }
+/* 悬停比当前页浅一半，鼠标停在别的项上时分得清哪个是当前页 */
+.app-sidebar__item:hover { background: var(--pn-nav-hover); }
 
 .app-sidebar__item--active,
 .app-sidebar__item--active:hover {
@@ -134,7 +135,11 @@ const collapseTitle = `收起侧栏  ${isMac ? '⌘' : 'Ctrl+'}\\`;
   font: inherit;
   font-size: var(--pn-text-footnote);
   text-align: left;
+  cursor: pointer;
 }
+
+.app-sidebar__collapse:hover { color: var(--pn-nav-text); }
+.app-sidebar__collapse:active { background: var(--pn-selected); }
 
 .app-sidebar__dot {
   width: var(--pn-size-status-dot);

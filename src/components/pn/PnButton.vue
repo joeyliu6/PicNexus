@@ -85,6 +85,7 @@ withDefaults(defineProps<{
 
 .pn-button--soft { background: var(--pn-btn-soft); box-shadow: var(--pn-btn-soft-shadow); color: var(--pn-text1); }
 .pn-button--soft:not(:disabled):hover { background: var(--pn-btn-soft-hover); }
+.pn-button--soft:not(:disabled):active { background: var(--pn-btn-soft-press); }
 
 .pn-button--secondary { background: var(--pn-secondary-bg); box-shadow: var(--pn-secondary-ring); color: var(--pn-text1); }
 .pn-button--secondary:not(:disabled):hover { background: var(--pn-secondary-hover); }
@@ -97,6 +98,13 @@ withDefaults(defineProps<{
 .pn-button--danger { background: var(--pn-danger-button); color: var(--pn-on-fill); }
 .pn-button--danger:not(:disabled):hover { background: var(--pn-danger-button-hover); }
 .pn-button--danger:not(:disabled):active { background: var(--pn-danger-button-press); }
+
+/* 当菜单 / 弹出层的触发器时，打开期间停在按下色（Reka 在触发器上写 data-state="open"），悬停也不变浅；与各页自写的触发器一致 */
+.pn-button.pn-button--primary[data-state='open'] { background: var(--pn-button-press); }
+.pn-button.pn-button--soft[data-state='open'] { background: var(--pn-btn-soft-press); }
+.pn-button.pn-button--secondary[data-state='open'] { background: var(--pn-secondary-press); }
+.pn-button.pn-button--ghost[data-state='open'] { background: var(--pn-ghost-press); }
+.pn-button.pn-button--danger[data-state='open'] { background: var(--pn-danger-button-press); }
 
 .pn-button__spinner { animation: pn-spin var(--pn-dur-spin) linear infinite; }
 

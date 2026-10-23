@@ -40,7 +40,11 @@ const keys = uiPlatform() === 'macos' ? '⌘K' : 'Ctrl+K';
   color: var(--pn-text3);
   font: inherit;
   cursor: pointer;
+  transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+/* 悬停：细框加深、字变深一级（设计稿未画），提示这里点得开 */
+.sidebar-search:hover { box-shadow: inset 0 0 0 1px var(--pn-border-strong); color: var(--pn-text2); }
 
 .sidebar-search__label { flex: 1; text-align: left; }
 .sidebar-search__keys { font-size: var(--pn-text-caption); }
@@ -58,7 +62,9 @@ const keys = uiPlatform() === 'macos' ? '⌘K' : 'Ctrl+K';
   background: transparent;
   color: var(--pn-nav-text);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.sidebar-search-rail:hover { background: var(--pn-row-hover); }
+/* 同图标栏导航项的悬停色 */
+.sidebar-search-rail:hover { background: var(--pn-nav-hover); }
 </style>

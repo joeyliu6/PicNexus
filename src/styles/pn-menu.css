@@ -31,6 +31,9 @@
 }
 
 .pn-menu__item[data-highlighted] { background: var(--pn-menu-sel); }
+
+/* 按下：比悬停再深一级（设计稿未画；勾选后不关的菜单靠它知道点中了） */
+.pn-menu__item[data-highlighted]:active { background: var(--pn-ghost-press); }
 .pn-menu__item[data-disabled] { color: var(--pn-disabled); cursor: default; }
 
 /* 带勾选列的项：左侧留 30px 放对勾 */

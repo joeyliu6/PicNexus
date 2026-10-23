@@ -53,7 +53,9 @@ withDefaults(defineProps<{
 
 .pn-icon-button--subtle { background: var(--pn-subtle); color: var(--pn-text1); }
 .pn-icon-button--subtle:not(:disabled):hover { background: var(--pn-ghost-press); }
+.pn-icon-button--subtle:not(:disabled):active { background: var(--pn-subtle-press); }
 
 .pn-icon-button--ghost { background: transparent; color: var(--pn-text2); }
 .pn-icon-button--ghost:not(:disabled):hover { background: var(--pn-ghost-hover); color: var(--pn-text1); }
+.pn-icon-button--ghost:not(:disabled):active { background: var(--pn-ghost-press); color: var(--pn-text1); }
 </style>

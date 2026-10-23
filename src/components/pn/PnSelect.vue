@@ -96,6 +96,7 @@ withDefaults(defineProps<{
 }
 
 .pn-select-menu__item[data-highlighted] { background: var(--pn-menu-sel); }
+.pn-select-menu__item[data-highlighted]:active { background: var(--pn-ghost-press); }
 .pn-select-menu__item[data-disabled] { color: var(--pn-disabled); cursor: default; }
 
 .pn-select-menu__check {

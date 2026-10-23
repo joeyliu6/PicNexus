@@ -195,9 +195,11 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.transfer-center__close:hover { background: var(--pn-ghost-hover); }
+.transfer-center__close:hover { background: var(--pn-ghost-hover); color: var(--pn-text1); }
+.transfer-center__close:active { background: var(--pn-ghost-press); }
 
 .transfer-center__group { display: flex; flex-direction: column; gap: var(--pn-space-8); }
 
@@ -219,9 +221,12 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .transfer-center__task-button:hover { background: var(--pn-ghost-hover); }
+.transfer-center__task-button:active { background: var(--pn-ghost-press); }
+
 .transfer-center__group-head { display: flex; align-items: baseline; justify-content: space-between; }
 
 .transfer-center__group-title,
@@ -290,7 +295,11 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.transfer-center__clear:hover { background: var(--pn-ghost-hover); color: var(--pn-text1); }
+.transfer-center__clear:active { background: var(--pn-ghost-press); }
 
 .transfer-center__done-line {
   display: flex;
