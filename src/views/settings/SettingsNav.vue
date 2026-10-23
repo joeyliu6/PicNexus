@@ -79,6 +79,7 @@ defineEmits<{ select: [id: SettingsGroupId] }>();
   color: var(--pn-text2);
   font: inherit;
   text-align: left;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 设计稿里是链接（<a>），用小手 */
   cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }

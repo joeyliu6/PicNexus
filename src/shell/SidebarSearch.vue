@@ -39,6 +39,7 @@ const keys = uiPlatform() === 'macos' ? '⌘K' : 'Ctrl+K';
   box-shadow: inset 0 0 0 1px var(--pn-hairline);
   color: var(--pn-text3);
   font: inherit;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 设计稿里是链接（<a>），用小手 */
   cursor: pointer;
   transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
@@ -61,6 +62,7 @@ const keys = uiPlatform() === 'macos' ? '⌘K' : 'Ctrl+K';
   border-radius: var(--pn-radius-rail-item);
   background: transparent;
   color: var(--pn-nav-text);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 设计稿里是链接（<a>），用小手 */
   cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }

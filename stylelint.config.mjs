@@ -112,9 +112,15 @@ export default {
         'outline':                                [RAW_HEX, RAW_COLOR_FN],
         'box-shadow':                             [RAW_HEX, RAW_COLOR_FN],
         'text-shadow':                            [RAW_HEX, RAW_COLOR_FN],
+
+        // ── 光标 (ui-patterns.md「不像网页」) ──
+        // 按钮、行、开关用箭头（设计稿 Controls 写的 cursor: default）；设计稿里是链接（<a>）的才用小手，逐个豁免
+        'cursor': ['pointer'],
       },
       {
-        message: '禁止硬编码数值/颜色，请使用 CSS 变量 → docs/design/tokens.md',
+        message: (property) => (property === 'cursor'
+          ? '按钮、行、开关用箭头，只有设计稿里是链接的才用小手（豁免并写明）→ docs/design/ui-patterns.md「不像网页」'
+          : '禁止硬编码数值/颜色，请使用 CSS 变量 → docs/design/tokens.md'),
       },
     ],
   },

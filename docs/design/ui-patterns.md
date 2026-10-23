@@ -70,6 +70,6 @@
 - 图片和链接拖不起来（`pn-base.css` 的 `-webkit-user-drag: none`），不用再写 `draggable="false"`。
 - 主窗口不响应 WebView2 的浏览器快捷键（F5 / Ctrl+R 刷新、Ctrl+P 打印、Ctrl+F 查找栏），在 Rust 里关（[window-system-integration.md](../flows/window-system-integration.md)）：这些键浏览器先于网页处理，网页里拦不住；按键照常交给网页，应用要用的键（图库 Ctrl+F）自己接。
 - 自写的 `<input>`（搜索框、改名框）写 `spellcheck="false"` 和 `autocomplete="off"`，与 `PnInput` 的默认一致：不画拼写红线、不弹浏览器记住的旧输入。
-- 光标照设计稿：按钮、行、开关、菜单项、卡片用箭头（Controls.dc.html 给按钮写的 `cursor: default`，同系统应用）；只有设计稿里是链接（`<a>`）的用小手：侧栏导航与搜索、设置分组、关于页的链接、「重新登录」「管理图床」这类行内链接、图床字段旁的帮助链接。
+- 光标照设计稿：按钮、行、开关、菜单项、卡片用箭头（Controls.dc.html 给按钮写的 `cursor: default`，同系统应用）；只有设计稿里是链接（`<a>`）的用小手：侧栏导航与搜索、设置分组、关于页的链接、「重新登录」「管理图床」这类行内链接、图床字段旁的帮助链接。stylelint 拦 `cursor: pointer`，正当的逐个豁免并写明「设计稿里是链接」。
 - 被省略号截断的文件名加 `v-overflow-title`（`src/utils/overflowTitle.ts`）：鼠标移上去时用系统提示补全名，放得下的不出提示（同资源管理器）。
 - 守门测试在 `tests/e2e/desktop-feel.e2e.spec.ts`（Chromium + WebKit）。

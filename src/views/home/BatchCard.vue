@@ -347,6 +347,7 @@ const RING = 37.7;
   color: var(--pn-brand-text);
   font: inherit;
   font-weight: var(--pn-weight-medium);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 设计稿里是链接（<a>），用小手 */
   cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
