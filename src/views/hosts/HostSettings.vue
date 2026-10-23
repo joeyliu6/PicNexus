@@ -10,6 +10,7 @@ import {
   DEFAULT_CONFIG, DEFAULT_GITHUB_CDN_LIST, cloneDefaultPrefixes, isWebDAVId,
   type GithubCdnConfig, type LinkPrefixConfig, type UserConfig,
 } from '@/config/types';
+import { useUndoToast } from '@/composables/useUndoToast';
 import { secureStorage } from '@/security/crypto';
 import { isIpv4Address, isLoopbackHost, isPrivateOrReservedHost, normalizeHost } from '@/security/networkPolicy';
 import { applyPrefixTemplate } from '@/utils/linkPrefixTemplate';
@@ -18,6 +19,7 @@ import { findWebdav, hostRecord } from './hostConfig';
 import HostFields from './HostFields.vue';
 import HostTemplateList, { type TemplateItem } from './HostTemplateList.vue';
 import type { HostTestState } from './hostTestText';
+import { removeTemplate, restoreTemplate } from './templateEdits';
 import { useHosts } from './useHosts';
 
 const props = defineProps<{
@@ -36,6 +38,7 @@ const emit = defineEmits<{ commit: [key: string, value: string]; login: [] }>();
 
 const hosts = useHosts();
 const config = hosts.config;
+const undo = useUndoToast();
 const showAdvanced = ref(false);
 
 const invalidField = computed(() => (props.test.phase === 'fail' && !props.test.edited ? props.test.field : undefined));
@@ -110,10 +113,24 @@ function selectPrefix(index: number): void {
   savePrefix(index === 0 ? { enabled: false } : { enabled: true, selectedIndex: index - 1 });
 }
 
-function removePrefix(index: number): void {
-  const list = prefixConfig.value.prefixList.filter((_, i) => i !== index - 1);
-  const selected = prefixConfig.value.selectedIndex;
-  savePrefix({ prefixList: list, selectedIndex: Math.min(selected >= index - 1 && selected > 0 ? selected - 1 : selected, list.length - 1) });
+/** 删除与「恢复默认」不弹确认，通知带撤销（交接说明第 4 节）；第 0 行是「不加前缀」，列表里的下标要减 1 */
+async function removePrefix(index: number): Promise<void> {
+  const at = index - 1;
+  const before = prefixConfig.value;
+  const item = before.prefixList[at];
+  if (!item) return;
+  const wasChosen = before.enabled && before.selectedIndex === at;
+  const removed = removeTemplate(before.prefixList, before.selectedIndex, at);
+  savePrefix({ prefixList: removed.list, selectedIndex: removed.selected });
+  if (await undo.show(`已删除模板「${item.name}」`)) return;
+  const back = restoreTemplate(prefixConfig.value.prefixList, prefixConfig.value.selectedIndex, item, at, wasChosen);
+  savePrefix({ prefixList: back.list, selectedIndex: back.selected, ...(wasChosen ? { enabled: true } : {}) });
+}
+
+async function restorePrefixes(): Promise<void> {
+  const before = { ...prefixConfig.value, prefixList: [...prefixConfig.value.prefixList] };
+  savePrefix({ prefixList: cloneDefaultPrefixes(), selectedIndex: 0, enabled: true });
+  if (!(await undo.show('已恢复默认链接前缀'))) savePrefix(before);
 }
 
 // ---- GitHub 加速（「原始地址」= cdnConfig.enabled false） ----
@@ -137,6 +154,24 @@ function saveCdn(next: Partial<GithubCdnConfig>): void {
     github.cdnConfig = { ...cdnConfig.value, ...next };
     return { ...c, services: { ...c.services, github } as unknown as UserConfig['services'] };
   });
+}
+
+async function removeCdn(index: number): Promise<void> {
+  const before = cdnConfig.value;
+  const item = before.cdnList[index];
+  if (!item) return;
+  const wasChosen = before.enabled && before.selectedIndex === index;
+  const removed = removeTemplate(before.cdnList, before.selectedIndex, index);
+  saveCdn({ cdnList: removed.list, selectedIndex: removed.selected });
+  if (await undo.show(`已删除 CDN「${item.name}」`)) return;
+  const back = restoreTemplate(cdnConfig.value.cdnList, cdnConfig.value.selectedIndex, item, index, wasChosen);
+  saveCdn({ cdnList: back.list, selectedIndex: back.selected, ...(wasChosen ? { enabled: true } : {}) });
+}
+
+async function restoreCdns(): Promise<void> {
+  const before = { ...cdnConfig.value, cdnList: [...cdnConfig.value.cdnList] };
+  saveCdn({ enabled: true, selectedIndex: 0, cdnList: DEFAULT_GITHUB_CDN_LIST });
+  if (!(await undo.show('已恢复默认 CDN'))) saveCdn(before);
 }
 
 function addCdn(item: { name: string; template: string }): void {
@@ -197,7 +232,7 @@ function setUniqueName(value: boolean): void {
         @select="selectPrefix"
         @add="(item) => savePrefix({ prefixList: [...prefixConfig.prefixList, item], enabled: true, selectedIndex: prefixConfig.prefixList.length })"
         @remove="removePrefix"
-        @restore="savePrefix({ prefixList: cloneDefaultPrefixes(), selectedIndex: 0, enabled: true })"
+        @restore="restorePrefixes"
       />
       <div v-if="descriptor.id === 'zhihu' && !draft" class="host-settings__box host-settings__box--row">
         <div class="host-settings__switch-text">
@@ -232,8 +267,8 @@ function setUniqueName(value: boolean): void {
         template-placeholder="https://cdn.example.com/gh/{owner}/{repo}@{branch}/{path}"
         @select="(i) => saveCdn(i === cdnConfig.cdnList.length ? { enabled: false } : { enabled: true, selectedIndex: i })"
         @add="addCdn"
-        @remove="(i) => saveCdn({ cdnList: cdnConfig.cdnList.filter((_, j) => j !== i), selectedIndex: 0 })"
-        @restore="saveCdn({ enabled: true, selectedIndex: 0, cdnList: DEFAULT_GITHUB_CDN_LIST })"
+        @remove="removeCdn"
+        @restore="restoreCdns"
       />
       <template v-if="hasAdvanced">
         <button type="button" class="host-settings__advanced" :aria-expanded="advancedOpen" @click="showAdvanced = !advancedOpen">
