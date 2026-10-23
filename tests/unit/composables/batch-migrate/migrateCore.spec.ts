@@ -142,6 +142,20 @@ describe('migrateOneItem', () => {
     ]));
   });
 
+  // webp 备份到京东要先转成 jpeg；转换失败时 Rust 报的是 { type, data: { message } }，原因要读出原话，不能记成 [object Object]
+  it('keeps the words of a failed format conversion as that target\'s reason', async () => {
+    getInvokeMock().mockImplementation(async (command: string) => {
+      if (command === 'compress_image') throw { type: 'FILE_IO', data: { message: '无法解码这张图片' } };
+      return { file_path: '/tmp/a.webp', content_type: 'image/webp', file_size: 512 };
+    });
+
+    await migrateOneItem(createItem({}), createStatus(), ['r2', 'jd'], {} as UserConfig, createUploader({}) as any, ref(false), ref(false), createStats());
+
+    expect(vi.mocked(historyDB.update).mock.calls[0][1].results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ serviceId: 'jd', status: 'failed', error: '无法解码这张图片' }),
+    ]));
+  });
+
   it('marks upload failure when every target fails', async () => {
     getInvokeMock().mockResolvedValue({ file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 });
     const uploader = createUploader({ r2: new Error('r2 down'), github: new Error('bad token') });

@@ -213,7 +213,8 @@ export async function migrateOneItem(
       onTargetSettled?.();
       return { serviceId: targetId, result: uploadResult, status: 'success' };
     } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
+      // 格式转换是 Rust 命令，失败时抛的是 { type, data: { message } }
+      const errorMsg = extractErrorMessage(e);
       status.serviceResults[targetId] = 'failed';
       onTargetSettled?.();
       log.warn(`迁移到 ${targetId} 失败: ${errorMsg}`);
