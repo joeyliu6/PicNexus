@@ -118,6 +118,14 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // 记住主窗口的大小和位置（只记这两样，见 window_fit.rs）
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(window_fit::REMEMBERED)
+                .with_filter(|label| label == window_fit::TRACKED_WINDOW)
+                .with_filename(window_fit::state_filename())
+                .build(),
+        )
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets(log_targets)
@@ -312,7 +320,7 @@ fn main() {
                 }
             }
 
-            // 窗口大小：按屏幕可用区域挑
+            // 窗口大小：插件已放回上次的；没记过或放不下现在的屏幕时按屏幕可用区域挑
             window_fit::fit_main_window(&window);
 
             // 5. 窗口事件处理：关闭最小化到托盘 + 后台内存优化
@@ -330,6 +338,7 @@ fn main() {
                                 .load(Ordering::Relaxed);
                             if close_to_tray {
                                 api.prevent_close();
+                                window_fit::remember_main_window(&window_for_close);
                                 let _ = window_for_close.hide();
                                 let _ = window_for_close
                                     .emit(commands::tray::WINDOW_PRESENCE_EVENT, ());

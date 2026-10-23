@@ -6,7 +6,7 @@
 
 PicNexus 是**单窗口 + 系统托盘** 架构:
 
-- **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),界面准备好才显示。初始大小由 `window_fit.rs` 按这块屏幕扣掉任务栏后的可用区域、用逻辑像素挑:放得下就是 1400×900,放不下就取可用区域的九成,九成还不到 1100×700 就铺满(不最大化:Windows 上隐藏的窗口一最大化就会弹出来)。居中与铺满都按内容区算,Windows 给无边框窗口留的那圈看不见的拖拽边露在外面
+- **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),界面准备好才显示。大小和位置由 `tauri-plugin-window-state` 记下、下次放回(只记这两样,不记最大化:Windows 上隐藏的窗口一最大化就会弹出来);没记过、或记下的放不下现在的屏幕(换了显示器)时,`window_fit.rs` 按这块屏幕扣掉任务栏后的可用区域、用逻辑像素挑:放得下就是 1400×900,放不下就取可用区域的九成,九成还不到 1100×700 就铺满。居中与铺满都按内容区算,Windows 给无边框窗口留的那圈看不见的拖拽边露在外面
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
 - **系统托盘**:三个平台都有,点开是系统原生菜单(交接说明 8.6,T01–T08)。Rust 建图标与点击行为,菜单由主窗口前端按配置画;Windows 左键 / 双击打开主界面、右键菜单,macOS / Linux 点开即菜单(见图 2)
 - **全局快捷键**:默认 `Ctrl+Shift+C` 上传剪贴板图片、`Ctrl+Shift+O` 选择文件上传,可在设置 › 快捷键改或整体关闭;上传走应用级上传控制器,与首页、托盘同一条路
@@ -29,12 +29,15 @@ stateDiagram-v2
     [*] --> Starting: cargo tauri dev / 双击启动
 
     Starting --> ConfigLoad: 读取 tauri.conf.json<br/>(visible:false 启动隐藏)
-    ConfigLoad --> Fit: setup 回调<br/>window_fit 按可用区域(逻辑像素)挑
+    ConfigLoad --> Restore: 建窗口<br/>window-state 插件放回记下的大小和位置
+    Restore --> Remembered: 记下过,且放得下这块屏幕
+    Restore --> Fit: 没记过 / 放不下<br/>window_fit 按可用区域(逻辑像素)挑
     Fit --> WRoomy: 放得下 → 1400×900 居中
     Fit --> WMedium: 放不下 → 可用区域的九成
     Fit --> WFill: 九成还不到 1100×700 → 铺满
 
-    WRoomy --> Visible: 界面准备好后 window.show()
+    Remembered --> Visible: 界面准备好后 window.show()
+    WRoomy --> Visible
     WMedium --> Visible
     WFill --> Visible
 
@@ -47,7 +50,7 @@ stateDiagram-v2
     Minimized --> CloseRequested
 
     CloseRequested --> CheckCloseToTray: on_window_event
-    CheckCloseToTray --> HiddenToTray: closeToTray = true<br/>(默认)<br/>api.prevent_close + hide
+    CheckCloseToTray --> HiddenToTray: closeToTray = true<br/>(默认)<br/>记下大小和位置 + api.prevent_close + hide
     CheckCloseToTray --> Quit: closeToTray = false
 
     HiddenToTray --> Focused: 托盘左键 / 双击 / 菜单项<br/>window.show + unminimize + focus
@@ -212,6 +215,7 @@ flowchart LR
 | `tauri-plugin-updater` | 自动更新 | [auto-update-flow](./auto-update-flow.md) |
 | `tauri-plugin-process` | 进程管理 / relaunch | — |
 | `tauri-plugin-log` | 日志系统 | [logger-diagnostics](./logger-diagnostics-flow.md) |
+| `tauri-plugin-window-state` | 记住主窗口大小和位置(固定 2.4:2.5 起要 Tauri 2.12) | 图1 Restore |
 
 ---
 
@@ -226,7 +230,9 @@ flowchart LR
 | 托盘里上传后什么提示都没有 | 主窗口隐藏时 `appPresence` 仍判「在屏」,通知进了看不见的应用内;或系统通知权限被拒 | 图2 同步契约 |
 | Windows 上「打开 PicNexus」没加粗 | `set_tray_default_item` 失败(看日志「设置托盘默认项失败」),或默认项的位置算错 | 图2 AM |
 | 托盘图标在任务栏上看不清 | Windows 任务栏深浅读取失败(按深色任务栏画了白色);Linux 浅色面板固定白色是已知限制 | 图2 IC |
-| 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示;或在隐藏的窗口上调了 `maximize()`(Windows 上会直接把窗口显示出来,所以小屏用铺满) | 图1 Visible |
+| 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示;或在隐藏的窗口上调了 `maximize()`(Windows 上会直接把窗口显示出来,所以不记最大化、小屏用铺满) | 图1 Visible |
+| 每次打开窗口都回到屏幕中间 | 记录没写成:常驻托盘时只在关到托盘、正常退出两处写盘,直接结束进程前没关过窗口就记不下;文件在系统配置目录的 `.window-state.json`,便携版在 `data/window-state.json` | 图1 Restore |
+| 换了显示器后窗口还是上次的大小 | 记下的大小放得下现在的屏幕时照用,只有放不下才重新按屏幕挑;想重来就删掉上一行的记录文件 | 图1 Fit |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | CLI 裸路径调用不上传 | 普通 CLI 必须传 `--service <serviceId>`;裸路径会打印可用图床和示例后退出 | 图3 D7 |
 | `picnexus --service r2` 报未知图床 | 设置页尚未保存对应图床配置,或该图床不支持 CLI 导出 | 图3 F1 |
