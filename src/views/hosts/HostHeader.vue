@@ -55,6 +55,7 @@ function finishRename(): void {
           class="host-head__rename"
           aria-label="名称"
           spellcheck="false"
+          autocomplete="off"
           @blur="finishRename"
           @keydown.enter.prevent="input?.blur()"
           @keydown.esc.prevent="editing = false"

@@ -131,6 +131,7 @@ function hintOf(entry: CommandEntry): string {
             class="command-palette__input"
             placeholder="搜索图片、页面或命令"
             spellcheck="false"
+            autocomplete="off"
             aria-label="搜索图片、页面或命令"
           >
           <kbd class="command-palette__kbd">Esc</kbd>

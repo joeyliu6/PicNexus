@@ -36,7 +36,7 @@ const groups = computed(() => buildCatalog(props.addedIds, query.value, filter.v
     <div class="host-catalog__tools" :class="{ 'host-catalog__tools--narrow': narrow }">
       <label class="host-catalog__search">
         <PnIcon name="search" :size="14" :stroke="1.8" />
-        <input v-model="query" class="host-catalog__search-input" type="search" placeholder="搜索图床名称" aria-label="搜索图床名称" spellcheck="false">
+        <input v-model="query" class="host-catalog__search-input" type="search" placeholder="搜索图床名称" aria-label="搜索图床名称" spellcheck="false" autocomplete="off">
       </label>
       <PnSegmented v-model="filter" :segments="CATALOG_FILTERS" label="接入方式" />
     </div>

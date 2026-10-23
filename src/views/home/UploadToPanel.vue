@@ -78,7 +78,7 @@ function onChip(hostId: string) {
 
     <label v-if="many" class="upload-to__search">
       <PnIcon name="search" :size="13" :stroke="1.8" />
-      <input v-model="query" class="upload-to__search-input" placeholder="搜索图床" aria-label="搜索图床">
+      <input v-model="query" class="upload-to__search-input" placeholder="搜索图床" aria-label="搜索图床" spellcheck="false" autocomplete="off">
     </label>
 
     <div class="upload-to__chips-wrap" :class="{ 'upload-to__chips-wrap--scroll': many }">
