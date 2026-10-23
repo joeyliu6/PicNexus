@@ -5,7 +5,7 @@ import type { CheckLinkResult, LinkCheckRow } from '@/types/linkCheck';
 import { buildHealthImages } from '@/views/health/healthModel';
 import type { DocWrite } from '@/views/health/docIndex';
 
-const m = vi.hoisted(() => ({
+const m = await vi.hoisted(async () => ({
   switchPrimaryService: vi.fn(),
   writeDocs: vi.fn(),
   restoreDocs: vi.fn(),
@@ -16,7 +16,8 @@ const m = vi.hoisted(() => ({
   scan: vi.fn(),
   addFolder: vi.fn(),
   emitHistoryUpdated: vi.fn().mockResolvedValue(undefined),
-  rows: { value: [] as LinkCheckRow[] },
+  // 清单的模型读这一份：响应式，模型跟着重算（真的那份检测中最多 300ms 重算一次）
+  rows: (await import('vue')).ref<LinkCheckRow[]>([]),
   docFolders: { value: ['D:\\Notes'] as string[] },
   scanned: { value: [] as unknown[] },
 }));
@@ -56,6 +57,11 @@ function scannedDoc(urls: string[]) {
   m.scanned.value = [{ folder: 'D:\\Notes', docs: [{ filePath: 'D:\\Notes\\README.md', fileName: 'README.md', links: urls.map((url, i) => ({ url, lineNumber: i + 1 })) }] }];
 }
 
+/** 模型里换上改用的那份（「复制时使用」那一行换成新的图床） */
+function applySwitch(changes: ReadonlyMap<string, string>): void {
+  m.rows.value = m.rows.value.map((r) => (changes.has(r.historyId) ? { ...r, isPrimary: r.serviceId === changes.get(r.historyId) } : r));
+}
+
 /** 最后一条带动作的通知，点它的按钮 */
 function lastAction(label: string): () => void {
   const call = [...m.withAction.mock.calls].reverse().find((c) => c[3].label === label);
@@ -74,6 +80,8 @@ describe('useHealthRepair', () => {
     ];
     scannedDoc(['https://weibo.example/a.png', 'https://weibo.example/a.png', 'https://weibo.example/b.png']);
     m.switchPrimaryService.mockResolvedValue(undefined);
+    // 改用之后模型立刻跟上（真的那份有时晚 300ms，见「等清单跟上」那条）
+    m.setPrimaryServices.mockImplementation((changes: Map<string, string>) => applySwitch(changes));
     m.writeDocs.mockImplementation(async (writes: DocWrite[]) => ({
       written: writes.map((w) => ({ path: w.path, backup: 'bak', content: 'new', places: w.places })),
       failed: [],
@@ -98,6 +106,23 @@ describe('useHealthRepair', () => {
     expect(repairState.lastDocs).toEqual({ docs: 1, places: 3 });
     m.withAction.mock.calls[0][4].onExpire();
     expect(repairState.lastDocs).toBeNull();
+  });
+
+  // 检测中清单的模型最多 300ms 才重算一次：修复中的状态清早了，那一行会先闪回「改用 X」再被拿掉
+  it('改好的行一直写「已改用 X」，等清单换上新的那份才收起修复中的状态', async () => {
+    let lagging: Map<string, string> | undefined;
+    m.setPrimaryServices.mockImplementation((changes: Map<string, string>) => { lagging = changes; });
+
+    const repairing = useHealthRepair().repair(['b'], 'row');
+    await vi.waitFor(() => expect(lagging).toBeDefined());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(repairState.running).toBe(true);
+    expect(repairState.rows.get('b')?.phase).toBe('done');
+
+    applySwitch(lagging!);
+    await repairing;
+    expect(repairState.running).toBe(false);
+    expect(repairState.rows.size).toBe(0);
   });
 
   it('行内改用：通知写「已改用 X」；没有文档引用时写复制的链接来自哪里', async () => {

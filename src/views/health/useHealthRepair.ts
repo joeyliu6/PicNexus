@@ -2,7 +2,7 @@
 // 「修复 N 张」、行内「改用 X」、文档弹窗「修复 N 处」走同一条路：不弹确认，通知带「撤销」；
 // 写不成的文档另起一条红色通知，「重试」只重写没写成的那几个。
 
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { historyDB } from '@/services/database';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import { useToast } from '@/composables/useToast';
@@ -16,6 +16,9 @@ import { useDocFolders } from './useDocFolders';
 import { repairState, useLinkHealth } from './useLinkHealth';
 
 const log = createLogger('HealthRepair');
+
+/** 清单的模型检测中最多 300ms 才重算一次：改好的行最多等这么久再清掉修复中的状态 */
+const LIST_CATCH_UP_MS = 1000;
 
 /** 「文档中的旧链接未更新 · 添加文档文件夹…」只提示一次（本机） */
 const DOC_FOLDER_HINT_KEY = 'picnexus-hint-doc-folders';
@@ -50,6 +53,21 @@ export function useHealthRepair() {
     if (changes.length === 0) return;
     health.linkCheck.setPrimaryServices(new Map(changes.map((c) => [c.id, c.host])));
     void emitHistoryUpdated(changes.map((c) => c.id)).catch((error) => log.warn('history-updated 事件发送失败', error));
+  }
+
+  /**
+   * 等清单的模型也换成了改用的那份。清早了，模型重算之前那一行会先闪回「改用 X」再被拿掉，
+   * 离开时也不带修复中的 --busy，收不起来（HealthDeadList）
+   */
+  function untilListCaughtUp(switched: RepairRecord['switched']): Promise<void> {
+    const caughtUp = () => switched.every((s) => health.images.value.find((i) => i.id === s.id)?.copyHost !== s.from);
+    if (caughtUp()) return Promise.resolve();
+    return new Promise((resolve) => {
+      let stop = () => {};
+      const timer = setTimeout(() => finish(), LIST_CATCH_UP_MS);
+      const finish = () => { clearTimeout(timer); stop(); resolve(); };
+      stop = watch(caughtUp, (yes) => { if (yes) finish(); });
+    });
   }
 
   function reportDocFailures(record: RepairRecord, failed: FailedDoc[]): void {
@@ -159,6 +177,7 @@ export function useHealthRepair() {
         repairState.done++;
       }
       syncRows(record.switched.map((s) => ({ id: s.id, host: s.to })));
+      const listCaughtUp = untilListCaughtUp(record.switched);
       const outcome = await writeDocs(writes);
       record.written.push(...outcome.written);
       if (toSwitch.length === 0) repairState.done = repairState.total;
@@ -168,6 +187,7 @@ export function useHealthRepair() {
       reportDocFailures(record, outcome.failed);
       if (failedSwitches.length) toast.error(`${formatCount(failedSwitches.length)} 张图片未能修复`, '记录已变化，请重新检测后重试');
       if (record.written.length) void docFolders.scan();
+      await listCaughtUp;
     } finally {
       repairState.running = false;
       repairState.rows = new Map();
