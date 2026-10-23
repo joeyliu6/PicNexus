@@ -41,6 +41,7 @@
 
 - 每个可点的元素都要有悬停色和按下色（点了就选中的行、导航项只要悬停色），颜色按长相取 [tokens.md](./tokens.md)「可点元素的悬停与按下」那一对令牌；悬停变色写 `transition: background-color var(--pn-dur-instant) var(--pn-ease-in)`。
 - 选中 / 未选、开关这类状态切换渐变 `--pn-dur-fast`；切换页面不放过渡（LoadingRules ①）。
+- 列表里的项增删、换顺序：会被频繁重绘的列表（上传中的「最近上传」）让进出的那一项自己伸缩（`max-height` + 透明度），不用 TransitionGroup 的 `-move`；不常重绘、要换顺序的（图床左栏）用 `src/utils/flipReorder.ts`（换序前 `measureFlip`、换完 `playFlip`）。换筛选、切页面这类「换内容」不放动画。
 
 ## 空状态与加载
 

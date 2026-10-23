@@ -2,13 +2,14 @@
 // 图床页左栏（HostsScreen.dc.html、P01 / P14）：标题「图床」+「＋」；只列已添加的图床，有问题的 → 已启用的 → 停用的。
 // 正常时不打标记；停用的整行变淡、第二行「已停用」；有问题的第二行琥珀 ⚠ + 原因。
 // 悬停一行右侧浮出「启用 / 停用」；右键菜单同一个动作；键盘 ↑↓ 换行、空格切换、Enter 打开。
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import HostIcon from '@/components/biz/HostIcon.vue';
 import PnContextMenu from '@/components/pn/PnContextMenu.vue';
 import PnContextMenuItem from '@/components/pn/PnContextMenuItem.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import TransferButton from '@/shell/TransferButton.vue';
 import WindowControls from '@/shell/WindowControls.vue';
+import { measureFlip, playFlip } from '@/utils/flipReorder';
 import type { HostRow } from './hostList';
 
 const props = defineProps<{
@@ -34,6 +35,13 @@ const shownRows = computed(() => {
 });
 function freezeOrder(): void { frozenOrder.value = props.rows.map((r) => r.id); }
 function releaseOrder(): void { frozenOrder.value = null; }
+
+// 重排时每行从原位置滑到新位置，看得出那个图床挪去哪了（decisions/motion.md）：换之前量，换完再放
+const rowsEl = ref<HTMLElement | null>(null);
+watch(() => shownRows.value.map((r) => r.id).join(','), () => {
+  const before = measureFlip(rowsEl.value);
+  void nextTick(() => playFlip(rowsEl.value, before));
+}, { flush: 'pre' });
 
 // 按行号记：v-for 在插槽里，普通的 ref 数组顺序跟排序后的行对不上
 const rowRefs = ref<Array<HTMLElement | null>>([]);
@@ -79,12 +87,13 @@ function tabIndexOf(row: HostRow, index: number): number {
         <WindowControls />
       </template>
     </div>
-    <div class="hosts-list__rows" role="listbox" aria-label="已连接的图床" @pointerenter="freezeOrder" @pointerleave="releaseOrder">
+    <div ref="rowsEl" class="hosts-list__rows" role="listbox" aria-label="已连接的图床" @pointerenter="freezeOrder" @pointerleave="releaseOrder">
       <PnContextMenu v-for="(row, index) in shownRows" :key="row.id">
         <template #trigger>
           <div
             :ref="(el) => { rowRefs[index] = el as HTMLElement | null; }"
             role="option"
+            :data-flip-key="row.id"
             class="hosts-list__row"
             :class="{
               'hosts-list__row--selected': !listOnly && row.id === selectedId,

@@ -73,3 +73,43 @@ test('the public host risk confirm opens with 取消 focused', async ({ page }) 
   await expect(confirm).toHaveCount(0);
   await expect(page.getByRole('button', { name: '启用京东图床（免配置）' })).toBeVisible();
 });
+
+// 左栏重排（指针离开清单后按「有问题 → 已启用 → 停用」排）：每行从原位置滑到新位置，看得出那个图床挪去哪了；
+// 「减少动态效果」时直接到位（decisions/motion.md）。滑动用 Web Animations，记下对清单行的每一次 animate()
+for (const motion of ['no-preference', 'reduce'] as const) {
+  test(`a host turned off slides to the bottom once the pointer leaves the list (${motion})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await openApp(page, { config: { availableServices: ['jd', 'qiyu'], enabledServices: ['jd', 'qiyu'] } });
+    await page.emulateMedia({ reducedMotion: motion });
+    await page.getByRole('navigation').getByRole('link', { name: '图床', exact: true }).click();
+    const names = page.locator('.hosts-list__row .hosts-list__name');
+    await expect(names).toHaveCount(2);
+    const [top, bottom] = await names.allTextContents();
+    await page.evaluate(() => {
+      const slides: string[] = [];
+      (window as unknown as { __slides: string[] }).__slides = slides;
+      const animate = Element.prototype.animate;
+      Element.prototype.animate = function (this: Element, keyframes, options) {
+        if (this.classList.contains('hosts-list__row')) slides.push(`${this.querySelector('.hosts-list__name')?.textContent} ${JSON.stringify(keyframes)}`);
+        return animate.call(this, keyframes, options);
+      };
+    });
+
+    const row = page.locator('.hosts-list__row', { hasText: top });
+    await row.hover();
+    await row.getByRole('button', { name: '停用' }).click();
+    await expect(names).toHaveText([top, bottom]);
+    await page.mouse.move(1200, 600);
+    await expect(names).toHaveText([bottom, top]);
+
+    const slides = () => page.evaluate(() => (window as unknown as { __slides: string[] }).__slides);
+    if (motion === 'reduce') {
+      expect(await slides()).toEqual([]);
+    } else {
+      await expect.poll(slides).toEqual(expect.arrayContaining([
+        expect.stringMatching(new RegExp(`^${top} .*translateY[(]-[0-9]`)),
+        expect.stringMatching(new RegExp(`^${bottom} .*translateY[(][0-9]`)),
+      ]));
+    }
+  });
+}
