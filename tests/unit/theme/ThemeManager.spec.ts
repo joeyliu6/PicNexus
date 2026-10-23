@@ -22,6 +22,21 @@ describe('ThemeManager', () => {
     manager.destroy();
   });
 
+  it('pauses every transition for the frame the theme changes in, so all colours switch together', async () => {
+    // 带颜色过渡的元素会慢半拍（深色第一帧侧栏字还是深灰、压在深底上看不见），切主题那一帧全应用不放过渡
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const manager = new ThemeManager({ theme: { mode: 'light' } } as UserConfig, makeStore());
+    manager.initialize();
+    await nextFrame();
+    expect(document.documentElement.classList.contains('pn-theme-switching')).toBe(false);
+
+    await manager.setTheme('dark');
+    expect(document.documentElement.classList.contains('pn-theme-switching')).toBe(true);
+    await nextFrame();
+    expect(document.documentElement.classList.contains('pn-theme-switching')).toBe(false);
+    manager.destroy();
+  });
+
   it('writes the theme onto the latest saved config, not the copy it was created with', async () => {
     // 云同步、导入配置直接写 store、不发 config-updated：手里那份是启动时的旧副本，整份写回会把它们盖掉
     const fresh = { theme: { mode: 'dark', enableTransitions: false }, enabledServices: ['jd', 'r2'] } as unknown as UserConfig;

@@ -52,6 +52,12 @@
 :root { color-scheme: light; }
 :root[data-theme='dark'] { color-scheme: dark; }
 
+/* 切深浅色的那一帧不放任何过渡（ThemeManager 加上、下一帧去掉）：全应用一次整齐换色，不一块一块慢半拍 */
+.pn-theme-switching,
+.pn-theme-switching *,
+.pn-theme-switching *::before,
+.pn-theme-switching *::after { transition: none !important; }
+
 html,
 body,
 #app {

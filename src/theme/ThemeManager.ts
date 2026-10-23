@@ -132,8 +132,13 @@ export class ThemeManager {
   private applyThemeClass(effective: EffectiveTheme): void {
     const root = document.documentElement;
 
+    // 换色的这一帧全应用不放过渡（pn-base.css 的 .pn-theme-switching）：带颜色过渡的元素会慢半拍，
+    // 深色第一帧侧栏字还是深灰、压在深底上看不见；先按新主题把样式算完，下一帧再放开过渡
+    root.classList.add('pn-theme-switching');
     // --pn-* 令牌按 data-theme 切深浅色（tokens.css）
     root.dataset.theme = effective;
+    void root.offsetHeight;
+    requestAnimationFrame(() => root.classList.remove('pn-theme-switching'));
 
     const mode = this.config.theme?.mode || 'auto';
     // 存值沿用「light-theme / dark-theme / auto」，首屏的 public/preload-theme.js 按它先写 data-theme
