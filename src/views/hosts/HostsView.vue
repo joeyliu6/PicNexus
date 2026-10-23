@@ -6,6 +6,7 @@ import { computed, inject, onActivated, onDeactivated, ref, watch, type Ref } fr
 import { useEventListener } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
 import PnIcon from '@/components/pn/PnIcon.vue';
+import { useKeepScroll } from '@/composables/useKeepScroll';
 import TransferButton from '@/shell/TransferButton.vue';
 import WindowControls from '@/shell/WindowControls.vue';
 import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
@@ -29,6 +30,7 @@ const detailId = computed(() => (hosts.pane.value === 'detail' ? hosts.selectedI
 
 // 右侧换了内容（另一个图床、目录、连接表单）就回到顶上：滚动容器是同一个，不然新内容停在上一个的滚动位置
 const scrollEl = ref<HTMLElement>();
+useKeepScroll(scrollEl);
 watch(() => [hosts.pane.value, detailId.value, hosts.draft.value?.hostId], () => { scrollEl.value?.scrollTo(0, 0); }, { flush: 'post' });
 
 function applyTarget(): void {

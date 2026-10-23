@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // 首页·快传（HomeScreen.dc.html，交接说明 8.1）：拖入 / 粘贴 / 选择文件 / 从 URL 下载 → 上传到勾选的图床 → 自动复制链接。
 // 上传本身由应用级的 useUploadController 负责（在任何页面拖入都能传），这里只负责展示与把操作交给它。
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
 import BgDecor from '@/components/biz/BgDecor.vue';
 import type { HistoryItem } from '@/config/types';
 import { useRecentUploads } from '@/composables/history/useRecentUploads';
 import { useCopyLink, applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
+import { useKeepScroll } from '@/composables/useKeepScroll';
 import { useUploadController } from '@/composables/upload/useUploadController';
 import { openUserExternalUrl } from '@/security/shellOpen';
 import TitleRow from '@/shell/TitleRow.vue';
@@ -25,6 +26,8 @@ import UrlDownloadDialog from './UrlDownloadDialog.vue';
 
 const upload = useUploadController();
 const recentUploads = useRecentUploads();
+const scroller = ref<HTMLElement | null>(null);
+useKeepScroll(scroller);
 const { recent, total } = recentUploads;
 const { copyLinks } = useCopyLink();
 
@@ -99,7 +102,7 @@ async function openInBrowser(item: HistoryItem) {
   <div class="home">
     <TitleRow />
     <BgDecor fade-from="52px" fade-to="104px" />
-    <div class="home__scroll">
+    <div ref="scroller" class="home__scroll">
       <div class="home__column">
         <HomeNoHost v-if="ready && noHost" @enable-jd="upload.enableNoConfigHost('jd')" @connect="goHosts" />
 

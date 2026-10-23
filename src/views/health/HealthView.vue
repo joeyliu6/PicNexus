@@ -9,6 +9,7 @@ import BgDecor from '@/components/biz/BgDecor.vue';
 import UploadCalendar from '@/components/biz/UploadCalendar.vue';
 import YearPills from '@/components/biz/YearPills.vue';
 import { useConfirmedHttpHosts } from '@/composables/image/useConfirmedHttpHosts';
+import { useKeepScroll } from '@/composables/useKeepScroll';
 import { useUploadController } from '@/composables/upload/useUploadController';
 import TitleRow from '@/shell/TitleRow.vue';
 import { formatCount, getDayKey } from '@/utils/formatters';
@@ -44,6 +45,8 @@ const { images, summary, dead, state } = health;
 /** 主栏宽度放不下整年 13px 的日历（约 990px）时整页切到窄版式（设计稿 K04 只画了 800×600） */
 const NARROW_BELOW = 990;
 const page = ref<HTMLElement | null>(null);
+const scroller = ref<HTMLElement | null>(null);
+useKeepScroll(scroller);
 const { width } = useElementSize(page);
 const narrow = computed(() => width.value > 0 && width.value < NARROW_BELOW);
 
@@ -226,6 +229,8 @@ function enter(): void {
     onlyUnfixable.value = false;
     onlyLimited.value = false;
     void router.replace({ path: route.path });
+    // 带着筛选条件进来是看另一份清单，从顶上开始，不回到上次看到的地方
+    scroller.value?.scrollTo({ top: 0 });
   }
   refreshNow();
   void health.ensureLoaded();
@@ -243,7 +248,7 @@ onDeactivated(() => {
   <div ref="page" class="health">
     <BgDecor v-if="state === 'never'" fade-from="52px" fade-to="104px" />
     <TitleRow title="链接健康" />
-    <div class="health__scroll">
+    <div ref="scroller" class="health__scroll">
       <div class="health__top">
         <HealthStatusBar
           :state="state"

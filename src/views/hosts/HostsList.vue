@@ -7,6 +7,7 @@ import HostIcon from '@/components/biz/HostIcon.vue';
 import PnContextMenu from '@/components/pn/PnContextMenu.vue';
 import PnContextMenuItem from '@/components/pn/PnContextMenuItem.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
+import { useKeepScroll } from '@/composables/useKeepScroll';
 import TransferButton from '@/shell/TransferButton.vue';
 import WindowControls from '@/shell/WindowControls.vue';
 import { measureFlip, playFlip } from '@/utils/flipReorder';
@@ -38,6 +39,7 @@ function releaseOrder(): void { frozenOrder.value = null; }
 
 // 重排时每行从原位置滑到新位置，看得出那个图床挪去哪了（decisions/motion.md）：换之前量，换完再放
 const rowsEl = ref<HTMLElement | null>(null);
+useKeepScroll(rowsEl);
 watch(() => shownRows.value.map((r) => r.id).join(','), () => {
   const before = measureFlip(rowsEl.value);
   void nextTick(() => playFlip(rowsEl.value, before));
