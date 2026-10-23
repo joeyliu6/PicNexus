@@ -24,6 +24,7 @@ import { listLayout, petalLabelOf, petalsOf, statusOf } from './galleryMeta';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
 import type { GalleryListApi } from './useGalleryList';
+import { isSecondPress } from './secondPress';
 import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
@@ -100,7 +101,7 @@ const sizeText = (row: GalleryListRow) => [row.width && row.height ? `${row.widt
   .join(' · ');
 
 function onRowClick(row: GalleryListRow, event: MouseEvent): void {
-  // 双击的第二下：交给 dblclick 开灯箱，不再切换详情 / 选择
+  // 双击的第二下：按下时已经开了灯箱（isSecondPress），不再切换详情 / 选择
   if (event.detail > 1) return;
   if (viewState.hasSelection.value || event.ctrlKey || event.metaKey || event.shiftKey) {
     viewState.handleSelectClick(row.id, event, list.loadedRows.value.map((r) => r.id));
@@ -199,7 +200,7 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
           :aria-selected="row ? selectedIds.has(row.id) : undefined"
           :style="{ transform: `translateY(${item.start}px)` }"
           @click="row && onRowClick(row, $event)"
-          @dblclick="row && emit('openLightbox', row, item.index)"
+          @mousedown="row && isSecondPress($event) && emit('openLightbox', row, item.index)"
           @focus="onRowFocus(item.index, row, $event)"
           @keydown="onRowKeydown(item.index, row, $event)"
         >

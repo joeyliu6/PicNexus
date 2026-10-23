@@ -11,6 +11,7 @@ import type { ImageMeta } from '@/types/image-meta';
 import { displayKind, displayTag, imageFormat, isAnimatedFormat, mayBeTransparent } from '@/utils/imageDisplay';
 import { badgeOf, petalLabelOf, petalsOf } from './galleryMeta';
 import { badgeFit, tagFits } from './tileMarkFit';
+import { isSecondPress } from './secondPress';
 
 const props = defineProps<{
   meta: ImageMeta;
@@ -142,10 +143,14 @@ function onLoad(event: Event): void {
 }
 
 function onClick(event: MouseEvent): void {
-  // 双击的第二下：交给 dblclick 开灯箱，不再切换详情 / 选择
+  // 双击的第二下：按下时已经开了灯箱（onMouseDown），不再切换详情 / 选择
   if (event.detail > 1) return;
   if (props.selecting || event.ctrlKey || event.metaKey || event.shiftKey) emit('toggleSelect', event);
   else emit('open');
+}
+
+function onMouseDown(event: MouseEvent): void {
+  if (isSecondPress(event)) emit('openLightbox');
 }
 </script>
 
@@ -163,7 +168,7 @@ function onClick(event: MouseEvent): void {
     :data-lightbox-id="meta.id"
     :style="{ transform: `translate3d(${x}px, ${y}px, 0)`, width: `${width}px`, height: `${height}px` }"
     @click="onClick"
-    @dblclick="emit('openLightbox')"
+    @mousedown="onMouseDown"
     @focus="onFocus"
     @mouseenter="hover = true"
     @mouseleave="hover = false"
