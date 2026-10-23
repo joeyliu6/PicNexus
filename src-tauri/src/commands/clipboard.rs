@@ -73,15 +73,44 @@ pub fn cleanup_clipboard_temp_file(path: String) -> Result<bool, AppError> {
 }
 
 /// 检查剪贴板是否包含图片
+///
+/// Windows 只问系统剪贴板里有没有图片格式，不把整张图读出来（4K 截图读一遍约 0.1 秒；
+/// 粘贴上传接着还要再读一遍，托盘每次剪贴板变化也要问一次）。其他系统没有便宜的问法，照旧读一遍
 #[tauri::command]
 pub fn clipboard_has_image() -> Result<bool, AppError> {
-    let mut clipboard =
-        Clipboard::new().map_err(|e| AppError::clipboard(format!("无法访问剪贴板: {}", e)))?;
+    #[cfg(windows)]
+    {
+        Ok(windows_clipboard_has_image())
+    }
 
-    match clipboard.get_image() {
-        Ok(_) => Ok(true),
-        Err(arboard::Error::ContentNotAvailable) => Ok(false),
-        Err(e) => Err(AppError::clipboard(format!("检查剪贴板失败: {}", e))),
+    #[cfg(not(windows))]
+    {
+        let mut clipboard = Clipboard::new()
+            .map_err(|e| AppError::clipboard(format!("无法访问剪贴板: {}", e)))?;
+
+        match clipboard.get_image() {
+            Ok(_) => Ok(true),
+            Err(arboard::Error::ContentNotAvailable) => Ok(false),
+            Err(e) => Err(AppError::clipboard(format!("检查剪贴板失败: {}", e))),
+        }
+    }
+}
+
+/// 与 arboard 在 Windows 上读图的判断一致：有「PNG」格式，或有 CF_DIBV5（系统会由 CF_DIB / CF_BITMAP 自动合成）
+#[cfg(windows)]
+fn windows_clipboard_has_image() -> bool {
+    use windows_sys::Win32::System::DataExchange::{
+        IsClipboardFormatAvailable, RegisterClipboardFormatW,
+    };
+    /// Win32_System_Ole 里的 CF_DIBV5，不为一个常量多开一个特性
+    const CF_DIBV5: u32 = 17;
+
+    let png_name: Vec<u16> = "PNG".encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: 两个函数都不需要先打开剪贴板；png_name 以 0 结尾，调用期间一直有效
+    unsafe {
+        let png = RegisterClipboardFormatW(png_name.as_ptr());
+        (png != 0 && IsClipboardFormatAvailable(png) != 0)
+            || IsClipboardFormatAvailable(CF_DIBV5) != 0
     }
 }
 
