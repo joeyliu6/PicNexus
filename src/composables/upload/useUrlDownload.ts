@@ -133,7 +133,7 @@ export function useUrlDownload() {
       // 结果处理
       const filePaths = filePathsByIndex.filter((path): path is string => Boolean(path));
       if (filePaths.length === 0) {
-        const reason = errors.length === 1 ? errors[0] : `${errors.length} 个地址都没有下载成功`;
+        const reason = errors.length === 1 ? errors[0] : `${errors.length} 个地址均未能下载`;
         toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(reason));
         return false;
       }

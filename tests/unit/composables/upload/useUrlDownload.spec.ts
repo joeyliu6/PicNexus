@@ -141,7 +141,7 @@ describe('useUrlDownload', () => {
 
     expect(toastShowConfigMock).toHaveBeenCalledWith('error', {
       summary: 'URL 下载失败',
-      detail: '2 个地址都没有下载成功，请检查地址后重试',
+      detail: '2 个地址均未能下载，请检查地址后重试',
     });
   });
 });

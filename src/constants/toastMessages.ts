@@ -159,7 +159,7 @@ export const TOAST_MESSAGES = {
       summary: '无效 URL',
       detail: '请输入有效的图片链接（以 http:// 或 https:// 开头）'
     } as StaticMessage,
-    /** 一个都没下载成功（对话框不关，改了地址可以再点） */
+    /** 一个都未能下载（对话框不关，改了地址可以再点） */
     downloadFailed: (reason: string): ToastMessageConfig => ({
       summary: 'URL 下载失败',
       detail: `${reason}，请检查地址后重试`
@@ -253,18 +253,18 @@ export const TOAST_MESSAGES = {
     } as StaticMessage,
     // 按图床移除链接（链接检测）：回执和确认框用同一个单位——整张图移除说张数，只剥掉链接说个数
     imagesRemoved: (count: number): ToastMessageConfig => ({
-      summary: `已从记录中移除 ${count} 张图片`
+      summary: `已从记录中移除 ${formatCount(count)} 张图片`
     }),
     linksRemoved: (count: number): ToastMessageConfig => ({
-      summary: `已移除 ${count} 个链接`
+      summary: `已移除 ${formatCount(count)} 个链接`
     }),
     removePartial: (failedImages: number): ToastMessageConfig => ({
-      summary: `${failedImages} 张图片没移除成功`,
-      detail: '其余的已移除；没移除的还留在列表里，可以再试一次'
+      summary: `${formatCount(failedImages)} 张图片未能移除`,
+      detail: '其余的已移除；未移除的仍在列表中，请重试'
     }),
     removeFailed: (error: string): ToastMessageConfig => ({
-      summary: '没移除成功',
-      detail: error
+      summary: '未能移除',
+      detail: `${error}，请稍后重试`
     })
   },
 

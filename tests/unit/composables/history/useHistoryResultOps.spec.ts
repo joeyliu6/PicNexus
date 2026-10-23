@@ -628,8 +628,8 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(emitHistoryUpdatedMock).not.toHaveBeenCalled();
     // 部分失败用 warn 报实际战果 + 可重试指引，而不是整体报错
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', {
-      summary: '1 张图片没移除成功',
-      detail: '其余的已移除；没移除的还留在列表里，可以再试一次',
+      summary: '1 张图片未能移除',
+      detail: '其余的已移除；未移除的仍在列表中，请重试',
     });
   });
 
@@ -656,7 +656,7 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(ctx.totalCount.value).toBe(5);
     expect(ctx.dataVersion.value).toBe(1);
     expect(refreshServiceCounts).not.toHaveBeenCalled();
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', { summary: '没移除成功', detail: 'db locked' });
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', { summary: '未能移除', detail: 'db locked，请稍后重试' });
   });
 
   // 与单条版对称：Tauri invoke 抛出的常是字符串而非 Error，detail 不能变成 "[object Object]"
