@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { historyRow, openApp } from '../redesign/helpers';
 import type { E2ESeed } from './mocks/state';
 
@@ -396,6 +396,52 @@ test('the lightbox opened from the list pages in list order', async ({ page }) =
   await page.keyboard.press('ArrowRight');
   await expect(chrome).toContainText('n-01.png');
   await expect(chrome).toContainText('2 / 30');
+});
+
+// 双击在第二次按下时就算（同 Windows）：第一下打开详情后列表、网格随之重排，第二下的按下与松开可能落在
+// 不同的元素上，WebKit 就既不发 click 也不发 dblclick，这一下双击就丢了
+async function secondPress(page: Page, down: Locator, up: Locator): Promise<void> {
+  const from = (await down.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down({ clickCount: 2 });
+  const to = (await up.boundingBox())!;
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2);
+  await page.mouse.up({ clickCount: 2 });
+}
+
+const NAMED = Array.from({ length: 30 }, (_, i) => historyRow(i + 1, `n-${String(29 - i).padStart(2, '0')}.png`, i * 60));
+
+test('a double-click on a list row opens the lightbox even if the layout shifts under the second press', async ({ page }) => {
+  await openApp(page, { historyRows: NAMED });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  await page.locator('.gallery').getByLabel('列表', { exact: true }).click();
+  const firstRow = page.locator('.list__row').first();
+  await firstRow.locator('.list__name').click();
+  await expect(page.locator('.detail')).toBeVisible();
+
+  await secondPress(page, firstRow.locator('.list__name'), page.locator('.list__row').nth(1).locator('.list__thumb'));
+  await expect(page.locator('.lightbox-chrome')).toContainText(await firstRow.getAttribute('aria-label') ?? '');
+});
+
+test('a double-click on a tile opens the lightbox even if the layout shifts under the second press', async ({ page }) => {
+  await openApp(page, { historyRows: NAMED });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const tile = page.locator('.gallery .tile[aria-label="n-29.png"]');
+  await tile.click();
+  await expect(page.locator('.detail')).toBeVisible();
+
+  await secondPress(page, tile, page.locator('.gallery .tile[aria-label="n-28.png"]'));
+  await expect(page.locator('.lightbox-chrome')).toContainText('n-29.png');
+});
+
+test('double-clicking a button on a tile does not open the lightbox', async ({ page }) => {
+  await openApp(page, { historyRows: NAMED });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const tile = page.locator('.gallery .tile[aria-label="n-29.png"]');
+  await tile.hover();
+  await tile.locator('.tile__star').dblclick();
+  await page.waitForTimeout(300);
+  await expect(page.locator('.lightbox-chrome')).toHaveCount(0);
 });
 
 // 回归：动图停在第一帧时原图只是隐藏、仍占着位置，画第一帧的 canvas 被挤到格子下面看不见，GIF 格子一片空白
