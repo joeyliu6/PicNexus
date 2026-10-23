@@ -31,7 +31,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'src-tauri', 'target', 'debug', 'data');
@@ -71,12 +71,12 @@ function extractDdlStatements() {
 
 /**
  * 按 DataTransformer.deriveResultColumns 的口径派生三个存储列。
- * 判据是 isUsableMirror：success 且拿得到 url。口径与那边不一致会让
- * 批量迁移的 SQL 预筛选放进迁不动的记录。
+ * 判据是 isUsableMirror：status 为 success 且拿得到 result.url。口径与那边不一致会让
+ * 批量迁移的 SQL 预筛选放进迁不动的记录（tests/unit/scripts/seedTauriE2ePortable.spec.ts 拿应用的函数核对）。
  */
 function deriveResultColumns(results) {
   const successful = results.filter(
-    (r) => r != null && typeof r === 'object' && r.success === true && Boolean(r.url),
+    (r) => r != null && typeof r === 'object' && r.status === 'success' && Boolean(r.result?.url),
   );
   return {
     results: JSON.stringify(results),
@@ -85,13 +85,13 @@ function deriveResultColumns(results) {
   };
 }
 
-/** 6 条记录：id 固定为 e2e-001..006，时间戳递减以保证列表顺序稳定 */
-function buildRows() {
+/** 6 条记录：id 固定为 e2e-001..006，时间戳递减以保证列表顺序稳定；上传结果是应用写库的形状 */
+export function buildRows() {
   const baseTimestamp = 1_724_300_000_000; // 2024-08-22 前后的固定值，绝不用 Date.now()
   return Array.from({ length: 6 }, (_, index) => {
     const seq = String(index + 1).padStart(3, '0');
     const url = `https://example.invalid/e2e/${seq}.png`;
-    const results = [{ serviceId: 'smms', success: true, url }];
+    const results = [{ serviceId: 'smms', status: 'success', result: { serviceId: 'smms', fileKey: `e2e/${seq}.png`, url } }];
     const derived = deriveResultColumns(results);
 
     return {
@@ -187,8 +187,11 @@ function seed() {
   console.log('接着启动开发版走查；走查完务必：node scripts/seed-tauri-e2e-portable.mjs --clean');
 }
 
-if (process.argv.includes('--clean')) {
-  clean();
-} else {
-  seed();
+// 被测试 import 时不动磁盘，只有直接运行才建库
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  if (process.argv.includes('--clean')) {
+    clean();
+  } else {
+    seed();
+  }
 }

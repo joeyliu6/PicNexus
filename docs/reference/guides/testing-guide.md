@@ -138,7 +138,7 @@ portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥�
 
 视觉测试用的是夹具数据；改完维护页这类「数据 → 判断 → 界面」整条链路，还要在真应用里走一遍。做法：
 
-1. `node scripts/seed-tauri-e2e-portable.mjs` 建好隔离库，再用 Python 把 `history_items` 换成自己造的记录。`results` 每项写成 `{ serviceId, status: 'success', result: { serviceId, fileKey, url } }`（应用认这个形状，种子脚本里的 6 条 `e2e-*` 不是）。
+1. `node scripts/seed-tauri-e2e-portable.mjs` 建好隔离库（6 条 `e2e-*` 记录，链接指向不存在的 `example.invalid`），要测链接时再用 Python 把 `history_items` 换成自己造的记录。`results` 每项写成 `{ serviceId, status: 'success', result: { serviceId, fileKey, url } }`（应用认这个形状，种子脚本也照这个写）。
 2. 本机起一个假图床（Python `ThreadingHTTPServer`），按路径回 200 真图片（大于 1 KB、`image/png`）/ 404 / 502 / 403 / 超过 10 秒 / 302，链接写 `http://127.0.0.1:端口/...`：探测放行回环地址。
 3. `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222 npm run tauri dev`，用 Playwright `chromium.connectOverCDP('http://127.0.0.1:9222')` 连上主窗口点按钮、截图。
 4. 收尾：关掉 `target\debug\picnexus.exe` 和 Vite 进程，`--clean` 删隔离库。

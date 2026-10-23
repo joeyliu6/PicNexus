@@ -196,17 +196,6 @@
 
 **当前处置**：待处理
 
-### [ ] 验收种子脚本写的上传结果形状和应用不一致
-
-- **来源**：2026-10-14 维护页真机走查
-- **症状**：`scripts/seed-tauri-e2e-portable.mjs` 的 6 条 `e2e-*` 记录把 `results` 写成 `{ serviceId, success: true, url }`；
-  应用认的是 `{ serviceId, status: 'success', result: { url } }`（`isUsableMirror`）。脚本注释说派生列「按 isUsableMirror 的口径」，
-  实际口径不同：应用里这些记录没有可用链接，链接检测、补充备份都看不到它们
-- **要做的**：改成应用的形状（依赖它的旧历史页验收用例已删，脚本只给真机走查用）
-- **优先级**：低
-
-**当前处置**：待处理
-
 ---
 
 ## 已知取舍
@@ -328,6 +317,10 @@
 ## 已完成
 
 更早完成的条目原样搬到了 [archive/TODO-done.md](./archive/TODO-done.md)，按标题搜。
+
+### [x] 验收种子脚本写的上传结果形状和应用不一致
+
+2026-10-23 种子脚本改写成应用认的形状（单测拿应用的函数核对），依赖它的旧历史页验收用例已删，脚本只给真机走查用，见 [testing-guide.md](./reference/guides/testing-guide.md)「portable 隔离库」。
 
 ### [x] 输入框的右键菜单里有 Edge 的「Import passwords」
 
