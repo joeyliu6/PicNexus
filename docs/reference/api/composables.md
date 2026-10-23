@@ -33,6 +33,7 @@
 | `backupSyncUtils.ts`（模块） | WebDAV 建连与远程路径推导（解密密文密码就在这里）；导出 `getWebDAVClientAndPath` / `writeSyncLog` / `extractErrorCode` / `isWebDAVNotFoundError` | `src/composables/backup-sync/backupSyncUtils.ts` |
 | useClipboardImage | 剪贴板图片处理 | `src/composables/upload/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
+| useKeepScroll | 一直开着的页面（KeepAlive）切走再回来停在原处：滚动时记下位置，这一页重新显示时放回去（换了一个元素就作废）。在页面自己的 `onActivated` 之前调用，切回来要去别处时页面自己再滚。图库不用，它按看到的那一张恢复 | `src/composables/useKeepScroll.ts` |
 | useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
 | useVirtualTimeline | 图库网格的虚拟滚动（按天分组的等高行布局）；格子按算出布局的那份分组画（`layoutGroups`），换一份结果用 `showFromTop`（新布局与回到顶部同一帧） | `src/composables/timeline/useVirtualTimeline.ts` |
 | useTimelineDayPagination | 图库网格按天读记录：按天统计 + 第一屏那几天（`firstScreenDays`）读好再一起换上，换筛选时读好之前 `isSwitching`、分组仍是旧的；之后按可见天补读；记录有变化（`reloadAll`）时变了的已读天与第一屏新出现的天读好再换上 | `src/composables/timeline/useTimelineDayPagination.ts` |

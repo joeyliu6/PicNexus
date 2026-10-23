@@ -11,6 +11,7 @@ import TransferButton from '@/shell/TransferButton.vue';
 import WindowControls from '@/shell/WindowControls.vue';
 import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
 import { useAutoUpdate } from '@/composables/useAutoUpdate';
+import { useKeepScroll } from '@/composables/useKeepScroll';
 import { createLogger } from '@/utils/logger';
 import AboutGroup from './AboutGroup.vue';
 import BackupGroup from './BackupGroup.vue';
@@ -41,6 +42,7 @@ const { needsReload } = useCloudSync();
 const groupId = ref<SettingsGroupId>('general');
 const group = computed(() => SETTINGS_GROUPS.find((g) => g.id === groupId.value)!);
 const scroller = ref<HTMLElement>();
+useKeepScroll(scroller);
 const active = ref(false);
 
 let highlighted: Element | null = null;
