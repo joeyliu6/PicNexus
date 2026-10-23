@@ -4,6 +4,9 @@ import PnIcon from './PnIcon.vue';
 import PnTooltip from './PnTooltip.vue';
 import type { IconName } from './icons';
 
+// 根节点是气泡（不渲染元素），@click、class 这类透传属性要手动交给按钮，否则会被丢掉
+defineOptions({ inheritAttrs: false });
+
 withDefaults(defineProps<{
   icon: IconName;
   label: string;
@@ -25,7 +28,7 @@ withDefaults(defineProps<{
 
 <template>
   <PnTooltip :text="label" :disabled="noTooltip || disabled">
-    <button type="button" class="pn-icon-button" :class="`pn-icon-button--${tone}`" :aria-label="label" :disabled="disabled">
+    <button v-bind="$attrs" type="button" class="pn-icon-button" :class="`pn-icon-button--${tone}`" :aria-label="label" :disabled="disabled">
       <PnIcon :name="icon" :size="iconSize" :stroke="stroke" />
     </button>
   </PnTooltip>
