@@ -146,16 +146,23 @@ test('with reduced motion dialogs and popovers fade in instead of popping up', a
     return `${style.animationName} ${style.animationDuration}`;
   });
 
+  // 菜单、弹出层定好位置之前 Reka 把动画写成 none（免得朝错的方向播），所以轮询到动画出现为止
   await page.locator('.home-options__trigger').filter({ hasText: '上传到' }).click();
-  await expect(page.locator('.pn-popover')).toBeVisible();
-  expect(await animation('.pn-popover')).toBe('pn-popover-fade 0.2s');
+  await expect.poll(() => animation('.pn-popover')).toBe('pn-layer-fade-in 0.2s');
   await page.keyboard.press('Escape');
 
   await page.locator('.drop-bar__more').click();
+  await expect.poll(() => animation('.pn-menu')).toBe('pn-layer-fade-in 0.2s');
   await page.locator('.pn-menu').getByText('从 URL 下载…').click();
   await expect(page.locator('.pn-dialog')).toBeVisible();
   expect(await animation('.pn-dialog')).toBe('pn-dialog-fade 0.25s');
   expect(await animation('.pn-dialog-overlay')).toBe('pn-dialog-fade 0.25s');
+
+  // 关的时候也只淡出，不缩小
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.pn-dialog')).toHaveCount(0);
+  const closing = (await motionLog(page)).filter((entry) => / pn-dialog(-overlay)?$/.test(entry) && entry.includes('-out'));
+  expect(closing.sort()).toEqual(['animation pn-fade-out pn-dialog-overlay', 'animation pn-fade-out pn-layer pn-dialog']);
 });
 
 test('without reduced motion dialogs rise into place', async ({ page }) => {
@@ -165,4 +172,53 @@ test('without reduced motion dialogs rise into place', async ({ page }) => {
   await expect(page.locator('.pn-dialog')).toBeVisible();
   expect(await page.locator('.pn-dialog').evaluate((el) => `${getComputedStyle(el).animationName} ${getComputedStyle(el).animationDuration}`))
     .toBe('pn-dialog-in 0.25s');
+});
+
+// 交接说明 5.3：菜单、下拉、弹出层、气泡出现用「标准 200ms」，退场 ease-out、快 30%（弹窗是舒展 250ms 的 70%）；
+// 关的时候先播完淡出才移除，不是一下消失
+test('menus slide in, and menus and dialogs fade out before they go', async ({ page }) => {
+  await openHome(page, 'no-preference', UPLOAD);
+  // 菜单定好位置之前 Reka 把动画写成 none：等进场动画真的开始了再关，不然进场根本来不及播
+  const started = async (entry: string, count: number) => {
+    await expect.poll(async () => (await motionLog(page)).filter((e) => e === entry).length).toBe(count);
+  };
+  await page.locator('.drop-bar__more').click();
+  await started('animation pn-layer-in pn-layer pn-menu', 1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.pn-menu')).toHaveCount(0);
+
+  await page.locator('.drop-bar__more').click();
+  await started('animation pn-layer-in pn-layer pn-menu', 2);
+  await page.locator('.pn-menu').getByText('从 URL 下载…').click();
+  await started('animation pn-dialog-in pn-layer pn-dialog', 1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.pn-dialog')).toHaveCount(0);
+
+  const log = await motionLog(page);
+  expect(log.filter((entry) => entry.endsWith(' pn-menu'))).toEqual([
+    'animation pn-layer-in pn-layer pn-menu',
+    'animation pn-fade-out pn-layer pn-menu',
+    'animation pn-layer-in pn-layer pn-menu',
+    'animation pn-fade-out pn-layer pn-menu',
+  ]);
+  expect(log.filter((entry) => / pn-dialog(-overlay)?$/.test(entry)).sort()).toEqual([
+    'animation pn-dialog-fade pn-dialog-overlay',
+    'animation pn-dialog-in pn-layer pn-dialog',
+    'animation pn-dialog-out pn-layer pn-dialog',
+    'animation pn-fade-out pn-dialog-overlay',
+  ]);
+});
+
+// 通知叠放（T05-Toasts）：新的一条加在最下面时，上面几条滑上去，不是瞬移
+test('older notifications slide up when a new one arrives', async ({ page }) => {
+  await openHome(page, 'no-preference');
+  const push = (title: string) => page.evaluate(async (text) => {
+    const storePath = '/src/components/pn/toastStore.ts';
+    const store: typeof import('../../src/components/pn/toastStore') = await import(/* @vite-ignore */ storePath);
+    store.pushToast({ kind: 'success', title: text, life: 60_000 });
+  }, title);
+  await push('第一条');
+  await expect(page.locator('.pn-toast')).toHaveCount(1);
+  await push('第二条');
+  await expect.poll(() => motionLog(page)).toEqual(expect.arrayContaining([expect.stringMatching(/^transition transform pn-toast .*pn-toast-move/)]));
 });

@@ -225,6 +225,9 @@
   /* 骨架 / 空状态 / 快捷键标签 */
   --pn-size-skeleton-text: 12px;
   --pn-size-skeleton-line: 10px;
+  /* 骨架明暗起伏：1.4 秒一轮，暗时 55% 不透明（LoadingRules.dc.html lrShimmer） */
+  --pn-dur-skeleton: 1.4s;
+  --pn-opacity-skeleton-dim: 0.55;
   --pn-space-empty-bottom: 80px;
   /* 按钮在说明下方 8 + 10（G09–G11） */
   --pn-space-empty-action-top: 10px;

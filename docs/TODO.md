@@ -37,7 +37,7 @@
 ### [ ] 维护者日常使用验收（界面大重构）
 
 - **来源**：2026-10-19 维护者定：验收 = 装上 `feat/redesign` 的正式版包当日常工具用几天，用着没问题即通过；不逐条做走查清单
-- **已定**：①–㊱ 全部定下并落实（做法在 [decisions/](./design/redesign/decisions/) 各页正文；[pending-decisions.md](./design/redesign/pending-decisions.md) 第二节 6 项排到发版之后）；decisions 下「设计没画、开发时补的」8 页按现做法通过，维护者用着不顺手再改
+- **已定**：①–㊱ 全部定下并落实（做法在 [decisions/](./design/redesign/decisions/) 各页正文；[pending-decisions.md](./design/redesign/pending-decisions.md) 第二节 4 项排到发版之后）；decisions 下「设计没画、开发时补的」8 页按现做法通过，维护者用着不顺手再改
 - **怎么验**：照平时截图、拖图、上传、复制链接，平时用到的功能（如 Cookie 登录、坚果云同步）顺手用一次；没用到的功能与 macOS / Linux 不要求。下面 7 条「在真应用里走查一遍」的「只能维护者做的」只作参考：维护者报问题时，先对照 AI 没在真机验证过的地方
 - **安装包**：本机打，`npx tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'`。不生成更新签名（只有发到 GitHub 的更新包才要）；版本号仍是 1.1.2，不比 GitHub 最新版新也不旧，不会被自动更新换回旧版
 - **装前备份**：`C:\Users\Jiawei\Documents\PicNexus-backup-2026-10-19`，`Roaming` / `Local` 原样对应 `%APPDATA%` / `%LOCALAPPDATA%` 下的 `us.picnex.app`（不含浏览器缓存）。加密配置的密钥在 Windows 凭据管理器里没有复制，同一台电脑、同一个账户还原才能解开
@@ -58,10 +58,10 @@
 
 **当前处置**：等维护者验收
 
-### [ ] 设计画了、还没做的 6 项（新界面发版之后）
+### [ ] 设计画了、还没做的 4 项（新界面发版之后）
 
 - **来源**：2026-10-19 阶段 11 收尾审查发现；维护者定为发版之后再做
-- **清单**：见 [pending-decisions.md](./design/redesign/pending-decisions.md) 第二节（侧栏悬停说明、上传中悬停花瓣写各图床进度、文档修复弹窗开着时拖入 .md、复制菜单数字键与「复制全部图床链接」、骨架明暗起伏、菜单与气泡出现动画）
+- **清单**：见 [pending-decisions.md](./design/redesign/pending-decisions.md) 第二节（侧栏悬停说明、上传中悬停花瓣写各图床进度、文档修复弹窗开着时拖入 .md、复制菜单数字键与「复制全部图床链接」）
 - **要做的**：新界面发版后排成一批；「复制菜单」是新功能，先单独出方案
 - **优先级**：中
 

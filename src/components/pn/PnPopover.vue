@@ -55,19 +55,5 @@ withDefaults(defineProps<{
   box-shadow: var(--pn-e3);
 }
 
-.pn-popover[data-state='open'] { animation: pn-popover-in var(--pn-dur-standard) var(--pn-ease-in); }
-
-@keyframes pn-popover-in {
-  from { opacity: 0; transform: translateY(calc(-1 * var(--pn-space-4))); }
-  to { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pn-popover[data-state='open'] { animation: pn-popover-fade var(--pn-dur-fade-standard) var(--pn-ease-in); }
-}
-
-@keyframes pn-popover-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* 出现 / 消失的动画与菜单、气泡共用，在 pn-base.css */
 </style>

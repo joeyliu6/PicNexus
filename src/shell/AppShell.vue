@@ -83,7 +83,8 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
 </script>
 
 <template>
-  <TooltipProvider :delay-duration="300">
+  <!-- 气泡悬停 500ms 后出现（Controls.dc.html）；从一个气泡移到相邻的按钮时 Reka 默认立即切换 -->
+  <TooltipProvider :delay-duration="500">
     <div class="app-shell">
       <NavRail
         v-if="collapsed"

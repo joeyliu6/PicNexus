@@ -5,11 +5,18 @@ import { pauseToasts, resumeToasts, runToastAction, useToastItems, type ToastKin
 const toasts = useToastItems();
 
 const GLYPH: Record<ToastKind, string> = { success: '✓', error: '✕', warn: '!', info: 'i' };
+
+// 离场的那条先钉在原位、移出排版（.pn-toast-leave-active 绝对定位），其余几条才能平滑挪位，不是等它淡完再一下跳过去
+function pinLeaving(el: Element): void {
+  const toast = el as HTMLElement;
+  toast.style.top = `${toast.offsetTop}px`;
+  toast.style.left = `${toast.offsetLeft}px`;
+}
 </script>
 
 <template>
   <div class="pn-layer pn-toaster" aria-live="polite" @mouseenter="pauseToasts" @mouseleave="resumeToasts">
-    <TransitionGroup name="pn-toast">
+    <TransitionGroup name="pn-toast" @before-leave="pinLeaving">
       <div
         v-for="(toast, index) in toasts"
         :key="toast.id"
@@ -32,13 +39,17 @@ const GLYPH: Record<ToastKind, string> = { success: '✓', error: '✕', warn: '
 </template>
 
 <style scoped>
+/* 容器竖向铺满、通知贴底排：叠放变化时容器本身不动，每条相对容器的位置才会变，
+   TransitionGroup 按 offsetTop 量得出挪了多少，才放得出挪位动画。容器不接鼠标，只有通知本身接 */
 .pn-toaster {
   position: fixed;
+  top: 0;
   right: var(--pn-space-toast-edge);
   bottom: var(--pn-space-toast-edge);
   z-index: var(--pn-z-toast);
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: var(--pn-space-8);
   pointer-events: none;
 }
@@ -135,7 +146,14 @@ const GLYPH: Record<ToastKind, string> = { success: '✓', error: '✕', warn: '
 }
 
 .pn-toast-enter-active { transition: opacity var(--pn-dur-standard) var(--pn-ease-in), transform var(--pn-dur-standard) var(--pn-ease-in); }
-.pn-toast-leave-active { transition: opacity var(--pn-dur-fast) var(--pn-ease-out); }
+
+/* 新通知加在最下面、旧的离场时，其余几条滑到新位置（时长同进场） */
+.pn-toast-move { transition: transform var(--pn-dur-standard) var(--pn-ease-in); }
+
+.pn-toast-leave-active {
+  position: absolute;
+  transition: opacity var(--pn-dur-fast) var(--pn-ease-out);
+}
 .pn-toast-enter-from { opacity: 0; transform: translateY(var(--pn-space-8)); }
 .pn-toast-leave-to { opacity: 0; }
 

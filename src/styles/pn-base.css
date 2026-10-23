@@ -121,9 +121,13 @@ button { font-family: inherit; }
 
 .pn-dialog-overlay[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
 
-/* 「减少动态效果」时遮罩照样淡入（交接说明 5.3：位移改淡入，淡入不取消） */
+/* 关闭时淡出：退场用 ease-out、比进场快 30%（交接说明 5.3）；Reka 等这段动画播完才移除元素 */
+.pn-dialog-overlay[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
+/* 「减少动态效果」时遮罩照样淡入淡出（交接说明 5.3：位移改淡入，淡入不取消） */
 @media (prefers-reduced-motion: reduce) {
   .pn-dialog-overlay[data-state='open'] { animation-duration: var(--pn-dur-fade-expressive); }
+  .pn-dialog-overlay[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-expressive) * 0.7) var(--pn-ease-out) forwards; }
 }
 
 @keyframes pn-dialog-in {
@@ -131,9 +135,71 @@ button { font-family: inherit; }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
+@keyframes pn-dialog-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+}
+
 @keyframes pn-dialog-fade {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes pn-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/*
+ * 浮层（菜单、下拉、弹出层、气泡）出现 / 消失：交接说明 5.3「标准 200ms（菜单出现）」，
+ * 进场朝展开方向挪 4px 并淡入，退场只淡出、ease-out、快 30%。方向取 Reka 写在浮层上的 data-side。
+ * 「减少动态效果」时不挪，只淡入淡出，时长用不归零的 --pn-dur-fade-standard。
+ */
+.pn-layer[data-side='bottom'] { --pn-layer-shift-y: calc(-1 * var(--pn-space-4)); }
+.pn-layer[data-side='top'] { --pn-layer-shift-y: var(--pn-space-4); }
+.pn-layer[data-side='right'] { --pn-layer-shift-x: calc(-1 * var(--pn-space-4)); }
+.pn-layer[data-side='left'] { --pn-layer-shift-x: var(--pn-space-4); }
+
+@keyframes pn-layer-in {
+  from { opacity: 0; transform: translate(var(--pn-layer-shift-x, 0), var(--pn-layer-shift-y, 0)); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pn-layer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pn-menu[data-state='open'],
+.pn-select-menu[data-state='open'],
+.pn-popover[data-state='open'],
+.pn-tooltip[data-state='delayed-open'] { animation: pn-layer-in var(--pn-dur-standard) var(--pn-ease-in); }
+
+.pn-menu[data-state='closed'],
+.pn-select-menu[data-state='closed'],
+.pn-popover[data-state='closed'],
+.pn-tooltip[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pn-menu[data-state='open'],
+  .pn-select-menu[data-state='open'],
+  .pn-popover[data-state='open'],
+  .pn-tooltip[data-state='delayed-open'] { animation: pn-layer-fade-in var(--pn-dur-fade-standard) var(--pn-ease-in); }
+
+  .pn-menu[data-state='closed'],
+  .pn-select-menu[data-state='closed'],
+  .pn-popover[data-state='closed'],
+  .pn-tooltip[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-standard) * 0.7) var(--pn-ease-out) forwards; }
+}
+
+/* 骨架（冷启动超过 300ms 才出现）：1.4 秒明暗起伏，「减少动态效果」时停住（LoadingRules.dc.html） */
+@keyframes pn-skeleton-pulse {
+  0%, 100% { opacity: var(--pn-opacity-skeleton-dim); }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pn-skeleton-pulse { to { opacity: 1; } }
 }
 
 /* 转圈（加载中）：全应用共用一份；「减少动态效果」时停住（LoadingRules.dc.html） */

@@ -203,11 +203,19 @@ function hintOf(entry: CommandEntry): string {
   transform: translateX(-50%);
 }
 
-.command-palette[data-state='open'] { animation: pn-palette-fade var(--pn-dur-standard) var(--pn-ease-in); }
+/* 遮罩与面板一起淡入（标准 200ms），关时一起淡出、ease-out、快 30%；「减少动态效果」时照样淡入淡出（关键帧在 pn-base.css） */
+.command-palette__overlay[data-state='open'],
+.command-palette[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-standard) var(--pn-ease-in); }
 
-@keyframes pn-palette-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.command-palette__overlay[data-state='closed'],
+.command-palette[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .command-palette__overlay[data-state='open'],
+  .command-palette[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-fade-standard) var(--pn-ease-in); }
+
+  .command-palette__overlay[data-state='closed'],
+  .command-palette[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-standard) * 0.7) var(--pn-ease-out) forwards; }
 }
 
 .command-palette__sr {

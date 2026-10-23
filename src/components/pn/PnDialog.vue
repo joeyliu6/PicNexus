@@ -105,8 +105,12 @@ function onDismissAttempt(event: Event) {
 
 .pn-dialog[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
 
+/* 关闭：略缩小并淡出，ease-out、比进场快 30%（交接说明 5.3） */
+.pn-dialog[data-state='closed'] { animation: pn-dialog-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
 @media (prefers-reduced-motion: reduce) {
   .pn-dialog[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-fade-expressive) var(--pn-ease-in); }
+  .pn-dialog[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-expressive) * 0.7) var(--pn-ease-out) forwards; }
 }
 
 .pn-dialog__head {

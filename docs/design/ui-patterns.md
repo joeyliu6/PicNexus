@@ -35,6 +35,12 @@
 - 浮层根元素加 `pn-layer`（取外壳的字体、字号、颜色与焦点环），样式用不带 `scoped` 的唯一类名写在组件的 `<style>` 里或 `pn-menu.css`。
 - `:deep()` 救不了：浮层根节点不带 `data-v` 属性；全局 `.css` 里的 `:deep()` 会被浏览器整条丢弃（`scripts/check-css-deep.mjs` 拦）。
 - 菜单、弹出层离窗口边至少 8px。
+- 进出场动画共用 `pn-base.css`：`.pn-menu` / `.pn-select-menu` / `.pn-popover` / `.pn-tooltip` 按 `data-state` 淡入（朝 `data-side` 挪 4px）、淡出，组件里不再各写一份；自写的浮层照同一规格补（见 [tokens.md](./tokens.md)「动效」）。
+
+## 悬停、按下与过渡
+
+- 每个可点的元素都要有悬停色和按下色（点了就选中的行、导航项只要悬停色），颜色按长相取 [tokens.md](./tokens.md)「可点元素的悬停与按下」那一对令牌；悬停变色写 `transition: background-color var(--pn-dur-instant) var(--pn-ease-in)`。
+- 选中 / 未选、开关这类状态切换渐变 `--pn-dur-fast`；切换页面不放过渡（LoadingRules ①）。
 
 ## 空状态与加载
 

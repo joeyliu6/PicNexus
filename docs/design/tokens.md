@@ -8,7 +8,7 @@
 |---|---|---|
 | `src/styles/tokens.css` | 设计稿导出的令牌，原样放入：颜色（浅 / 深）、e1–e4 阴影、圆角、间距刻度、四档动效时长与缓动、字体 | 不手改；设计包更新时整份替换 |
 | `src/styles/tokens-extra.css` | 设计源文件用到、导出没收录的值：字号 / 字重 / 行高、控件尺寸、各页的具名尺寸与颜色、层级、Logo 动效 | 按页面分段，每段一行注释写出处（画板编号或 `*.dc.html`） |
-| `src/styles/pn-base.css` | 全局基础样式：字体文件、`box-sizing`、页面底色与字体、滚动条、焦点环、弹窗遮罩、共用的转圈动画 | 只引用令牌 |
+| `src/styles/pn-base.css` | 全局基础样式：字体文件、`box-sizing`、页面底色与字体、滚动条、焦点环、弹窗遮罩、浮层进出场、骨架起伏、共用的转圈动画 | 只引用令牌 |
 | `src/styles/pn-menu.css` | 菜单、下拉的共用样式（内容传送到 body，组件的 scoped 样式够不到） | 只引用令牌 |
 
 - 主题：根元素 `data-theme="light|dark"`（`ThemeManager` 写，跟随系统或 设置 › 通用）。令牌按 `[data-theme]` 取浅 / 深两套；不随主题变的写在 `:root`。引用了随主题变的令牌的（渐变、组合阴影，如 `--pn-checker`）也要在浅、深两段各写一次：写在 `:root` 会在根元素上按根的主题算死，`data-theme="dark"` 的区域里拿到的仍是浅色。
@@ -132,14 +132,17 @@
 | `--pn-dur-standard` | 200ms | 菜单出现 |
 | `--pn-dur-expressive` | 250ms | 对话框、抽屉、灯箱 |
 | `--pn-dur-spin` | 900ms | 转圈一周 |
+| `--pn-dur-skeleton` | 1.4s | 骨架明暗起伏一轮（`pn-skeleton-pulse`，暗时 `--pn-opacity-skeleton-dim` 55%） |
 | `--pn-dur-fade-standard` / `--pn-dur-fade-expressive` | 200 / 250ms | 「减少动态效果」时弹出层、通知 / 弹窗的淡入（不归零） |
 | `--pn-dur-petal-light` / `--pn-dur-bloom` / `--pn-dur-receive` | 300 / 600 / 600ms | 花瓣逐片点亮、完成绽放、拖入感应（[decisions/motion.md](./redesign/decisions/motion.md)） |
 
-缓动：进场 `--pn-ease-in`（`cubic-bezier(.2,0,0,1)`），退场 `--pn-ease-out`（`(.4,0,1,1)`）且快 30%。灯箱开关时长要传给 PhotoSwipe 的 JS 选项，数值写在 `usePhotoSwipeBridge.ts`，对齐这里的令牌。
+缓动：进场 `--pn-ease-in`（`cubic-bezier(.2,0,0,1)`），退场 `--pn-ease-out`（`(.4,0,1,1)`）且快 30%（写成 `calc(var(--pn-dur-…) * 0.7)`）。灯箱开关时长要传给 PhotoSwipe 的 JS 选项，数值写在 `usePhotoSwipeBridge.ts`，对齐这里的令牌。
+
+怎么用：悬停只变颜色，`--pn-dur-instant`；开关、选中 / 未选这类状态切换 `--pn-dur-fast`；菜单、下拉、弹出层、气泡进出场 `--pn-dur-standard`；对话框、抽屉 `--pn-dur-expressive`。浮层的进出场写在 `pn-base.css`，按 Reka 写在浮层上的 `data-state` 生效：进场 `pn-layer-in`（朝 `data-side` 的方向挪 4px 并淡入），退场 `pn-fade-out`（只淡出）；对话框进场 `pn-dialog-in`、退场 `pn-dialog-out`。Reka 等退场动画播完才移除元素。
 
 ### 减少动态效果
 
-系统开着「减少动态效果」时：`--pn-dur-fast / standard / expressive` 与三个花瓣时长归零；位移、缩放类的进场改用 `pn-dialog-fade` 这类纯淡入（各组件的 `@media (prefers-reduced-motion: reduce)`），淡入时长用不归零的 `--pn-dur-fade-*`（弹窗与遮罩 250ms，弹出层、通知 200ms），不是直接出现；共用的转圈 `pn-spin` 停住；`--pn-dur-instant` 不归零（只用于悬停变色）。JS 里写死的时长走 `src/utils/reducedMotion.ts` 的 `motionDuration()`。
+系统开着「减少动态效果」时：`--pn-dur-fast / standard / expressive` 与三个花瓣时长归零；位移、缩放类的进场改用 `pn-dialog-fade` / `pn-layer-fade-in` 这类纯淡入（各组件的 `@media (prefers-reduced-motion: reduce)`），淡入淡出时长用不归零的 `--pn-dur-fade-*`（弹窗与遮罩 250ms，弹出层、菜单、气泡、通知 200ms；淡出取它们的 70%），不是直接出现或消失；共用的转圈 `pn-spin` 与骨架起伏 `pn-skeleton-pulse` 停住；`--pn-dur-instant` 不归零（只用于悬停变色）。JS 里写死的时长走 `src/utils/reducedMotion.ts` 的 `motionDuration()`。
 
 ## 首屏副本（唯一允许抄写色值的地方）
 

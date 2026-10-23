@@ -18,6 +18,9 @@ withDefaults(defineProps<{
   flex: none;
   height: var(--pn-size-skeleton-text);
   background: var(--pn-skeleton);
+
+  /* 明暗起伏（LoadingRules.dc.html）；「减少动态效果」时 pn-base.css 让它停住 */
+  animation: pn-skeleton-pulse var(--pn-dur-skeleton) ease-in-out infinite;
 }
 
 .pn-skeleton--text { border-radius: var(--pn-radius-xs); }

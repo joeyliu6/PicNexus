@@ -65,98 +65,100 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
 </script>
 
 <template>
-  <aside v-if="transfer.open.value" ref="panel" class="transfer-center" aria-label="传输中心">
-    <div class="transfer-center__head">
-      <span class="transfer-center__title">传输</span>
-      <div class="transfer-center__spacer" />
-      <button type="button" class="transfer-center__close" aria-label="关闭" @click="transfer.close()">
-        <PnIcon name="close" :size="12" :stroke="2" />
-      </button>
-    </div>
-
-    <div v-if="transfer.activeUploads.value.length" class="transfer-center__group">
-      <div class="transfer-center__group-head">
-        <span class="transfer-center__group-title">上传</span>
-        <span class="transfer-center__muted">{{ uploadingImages }} 张进行中</span>
-      </div>
-      <template v-for="row in transfer.activeUploads.value" :key="row.session.id">
-        <div v-if="row.items.length === 1" class="transfer-center__item">
-          <span class="transfer-center__thumb">
-            <ThumbnailImage v-if="row.items[0].primaryUrl" :srcs="getThumbnailCandidates(row.items[0], upload.config.value)" alt="" :confirmed-http-hosts="confirmedHttpHosts" />
-          </span>
-          <div class="transfer-center__item-body">
-            <div class="transfer-center__item-line">
-              <span class="transfer-center__name">{{ row.items[0].fileName }}</span>
-              <span class="transfer-center__faint">{{ hostViews(row.items[0]).filter((h) => h.state === 'done').length }} / {{ hostViews(row.items[0]).length }}</span>
-            </div>
-            <div class="transfer-center__bar"><span :style="{ width: `${itemProgress(row.items[0])}%` }" /></div>
-            <span class="transfer-center__detail">{{ hostLine(hostViews(row.items[0])) }}</span>
-          </div>
-        </div>
-        <div v-else class="transfer-center__batch">
-          <div class="transfer-center__item-line">
-            <span class="transfer-center__strong">上传 · {{ row.counts.total }} 张</span>
-            <span class="transfer-center__muted">{{ row.counts.done }} / {{ row.counts.total }}</span>
-          </div>
-          <div class="transfer-center__bar"><span :style="{ width: `${(row.counts.done / row.counts.total) * 100}%` }" /></div>
-        </div>
-      </template>
-    </div>
-
-    <div v-if="transfer.backupActive.value" class="transfer-center__group">
-      <div class="transfer-center__group-head">
-        <span class="transfer-center__group-title">{{ cat('补充备份到', backupName) }}</span>
-        <span class="transfer-center__muted">{{ formatCount(backup.state.processed) }} / {{ formatCount(backup.state.total) }}</span>
-      </div>
-      <div class="transfer-center__bar"><span :style="{ width: pct(backup.state.processed, backup.state.total) }" /></div>
-      <div class="transfer-center__task">
-        <span class="transfer-center__task-note">{{ backupNote }}</span>
-        <button v-if="backup.state.phase === 'paused'" type="button" class="transfer-center__task-button" @click="backup.resume()">继续</button>
-        <button v-else type="button" class="transfer-center__task-button" @click="backup.pause()">暂停</button>
-        <button type="button" class="transfer-center__task-button" @click="backup.stop()">停止</button>
-      </div>
-    </div>
-
-    <div v-if="transfer.checkActive.value" class="transfer-center__group">
-      <div class="transfer-center__group-head">
-        <span class="transfer-center__group-title">链接检测</span>
-        <span class="transfer-center__muted">{{ formatCount(checkProgress.checked) }} / {{ formatCount(checkProgress.total) }} 个链接</span>
-      </div>
-      <div class="transfer-center__bar" :class="{ 'transfer-center__bar--paused': linkCheck.isPaused.value }"><span :style="{ width: pct(checkProgress.checked, checkProgress.total) }" /></div>
-      <div class="transfer-center__task">
-        <span class="transfer-center__task-note">{{ checkNote }}</span>
-        <button v-if="linkCheck.isPaused.value" type="button" class="transfer-center__task-button" @click="linkCheck.resumeCheck()">继续</button>
-        <button v-else type="button" class="transfer-center__task-button" @click="linkCheck.pauseCheck()">暂停</button>
-        <button type="button" class="transfer-center__task-button" @click="linkCheck.cancelCheck()">取消</button>
-      </div>
-    </div>
-
-    <div class="transfer-center__spacer" />
-
-    <div v-if="transfer.hasFinished.value" class="transfer-center__done">
-      <div class="transfer-center__item-line">
-        <span class="transfer-center__faint">已完成</span>
+  <Transition name="transfer-center">
+    <aside v-if="transfer.open.value" ref="panel" class="transfer-center" aria-label="传输中心">
+      <div class="transfer-center__head">
+        <span class="transfer-center__title">传输</span>
         <div class="transfer-center__spacer" />
-        <button type="button" class="transfer-center__clear" @click="transfer.clearFinished()">清除</button>
+        <button type="button" class="transfer-center__close" aria-label="关闭" @click="transfer.close()">
+          <PnIcon name="close" :size="12" :stroke="2" />
+        </button>
       </div>
-      <span v-for="row in transfer.finishedUploads.value" :key="row.session.id" class="transfer-center__done-line">
-        <PnIcon :name="row.counts.failed === row.counts.total ? 'close' : 'check'" :size="13" :stroke="2.4" :class="row.counts.failed === row.counts.total ? 'transfer-center__danger' : 'transfer-center__success'" />
-        <template v-if="row.items.length > 1">上传 {{ row.counts.total }} 张 · {{ row.counts.done }} 张已完成</template>
-        <template v-else>{{ row.items[0].fileName }}</template>
-      </span>
-      <span v-if="transfer.backupFinished.value" class="transfer-center__done-line">
-        <PnIcon :name="backup.state.succeeded.length === 0 && backup.state.failed.length ? 'close' : 'check'" :size="13" :stroke="2.4" :class="backup.state.succeeded.length === 0 && backup.state.failed.length ? 'transfer-center__danger' : 'transfer-center__success'" />
-        {{ cat('补充备份到', backupName) }} · {{ formatCount(backup.state.succeeded.length) }} 张
-      </span>
-      <span v-for="check in transfer.finishedChecks" :key="check.id" class="transfer-center__done-line">
-        <PnIcon :name="check.cancelled ? 'close' : 'check'" :size="13" :stroke="2.4" :class="check.cancelled ? 'transfer-center__muted-icon' : 'transfer-center__success'" />
-        <template v-if="check.cancelled">链接检测已取消 · 已查 {{ formatCount(check.links) }} 个链接</template>
-        <template v-else>链接检测 · {{ formatCount(check.links) }} 个链接</template>
-      </span>
-    </div>
 
-    <p v-if="!transfer.hasAnything.value" class="transfer-center__empty">没有进行中的任务</p>
-  </aside>
+      <div v-if="transfer.activeUploads.value.length" class="transfer-center__group">
+        <div class="transfer-center__group-head">
+          <span class="transfer-center__group-title">上传</span>
+          <span class="transfer-center__muted">{{ uploadingImages }} 张进行中</span>
+        </div>
+        <template v-for="row in transfer.activeUploads.value" :key="row.session.id">
+          <div v-if="row.items.length === 1" class="transfer-center__item">
+            <span class="transfer-center__thumb">
+              <ThumbnailImage v-if="row.items[0].primaryUrl" :srcs="getThumbnailCandidates(row.items[0], upload.config.value)" alt="" :confirmed-http-hosts="confirmedHttpHosts" />
+            </span>
+            <div class="transfer-center__item-body">
+              <div class="transfer-center__item-line">
+                <span class="transfer-center__name">{{ row.items[0].fileName }}</span>
+                <span class="transfer-center__faint">{{ hostViews(row.items[0]).filter((h) => h.state === 'done').length }} / {{ hostViews(row.items[0]).length }}</span>
+              </div>
+              <div class="transfer-center__bar"><span :style="{ width: `${itemProgress(row.items[0])}%` }" /></div>
+              <span class="transfer-center__detail">{{ hostLine(hostViews(row.items[0])) }}</span>
+            </div>
+          </div>
+          <div v-else class="transfer-center__batch">
+            <div class="transfer-center__item-line">
+              <span class="transfer-center__strong">上传 · {{ row.counts.total }} 张</span>
+              <span class="transfer-center__muted">{{ row.counts.done }} / {{ row.counts.total }}</span>
+            </div>
+            <div class="transfer-center__bar"><span :style="{ width: `${(row.counts.done / row.counts.total) * 100}%` }" /></div>
+          </div>
+        </template>
+      </div>
+
+      <div v-if="transfer.backupActive.value" class="transfer-center__group">
+        <div class="transfer-center__group-head">
+          <span class="transfer-center__group-title">{{ cat('补充备份到', backupName) }}</span>
+          <span class="transfer-center__muted">{{ formatCount(backup.state.processed) }} / {{ formatCount(backup.state.total) }}</span>
+        </div>
+        <div class="transfer-center__bar"><span :style="{ width: pct(backup.state.processed, backup.state.total) }" /></div>
+        <div class="transfer-center__task">
+          <span class="transfer-center__task-note">{{ backupNote }}</span>
+          <button v-if="backup.state.phase === 'paused'" type="button" class="transfer-center__task-button" @click="backup.resume()">继续</button>
+          <button v-else type="button" class="transfer-center__task-button" @click="backup.pause()">暂停</button>
+          <button type="button" class="transfer-center__task-button" @click="backup.stop()">停止</button>
+        </div>
+      </div>
+
+      <div v-if="transfer.checkActive.value" class="transfer-center__group">
+        <div class="transfer-center__group-head">
+          <span class="transfer-center__group-title">链接检测</span>
+          <span class="transfer-center__muted">{{ formatCount(checkProgress.checked) }} / {{ formatCount(checkProgress.total) }} 个链接</span>
+        </div>
+        <div class="transfer-center__bar" :class="{ 'transfer-center__bar--paused': linkCheck.isPaused.value }"><span :style="{ width: pct(checkProgress.checked, checkProgress.total) }" /></div>
+        <div class="transfer-center__task">
+          <span class="transfer-center__task-note">{{ checkNote }}</span>
+          <button v-if="linkCheck.isPaused.value" type="button" class="transfer-center__task-button" @click="linkCheck.resumeCheck()">继续</button>
+          <button v-else type="button" class="transfer-center__task-button" @click="linkCheck.pauseCheck()">暂停</button>
+          <button type="button" class="transfer-center__task-button" @click="linkCheck.cancelCheck()">取消</button>
+        </div>
+      </div>
+
+      <div class="transfer-center__spacer" />
+
+      <div v-if="transfer.hasFinished.value" class="transfer-center__done">
+        <div class="transfer-center__item-line">
+          <span class="transfer-center__faint">已完成</span>
+          <div class="transfer-center__spacer" />
+          <button type="button" class="transfer-center__clear" @click="transfer.clearFinished()">清除</button>
+        </div>
+        <span v-for="row in transfer.finishedUploads.value" :key="row.session.id" class="transfer-center__done-line">
+          <PnIcon :name="row.counts.failed === row.counts.total ? 'close' : 'check'" :size="13" :stroke="2.4" :class="row.counts.failed === row.counts.total ? 'transfer-center__danger' : 'transfer-center__success'" />
+          <template v-if="row.items.length > 1">上传 {{ row.counts.total }} 张 · {{ row.counts.done }} 张已完成</template>
+          <template v-else>{{ row.items[0].fileName }}</template>
+        </span>
+        <span v-if="transfer.backupFinished.value" class="transfer-center__done-line">
+          <PnIcon :name="backup.state.succeeded.length === 0 && backup.state.failed.length ? 'close' : 'check'" :size="13" :stroke="2.4" :class="backup.state.succeeded.length === 0 && backup.state.failed.length ? 'transfer-center__danger' : 'transfer-center__success'" />
+          {{ cat('补充备份到', backupName) }} · {{ formatCount(backup.state.succeeded.length) }} 张
+        </span>
+        <span v-for="check in transfer.finishedChecks" :key="check.id" class="transfer-center__done-line">
+          <PnIcon :name="check.cancelled ? 'close' : 'check'" :size="13" :stroke="2.4" :class="check.cancelled ? 'transfer-center__muted-icon' : 'transfer-center__success'" />
+          <template v-if="check.cancelled">链接检测已取消 · 已查 {{ formatCount(check.links) }} 个链接</template>
+          <template v-else>链接检测 · {{ formatCount(check.links) }} 个链接</template>
+        </span>
+      </div>
+
+      <p v-if="!transfer.hasAnything.value" class="transfer-center__empty">没有进行中的任务</p>
+    </aside>
+  </Transition>
 </template>
 
 <style scoped>
@@ -177,6 +179,20 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   border-radius: var(--pn-radius-xl);
   background: var(--pn-elevated);
   box-shadow: var(--pn-e4);
+}
+
+/* 抽屉：从右侧挪 8px 淡入（舒展 250ms），关时只淡出、ease-out、快 30%；「减少动态效果」时不挪 */
+.transfer-center-enter-active {
+  --pn-layer-shift-x: var(--pn-space-8);
+
+  animation: pn-layer-in var(--pn-dur-expressive) var(--pn-ease-in);
+}
+
+.transfer-center-leave-active { animation: pn-fade-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .transfer-center-enter-active { animation: pn-layer-fade-in var(--pn-dur-fade-expressive) var(--pn-ease-in); }
+  .transfer-center-leave-active { animation: pn-fade-out calc(var(--pn-dur-fade-expressive) * 0.7) var(--pn-ease-out) forwards; }
 }
 
 .transfer-center__head { display: flex; align-items: center; }
