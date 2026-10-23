@@ -55,15 +55,16 @@ flowchart TD
     %% 密码恢复异常分支
     L -.-> ERR{抛出异常?}
     ERR -- BackupPasswordRequired --> PWD1[显示窗口]
-    PWD1 --> PWD2[读取加密配置 .settings.dat]
-    PWD2 --> PWD3["显示 BackupPasswordDialog（D01，阻塞）"]
+    PWD1 --> PWD3["显示 BackupPasswordDialog（D01，阻塞）"]
     PWD3 --> PWD4{用户操作}
-    PWD4 -- 输入密码 --> PWD5["restoreWithPassword<br/>secureStorage.initWithPassword"]
+    PWD4 -- 输入密码 --> PWD5["restoreWithPassword<br/>每次重新读 .settings.dat → secureStorage.initWithPassword"]
     PWD4 -- 跳过 --> PWD6["setAsideEncryptedConfig<br/>原样另存为 picnexus-encrypted-settings-时间.json<br/>核对一字不差后删 .settings.dat"]
     PWD5 --> PWD7{密码正确?}
     PWD7 -- 是 --> PWD8["派生密钥存进钥匙串<br/>留通知「已还原备份配置」"]
     PWD7 -- 否 --> PWD9["onPasswordFailed：写剩余次数（D02）<br/>5 次用完只剩「跳过，使用默认配置」"]
     PWD9 --> PWD4
+    PWD5 -. 读不出 / 其他错误 .-> PWDE["红色「还原失败 / 原因，请重试」<br/>不算输错，弹窗留着"]
+    PWDE --> PWD4
     PWD8 --> RLD["window.location.reload 整页重新加载<br/>（等密码时主题、上传器、上传控制器已读配置失败一轮）"]
     PWD6 --> RLD
     PWD6 -. 另存失败 .-> PWD3

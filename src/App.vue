@@ -19,7 +19,7 @@ import { useServiceAvailability } from '@/composables/service/useServiceAvailabi
 import { TOAST_MESSAGES } from '@/constants';
 import { configStore, readFreshConfig } from '@/store/instances';
 import { BackupPasswordRequiredError } from '@/security/crypto';
-import { readEncryptedConfig, restoreWithPassword, setAsideEncryptedConfig, takeStartupNotice, type StartupNotice } from '@/security/startupRestore';
+import { restoreWithPassword, setAsideEncryptedConfig, takeStartupNotice, type StartupNotice } from '@/security/startupRestore';
 import { startupFlags } from '@/store/startupFlags';
 import type { UserConfig } from '@/config/types';
 import { historyDB } from '@/services/database';
@@ -54,8 +54,6 @@ function ensurePeriodicCheckStarted() {
 // 备份密码恢复对话框状态
 const showPasswordDialog = ref(false);
 const passwordDialogRef = ref<InstanceType<typeof BackupPasswordDialog>>();
-/** 缓存的加密配置文件内容，密码验证成功后用于解密 */
-let pendingEncryptedContent = '';
 
 // 网络状态监听处理函数
 function handleOffline() {
@@ -97,7 +95,7 @@ async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
   if (payload.mode !== 'restore') return;
 
   try {
-    if (await restoreWithPassword(pendingEncryptedContent, payload.password) === 'wrong-password') {
+    if (await restoreWithPassword(payload.password) === 'wrong-password') {
       passwordDialogRef.value?.onPasswordFailed();
       return;
     }
@@ -229,13 +227,6 @@ onMounted(async () => {
     if (err instanceof BackupPasswordRequiredError) {
       log.debug('检测到迁移密码加密配置，等待用户输入密码');
       try { await getCurrentWindow().show(); await refreshAppPresence(); } catch { /* ignore */ }
-
-      try {
-        pendingEncryptedContent = await readEncryptedConfig();
-      } catch (readErr) {
-        log.error('读取加密配置文件失败:', readErr);
-      }
-
       showPasswordDialog.value = true;
       return;
     }

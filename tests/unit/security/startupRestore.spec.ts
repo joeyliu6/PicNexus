@@ -6,10 +6,12 @@ const m = vi.hoisted(() => ({
   files: new Map<string, string>(),
   initWithPassword: vi.fn(),
   failWrite: false,
+  failRead: '',
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   readTextFile: vi.fn(async (path: string) => {
+    if (m.failRead) throw new Error(m.failRead);
     if (!m.files.has(path)) throw new Error(`not found: ${path}`);
     return m.files.get(path)!;
   }),
@@ -26,7 +28,6 @@ vi.mock('@/security/crypto', () => ({ secureStorage: { initWithPassword: m.initW
 
 import {
   asideFileName,
-  readEncryptedConfig,
   restoreWithPassword,
   setAsideEncryptedConfig,
   takeStartupNotice,
@@ -38,17 +39,14 @@ beforeEach(() => {
   m.files = new Map([['D:/data/.settings.dat', ENCRYPTED]]);
   m.initWithPassword.mockReset();
   m.failWrite = false;
+  m.failRead = '';
   sessionStorage.clear();
 });
 
 describe('startupRestore', () => {
-  it('读出数据文件夹里的加密配置', async () => {
-    await expect(readEncryptedConfig()).resolves.toBe(ENCRYPTED);
-  });
-
-  it('密码对了：返回 restored，重新加载后弹一次「已还原」', async () => {
+  it('密码对了：用数据文件夹里的加密配置解开，返回 restored，重新加载后弹一次「已还原」', async () => {
     m.initWithPassword.mockResolvedValue(undefined);
-    await expect(restoreWithPassword(ENCRYPTED, 'right')).resolves.toBe('restored');
+    await expect(restoreWithPassword('right')).resolves.toBe('restored');
     expect(m.initWithPassword).toHaveBeenCalledWith(ENCRYPTED, 'right');
     expect(takeStartupNotice()).toEqual({ kind: 'restored' });
     expect(takeStartupNotice()).toBeNull();
@@ -56,13 +54,30 @@ describe('startupRestore', () => {
 
   it('密码不对：返回 wrong-password，不留通知', async () => {
     m.initWithPassword.mockRejectedValue(new Error('迁移密码不正确'));
-    await expect(restoreWithPassword(ENCRYPTED, 'nope')).resolves.toBe('wrong-password');
+    await expect(restoreWithPassword('nope')).resolves.toBe('wrong-password');
     expect(takeStartupNotice()).toBeNull();
   });
 
   it('其他错误原样抛出（由调用方写原因）', async () => {
     m.initWithPassword.mockRejectedValue(new Error('钥匙串不可用'));
-    await expect(restoreWithPassword(ENCRYPTED, 'x')).rejects.toThrow('钥匙串不可用');
+    await expect(restoreWithPassword('x')).rejects.toThrow('钥匙串不可用');
+  });
+
+  it('读不出加密配置：抛出原因，不拿空内容去解（调用方弹「还原失败」，不算输错密码）', async () => {
+    m.failRead = '另一个程序正在使用此文件';
+    await expect(restoreWithPassword('right')).rejects.toThrow('读不出加密的配置文件：另一个程序正在使用此文件');
+    expect(m.initWithPassword).not.toHaveBeenCalled();
+    expect(takeStartupNotice()).toBeNull();
+  });
+
+  it('每次确认都重新读：上一次读不出，文件能读了再点就还原', async () => {
+    m.initWithPassword.mockResolvedValue(undefined);
+    m.failRead = '另一个程序正在使用此文件';
+    await expect(restoreWithPassword('right')).rejects.toThrow();
+
+    m.failRead = '';
+    await expect(restoreWithPassword('right')).resolves.toBe('restored');
+    expect(m.initWithPassword).toHaveBeenCalledWith(ENCRYPTED, 'right');
   });
 
   it('另存的文件名带时间、扩展名 .json（「从文件导入…」只列 .json）', () => {

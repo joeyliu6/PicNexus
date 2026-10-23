@@ -10,6 +10,7 @@ import { validateBackupPassword } from '@/security/crypto';
 import PasswordField from './PasswordField.vue';
 import type { BackupPasswordConfirmPayload, BackupPasswordDialogMode } from './backupPasswordDialogTypes';
 
+// 只在这次运行里计数：是提示不是防猜密码的门（加密文件拷走就能不限次数地猜），不要存到磁盘上，见 docs/TODO.md「已知取舍」
 const MAX_ATTEMPTS = 5;
 
 const props = defineProps<{

@@ -5,6 +5,7 @@
 
 import { exists, readTextFile, remove, writeTextFile } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
+import { getErrorMessage } from '@/types/errors';
 import { getUserDataDir } from '@/utils/appPaths';
 import { secureStorage } from './crypto';
 
@@ -34,12 +35,17 @@ export function takeStartupNotice(): StartupNotice | null {
   }
 }
 
-export async function readEncryptedConfig(): Promise<string> {
-  return readTextFile(await configPath());
-}
-
-/** 密码对了把派生密钥存进钥匙串并返回 restored；密码不对返回 wrong-password；其他错误抛出 */
-export async function restoreWithPassword(encrypted: string, password: string): Promise<'restored' | 'wrong-password'> {
+/**
+ * 密码对了把派生密钥存进钥匙串并返回 restored；密码不对返回 wrong-password；其他错误抛出。
+ * 每次都重新读一遍加密配置：上一次读不出（比如被别的程序占着）这次还能成；读不出时抛出原因，不算输错密码
+ */
+export async function restoreWithPassword(password: string): Promise<'restored' | 'wrong-password'> {
+  let encrypted: string;
+  try {
+    encrypted = await readTextFile(await configPath());
+  } catch (error) {
+    throw new Error(`读不出加密的配置文件：${getErrorMessage(error)}`);
+  }
   try {
     await secureStorage.initWithPassword(encrypted, password);
   } catch (error) {
