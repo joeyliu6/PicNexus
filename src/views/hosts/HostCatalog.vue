@@ -107,9 +107,11 @@ const groups = computed(() => buildCatalog(props.addedIds, query.value, filter.v
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.host-catalog__close:hover { background: var(--pn-host-row-hover); }
+.host-catalog__close:hover { background: var(--pn-ghost-hover); }
+.host-catalog__close:active { background: var(--pn-ghost-press); }
 
 .host-catalog__tools {
   display: flex;
@@ -137,6 +139,7 @@ const groups = computed(() => buildCatalog(props.addedIds, query.value, filter.v
   background: var(--pn-field);
   box-shadow: inset 0 0 0 1px var(--pn-border-strong);
   color: var(--pn-text3);
+  transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .host-catalog__search:focus-within { box-shadow: inset 0 0 0 1px var(--pn-brand), 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft); }
@@ -196,6 +199,7 @@ const groups = computed(() => buildCatalog(props.addedIds, query.value, filter.v
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .host-catalog__card:hover,

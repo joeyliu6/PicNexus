@@ -320,8 +320,10 @@ function setUniqueName(value: boolean): void {
   color: var(--pn-text2);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.host-settings__advanced:hover { background: var(--pn-host-row-hover); }
+.host-settings__advanced:hover { background: var(--pn-ghost-hover); }
+.host-settings__advanced:active { background: var(--pn-ghost-press); }
 .host-settings__summary { color: var(--pn-text3); }
 </style>

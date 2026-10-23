@@ -70,6 +70,9 @@
   --pn-host-pill-ok: #ECF7EF;
   --pn-host-pill-bad: #FEF4E6;
   --pn-host-row-hover: rgba(0, 0, 0, 0.035);
+  /* 「✓ 已启用」状态按钮（品牌浅底）的悬停 / 按下：设计稿未画，品牌浅底往品牌蓝各混 8% / 16% */
+  --pn-host-use-hover: #DCE9FC;
+  --pn-host-use-press: #CEE1FA;
   /* 首页「最近上传」悬停行：半透明，叠在背景装饰上不发灰 */
   --pn-recent-row-hover: rgba(0, 0, 0, 0.04);
   /* 首页「上传到」里已勾选的标签（品牌浅底 --pn-chip-on）悬停 / 按下：设计稿未画，往品牌蓝各混 8% / 16% */
@@ -137,6 +140,8 @@
   --pn-host-pill-ok: rgba(34, 197, 94, 0.14);
   --pn-host-pill-bad: rgba(245, 158, 11, 0.16);
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
+  --pn-host-use-hover: #1F3250;
+  --pn-host-use-press: #233B5F;
   --pn-recent-row-hover: rgba(255, 255, 255, 0.045);
   /* 深色里品牌浅底是 16% 的蓝：悬停 24%、按下 32%（越靠上越亮） */
   --pn-chip-on-hover: rgba(76, 147, 245, 0.24);

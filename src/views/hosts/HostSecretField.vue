@@ -187,6 +187,7 @@ onBeforeUnmount(() => clearTimeout(timer));
   box-shadow: inset 0 0 0 1px var(--pn-border-strong);
   font-family: var(--pn-font-mono);
   font-size: var(--pn-text-mono);
+  transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .host-secret__box--editing { box-shadow: inset 0 0 0 1px var(--pn-brand), 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft); }
@@ -224,8 +225,11 @@ onBeforeUnmount(() => clearTimeout(timer));
   font-family: var(--pn-font-ui);
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+.host-secret__action:hover { background: var(--pn-ghost-hover); }
+.host-secret__action:active { background: var(--pn-ghost-press); }
 .host-secret__action--muted { color: var(--pn-text2); }
 
 .host-secret__required { color: var(--pn-danger); }

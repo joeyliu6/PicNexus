@@ -233,9 +233,11 @@ const disconnectNote = computed(() => {
   color: var(--pn-danger);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .host-detail__disconnect:hover { background: var(--pn-danger-soft); }
+.host-detail__disconnect:active { background: var(--pn-danger-soft-press); }
 
 .host-detail__note {
   color: var(--pn-text3);

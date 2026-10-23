@@ -130,6 +130,7 @@ function submit(): void {
   padding: var(--pn-space-host-template);
   cursor: pointer;
   outline-offset: -2px;
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .host-templates__row + .host-templates__row { border-top: 1px solid var(--pn-border); }
@@ -146,12 +147,14 @@ function submit(): void {
   box-sizing: border-box;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px var(--pn-check-border);
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .host-templates__dot {
   width: var(--pn-size-radio-dot);
   height: var(--pn-size-radio-dot);
   border-radius: 50%;
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .host-templates__row--on .host-templates__radio { background: var(--pn-brand); box-shadow: none; }
@@ -185,8 +188,8 @@ function submit(): void {
   font-size: var(--pn-text-footnote);
 }
 
+/* 悬停才浮出的「删除」：一直占着位置，只是看不见；淡入淡出 */
 .host-templates__remove {
-  display: none;
   flex: none;
   align-self: center;
   height: var(--pn-size-host-field-action);
@@ -198,10 +201,16 @@ function submit(): void {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--pn-dur-instant) var(--pn-ease-in), visibility var(--pn-dur-instant), background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .host-templates__row:hover .host-templates__remove,
-.host-templates__row:focus-within .host-templates__remove { display: block; }
+.host-templates__row:focus-within .host-templates__remove { opacity: 1; visibility: visible; }
+
+.host-templates__remove:hover { background: var(--pn-danger-soft); }
+.host-templates__remove:active { background: var(--pn-danger-soft-press); }
 
 .host-templates__foot {
   display: flex;
@@ -220,9 +229,11 @@ function submit(): void {
   color: var(--pn-text2);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.host-templates__text-button:hover { background: var(--pn-host-row-hover); }
+.host-templates__text-button:hover { background: var(--pn-ghost-hover); }
+.host-templates__text-button:active { background: var(--pn-ghost-press); }
 .host-templates__text-button--first { margin-left: calc(var(--pn-space-8) * -1); }
 
 .host-templates__vars {

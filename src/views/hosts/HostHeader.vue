@@ -78,13 +78,17 @@ function finishRename(): void {
     >
       <PnIcon v-if="enabled" name="check" :size="13" :stroke="2.8" />{{ enabled ? '已启用' : '启用' }}
     </button>
+    <!-- 两种文字叠在同一格、按钮宽度取两者之大：换成「正在检测…」时左边的状态按钮不跟着挪 -->
     <button type="button" class="host-head__test" :disabled="testing" @click="emit('test')">
-      <svg v-if="testing" width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" class="host-head__spinner">
-        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" />
-        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="12 37.7" stroke-linecap="round" transform="rotate(-90 8 8)" />
-      </svg>
-      <PnIcon v-else name="recheck" :size="13" :stroke="1.9" />
-      {{ testing ? '正在检测…' : testLabel }}
+      <span class="host-head__face" :class="{ 'host-head__face--hidden': testing }">
+        <PnIcon name="recheck" :size="13" :stroke="1.9" />{{ testLabel }}
+      </span>
+      <span class="host-head__face" :class="{ 'host-head__face--hidden': !testing }">
+        <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" class="host-head__spinner">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" />
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="12 37.7" stroke-linecap="round" transform="rotate(-90 8 8)" />
+        </svg>正在检测…
+      </span>
     </button>
   </div>
 </template>
@@ -139,6 +143,7 @@ function finishRename(): void {
 
 .host-head__rename {
   flex: 1;
+  margin-left: calc(var(--pn-space-4) * -1);
   padding: 0 var(--pn-space-4);
   border: 0;
   border-radius: var(--pn-radius-sm);
@@ -162,9 +167,11 @@ function finishRename(): void {
   background: transparent;
   color: var(--pn-text3);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.host-head__pencil:hover { background: var(--pn-host-row-hover); }
+.host-head__pencil:hover { background: var(--pn-ghost-hover); }
+.host-head__pencil:active { background: var(--pn-ghost-press); }
 
 .host-head__pill {
   display: flex;
@@ -207,28 +214,52 @@ function finishRename(): void {
   cursor: pointer;
 }
 
+/* 状态按钮在「启用」（主按钮）与「✓ 已启用」（品牌浅底）之间切换：状态切换用 150ms */
 .host-head__use {
   padding: var(--pn-space-host-button);
   background: var(--pn-button);
   color: var(--pn-on-fill);
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
+
+.host-head__use:hover { background: var(--pn-button-hover); }
+.host-head__use:active { background: var(--pn-button-press); }
 
 .host-head__use--on {
   background: var(--pn-brand-soft);
   color: var(--pn-brand-text);
 }
 
+.host-head__use--on:hover { background: var(--pn-host-use-hover); }
+.host-head__use--on:active { background: var(--pn-host-use-press); }
+
 .host-head__test {
+  display: grid;
   padding: 0 var(--pn-space-12);
   background: var(--pn-secondary-bg);
   box-shadow: var(--pn-secondary-ring);
   color: var(--pn-text1);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.host-head__test:not(:disabled):hover { background: var(--pn-secondary-hover); }
+.host-head__test:not(:disabled):active { background: var(--pn-secondary-press); }
 
 .host-head__test:disabled {
   color: var(--pn-text2);
   cursor: default;
 }
 
+.host-head__face {
+  display: flex;
+  grid-area: 1 / 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pn-space-6);
+  white-space: nowrap;
+}
+
+.host-head__face--hidden { visibility: hidden; }
 .host-head__spinner { animation: pn-spin var(--pn-dur-spin) linear infinite; }
+.host-head__face--hidden .host-head__spinner { animation: none; }
 </style>

@@ -169,11 +169,15 @@ function tabIndexOf(row: HostRow, index: number): number {
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.hosts-list__add:hover { background: var(--pn-host-row-hover); }
-.hosts-list__add--on { background: var(--pn-brand-soft); color: var(--pn-brand-text); }
-.hosts-list__add--on:hover { background: var(--pn-brand-soft); }
+.hosts-list__add:hover { background: var(--pn-ghost-hover); }
+.hosts-list__add:active { background: var(--pn-ghost-press); }
+
+.hosts-list__add--on,
+.hosts-list__add--on:hover,
+.hosts-list__add--on:active { background: var(--pn-brand-soft); color: var(--pn-brand-text); }
 
 .hosts-list__rows {
   display: flex;
@@ -193,6 +197,7 @@ function tabIndexOf(row: HostRow, index: number): number {
   border-radius: var(--pn-radius-host-row);
   cursor: pointer;
   outline-offset: -2px;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .hosts-list__row:hover { background: var(--pn-host-row-hover); }
@@ -244,8 +249,8 @@ function tabIndexOf(row: HostRow, index: number): number {
 
 .hosts-list__sub--bad { color: var(--pn-warning); }
 
+/* 悬停才浮出的「启用 / 停用」：一直占着位置（名字的截断不随悬停变），只是看不见；淡入淡出 */
 .hosts-list__toggle {
-  display: none;
   flex: none;
   height: var(--pn-size-pill);
   padding: 0 var(--pn-space-button-sm-x);
@@ -258,8 +263,14 @@ function tabIndexOf(row: HostRow, index: number): number {
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
   cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--pn-dur-instant) var(--pn-ease-in), visibility var(--pn-dur-instant), background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .hosts-list__row:hover .hosts-list__toggle,
-.hosts-list__row:focus-visible .hosts-list__toggle { display: block; }
+.hosts-list__row:focus-visible .hosts-list__toggle { opacity: 1; visibility: visible; }
+
+.hosts-list__toggle:hover { background: var(--pn-secondary-hover); }
+.hosts-list__toggle:active { background: var(--pn-secondary-press); }
 </style>

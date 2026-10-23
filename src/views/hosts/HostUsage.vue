@@ -23,7 +23,8 @@ const dead = computed(() => props.usage?.dead ?? 0);
 </script>
 
 <template>
-  <div class="host-usage">
+  <!-- 数字还没读出来时先不画（不显示一瞬间的 0），读出来后淡入 -->
+  <div class="host-usage" :class="{ 'host-usage--loading': !usage }">
     <div class="host-usage__stat">
       <span class="host-usage__num">{{ formatCount(usage?.uploaded ?? 0) }}</span>
       <span class="host-usage__label">张传到这里</span>
@@ -81,6 +82,7 @@ const dead = computed(() => props.usage?.dead ?? 0);
   font-weight: var(--pn-weight-semibold);
   line-height: var(--pn-leading-title);
   letter-spacing: var(--pn-tracking-headline);
+  transition: opacity var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .host-usage__num--bad { color: var(--pn-warning); }
@@ -89,7 +91,13 @@ const dead = computed(() => props.usage?.dead ?? 0);
   color: var(--pn-text2);
   font-size: var(--pn-text-footnote);
   line-height: var(--pn-leading-footnote);
+  transition: color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.host-usage__stat--link:hover .host-usage__label { color: var(--pn-text1); }
+
+.host-usage--loading .host-usage__num,
+.host-usage--loading .host-usage__bar { opacity: 0; }
 
 .host-usage__divider {
   flex: none;
@@ -110,6 +118,7 @@ const dead = computed(() => props.usage?.dead ?? 0);
 .host-usage__bar {
   flex: 1;
   border-radius: var(--pn-radius-host-bar);
+  transition: opacity var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .host-usage__bar--empty { background: var(--pn-border); }

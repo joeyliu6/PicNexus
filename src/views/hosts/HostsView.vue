@@ -27,6 +27,10 @@ const showList = computed(() => !narrow.value || (!hosts.narrowDetail.value && !
 const showMain = computed(() => !narrow.value || hosts.narrowDetail.value || noHosts.value);
 const detailId = computed(() => (hosts.pane.value === 'detail' ? hosts.selectedId.value : null));
 
+// 右侧换了内容（另一个图床、目录、连接表单）就回到顶上：滚动容器是同一个，不然新内容停在上一个的滚动位置
+const scrollEl = ref<HTMLElement>();
+watch(() => [hosts.pane.value, detailId.value, hosts.draft.value?.hostId], () => { scrollEl.value?.scrollTo(0, 0); }, { flush: 'post' });
+
 function applyTarget(): void {
   const section = settingsTargetSection?.value;
   if (section) {
@@ -89,7 +93,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         <TransferButton />
         <WindowControls />
       </header>
-      <div class="hosts__scroll">
+      <div ref="scrollEl" class="hosts__scroll">
         <div class="hosts__column">
           <HostCatalog
             v-if="hosts.pane.value === 'catalog'"
@@ -158,9 +162,11 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   color: var(--pn-brand-text);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.hosts__back:hover { background: var(--pn-host-row-hover); }
+.hosts__back:hover { background: var(--pn-ghost-hover); }
+.hosts__back:active { background: var(--pn-ghost-press); }
 
 .hosts__scroll {
   display: flex;
