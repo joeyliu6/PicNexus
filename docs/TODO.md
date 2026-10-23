@@ -81,7 +81,6 @@
 - **来源**：2026-10-19 阶段 11 给首页、图库、托盘、引导、动效各派一个只读审查子助手，查出的问题里 AI 核对过、这次没改的（改了的见各页 decisions 与提交记录）
 - **清单**：
   - 启动还原：「最多 5 次」重启后清零；启动时读不出加密文件只写日志
-  - `tests/tauri-e2e/scan-history-fix-acceptance.tauri.e2e.cjs` 还在找 PrimeVue 的 `.p-dialog`（这条验收本来就挂在「验收种子脚本」一条下，平时不跑）
 - **优先级**：中
 
 **当前处置**：待处理
@@ -203,8 +202,7 @@
 - **症状**：`scripts/seed-tauri-e2e-portable.mjs` 的 6 条 `e2e-*` 记录把 `results` 写成 `{ serviceId, success: true, url }`；
   应用认的是 `{ serviceId, status: 'success', result: { url } }`（`isUsableMirror`）。脚本注释说派生列「按 isUsableMirror 的口径」，
   实际口径不同：应用里这些记录没有可用链接，链接检测、补充备份都看不到它们
-- **要做的**：改成应用的形状。依赖它的验收用例 `scan-history-fix-acceptance.tauri.e2e.cjs` 还在点旧历史页（`.main-layout`、旧表格），新界面下必然失败：要么按图库页重写，要么连同种子脚本一起删掉
-- **为什么没顺手改**：这次跑不了那套验收（要 tauri-driver + msedgedriver），改了没法验证
+- **要做的**：改成应用的形状（依赖它的旧历史页验收用例已删，脚本只给真机走查用）
 - **优先级**：低
 
 **当前处置**：待处理

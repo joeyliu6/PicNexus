@@ -120,14 +120,13 @@ Rust 侧起本机 HTTP 服务的测试要绕开系统代理：本机开着系统
 > 降权绕过，根因见 [wry#1782](https://github.com/tauri-apps/wry/issues/1782) 与
 > `docs/TODO.md`「Tauri E2E 在 CI 跑手上建会话失败」。
 
-### 带数据的验收（portable 隔离库）
+### portable 隔离库
 
-需要预置历史记录的验收 spec（`PICNEXUS_ACCEPTANCE=1` 门控）走 portable 隔离：
+真机走查要用自己的数据时走 portable 隔离：
 
 ```bash
 node scripts/seed-tauri-e2e-portable.mjs          # 建 portable.json + 6 条 e2e-* 记录
-PICNEXUS_ACCEPTANCE=1 npm run test:tauri:e2e
-node scripts/seed-tauri-e2e-portable.mjs --clean  # ⚠️ 必做
+node scripts/seed-tauri-e2e-portable.mjs --clean  # ⚠️ 走查完必做
 ```
 
 portable 模式下应用的**全部**数据（DB / 配置 / 日志 / 主密钥）落到

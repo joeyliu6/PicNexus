@@ -1,23 +1,20 @@
 /**
- * 为 Tauri E2E 验收准备 portable 隔离数据目录
+ * 建一个 portable 隔离数据目录，给真机走查用（做法见 docs/reference/guides/testing-guide.md「真机走查」）
  *
- * `tests/tauri-e2e/scan-history-fix-acceptance.tauri.e2e.cjs` 依赖
- * `src-tauri/target/debug/data/` 下的 `portable.json` + seed 过 6 条 `e2e-*` 记录的
- * `history.db`。这套数据当初是临时脚本造的、跑完就删了，仓库里没留下任何可重建的东西——
- * 于是那条验收 spec 从 2026-08-22 之后就再也没法直接跑（会卡在 waitForDataRows(6)）。
- * 本脚本把它补回来。
+ * 在 `src-tauri/target/debug/data/` 放 `portable.json`，再建好 `history.db` 并写入 6 条 `e2e-*` 记录，
+ * 开发版一启动就读这份数据，不碰真实用户数据。
  *
  * ── portable 模式是什么 ──
  * `src-tauri/src/portable.rs` 看到数据目录里有 `portable.json` 就把**全部**数据
  * （history.db / .settings.dat / logs / 主密钥）落到该目录，完全不碰真实用户数据。
  * 顺带一个好处：密钥走文件而不是系统钥匙串，无头环境也能起。
  *
- * ⚠️ 验收后必须 `--clean`，否则以后 `tauri dev` 会静默进入 portable 模式读错数据。
+ * ⚠️ 走查完必须 `--clean`，否则以后 `tauri dev` 会静默进入 portable 模式读错数据。
  *
  * ── 建表语句从哪来 ──
  * 运行时从 `src/services/database/SchemaManager.ts` 里把 `createTablesAndIndexes`
  * 的 DDL 抽出来用，**不在本文件里抄第二份**。抄一份的代价是它会随 schema 演进静默漂移，
- * 而这种漂移只会在验收时以"莫名其妙的 SQL 错误"暴露出来。抽取失败就直接报错退出，
+ * 而这种漂移只会在走查时以"莫名其妙的 SQL 错误"暴露出来。抽取失败就直接报错退出，
  * 不做任何猜测性兜底。
  *
  * （已核对：`CREATE TABLE` 里已经包含 `runMigrations` 会 ADD COLUMN 的全部列，
@@ -27,13 +24,8 @@
  *   node scripts/seed-tauri-e2e-portable.mjs           # 建目录 + portable.json + 6 条记录
  *   node scripts/seed-tauri-e2e-portable.mjs --clean   # 删掉整个 target/debug/data
  *
- *   完整验收流程：
- *   1. node scripts/seed-tauri-e2e-portable.mjs
- *   2. PICNEXUS_ACCEPTANCE=1 npm run test:tauri:e2e
- *   3. node scripts/seed-tauri-e2e-portable.mjs --clean
- *
  * 写库那一步交给 `scripts/apply-sqlite-seed.py`：Node 20（本项目 CI 与类型声明的目标版本）
- * 没有内置 sqlite，而验收 spec 本来就依赖 PATH 里的 python，所以不引入新依赖。
+ * 没有内置 sqlite，走查时改记录本来也用 Python，所以不引入新依赖。
  */
 
 import fs from 'node:fs';
@@ -145,7 +137,7 @@ function seed() {
   if (!python) {
     console.error(
       'PATH 里找不到 python / python3。写库这一步依赖 Python 自带的 sqlite3 模块'
-      + '（Node 20 没有内置 sqlite），验收 spec 本身也依赖它。',
+      + '（Node 20 没有内置 sqlite）。',
     );
     process.exit(1);
   }
@@ -192,8 +184,7 @@ function seed() {
   console.log(`✅ ${path.relative(root, markerPath)}（portable 标记）`);
   console.log(`✅ ${path.relative(root, dbPath)}：${ddl.length} 条 DDL，${count} 条 e2e-* 记录`);
   console.log('');
-  console.log('接着跑：PICNEXUS_ACCEPTANCE=1 npm run test:tauri:e2e');
-  console.log('跑完务必：node scripts/seed-tauri-e2e-portable.mjs --clean');
+  console.log('接着启动开发版走查；走查完务必：node scripts/seed-tauri-e2e-portable.mjs --clean');
 }
 
 if (process.argv.includes('--clean')) {
