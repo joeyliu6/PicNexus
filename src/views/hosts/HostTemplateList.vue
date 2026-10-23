@@ -85,7 +85,7 @@ function submit(): void {
         <label class="host-templates__label" for="host-template-name">名称</label>
         <PnInput id="host-template-name" v-model="name" size="dialog" placeholder="我的反代" />
         <label class="host-templates__label" for="host-template-tpl">模板</label>
-        <PnInput id="host-template-tpl" v-model="template" size="dialog" mono :placeholder="templatePlaceholder" @keydown.enter="submit" />
+        <PnInput id="host-template-tpl" v-model="template" size="dialog" mono :placeholder="templatePlaceholder" />
       </div>
       <template #footer>
         <PnButton variant="secondary" size="dialog" @click="adding = false">取消</PnButton>

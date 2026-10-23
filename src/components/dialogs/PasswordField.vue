@@ -15,8 +15,6 @@ withDefaults(defineProps<{
   disabled?: boolean;
 }>(), { autocomplete: 'current-password', message: '', tone: 'muted', disabled: false });
 
-defineEmits<{ enter: [] }>();
-
 const shown = ref(false);
 </script>
 
@@ -32,7 +30,6 @@ const shown = ref(false);
       :autocomplete="autocomplete"
       :invalid="tone === 'danger'"
       :disabled="disabled"
-      @keydown.enter="$emit('enter')"
     >
       <template #suffix>
         <button type="button" class="password-field__eye" :aria-label="shown ? '隐藏密码' : '显示密码'" :aria-pressed="shown" :disabled="disabled" @click="shown = !shown">

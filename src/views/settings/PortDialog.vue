@@ -34,7 +34,7 @@ function submit(): void {
   <PnDialog v-model:open="open" title="更换端口" eyebrow="设置 › 编辑器与命令行" icon="terminal">
     <div class="port">
       <label class="port__label" for="settings-obsidian-port">端口</label>
-      <PnInput id="settings-obsidian-port" v-model="draft" size="dialog" mono :invalid="!!error" @keydown.enter="submit" />
+      <PnInput id="settings-obsidian-port" v-model="draft" size="dialog" mono :invalid="!!error" />
       <span class="port__help" :class="{ 'port__help--error': error }">{{ error || 'Obsidian 插件设置里的端口要与这里相同' }}</span>
     </div>
     <template #footer>

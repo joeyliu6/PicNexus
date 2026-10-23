@@ -97,7 +97,7 @@ async function remove(): Promise<void> {
     <div v-if="preset" class="preset">
       <label class="preset__field">
         <span class="preset__label">名称</span>
-        <PnInput v-model="name" size="dialog" @blur="commitName" @keydown.enter="commitName" />
+        <PnInput v-model="name" size="dialog" @blur="commitName" @keydown.enter.prevent="commitName" />
       </label>
       <div class="preset__field">
         <span class="preset__label">输出格式</span>
@@ -106,7 +106,7 @@ async function remove(): Promise<void> {
       <div class="preset__grid">
         <label v-for="field in NUMBERS" :key="field.key" class="preset__field">
           <span class="preset__label">{{ field.label }}</span>
-          <PnInput v-model="numbers[field.key]" size="dialog" @blur="commitNumber(field.key)" @keydown.enter="commitNumber(field.key)">
+          <PnInput v-model="numbers[field.key]" size="dialog" @blur="commitNumber(field.key)" @keydown.enter.prevent="commitNumber(field.key)">
             <template v-if="field.unit" #suffix><span class="preset__unit">{{ field.unit }}</span></template>
           </PnInput>
           <span class="preset__help">{{ field.help }}</span>

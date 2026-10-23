@@ -145,7 +145,6 @@ async function disable(): Promise<void> {
         v-model="password"
         :label="hasSavedPassword ? '密码（留空 = 不修改）' : '密码'"
         message="坚果云请填写「应用密码」，不是登录密码"
-        @enter="testAndSave"
       />
       <p v-if="error" class="target__error" role="alert">{{ error }}</p>
     </div>

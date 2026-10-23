@@ -24,6 +24,7 @@
 
 - **对话框一律用 `PnDialog`**：宽 520、圆角 16、内边距 24 / 28、左侧 40px 图标块（普通品牌蓝 / 警告琥珀 / 危险红）、标题 17px + 12px 灰色上下文、按钮高 34（`PnButton size="dialog"`）、垂直水平居中；最高「窗口高 − 56」，超出在弹窗里滚动。宽度不可改（没有 `width` 参数）。
 - 打开时焦点落在 `[data-autofocus]`，没有就第一个输入框，再没有就主按钮；Esc 与点遮罩关闭（`blocking` 的不关）。关掉后焦点回到打开它的按钮；从菜单项打开的回到那个菜单的按钮（`PnDialog` 负责，守门测试 `tests/e2e/dialog-focus.e2e.spec.ts`）。
+- 单行输入框里按 Enter = 点底栏的主按钮（实色的那个，危险操作是红色的），同系统对话框的默认按钮；主按钮不可点（没填完、正在提交）时什么也不做，所以连按也只提交一次。各输入框不再自己接 Enter 去提交，否则按一次提交两次；Enter 另有用处的（压缩方案「回车保存这一项」）在自己的处理里 `preventDefault`。多行文本框的 Enter 是换行（从 URL 下载用 Ctrl+Enter 提交）。守门测试 `tests/e2e/dialog-enter.e2e.spec.ts`。
 - **确认框**：`useConfirm()`，画在 `PnConfirmHost`，一次只显示一个、排队。`tone: 'danger'` = 红图标块 + 红确认按钮（不可逆的危险操作），不给按琥珀。能撤销的操作不弹确认（改用撤销通知），见 notification-patterns.md。
 - 规格外的三处，各自记在 decisions：新手引导（大弹窗，[onboarding.md](./redesign/decisions/onboarding.md)）、命令面板（同圆角、遮罩、阴影，[home.md](./redesign/decisions/home.md)）、压缩预览（整窗深色查看器，[settings.md](./redesign/decisions/settings.md)）。
 - 截图测试会量每个 `.pn-dialog` 的宽、圆角、居中与按钮高（`tests/redesign/designRules.ts`）。

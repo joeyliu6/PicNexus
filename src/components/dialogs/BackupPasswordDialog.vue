@@ -158,10 +158,9 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
         :message="currentError"
         :tone="currentError ? 'danger' : 'muted'"
         :disabled="exhausted"
-        @enter="submit"
       />
       <template v-if="settingNew">
-        <PasswordField id="backup-password-new" v-model="next" label="新密码" autocomplete="new-password" :message="newHint" @enter="submit" />
+        <PasswordField id="backup-password-new" v-model="next" label="新密码" autocomplete="new-password" :message="newHint" />
         <PasswordField
           id="backup-password-confirm"
           v-model="confirmNext"
@@ -169,7 +168,6 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
           autocomplete="new-password"
           :message="confirmMessage?.text"
           :tone="confirmMessage?.tone"
-          @enter="submit"
         />
       </template>
       <div v-if="mode === 'set'" class="backup-password__strength" aria-label="密码强度">

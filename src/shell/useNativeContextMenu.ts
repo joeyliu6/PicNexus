@@ -3,14 +3,12 @@
 // 自己画了右键菜单的地方（图床页左栏）由 Reka 先拦下，这里不再管。
 
 import { useEventListener } from '@vueuse/core';
-
-/** 这些 input 不能打字，右键弹出来的只会是网页菜单 */
-const NOT_TEXT_INPUTS = new Set(['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit']);
+import { isTextInput } from '@/utils/textInput';
 
 /** 右键的地方在能打字的框里（只读的框也算：照样能复制） */
 function inTextBox(el: Element): boolean {
   const box = el.closest('input, textarea, [contenteditable]');
-  if (box instanceof HTMLInputElement) return !NOT_TEXT_INPUTS.has(box.type);
+  if (box instanceof HTMLInputElement) return isTextInput(box);
   if (box instanceof HTMLTextAreaElement) return true;
   return box instanceof HTMLElement && box.isContentEditable;
 }

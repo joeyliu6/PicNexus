@@ -3,8 +3,10 @@
 // 左侧 40px 图标块（普通品牌蓝 / 警告琥珀 / 危险红），标题 17px + 12px 灰色上下文；按钮高 34。
 // 打开时焦点落在 [data-autofocus] 元素，没有就落在第一个输入框，再没有就落在主按钮；Esc 关闭。
 // 关掉后焦点回到打开它的地方（交接说明 3.4）：从菜单项打开的，回到那个菜单的按钮。
+// 单行输入框里按 Enter = 点主按钮（同系统对话框的默认按钮）。
 import { ref, watch } from 'vue';
 import { DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
+import { isTextInput } from '@/utils/textInput';
 import PnIcon from './PnIcon.vue';
 import type { IconName } from './icons';
 
@@ -61,6 +63,24 @@ function onOpenAutoFocus(event: Event) {
   target.focus();
 }
 
+/** 主按钮：底栏里实色的那个（危险操作是红色的） */
+const MAIN_BUTTON = '.pn-dialog__footer .pn-button--primary, .pn-dialog__footer .pn-button--danger';
+
+/**
+ * 单行输入框里按 Enter 点主按钮；主按钮不可点（没填完、正在提交）时什么也不做，连按也只提交一次。
+ * 输入框自己处理了 Enter 的（如压缩方案「回车保存这一项」）先 preventDefault，这里就不管；
+ * 多行文本框的 Enter 是换行，带修饰键的 Enter 各有用处，都不算
+ */
+function onContentKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.defaultPrevented || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!isTextInput(event.target)) return;
+  const root = contentRef.value?.$el as HTMLElement | undefined;
+  const main = root?.querySelector<HTMLButtonElement>(MAIN_BUTTON);
+  if (!main || main.disabled) return;
+  event.preventDefault();
+  main.click();
+}
+
 function onDismissAttempt(event: Event) {
   if (props.blocking) {
     event.preventDefault();
@@ -79,6 +99,7 @@ function onDismissAttempt(event: Event) {
         class="pn-layer pn-dialog"
         @open-auto-focus="onOpenAutoFocus"
         @close-auto-focus="onCloseAutoFocus"
+        @keydown="onContentKeydown"
         @escape-key-down="onDismissAttempt"
         @pointer-down-outside="onDismissAttempt"
         @interact-outside="(event: Event) => { if (blocking) event.preventDefault(); }"

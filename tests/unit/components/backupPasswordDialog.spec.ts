@@ -75,6 +75,15 @@ describe('BackupPasswordDialog', () => {
     expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'disable', currentPassword: 'Old12345' }]);
   });
 
+  // 所有密码框按回车提交（decisions/onboarding.md）：回车走主按钮，按一次只提交一次
+  it('密码框里按回车提交，只提交一次', async () => {
+    const wrapper = mountDialog('disable');
+    await nextTick();
+    await type('backup-password-current', 'Old12345');
+    input('backup-password-current').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(wrapper.emitted('confirm')).toEqual([[{ mode: 'disable', currentPassword: 'Old12345' }]]);
+  });
+
   it('还原：写剩余次数，5 次用完后只剩「跳过，使用默认配置」', async () => {
     const wrapper = mountDialog('restore');
     await nextTick();
