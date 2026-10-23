@@ -265,9 +265,11 @@ async function removeRecord(): Promise<void> {
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
-.detail__star:hover { background: var(--pn-row-hover); }
+.detail__star:hover { background: var(--pn-ghost-hover); }
+.detail__star:active { background: var(--pn-ghost-press); }
 .detail__star--on { color: var(--pn-warning-fill); }
 
 .detail__section {
@@ -303,13 +305,21 @@ async function removeRecord(): Promise<void> {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in), box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.detail__copy--done {
+.detail__copy:hover { background: var(--pn-secondary-hover); }
+.detail__copy:active { background: var(--pn-secondary-press); }
+
+/* 复制 → 已复制：状态切换按「快」过渡 */
+.detail__copy--done,
+.detail__copy--done:hover,
+.detail__copy--done:active {
   background: var(--pn-success-soft);
   box-shadow: none;
   color: var(--pn-success);
   font-weight: var(--pn-weight-medium);
+  transition-duration: var(--pn-dur-fast);
 }
 
 .detail__notice {
@@ -343,10 +353,13 @@ async function removeRecord(): Promise<void> {
   color: var(--pn-text2);
   font: inherit;
   font-size: var(--pn-text-footnote);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.detail__ghost:hover:not(:disabled),
-.detail__ghost[data-state='open'] { background: var(--pn-row-hover); }
+.detail__ghost:hover:not(:disabled) { background: var(--pn-ghost-hover); }
+
+.detail__ghost:active:not(:disabled),
+.detail__ghost[data-state='open'] { background: var(--pn-ghost-press); }
 
 .detail__foot {
   display: flex;
@@ -365,7 +378,10 @@ async function removeRecord(): Promise<void> {
   background: transparent;
   color: var(--pn-danger);
   font: inherit;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.detail__remove:hover { background: var(--pn-danger-soft); }
+/* 红字文字按钮：悬停 / 按下同其他透明底文字按钮（菜单里的红色项、多选条的「移除记录」同此） */
+.detail__remove:hover { background: var(--pn-ghost-hover); }
+.detail__remove:active { background: var(--pn-ghost-press); }
 </style>

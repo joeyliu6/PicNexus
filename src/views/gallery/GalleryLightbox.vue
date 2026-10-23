@@ -266,9 +266,11 @@ async function removeRecord(): Promise<void> {
   color: var(--pn-text1);
   font: inherit;
   white-space: nowrap;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .lightbox__button:hover { background: var(--pn-lightbox-button-hover); }
+.lightbox__button:active { background: var(--pn-lightbox-button-press); }
 .lightbox__button--icon { width: var(--pn-size-button-lg); padding: 0; }
 .lightbox__button--danger { color: var(--pn-danger); }
 .lightbox__button--done { color: var(--pn-success); }
@@ -296,7 +298,13 @@ async function removeRecord(): Promise<void> {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.lightbox__chip:hover { background: var(--pn-lightbox-button-hover); }
+
+.lightbox__chip:active,
+.lightbox__chip[data-state='open'] { background: var(--pn-lightbox-button-press); }
 
 .lightbox__nav {
   position: absolute;
@@ -312,9 +320,11 @@ async function removeRecord(): Promise<void> {
   background: var(--pn-lightbox-button);
   color: var(--pn-text1);
   transform: translateY(-50%);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .lightbox__nav:hover { background: var(--pn-lightbox-button-hover); }
+.lightbox__nav:active { background: var(--pn-lightbox-button-press); }
 .lightbox__nav--prev { left: var(--pn-space-20); }
 .lightbox__nav--next { right: var(--pn-space-20); }
 

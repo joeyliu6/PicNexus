@@ -157,6 +157,7 @@ const segments = [
   background: var(--pn-field);
   box-shadow: inset 0 0 0 1px var(--pn-border-strong);
   color: var(--pn-text3);
+  transition: box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .toolbar__search--narrow { width: var(--pn-size-gallery-search-narrow); }
@@ -191,16 +192,26 @@ const segments = [
   color: var(--pn-text2);
   font: inherit;
   white-space: nowrap;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.toolbar__filter:hover { background: var(--pn-row-hover); }
+.toolbar__filter:hover { background: var(--pn-ghost-hover); }
 
-.toolbar__filter--on,
-.toolbar__filter--on:hover {
+.toolbar__filter:active,
+.toolbar__filter[data-state='open'] { background: var(--pn-ghost-press); }
+
+/* 生效后变实底（设计稿 f.bg = navSel）：切换按「快」过渡；实底上悬停、按下再各深一级（浅灰底的级差） */
+.toolbar__filter--on {
   background: var(--pn-selected);
   color: var(--pn-text1);
   font-weight: var(--pn-weight-medium);
+  transition-duration: var(--pn-dur-fast);
 }
+
+.toolbar__filter--on:hover { background: var(--pn-ghost-press); }
+
+.toolbar__filter--on:active,
+.toolbar__filter--on[data-state='open'] { background: var(--pn-subtle-press); }
 
 .toolbar__caret { color: var(--pn-text3); }
 

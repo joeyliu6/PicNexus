@@ -207,9 +207,6 @@ watch(() => props.confirmedHttpHosts, () => {
 
 <template>
   <div ref="wrapperRef" class="thumbnail-wrapper">
-    <!-- 加载中显示骨架屏 -->
-    <div v-if="isLoading && !isError" class="thumbnail-skeleton"></div>
-    
     <!-- 加载成功显示图片 -->
     <img
       v-if="!isError && currentSrc"
@@ -223,6 +220,11 @@ watch(() => props.confirmedHttpHosts, () => {
       @error="handleError"
       @load="handleLoad"
     />
+
+    <!-- 加载中盖一块色块占位：图拉到后它 150ms 淡出、露出底下的图（LoadingRules.dc.html ③「拉到后淡入」） -->
+    <Transition name="thumbnail-skeleton">
+      <div v-if="isLoading && !isError" class="thumbnail-skeleton"></div>
+    </Transition>
     
     <!-- 占位符：错误或无可用源时显示 -->
     <div v-if="isError" class="thumbnail-placeholder">
@@ -252,10 +254,13 @@ watch(() => props.confirmedHttpHosts, () => {
 }
 
 .thumbnail-skeleton {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   background: var(--pn-skeleton);
 }
+
+.thumbnail-skeleton-leave-active { transition: opacity var(--pn-dur-fast) var(--pn-ease-in); }
+.thumbnail-skeleton-leave-to { opacity: 0; }
 
 .thumbnail-placeholder {
   width: 100%;

@@ -14,9 +14,12 @@ vi.mock('@/composables/image/useThumbCache', () => ({
 
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 
+/** 占位色块的淡出是 <Transition>（真跑要等两帧才移除）：这里只看状态逻辑，把 Transition 换成立即渲染的桩 */
+const mountThumb = (options: Parameters<typeof mountWithDefaults>[1]) => mountWithDefaults(ThumbnailImage, { ...options, global: { stubs: { Transition: true } } });
+
 describe('ThumbnailImage fallback chain', () => {
   it('tries the next image source before rendering the placeholder', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: {
         srcs: [
           'https://cdn.example.com/broken.jpg',
@@ -46,7 +49,7 @@ describe('ThumbnailImage fallback chain', () => {
   });
 
   it('resets the fallback index when the source list changes', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: {
         srcs: ['https://cdn.example.com/old.jpg'],
         alt: 'changing image',
@@ -66,7 +69,7 @@ describe('ThumbnailImage fallback chain', () => {
   });
 
   it('skips unsafe image URLs before trying the next candidate', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: {
         srcs: [
           'javascript:alert(1)',
@@ -81,7 +84,7 @@ describe('ThumbnailImage fallback chain', () => {
 
   it('allows an HTTP hostname listed in confirmedHttpHosts', async () => {
     // fake-ip 逃生舱确认的是主机名，不是字面量私网 IP——不传这个 prop 就该按默认策略拒绝
-    const rejecting = mountWithDefaults(ThumbnailImage, {
+    const rejecting = mountThumb({
       props: { srcs: ['http://nas.local/img/a.jpg'] },
       slots: { placeholder: '<span data-testid="thumb-fallback">fallback</span>' },
     });
@@ -89,7 +92,7 @@ describe('ThumbnailImage fallback chain', () => {
     expect(rejecting.find('img').exists()).toBe(false);
     expect(rejecting.get('[data-testid="thumb-fallback"]').text()).toBe('fallback');
 
-    const allowing = mountWithDefaults(ThumbnailImage, {
+    const allowing = mountThumb({
       props: {
         srcs: ['http://nas.local/img/a.jpg'],
         confirmedHttpHosts: new Set(['nas.local']),
@@ -117,7 +120,7 @@ describe('ThumbnailImage candidate list changes', () => {
   // 回归：pendingFailure 不跟着候选链一起清，就会在新链的候选加载成功时套用
   // 「前一条挂、这一条通」的判据，把上一张图的代理 URL 判死，整个会话降级成原图直连。
   it('drops the pending failure when the candidate list changes', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: { srcs: [PROXY, ORIGIN] },
     });
 
@@ -136,7 +139,7 @@ describe('ThumbnailImage candidate list changes', () => {
   // 回归：QueueItem 的候选每个上传进度 tick 都是一份内容相同的新数组。只比引用会把图
   // 拽回候选 0 并把 isLoading 打回 true，而 src 没变 → 浏览器不再发 load 事件 → 骨架屏卡死。
   it('keeps the settled candidate when a new array has identical content', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: { srcs: [PROXY, ORIGIN] },
     });
 
@@ -159,7 +162,7 @@ describe('ThumbnailImage candidate list changes', () => {
   // 拦不住，但首条恰好是当前已渲染的那张，src 不变 → 不会再有 load 事件 → isLoading
   // 永远停在 true。代理一挂，之后每张图都会走这条路。
   it('keeps the loaded image when the chain collapses to the already-shown URL', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: { srcs: [PROXY, ORIGIN] },
     });
 
@@ -189,7 +192,7 @@ describe('ThumbnailImage candidate list changes', () => {
     Reflect.deleteProperty(globalThis, 'IntersectionObserver');
     vi.useFakeTimers();
     try {
-      const wrapper = mountWithDefaults(ThumbnailImage, {
+      const wrapper = mountThumb({
         props: { srcs: [PROXY] },
       });
       await nextTick();
@@ -220,7 +223,7 @@ describe('ThumbnailImage candidate list changes', () => {
   // 真实触发：同一个 QueueItem 里 R2 先传完（显示代理图），WebDAV 后传完，把未确认的
   // 局域网 http 地址插到候选链首位。
   it('does not blame the previous image when a candidate is rejected by the safety filter', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: { srcs: [PROXY, ORIGIN] },
     });
     await wrapper.get('img').trigger('load');
@@ -241,7 +244,7 @@ describe('ThumbnailImage candidate list changes', () => {
   // 同一个拒绝分支的另一半：它也不能顺手把 isLoading 打回 true，
   // 否则会用骨架屏盖住已经显示好的图，还让「目标就是当前这张」的短路失效、白等 5 秒超时。
   it('keeps showing the loaded image while skipping a rejected candidate', async () => {
-    const wrapper = mountWithDefaults(ThumbnailImage, {
+    const wrapper = mountThumb({
       props: { srcs: [PROXY, ORIGIN] },
     });
     await wrapper.get('img').trigger('load');

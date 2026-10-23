@@ -203,20 +203,24 @@ function onClick(event: MouseEvent): void {
       <span v-if="animated && showMarks && !selecting" class="tile__tag tile__tag--gif" aria-hidden="true">GIF</span>
       <span v-if="tag && showMarks" class="tile__tag" :class="`tile__tag--${kind}`" aria-hidden="true">{{ tag }}</span>
 
-      <div v-if="overlay" class="tile__hover">
-        <button type="button" class="tile__select" aria-label="选择" @click.stop="emit('toggleSelect', $event)" />
-        <button type="button" class="tile__star" :aria-label="favorited ? '取消收藏' : '收藏'" @click.stop="emit('toggleFavorite')">
-          <PnIcon name="star" :size="16" :stroke="1.8" :filled="favorited" />
-        </button>
-        <PetalGlyph :states="petals" :size="16" on-image :label="petalLabel" class="tile__petals" />
-        <button type="button" class="tile__copy" @click.stop="emit('copy')">{{ copied ? '已复制' : '复制' }}</button>
-      </div>
+      <Transition name="tile-hover">
+        <div v-if="overlay" class="tile__hover">
+          <button type="button" class="tile__select" aria-label="选择" @click.stop="emit('toggleSelect', $event)" />
+          <button type="button" class="tile__star" :aria-label="favorited ? '取消收藏' : '收藏'" @click.stop="emit('toggleFavorite')">
+            <PnIcon name="star" :size="16" :stroke="1.8" :filled="favorited" />
+          </button>
+          <PetalGlyph :states="petals" :size="16" on-image :label="petalLabel" class="tile__petals" />
+          <button type="button" class="tile__copy" @click.stop="emit('copy')">{{ copied ? '已复制' : '复制' }}</button>
+        </div>
+      </Transition>
     </div>
 
     <span v-if="selecting && !selected" class="tile__circle" aria-hidden="true" />
-    <span v-if="selected" class="tile__check" aria-hidden="true">
-      <PnIcon name="check" :size="12" :stroke="2.4" />
-    </span>
+    <Transition name="tile-mark">
+      <span v-if="selected" class="tile__check" aria-hidden="true">
+        <PnIcon name="check" :size="12" :stroke="2.4" />
+      </span>
+    </Transition>
     <span v-if="focused && !selected" class="tile__focus" aria-hidden="true" />
   </div>
 </template>
@@ -232,6 +236,7 @@ function onClick(event: MouseEvent): void {
   box-shadow: 0 0 0 1px var(--pn-hairline);
   cursor: default;
   outline: none;
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 /* 小图放在方格里，空出来的地方是画布色（选中时让位给下面的浅蓝底） */
@@ -246,7 +251,7 @@ function onClick(event: MouseEvent): void {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  transition: transform var(--pn-dur-fast) var(--pn-ease-in);
+  transition: transform var(--pn-dur-fast) var(--pn-ease-in), border-radius var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .tile--selected .tile__inner {
@@ -369,6 +374,13 @@ function onClick(event: MouseEvent): void {
   background: var(--pn-media-hover);
 }
 
+/* 悬停层原地淡入、淡出（退场快 30%） */
+.tile-hover-enter-active { transition: opacity var(--pn-dur-instant) var(--pn-ease-in); }
+.tile-hover-leave-active { transition: opacity calc(var(--pn-dur-instant) * 0.7) var(--pn-ease-out); }
+
+.tile-hover-enter-from,
+.tile-hover-leave-to { opacity: 0; }
+
 .tile__select {
   position: absolute;
   top: var(--pn-space-8);
@@ -414,7 +426,11 @@ function onClick(event: MouseEvent): void {
   font: inherit;
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
+
+.tile__copy:hover { background: var(--pn-ghost-hover); }
+.tile__copy:active { background: var(--pn-ghost-press); }
 
 .tile__circle {
   position: absolute;
@@ -443,6 +459,13 @@ function onClick(event: MouseEvent): void {
   box-shadow: 0 0 0 var(--pn-space-2) var(--pn-brand-soft);
   color: var(--pn-on-fill);
 }
+
+/* 选中的对勾随图片缩小一起淡入（退场快 30%） */
+.tile-mark-enter-active { transition: opacity var(--pn-dur-fast) var(--pn-ease-in); }
+.tile-mark-leave-active { transition: opacity calc(var(--pn-dur-fast) * 0.7) var(--pn-ease-out); }
+
+.tile-mark-enter-from,
+.tile-mark-leave-to { opacity: 0; }
 
 .tile__focus {
   position: absolute;

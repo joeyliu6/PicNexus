@@ -364,9 +364,16 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
           :visible="grid.scrubber.isSidebarVisible.value"
           @jump="jump"
         />
-        <GallerySelectionBar v-if="viewState.hasSelection.value" :grid="grid" :format="format" @removed="onRemoved" />
+        <Transition name="selection-bar">
+          <GallerySelectionBar v-if="viewState.hasSelection.value" :grid="grid" :format="format" @removed="onRemoved" />
+        </Transition>
       </div>
-      <GalleryDetail v-if="detailId" :key="detailId" :item-id="detailId" :grid="grid" :format="format" @close="detailId = null" @removed="onRemoved" />
+      <!-- 外面套一层：从右侧滑入 / 滑出只在打开、关闭时播；换一张图时里面按 key 重建、不播 -->
+      <Transition name="detail-pane">
+        <div v-if="detailId" class="gallery__detail">
+          <GalleryDetail :key="detailId" :item-id="detailId" :grid="grid" :format="format" @close="detailId = null" @removed="onRemoved" />
+        </div>
+      </Transition>
     </div>
 
     <GalleryLightbox :grid="grid" :nav="lightbox" :format="format" @removed="onRemoved" />
@@ -386,6 +393,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .gallery__main {
@@ -410,5 +418,33 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   position: absolute;
   inset: 0;
   background: var(--pn-canvas);
+}
+
+.gallery__detail { display: flex; flex: none; }
+
+/* 详情栏进出（交接说明 5.3「舒展」）：进 250ms 从右滑入；出快 30%，先脱离布局——网格立刻铺满，滑走的那块盖在上面 */
+.detail-pane-enter-active { transition: transform var(--pn-dur-expressive) var(--pn-ease-in); }
+
+.detail-pane-leave-active {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  transition: transform calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out);
+}
+
+.detail-pane-enter-from,
+.detail-pane-leave-to { transform: translateX(100%); }
+
+/* 多选操作条：浮出（上移 8 + 淡入 200ms），收起只淡出、快 30%；「减少动态效果」时只淡入淡出 */
+.selection-bar-enter-active { transition: opacity var(--pn-dur-standard) var(--pn-ease-in), transform var(--pn-dur-standard) var(--pn-ease-in); }
+.selection-bar-leave-active { transition: opacity calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out); }
+.selection-bar-enter-from { opacity: 0; transform: translate(-50%, var(--pn-space-8)); }
+.selection-bar-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-bar-enter-active { transition: opacity var(--pn-dur-fade-standard) var(--pn-ease-in); }
+  .selection-bar-leave-active { transition: opacity calc(var(--pn-dur-fade-standard) * 0.7) var(--pn-ease-out); }
+  .selection-bar-enter-from { transform: translateX(-50%); }
 }
 </style>

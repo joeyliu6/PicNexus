@@ -73,6 +73,9 @@
   /* 首页「最近上传」悬停行：半透明，叠在背景装饰上不发灰 */
   --pn-recent-row-hover: rgba(0, 0, 0, 0.04);
   --pn-host-bar: rgba(57, 133, 237, 0.38);
+  /* 图库筛选小标签上的 ×（设计稿未画）：半透明叠在品牌浅底上才不发灰；悬停同「选中」，按下再深一级 */
+  --pn-chip-remove-hover: rgba(0, 0, 0, 0.065);
+  --pn-chip-remove-press: rgba(0, 0, 0, 0.11);
   /* 备份密码强度条的底色（Dialogs.dc.html） */
   --pn-backup-strength-track: #E5E5E5;
 }
@@ -130,6 +133,8 @@
   --pn-host-row-hover: rgba(255, 255, 255, 0.04);
   --pn-recent-row-hover: rgba(255, 255, 255, 0.045);
   --pn-host-bar: rgba(76, 147, 245, 0.45);
+  --pn-chip-remove-hover: rgba(255, 255, 255, 0.08);
+  --pn-chip-remove-press: rgba(255, 255, 255, 0.14);
   --pn-backup-strength-track: #3A3A3E;
 }
 
@@ -460,6 +465,8 @@
   --pn-lightbox-bg: #0E0E10;
   --pn-lightbox-button: rgba(255, 255, 255, 0.08);
   --pn-lightbox-button-hover: rgba(255, 255, 255, 0.14);
+  /* 按下：设计稿未画，按悬停再亮一级（深色「越靠上越亮」） */
+  --pn-lightbox-button-press: rgba(255, 255, 255, 0.2);
   --pn-lightbox-chip: rgba(255, 255, 255, 0.1);
   --pn-lightbox-rule: rgba(255, 255, 255, 0.06);
   --pn-lightbox-menu-active: #36363A;

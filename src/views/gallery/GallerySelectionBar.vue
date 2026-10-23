@@ -155,10 +155,14 @@ async function remove(): Promise<void> {
   background: transparent;
   color: var(--pn-text1);
   font: inherit;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.selection-bar__button:hover:not(:disabled),
-.selection-bar__button[data-state='open'] { background: var(--pn-row-hover); }
+/* 操作条是白色浮起面（深色 #2A2A2D）：按浮起按钮的悬停 / 按下色，深色下才看得出变化 */
+.selection-bar__button:hover:not(:disabled) { background: var(--pn-btn-soft-hover); }
+
+.selection-bar__button:active:not(:disabled),
+.selection-bar__button[data-state='open'] { background: var(--pn-btn-soft-press); }
 
 .selection-bar__button:disabled { color: var(--pn-text3); }
 .selection-bar__button--danger { color: var(--pn-danger); }
@@ -175,7 +179,9 @@ async function remove(): Promise<void> {
   border-radius: var(--pn-radius-md);
   background: transparent;
   color: var(--pn-text2);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.selection-bar__close:hover { background: var(--pn-row-hover); }
+.selection-bar__close:hover { background: var(--pn-btn-soft-hover); }
+.selection-bar__close:active { background: var(--pn-btn-soft-press); }
 </style>

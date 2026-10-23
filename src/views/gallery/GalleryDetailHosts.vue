@@ -129,12 +129,20 @@ const emit = defineEmits<{
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.hosts__copy--done {
+/* 浅灰底按钮：悬停再深一级、按下再深一级 */
+.hosts__copy:hover { background: var(--pn-ghost-press); }
+.hosts__copy:active { background: var(--pn-subtle-press); }
+
+.hosts__copy--done,
+.hosts__copy--done:hover,
+.hosts__copy--done:active {
   background: var(--pn-success-soft);
   color: var(--pn-success);
   font-weight: var(--pn-weight-medium);
+  transition-duration: var(--pn-dur-fast);
 }
 
 .hosts__more {
@@ -148,8 +156,11 @@ const emit = defineEmits<{
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.hosts__more:hover,
-.hosts__more[data-state='open'] { background: var(--pn-row-hover); }
+.hosts__more:hover { background: var(--pn-ghost-hover); }
+
+.hosts__more:active,
+.hosts__more[data-state='open'] { background: var(--pn-ghost-press); }
 </style>

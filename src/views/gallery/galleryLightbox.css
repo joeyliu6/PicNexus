@@ -55,6 +55,9 @@
   animation: pn-lightbox-in-prev var(--pn-dur-standard) var(--pn-ease-in);
 }
 
+/* 开场时顶栏、底栏、翻页按钮随背景一起淡入，不先于图片「啪」地出现（每次打开都是新挂的元素，动画只在挂上时播一次） */
+.pswp--picnexus .lightbox-chrome { animation: pn-lightbox-in var(--pn-dur-expressive) var(--pn-ease-in); }
+
 /* 关场时自绘的顶栏、底栏、翻页按钮先让开，把收回的动作留给图片 */
 .pswp--picnexus.is-pswp-closing .lightbox-chrome {
   opacity: 0;
@@ -74,6 +77,17 @@
   color: var(--pn-text1);
 }
 
+/* 出现 / 消失同标准浮层（pn-base.css 的 .pn-menu）：进 200ms 朝展开方向挪 4px 并淡入，退 140ms 只淡出；「减少动态效果」时只淡入淡出 */
+.lightbox__menu[data-side='bottom'] { --pn-layer-shift-y: calc(-1 * var(--pn-space-4)); }
+.lightbox__menu[data-side='top'] { --pn-layer-shift-y: var(--pn-space-4); }
+.lightbox__menu[data-state='open'] { animation: pn-layer-in var(--pn-dur-standard) var(--pn-ease-in); }
+.lightbox__menu[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-standard) * 0.7) var(--pn-ease-out) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox__menu[data-state='open'] { animation: pn-layer-fade-in var(--pn-dur-fade-standard) var(--pn-ease-in); }
+  .lightbox__menu[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-standard) * 0.7) var(--pn-ease-out) forwards; }
+}
+
 .lightbox__menu-row {
   display: flex;
   align-items: center;
@@ -82,6 +96,7 @@
   padding: 0 var(--pn-space-button-sm-x);
   border-radius: var(--pn-radius-sm);
   outline: none;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .lightbox__menu-row[data-highlighted] { background: var(--pn-lightbox-menu-active); }

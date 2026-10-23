@@ -290,15 +290,22 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
   white-space: nowrap;
 }
 
+/* 表头的排序按钮：悬停 / 按下的底色向两侧各伸 6，文字位置不变 */
 .list__sort {
-  padding: 0;
+  height: var(--pn-size-filter-chip);
+  margin: 0 calc(-1 * var(--pn-space-6));
+  padding: 0 var(--pn-space-6);
   border: 0;
+  border-radius: var(--pn-radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+.list__sort:hover { background: var(--pn-ghost-hover); color: var(--pn-text1); }
+.list__sort:active { background: var(--pn-ghost-press); color: var(--pn-text1); }
 .list__sort--on { color: var(--pn-text1); font-weight: var(--pn-weight-medium); }
 
 .list__scroll {
@@ -319,6 +326,7 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
   left: 0;
   height: var(--pn-size-list-row);
   border-radius: var(--pn-radius-md);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .list__row:hover { background: var(--pn-row-hover); }
@@ -387,9 +395,12 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
+/* 按钮落在悬停行的浅灰底上：按浅灰底的级差，悬停再深一级、按下再深一级 */
 .list__icon:hover,
-.list__icon[data-state='open'] { background: var(--pn-selected); }
+.list__icon[data-state='open'] { background: var(--pn-ghost-press); }
+.list__icon:active { background: var(--pn-subtle-press); }
 .list__icon--done { color: var(--pn-success); }
 </style>

@@ -60,9 +60,11 @@ const emit = defineEmits<{
   border-radius: 50%;
   background: transparent;
   color: var(--pn-brand-text);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.chips__remove:hover { background: var(--pn-row-hover); }
+.chips__remove:hover { background: var(--pn-chip-remove-hover); }
+.chips__remove:active { background: var(--pn-chip-remove-press); }
 
 .chips__clear {
   height: var(--pn-size-filter-chip);
@@ -73,7 +75,9 @@ const emit = defineEmits<{
   color: var(--pn-text2);
   font: inherit;
   font-size: var(--pn-text-footnote);
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.chips__clear:hover { background: var(--pn-row-hover); }
+.chips__clear:hover { background: var(--pn-ghost-hover); }
+.chips__clear:active { background: var(--pn-ghost-press); }
 </style>
