@@ -18,6 +18,25 @@ function isImageUrl(text: string): boolean {
   return /^https?:\/\/.+\.(jpe?g|png|gif|webp|bmp|svg|tiff?|ico|avif)([?#].*)?$/i.test(text);
 }
 
+/** 剪贴板里的文字是一条图片链接时返回它；不是、或读不出文字，返回 null */
+async function readClipboardImageUrl(): Promise<string | null> {
+  try {
+    const text = (await readText())?.trim() ?? '';
+    return isImageUrl(text) ? text : null;
+  } catch (error) {
+    log.debug('读取剪贴板文本失败:', error);
+    return null;
+  }
+}
+
+/**
+ * 「上传剪贴板图片」有没有东西可传：图片，或一条图片链接（文字，先下载再上传）。
+ * 与 pasteAndUpload 同一个口径；托盘第一项据此变灰
+ */
+export async function clipboardHasUploadable(): Promise<boolean> {
+  return (await invoke<boolean>('clipboard_has_image')) || (await readClipboardImageUrl()) !== null;
+}
+
 function hasRetryableFailureForFile(filePath: string): boolean {
   const { queueItems } = useQueueState();
   return queueItems.value.some(item =>
@@ -105,25 +124,19 @@ export function useClipboardImage() {
       return;
     }
 
-    // 剪贴板没有图片数据，尝试读取文本判断是否为图片 URL
-    try {
-      const text = await readText();
-      const trimmed = text?.trim() || '';
-      if (isImageUrl(trimmed)) {
-        log.info('检测到剪贴板中的图片 URL，开始下载:', trimmed);
-        try {
-          const downloadResult = await invoke<{ file_path: string }>('download_url_image', { url: trimmed });
-          await uploadHandler([downloadResult.file_path]);
-          return;
-        } catch (downloadError) {
-          log.error('图片 URL 下载失败:', downloadError);
-          // 这次粘贴上传失败了（红），原因照 Rust 的原话
-          toast.error('图片链接下载失败', `${getErrorMessage(downloadError)}，请检查链接后重试`);
-          return;
-        }
+    // 剪贴板没有图片数据：文字是一条图片链接就下载再上传
+    const url = await readClipboardImageUrl();
+    if (url) {
+      log.info('检测到剪贴板中的图片 URL，开始下载:', url);
+      try {
+        const downloadResult = await invoke<{ file_path: string }>('download_url_image', { url });
+        await uploadHandler([downloadResult.file_path]);
+      } catch (downloadError) {
+        log.error('图片 URL 下载失败:', downloadError);
+        // 这次粘贴上传失败了（红），原因照 Rust 的原话
+        toast.error('图片链接下载失败', `${getErrorMessage(downloadError)}，请检查链接后重试`);
       }
-    } catch (error) {
-      log.debug('读取剪贴板文本失败:', error);
+      return;
     }
 
     // 不算出错，说清怎么做（Patterns.dc.html 通知样例，灰色 i）

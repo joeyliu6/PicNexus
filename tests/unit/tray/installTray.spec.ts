@@ -4,7 +4,7 @@ import { reactive, ref } from 'vue';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
 import type { UploadController, UploadHost } from '@/composables/upload/useUploadController';
 import type { TrayAction, TrayRow } from '@/tray/trayMenuModel';
-import { getEmitMock, getExitMock, getInvokeMock, getListenMock, resetTauriMocks } from '../helpers/tauriMock';
+import { getClipboardMocks, getEmitMock, getExitMock, getInvokeMock, getListenMock, resetTauriMocks } from '../helpers/tauriMock';
 import { flushPromisesAndTicks } from '../helpers/wait';
 
 const m = vi.hoisted(() => ({
@@ -174,6 +174,44 @@ describe('installTray', () => {
     listeners[TRAY_CLIPBOARD_EVENT]({ payload: null });
     await flushPromisesAndTicks();
     expect(lastRows()[0]).toMatchObject({ enabled: false });
+  });
+
+  it('剪贴板里是一条图片链接（文字）也算有图片：和快捷键、首页粘贴一样可传；别的文字仍变灰', async () => {
+    const upload = fakeController();
+    upload.ready.value = true;
+    install(upload);
+    await flushPromisesAndTicks();
+    getInvokeMock().mockImplementation(async (command: string) => (command === 'clipboard_has_image' ? false : undefined));
+
+    getClipboardMocks().readText.mockResolvedValue('  https://img.example.com/a/photo.png?x=1 ');
+    listeners[TRAY_CLIPBOARD_EVENT]({ payload: null });
+    await flushPromisesAndTicks();
+    expect(lastRows()[0]).toMatchObject({ enabled: true, text: '上传剪贴板图片\tCtrl+Shift+C' });
+
+    getClipboardMocks().readText.mockResolvedValue('https://img.example.com/a/page.html');
+    listeners[TRAY_CLIPBOARD_EVENT]({ payload: null });
+    await flushPromisesAndTicks();
+    expect(lastRows()[0]).toMatchObject({ enabled: false, text: '上传剪贴板图片\t剪贴板无图片  Ctrl+Shift+C' });
+  });
+
+  it('连着重看几次时只认最后发起的那次：先发起的晚回来不覆盖', async () => {
+    const upload = fakeController();
+    upload.ready.value = true;
+    install(upload);
+    await flushPromisesAndTicks();
+    const answers: Array<(hasImage: boolean) => void> = [];
+    getInvokeMock().mockImplementation((command: string) => (command === 'clipboard_has_image'
+      ? new Promise<boolean>((resolve) => { answers.push(resolve); })
+      : Promise.resolve(undefined)));
+
+    listeners[TRAY_CLIPBOARD_EVENT]({ payload: null });
+    listeners[TRAY_CLIPBOARD_EVENT]({ payload: null });
+    await flushPromisesAndTicks();
+    answers[1](true);
+    await flushPromisesAndTicks();
+    answers[0](false);
+    await flushPromisesAndTicks();
+    expect(lastRows()[0]).toMatchObject({ enabled: true });
   });
 
   it('上传与「上传到 / 复制为 / 压缩」交给上传控制器；托盘改格式不重新复制剪贴板', async () => {

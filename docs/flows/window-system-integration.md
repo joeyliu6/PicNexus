@@ -90,7 +90,7 @@ flowchart TD
     IT --> R{upload.ready?}
     R -- 否 --> FB[保持兜底菜单]
     R -- 是 --> M[buildTrayMenu<br/>配置 + 图床 + 剪贴板 + 进度]
-    HV & CW --> CB[clipboard_has_image] --> M
+    HV & CW --> CB[clipboardHasUploadable<br/>clipboard_has_image,没有再看文字是不是图片链接<br/>只认最后发起的那次] --> M
     M --> SIG{签名变了?}
     SIG -- 是 --> AM[applyTrayMenu<br/>Menu.new → tray.setMenu<br/>Windows: set_tray_default_item 加粗<br/>换下的菜单留 60 秒再释放]
     IT --> IC[trayIconOpacities → 画四瓣<br/>applyTrayIcon → tray.setIcon]
@@ -110,7 +110,7 @@ flowchart TD
 - **托盘、首页「上传到」、设置页改的是同一份配置**:托盘读 `useUploadController()` 的 `config` / `hosts`,写也走同一个控制器(图床、格式、压缩)或设置页的保存入口(三个勾选)。别处改了配置,控制器收到 `config-updated` 刷新,托盘跟着重画;不要在托盘里另读一份配置。
 - **只在菜单「长什么样」变了时重建**(行的 JSON 签名),进度百分比不在菜单里。点完一项后签名没变的也再画一次:系统菜单点勾选项时自己就把勾翻过去了,而配置可能没变(点已选中的格式、点「登录失效」的图床、取消风险确认)。
 - **换下来的菜单留 60 秒才释放**:用户看着菜单时可能连着重建几次(上传中每个图床传完一次),正在显示的那份若被销毁,Windows 上会出错。
-- **剪贴板状态**:Windows 靠剪贴板序号(悬停也会重查,但资源管理器转发托盘鼠标移动有延迟,只靠悬停会慢一拍);macOS 靠悬停;Linux 收不到托盘事件,第一项一直可点。
+- **剪贴板状态**:图片或一条图片链接(文字)都算有,与快捷键、首页粘贴同一个判断(`useClipboardImage.clipboardHasUploadable`),别在托盘里另写一套。Windows 靠剪贴板序号(悬停也会重查,但资源管理器转发托盘鼠标移动有延迟,只靠悬停会慢一拍);macOS 靠悬停;Linux 收不到托盘事件,第一项一直可点。
 - **托盘发起的上传不打开主界面**:结果靠通知。`useToast` 在主窗口隐藏或最小化时把普通通知改发系统通知(带「撤销」的仍留在应用内);「在不在屏」由 `appPresence` 判断——焦点、尺寸变化、Rust 关到托盘 / 从托盘打开时发的 `main-window-presence-changed`、前端自己 `show()` / `hide()` 之后都会重判,几次判断同时进行时只认最后发起的那次。
 
 托盘写法与平台差异(右列、⚠、状态行、图标颜色)见 [decisions/tray.md](../design/redesign/decisions/tray.md) 与 [README 平台限制记录](../design/redesign/README.md#平台限制记录)。

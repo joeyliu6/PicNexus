@@ -80,7 +80,6 @@
 
 - **来源**：2026-10-19 阶段 11 给首页、图库、托盘、引导、动效各派一个只读审查子助手，查出的问题里 AI 核对过、这次没改的（改了的见各页 decisions 与提交记录）
 - **清单**：
-  - 托盘：剪贴板里是图片链接（文字）时第一项「剪贴板无图片」不可点，快捷键与首页粘贴却会下载这条链接再上传
   - 启动还原：「最多 5 次」重启后清零；启动时读不出加密文件只写日志
   - `useToast().clear()` 只移走通知、不通知等撤销结果的调用方，`useUndoToast().show()` 会一直等下去；现在没人调用 `clear()`
   - `tests/tauri-e2e/scan-history-fix-acceptance.tauri.e2e.cjs` 还在找 PrimeVue 的 `.p-dialog`（这条验收本来就挂在「验收种子脚本」一条下，平时不跑）；`src/assets/icons/illustrations/cloud-upload.svg` 没人引用，还用着已删的 `var(--primary)`

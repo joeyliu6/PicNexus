@@ -11,6 +11,7 @@ import { exit } from '@tauri-apps/plugin-process';
 import { DEFAULT_CONFIG, isPublicRiskService } from '@/config/types';
 import type { UploadController } from '@/composables/upload/useUploadController';
 import { CLIPBOARD_IMAGE_EVENT } from '@/composables/upload/clipboardWatch';
+import { clipboardHasUploadable } from '@/composables/upload/useClipboardImage';
 import { refreshAppPresence } from '@/composables/appPresence';
 import type { NavigatePayload } from '@/shell/navigatePayload';
 import { useSettingsConfig } from '@/views/settings/useSettingsConfig';
@@ -86,9 +87,13 @@ export function installTray(upload: UploadController): () => void {
     upload: uploadStatus.value,
   }));
 
+  // 一次要看两样（图片、文字），连着来几次时只认最后发起的那次
+  let clipboardChecks = 0;
   async function refreshClipboard(): Promise<void> {
     if (platform === 'linux') return;
-    clipboardHasImage.value = await invoke<boolean>('clipboard_has_image');
+    const check = ++clipboardChecks;
+    const hasImage = await clipboardHasUploadable();
+    if (check === clipboardChecks) clipboardHasImage.value = hasImage;
   }
 
   async function refreshTaskbar(): Promise<void> {
@@ -176,7 +181,10 @@ export function installTray(upload: UploadController): () => void {
   }));
   // Windows：剪贴板一变就重看（悬停的通知有延迟，靠它保证打开菜单时已经是对的）
   keep(listen(TRAY_CLIPBOARD_EVENT, () => { void refreshClipboard().catch((error) => log.warn('读取剪贴板状态失败', error)); }));
-  keep(listen(CLIPBOARD_IMAGE_EVENT, () => { clipboardHasImage.value = platform === 'linux' ? null : true; }));
+  keep(listen(CLIPBOARD_IMAGE_EVENT, () => {
+    clipboardChecks++;
+    clipboardHasImage.value = platform === 'linux' ? null : true;
+  }));
   // 切换 Windows 深浅模式时任务栏可能跟着变
   keep(getCurrentWindow().onThemeChanged(() => { void refreshTaskbar().catch((error) => log.warn('读取任务栏深浅失败', error)); }));
 

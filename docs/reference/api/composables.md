@@ -31,7 +31,7 @@
 | `HistorySync.ts`（模块） | 上传记录的 `syncHistory`（合并去重后回传）/ `pushHistory`；`describeHistorySync` 生成最近操作里的说法 | `src/composables/backup-sync/HistorySync.ts` |
 | `backupFiles.ts` / `backupPassword.ts`（模块） | 手动备份：认出文件是配置还是记录、导出 / 导入；设置 / 修改 / 关闭备份密码 | `src/composables/backup-sync/` |
 | `backupSyncUtils.ts`（模块） | WebDAV 建连与远程路径推导（解密密文密码就在这里）；导出 `getWebDAVClientAndPath` / `writeSyncLog` / `extractErrorCode` / `isWebDAVNotFoundError` | `src/composables/backup-sync/backupSyncUtils.ts` |
-| useClipboardImage | 剪贴板图片处理 | `src/composables/upload/useClipboardImage.ts` |
+| useClipboardImage | 剪贴板图片处理：`pasteAndUpload` 有图片传图片，文字是一条图片链接就下载再上传；`clipboardHasUploadable()` 用同一个口径判断有没有东西可传（托盘第一项据此变灰） | `src/composables/upload/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
 | useKeepScroll | 一直开着的页面（KeepAlive）切走再回来停在原处：滚动时记下位置，这一页重新显示时放回去（换了一个元素就作废）。在页面自己的 `onActivated` 之前调用，切回来要去别处时页面自己再滚。图库不用，它按看到的那一张恢复 | `src/composables/useKeepScroll.ts` |
 | useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
