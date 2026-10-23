@@ -14,6 +14,7 @@ import { useAppNavigation } from './useAppNavigation';
 import { useAppShortcuts } from './useAppShortcuts';
 import { useGlobalUploadInput } from './useGlobalUploadInput';
 import { useNativeContextMenu } from './useNativeContextMenu';
+import { useImeKeyGuard } from './useImeKeyGuard';
 import CommandPalette from './CommandPalette.vue';
 import DropOverlay from './DropOverlay.vue';
 import TransferCenter from './TransferCenter.vue';
@@ -48,6 +49,7 @@ setUpdateInstallGate(() => new Promise<void>((resolve) => {
   const stop = watch(upload.busy, (busy) => { if (!busy) { stop(); resolve(); } });
 }));
 const { overlay, receiving } = useGlobalUploadInput();
+useImeKeyGuard();
 useAppShortcuts();
 useNativeContextMenu();
 
