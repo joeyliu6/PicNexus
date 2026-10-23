@@ -154,7 +154,7 @@ const STATES: Record<string, State> = {
       await pick(page, 'Cloudflare R2');
       await detail(page).getByRole('button', { name: '测试连接' }).click();
       await page.clock.runFor(180);
-      await expect(detail(page).getByRole('status')).toContainText('服务可用 · 180ms');
+      await expect(detail(page).getByRole('status')).toContainText('正常 · 180ms');
     },
   },
   'P08-test-fail': {

@@ -63,7 +63,7 @@ function finishRename(): void {
         <button v-if="renamable && !editing" type="button" class="host-head__pencil" aria-label="重命名" @click="beginRename">
           <PnIcon name="pencil" :size="13" :stroke="1.8" />
         </button>
-        <span v-if="pill" class="host-head__pill" :class="`host-head__pill--${pill.tone}`"><span class="host-head__dot" />{{ pill.text }}</span>
+        <span v-if="pill" class="host-head__pill" role="status" :class="`host-head__pill--${pill.tone}`"><span class="host-head__dot" />{{ pill.text }}</span>
       </span>
       <span class="host-head__intro">{{ intro }}</span>
     </div>

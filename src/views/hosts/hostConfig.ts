@@ -158,7 +158,7 @@ export function connectHost(config: UserConfig, hostId: string): UserConfig {
 }
 
 /**
- * 断开连接：从已添加、启用里去掉；清掉凭证（多份图床整份删掉）；「复制」固定在它上面时退回最先完成；
+ * 移除图床：从已添加、启用里去掉；清掉凭证（多份图床整份删掉）；「复制」固定在它上面时退回最先完成；
  * 编辑器（Typora / Obsidian）绑着它时解绑。
  */
 export function disconnectHost(config: UserConfig, hostId: string): UserConfig {
@@ -201,7 +201,7 @@ export function disconnectHost(config: UserConfig, hostId: string): UserConfig {
   return { ...next, services: services as UserConfig['services'] };
 }
 
-/** 断开前的那一份（撤销时原样放回） */
+/** 移除前的那一份（撤销时原样放回） */
 export interface HostSnapshot {
   hostId: string;
   available: boolean;

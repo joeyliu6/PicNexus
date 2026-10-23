@@ -69,13 +69,6 @@ export function localizeReason(descriptorId: string, reason: string): string {
 
 const STEP_WORDS: Record<TestStep, string> = { credentials: '读取', write: '写入', public: '公开访问' };
 
-/** 成功结果条后半句：三步「读取、写入、公开访问均通过」；只有一步「凭证有效 / 登录有效」；免配置不写 */
-export function okDetail(descriptor: HostDescriptor, steps: readonly TestStep[]): string {
-  if (steps.length === 0) return '';
-  if (steps.length === 1) return descriptor.kind === 'cookie' ? '登录有效' : '凭证有效';
-  return `${steps.map((s) => STEP_WORDS[s]).join('、')}均通过`;
-}
-
 /** 失败结果条：粗体标题 + 灰色的「之前几步通过了 + 处理办法」 */
 export function failSummary(descriptor: HostDescriptor, state: Extract<HostTestState, { phase: 'fail' }>): { title: string; detail: string } {
   const field = state.field ? descriptor.fields.find((f) => f.key === state.field) : undefined;

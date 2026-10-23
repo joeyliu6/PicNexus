@@ -51,9 +51,9 @@
 | useHealthRowActions | 清单行与状态栏「⋯」里的动作：重新上传原图、移除失效链接、清理找不回的图片、在图库中查看、导出结果 | `src/views/health/useHealthRowActions.ts` |
 | `healthModel.ts` / `healthCalendar.ts` / `docIndex.ts`（模块） | 纯函数：每张图的状态与原因、改用哪一份、清单分组；一年的日历格子与年份胶囊；文档链接索引与修复计划 | `src/views/health/` |
 | `autoCheck.ts` / `healthBadge.ts`（模块） | 自动检测（到期判定、外壳里装定时器）；侧栏「链接健康」琥珀点的失效张数 | `src/views/health/` |
-| useHosts | 图床页状态（单例）：选中项 / 目录 / 连接草稿、逐项即存并自动测试、测试并连接、断开带撤销、P11 / P12 确认；保存失败红色通知 | `src/views/hosts/useHosts.ts` |
+| useHosts | 图床页状态（单例）：选中项 / 目录 / 连接草稿、逐项即存并自动测试、测试并连接、移除带撤销、P11 / P12 确认；保存失败红色通知 | `src/views/hosts/useHosts.ts` |
 | useHostTest | 测试连接（按接入方式：Cookie / Token / GitHub / 对象存储走 `probe_s3_storage` / WebDAV 走 `test_webdav_storage`）；结果只留本次会话，已连接的写健康状态 | `src/views/hosts/useHostTest.ts` |
-| `hostCatalog.ts` / `hostList.ts` / `hostConfig.ts` / `hostTestText.ts`（模块） | 纯函数：图床目录与字段描述；左栏排序、问题短标签、目录分组；配置读写、连接 / 断开 / 撤销快照、旧版单份自定义 S3 迁移；测试结果的说法 | `src/views/hosts/` |
+| `hostCatalog.ts` / `hostList.ts` / `hostConfig.ts` / `hostTestText.ts`（模块） | 纯函数：图床目录与字段描述；左栏排序、问题短标签、目录分组；配置读写、连接 / 移除 / 撤销快照、旧版单份自定义 S3 迁移；测试结果的说法 | `src/views/hosts/` |
 | editorSync | 编辑器服务（Typora / Obsidian / CLI）的凭证同步：启动时与每次配置变化从配置拼出凭证下发，排队执行 | `src/composables/settings/editorSync.ts` |
 | useAnalytics | GA4 P0 生命周期统计 + 在线心跳 | `src/composables/useAnalytics.ts` |
 | useMirrorFallback | 图库详情的备份管理（改用这一份 / 移除这条链接 / 单条重新检测）；`switchPrimary` 返回是否真的换了（已是这一份、写库失败都是 false） | `src/composables/history/useMirrorFallback.ts` |

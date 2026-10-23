@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 图床详情（HostsScreen.dc.html、P01–P12）：头部 → 结果条 → 使用情况 → 设置 → 断开连接。
-// 同一个组件也画连接表单（未连接的图床，P03）：没有状态按钮、使用情况与断开连接，底部是「测试并连接」/「连接」/「登录…」。
-// Cookie 图床有问题时把「重新登录…」放在设置区最上面（P02），平时放在 Cookie 字段旁。测试结果不弹通知（页面上已经写着）。
+// 图床详情（HostsScreen.dc.html、P01–P12）：头部 → 失败结果条 → 使用情况 → 设置 → 移除图床。
+// 同一个组件也画连接表单（未连接的图床，P03）：没有状态按钮、使用情况与移除图床，底部是「测试并连接」/「连接」/「登录…」。
+// Cookie 图床有问题时把「重新登录…」放在设置区最上面（P02），平时放在 Cookie 字段旁。测试结果不弹通知（页面上已经写着）：成功只看头部的「正常 · Nms」（设计稿的绿色结果条与它重复，不画），失败才有结果条写原因与处理办法。
 // 检测进行中仍显示上一次的结果（变淡）：结果条、状态标签、红框、展开的高级选项不在开始检测时消失、出结果时再出现，页面不跳。
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -13,7 +13,7 @@ import { describeHost } from './hostCatalog';
 import { readHostValues } from './hostConfig';
 import HostHeader, { type HostPill } from './HostHeader.vue';
 import HostSettings from './HostSettings.vue';
-import { failSummary, okDetail, type HostTestState } from './hostTestText';
+import { failSummary, type HostTestState } from './hostTestText';
 import HostUsage from './HostUsage.vue';
 import { useHostUsage } from './useHostUsage';
 import { useHosts } from './useHosts';
@@ -51,7 +51,6 @@ const pill = computed<HostPill | null>(() => {
 });
 
 const fail = computed(() => (shown.value.phase === 'fail' ? failSummary(descriptor.value, shown.value) : null));
-const okText = computed(() => (shown.value.phase === 'ok' ? okDetail(descriptor.value, shown.value.steps) : ''));
 
 /** Cookie 图床出了问题：「重新登录…」放最上面 */
 const loginExpired = computed(() => !props.draft && descriptor.value.kind === 'cookie' && !!row.value?.problem);
@@ -89,10 +88,14 @@ function connect(): void {
   else void hosts.connect();
 }
 
-const disconnectLabel = computed(() => (multi.value ? `删除这份 ${descriptor.value.catalogName}` : '断开连接'));
-const disconnectNote = computed(() => (multi.value
-  ? (descriptor.value.kind === 'webdav' ? '可添加多个 WebDAV，如 NAS 与坚果云' : '可添加多个 S3 兼容存储')
-  : '已传的图片和链接不受影响'));
+// 叫「移除」不叫「断开」：它会清掉填过的密钥 / 登录信息，不只是断开；说明写清清掉什么
+const disconnectLabel = computed(() => (multi.value ? `删除这份 ${descriptor.value.catalogName}` : '移除图床'));
+const disconnectNote = computed(() => {
+  if (multi.value) return descriptor.value.kind === 'webdav' ? '可添加多个 WebDAV，如 NAS 与坚果云' : '可添加多个 S3 兼容存储';
+  const kept = '已传的图片和链接不受影响';
+  if (descriptor.value.kind === 'builtin') return kept;
+  return `${descriptor.value.kind === 'cookie' ? '清除登录信息' : '清除已填的密钥'}，${kept}`;
+});
 </script>
 
 <template>
@@ -112,10 +115,7 @@ const disconnectNote = computed(() => (multi.value
       @rename="(n) => (draft && hosts.draft.value ? (hosts.draft.value.name = n) : hosts.rename(hostId, n))"
     />
 
-    <div v-if="shown.phase === 'ok'" class="host-detail__result host-detail__result--ok" :class="{ 'host-detail__result--stale': testing }" role="status">
-      <PnIcon name="check" :size="14" :stroke="2.4" />服务可用 · {{ shown.ms }}ms<span v-if="okText" class="host-detail__result-more">· {{ okText }}</span>
-    </div>
-    <div v-else-if="fail" class="host-detail__result host-detail__result--fail" :class="{ 'host-detail__result--stale': testing }" role="alert">
+    <div v-if="fail" class="host-detail__result host-detail__result--fail" :class="{ 'host-detail__result--stale': testing }" role="alert">
       <PnIcon name="failRound" :size="14" :stroke="2" class="host-detail__fail-icon" />
       <b class="host-detail__fail-title">{{ fail.title }}</b><span v-if="fail.detail" class="host-detail__result-more">{{ fail.detail }}</span>
     </div>
@@ -168,12 +168,6 @@ const disconnectNote = computed(() => (multi.value
   padding: var(--pn-space-host-result);
   border-radius: var(--pn-radius-lg);
   transition: opacity var(--pn-dur-standard) var(--pn-ease-in);
-}
-
-.host-detail__result--ok {
-  background: var(--pn-success-soft);
-  color: var(--pn-success);
-  font-weight: var(--pn-weight-medium);
 }
 
 .host-detail__result--fail {

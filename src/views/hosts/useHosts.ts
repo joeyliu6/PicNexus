@@ -1,5 +1,5 @@
 // 图床页的页面模型（交接说明 8.4）：选中哪个、右侧是详情 / 目录 / 连接表单；启用停用、逐项即存并自动测试、
-// 连接 / 断开（带撤销）、明文 HTTP 确认（P12）、Cookie 登录。单例，放在独立 effect scope 里。
+// 连接 / 移除（带撤销）、明文 HTTP 确认（P12）、Cookie 登录。单例，放在独立 effect scope 里。
 // 「已添加」与启用状态读 useUploadController.hosts（与首页「上传到」、托盘同一份设置）。
 
 import { computed, effectScope, ref, type EffectScope } from 'vue';
@@ -360,9 +360,9 @@ function create() {
     });
   }
 
-  // ---- 断开 ----
+  // ---- 移除 ----
 
-  /** 断开连接 / 删除这份：不弹确认（按钮没有「…」），通知带「撤销」原样放回 */
+  /** 移除图床 / 删除这份：不弹确认（按钮没有「…」），通知带「撤销」原样放回 */
   async function disconnect(hostId: string): Promise<void> {
     const latest = (await readFreshConfig()) ?? config.value;
     const name = hostName(hostId);
@@ -374,7 +374,7 @@ function create() {
     pane.value = selectedId.value ? 'detail' : 'catalog';
     narrowDetail.value = false;
     const multi = isWebDAVId(hostId) || isCustomS3Id(hostId);
-    toast.withAction('success', joinCjk(multi ? '已删除' : '已断开', name), '已传的图片和链接不受影响', {
+    toast.withAction('success', joinCjk(multi ? '已删除' : '已移除', name), '已传的图片和链接不受影响', {
       label: '撤销',
       run: () => {
         void patchConfig((c) => restoreHost(c, snap)).then((restored) => {

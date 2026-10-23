@@ -1,4 +1,4 @@
-// 图床在配置里的读写：GitHub 仓库合写、WebDAV 改地址作废 HTTP 确认、断开清凭证且能原样撤销、必填判定
+// 图床在配置里的读写：GitHub 仓库合写、WebDAV 改地址作废 HTTP 确认、移除清凭证且能原样撤销、必填判定
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
 import {
@@ -41,7 +41,7 @@ describe('hostConfig', () => {
     expect(blankProfile('s3', 'x', []).name).toBe('S3 兼容存储 1');
   });
 
-  it('断开：去掉已添加 / 启用、清凭证、复制固定退回；撤销原样放回', () => {
+  it('移除：去掉已添加 / 启用、清凭证、复制固定退回；撤销原样放回', () => {
     const config = base();
     config.linkOutput = { ...DEFAULT_CONFIG.linkOutput!, copyFromService: 'r2' };
     config.editorServer = { ...DEFAULT_CONFIG.editorServer!, typoraService: 'r2', obsidianService: 'jd' };
@@ -61,7 +61,7 @@ describe('hostConfig', () => {
     expect(back.editorServer).toMatchObject({ typoraService: 'r2', obsidianService: 'jd' });
   });
 
-  it('断开多份图床整份删掉，撤销放回', () => {
+  it('删除多份图床整份删掉，撤销放回', () => {
     const { config, hostId } = addProfile(base(), blankProfile('s3', 'minio', []), 's3');
     const on = connectHost(config, hostId);
     const snap = snapshotHost(on, hostId);

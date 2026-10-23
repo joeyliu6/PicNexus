@@ -1,4 +1,4 @@
-// 图床页模型：启用走首页同一处；逐项即存并自动测试；测试并连接（缺必填标红、测不过不连）；断开带撤销；P11 / P12
+// 图床页模型：启用走首页同一处；逐项即存并自动测试；测试并连接（缺必填标红、测不过不连）；移除带撤销；P11 / P12
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
@@ -170,13 +170,13 @@ describe('useHosts', () => {
     expect(m.disk!.webdav_profiles![0].lanHttpConfirmed).toBe(true);
   });
 
-  it('断开：去掉、清凭证、通知带撤销；撤销原样放回并选中它', async () => {
+  it('移除：去掉、清凭证、通知带撤销；撤销原样放回并选中它', async () => {
     const hosts = useHosts();
     await hosts.enter();
     await hosts.disconnect('r2');
     expect(m.disk!.availableServices).toEqual(['jd']);
     expect(services().r2.secretAccessKey).toBe('');
-    expect(m.withAction).toHaveBeenCalledWith('success', '已断开 Cloudflare R2', '已传的图片和链接不受影响', expect.objectContaining({ label: '撤销' }), { countdown: true });
+    expect(m.withAction).toHaveBeenCalledWith('success', '已移除 Cloudflare R2', '已传的图片和链接不受影响', expect.objectContaining({ label: '撤销' }), { countdown: true });
     const undo = m.withAction.mock.calls[0][3].run as () => void;
     undo();
     await vi.waitFor(() => expect(m.disk!.availableServices).toEqual(['jd', 'r2']));

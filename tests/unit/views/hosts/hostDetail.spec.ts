@@ -1,4 +1,4 @@
-// 详情：一页最多一个主按钮；Cookie 连接表单里手动粘贴了 Cookie 后，按钮写它真正会做的事；检测中上一次的结果不消失（页面不跳）
+// 详情：一页最多一个主按钮；底部「移除图床」写明会清掉什么；Cookie 连接表单里手动粘贴了 Cookie 后，按钮写它真正会做的事；检测中上一次的结果不消失（页面不跳）
 import { describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 import { mount } from '@vue/test-utils';
@@ -71,7 +71,22 @@ describe('HostDetail', () => {
     testState.value = { phase: 'ok', ms: 120, steps: ['credentials'] };
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.host-detail__result--fail').exists()).toBe(false);
-    expect(wrapper.get('.host-detail__result--ok').classes()).not.toContain('host-detail__result--stale');
+    // 成功不画结果条，只看头部「正常 · Nms」（与它重复）
+    expect(wrapper.find('.host-detail__result').exists()).toBe(false);
+    expect(wrapper.get('.host-head__pill').text()).toBe('正常 · 120ms');
     testState.value = { phase: 'idle' };
+  });
+
+  it.each([
+    ['r2', '移除图床', '清除已填的密钥，已传的图片和链接不受影响'],
+    ['weibo', '移除图床', '清除登录信息，已传的图片和链接不受影响'],
+    ['jd', '移除图床', '已传的图片和链接不受影响'],
+    ['webdav:nas', '删除这份 WebDAV', '可添加多个 WebDAV，如 NAS 与坚果云'],
+  ])('%s：底部按钮「%s」，说明「%s」', (hostId, label, note) => {
+    m.rows = [{ id: hostId, name: hostId, enabled: true, problem: null, sub: '', testing: false }];
+    m.draft = null;
+    const wrapper = mount(HostDetail, { props: { hostId, draft: false, narrow: false } });
+    expect(wrapper.get('.host-detail__disconnect').text()).toBe(label);
+    expect(wrapper.get('.host-detail__footer .host-detail__note').text()).toBe(note);
   });
 });

@@ -15,7 +15,7 @@ vi.mock('@/composables/service/useServiceAvailability', () => ({
 }));
 
 import { __resetHostTestForTests, LanHttpConsentNeeded, useHostTest } from '@/views/hosts/useHostTest';
-import { failSummary, okDetail } from '@/views/hosts/hostTestText';
+import { failSummary } from '@/views/hosts/hostTestText';
 import { describeHost } from '@/views/hosts/hostCatalog';
 
 describe('useHostTest', () => {
@@ -48,8 +48,6 @@ describe('useHostTest', () => {
     const state = await useHostTest().run({ hostId: 'custom_s3:minio', record: {}, draft: true });
     expect(state).toMatchObject({ phase: 'ok', steps: ['credentials', 'write', 'public'] });
     expect(m.markVerified).not.toHaveBeenCalled();
-    expect(okDetail(describeHost('custom_s3:minio')!, ['credentials', 'write', 'public'])).toBe('读取、写入、公开访问均通过');
-    expect(okDetail(describeHost('weibo')!, ['credentials'])).toBe('登录有效');
   });
 
   it('WebDAV 判不出局域网：抛给页面弹 P12，状态不卡在检测中', async () => {

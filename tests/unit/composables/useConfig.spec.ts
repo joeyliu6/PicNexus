@@ -166,7 +166,7 @@ describe('useConfigManager', () => {
       expect(mockedEmit).toHaveBeenCalledWith('config-updated', expect.any(Object));
     });
 
-    it('一个图床都没添加也能保存（图床页断开最后一个、首页「没有图床」都是正常状态）', async () => {
+    it('一个图床都没添加也能保存（图床页移除最后一个、首页「没有图床」都是正常状态）', async () => {
       const noHosts = {
         enabledServices: [],
         availableServices: [],
