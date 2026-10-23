@@ -4,7 +4,7 @@ import { getListenMock, getNotificationMocks, getPathMocks, getTauriWindowMocks,
 import { flushPromisesAndTicks } from '../helpers/wait';
 
 const pushToast = vi.hoisted(() => vi.fn());
-vi.mock('@/components/pn/toastStore', () => ({ pushToast, clearToasts: vi.fn() }));
+vi.mock('@/components/pn/toastStore', () => ({ pushToast }));
 
 import { __setAppOnScreenForTests, installAppPresence, isAppOnScreen, refreshAppPresence, WINDOW_PRESENCE_EVENT } from '@/composables/appPresence';
 import { useToast } from '@/composables/useToast';

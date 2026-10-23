@@ -2,7 +2,7 @@
 // 画面与计时在 PnToaster / toastStore（右下角、最多 3 条）；这里保留去重、全局静默与旧的调用方式。
 // 主窗口不在屏（隐藏到托盘 / 最小化）时，普通通知改发系统通知（appPresence）。
 
-import { pushToast, clearToasts, type ToastAction, type ToastKind } from '@/components/pn/toastStore';
+import { pushToast, type ToastAction, type ToastKind } from '@/components/pn/toastStore';
 import type { ToastMessageConfig } from '@/constants/toastMessages';
 import { isAppOnScreen, notifySystem } from '@/composables/appPresence';
 import { createLogger } from '@/utils/logger';
@@ -108,7 +108,6 @@ export function useToast() {
   const warn = (summary: string, detail?: string, life?: number) => addToast('warn', summary, detail, life);
   const info = (summary: string, detail?: string, life?: number) => addToast('info', summary, detail, life);
   const show = (severity: Severity, summary: string, detail?: string, life?: number) => addToast(severity, summary, detail, life);
-  const clear = () => clearToasts();
 
   const showConfig = (severity: Severity, config: ToastMessageConfig) => {
     addToast(severity, config.summary, config.detail, config.life);
@@ -136,7 +135,6 @@ export function useToast() {
     warn,
     info,
     show,
-    clear,
     showConfig,
     silent,
     withAction,

@@ -2,6 +2,8 @@
 // 右下角，最多叠 3 条，新的在最下面，旧的略淡；四种：成功 / 失败 / 警示 / 带「撤销」（底部倒计时细线）。
 // 普通通知 4 秒；带撤销的默认 6 秒；鼠标停在通知上时全部暂停计时。
 // 只放队列与计时，不碰 Vue 组件，便于单测；画面在 PnToaster.vue。
+// 通知只有两条离开的路：到时间或被挤掉（onExpire），点了动作按钮（action.run）。等撤销结果的调用方（useUndoToast）
+// 靠这一点一定得到答复——不要加不走这两条路的移除入口（「全部清掉」「主动收回」），那会让它一直等下去。
 
 import { reactive } from 'vue';
 
@@ -23,7 +25,7 @@ export interface ToastOptions {
   countdown?: boolean;
   /** 还没执行、到时间才执行（「清空全部记录」）：从不被挤掉，挤掉 = 提前执行，与「还有 N 秒可撤销」矛盾 */
   deferred?: boolean;
-  /** 到时间自然消失（含被新通知挤掉）时调用；点了动作按钮或手动关闭不调用 */
+  /** 到时间自然消失（含被新通知挤掉）时调用；点了动作按钮不调用 */
   onExpire?: () => void;
 }
 
@@ -101,11 +103,6 @@ export function pushToast(options: ToastOptions): number {
   return id;
 }
 
-/** 关闭一条通知，不触发 onExpire（点了动作按钮、或调用方主动收回） */
-export function dismissToast(id: number): void {
-  remove(id);
-}
-
 export function runToastAction(id: number): void {
   const item = items.find((toast) => toast.id === id);
   if (!item?.action) return;
@@ -131,16 +128,12 @@ export function resumeToasts(): void {
   for (const [id, timer] of timers) startTimer(id, timer);
 }
 
-export function clearToasts(): void {
-  for (const item of [...items]) remove(item.id);
-}
-
 export function useToastItems(): readonly ToastItem[] {
   return items;
 }
 
 export function __resetToastsForTests(): void {
-  clearToasts();
+  for (const item of [...items]) remove(item.id);
   paused = false;
   nextId = 1;
 }

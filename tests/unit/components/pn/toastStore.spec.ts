@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  __resetToastsForTests, dismissToast, MAX_TOASTS, pauseToasts, pushToast, resumeToasts, runToastAction, useToastItems,
+  __resetToastsForTests, MAX_TOASTS, pauseToasts, pushToast, resumeToasts, runToastAction, useToastItems,
 } from '@/components/pn/toastStore';
 
 const toasts = useToastItems();
@@ -94,13 +94,5 @@ describe('toastStore', () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(onExpire).not.toHaveBeenCalled();
     expect(toasts).toHaveLength(0);
-  });
-
-  it('dismisses without calling onExpire', () => {
-    const onExpire = vi.fn();
-    const id = pushToast({ kind: 'warn', title: 'x', onExpire });
-    dismissToast(id);
-    vi.advanceTimersByTime(10_000);
-    expect(onExpire).not.toHaveBeenCalled();
   });
 });
