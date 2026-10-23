@@ -272,10 +272,7 @@ const RING = 37.7;
   border: 0;
   border-radius: var(--pn-radius-button-sm);
   background: var(--pn-subtle);
-  cursor: pointer;
 }
-
-.batch-card__tile:disabled { cursor: default; }
 
 .batch-card__tile--waiting {
   opacity: var(--pn-opacity-tile-waiting);
@@ -375,7 +372,6 @@ const RING = 37.7;
   background: transparent;
   color: var(--pn-text2);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

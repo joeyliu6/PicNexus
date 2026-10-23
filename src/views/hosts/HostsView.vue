@@ -162,7 +162,6 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   background: transparent;
   color: var(--pn-brand-text);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

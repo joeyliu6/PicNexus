@@ -224,7 +224,6 @@ onBeforeUnmount(() => clearTimeout(timer));
   color: var(--pn-brand-text);
   font-family: var(--pn-font-ui);
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

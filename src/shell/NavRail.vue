@@ -119,7 +119,6 @@ const isMac = uiPlatform() === 'macos';
   border: 0;
   background: transparent;
   color: var(--pn-text3);
-  cursor: pointer;
 }
 
 .nav-rail__expand:active { background: var(--pn-selected); }

@@ -326,14 +326,13 @@ function truncated(name: string): string {
   color: var(--pn-text2);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .recent__ghost:last-child { margin-right: calc(-1 * var(--pn-space-8)); }
 .recent__ghost:hover { background: var(--pn-selected); }
 .recent__ghost:active { background: var(--pn-ghost-press); }
-.recent__ghost--off { color: var(--pn-disabled); cursor: default; }
+.recent__ghost--off { color: var(--pn-disabled); }
 
 .recent__ghost--off:hover,
 .recent__ghost--off:active { background: transparent; }
@@ -412,7 +411,6 @@ function truncated(name: string): string {
   color: var(--pn-danger);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -430,7 +428,6 @@ function truncated(name: string): string {
   border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

@@ -232,7 +232,6 @@ const disconnectNote = computed(() => {
   background: transparent;
   color: var(--pn-danger);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

@@ -87,6 +87,19 @@ test('thumbnails and nav items cannot be dragged away', async ({ page }) => {
   expect(await startsDrag(page, navItem(page, '图床'))).toBe(false);
 });
 
+// 光标照设计稿（Controls 给按钮写的 cursor: default）：按钮、行用箭头；设计稿里是链接的（侧栏搜索）才是小手。
+// 侧栏导航本身是 <a>，小手由浏览器给（WebKit 算出来是 auto，指到链接上才换成小手），这里不量
+test('buttons and rows show the arrow, links show the hand', async ({ page }) => {
+  await openApp(page, { historyRows: ROWS });
+  await expect(page.locator('.recent-row')).toHaveCount(4);
+  const cursor = (target: Locator) => target.evaluate((el) => getComputedStyle(el).cursor);
+
+  for (const target of [page.locator('.drop-bar__pick'), page.locator('.drop-bar__more'), page.locator('.recent__more').first(), page.locator('.app-sidebar__collapse')]) {
+    expect(await cursor(target)).not.toBe('pointer');
+  }
+  expect(await cursor(page.locator('.sidebar-search'))).toBe('pointer');
+});
+
 // 被省略号截断的文件名，悬停时用系统提示补全名；放得下的名字不出提示（同资源管理器）
 test('a cut-off file name shows its full name on hover, a short one does not', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });

@@ -134,7 +134,6 @@ const collapseTitle = `收起侧栏  ${isMac ? '⌘' : 'Ctrl+'}\\`;
   font: inherit;
   font-size: var(--pn-text-footnote);
   text-align: left;
-  cursor: pointer;
 }
 
 .app-sidebar__collapse:hover { color: var(--pn-nav-text); }

@@ -302,7 +302,6 @@ const MANUAL = computed(() => [
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

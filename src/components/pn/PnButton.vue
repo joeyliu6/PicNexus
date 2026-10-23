@@ -50,12 +50,10 @@ withDefaults(defineProps<{
   font-size: var(--pn-text-body);
   font-weight: var(--pn-weight-medium);
   white-space: nowrap;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .pn-button:disabled {
-  cursor: default;
   opacity: var(--pn-opacity-disabled);
 }
 

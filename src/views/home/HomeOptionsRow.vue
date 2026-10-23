@@ -127,7 +127,6 @@ const compressionLabel = computed(() => (props.compression.enabled ? props.activ
   background: transparent;
   color: var(--pn-text1);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

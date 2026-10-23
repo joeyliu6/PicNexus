@@ -83,7 +83,6 @@ const pasteKeys = uiPlatform() === 'macos' ? '⌘V' : 'Ctrl+V';
   border: 0;
   background: transparent;
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

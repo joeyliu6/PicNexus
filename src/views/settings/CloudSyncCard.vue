@@ -191,7 +191,6 @@ const ITEMS = computed(() => [
   border-radius: var(--pn-radius-md);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -199,7 +198,7 @@ const ITEMS = computed(() => [
 .cloud__more:not(:disabled):hover { background: var(--pn-ghost-hover); }
 .cloud__more:not(:disabled):active { background: var(--pn-ghost-press); }
 .cloud__more[data-state='open']:not(:disabled) { background: var(--pn-selected); }
-.cloud__more:disabled { cursor: default; opacity: var(--pn-opacity-disabled); }
+.cloud__more:disabled { opacity: var(--pn-opacity-disabled); }
 
 .cloud__item {
   display: flex;
@@ -215,14 +214,12 @@ const ITEMS = computed(() => [
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 /* 勾选行：点了就切换勾选，勾的颜色有过渡，不另加按下色 */
 .cloud__item:last-child { border-radius: 0 0 var(--pn-radius-xl) var(--pn-radius-xl); }
 .cloud__item:not(:disabled):hover { background: var(--pn-row-hover); }
-.cloud__item:disabled { cursor: default; }
 
 .cloud__item-text {
   display: flex;

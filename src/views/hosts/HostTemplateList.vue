@@ -128,7 +128,6 @@ function submit(): void {
   align-items: flex-start;
   gap: var(--pn-space-host-row-gap);
   padding: var(--pn-space-host-template);
-  cursor: pointer;
   outline-offset: -2px;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in);
 }
@@ -200,7 +199,6 @@ function submit(): void {
   color: var(--pn-danger);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   opacity: 0;
   visibility: hidden;
   transition: opacity var(--pn-dur-instant) var(--pn-ease-in), visibility var(--pn-dur-instant), background-color var(--pn-dur-instant) var(--pn-ease-in);
@@ -228,7 +226,6 @@ function submit(): void {
   background: transparent;
   color: var(--pn-text2);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

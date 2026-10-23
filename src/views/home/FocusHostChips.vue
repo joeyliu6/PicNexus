@@ -102,7 +102,6 @@ function copyAll(): void {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
@@ -160,7 +159,6 @@ function copyAll(): void {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -181,7 +179,6 @@ function copyAll(): void {
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

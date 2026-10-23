@@ -256,10 +256,7 @@ const changeHostsOpen = ref(false);
   border-radius: var(--pn-radius-lg);
   background: var(--pn-subtle);
   box-shadow: 0 0 0 1px var(--pn-hairline);
-  cursor: pointer;
 }
-
-.focus-card__thumb:disabled { cursor: default; }
 
 .focus-card__placeholder {
   display: flex;
@@ -312,7 +309,6 @@ const changeHostsOpen = ref(false);
 
 button.focus-card__pill {
   padding-right: var(--pn-space-8);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

@@ -187,7 +187,6 @@ const busy = computed(() => props.state === 'checking' || props.state === 'pause
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

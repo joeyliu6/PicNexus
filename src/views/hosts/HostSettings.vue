@@ -354,7 +354,6 @@ function setUniqueName(value: boolean): void {
   background: transparent;
   color: var(--pn-text2);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

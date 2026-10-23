@@ -192,7 +192,6 @@ function onKeydown(event: KeyboardEvent): void {
   color: var(--pn-text3);
   font-size: var(--pn-text-caption);
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .scrubber__tick--year {

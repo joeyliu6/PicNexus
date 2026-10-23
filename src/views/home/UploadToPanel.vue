@@ -201,7 +201,6 @@ function onChip(hostId: string) {
   background: var(--pn-subtle);
   color: var(--pn-text2);
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
@@ -267,7 +266,6 @@ function onChip(hostId: string) {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

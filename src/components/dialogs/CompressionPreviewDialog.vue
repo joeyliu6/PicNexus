@@ -325,7 +325,6 @@ function pickAnother() {
   margin-right: var(--pn-space-8);
   color: var(--pn-text2);
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
 }
 
 .compress-view__button {
@@ -341,7 +340,6 @@ function pickAnother() {
   color: var(--pn-text1);
   font: inherit;
   white-space: nowrap;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

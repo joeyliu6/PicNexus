@@ -89,7 +89,6 @@ const laterCount = laterHostCount();
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 

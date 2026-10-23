@@ -113,7 +113,6 @@ function start(): void {
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -121,7 +120,7 @@ function start(): void {
 
 /* 点了就选中的行：只有悬停底色（浮层底上用白底按钮的悬停色），不加按下色 */
 .backup-dialog__target:not([data-disabled]):hover { background: var(--pn-secondary-hover); }
-.backup-dialog__target[data-disabled] { opacity: var(--pn-opacity-target-disabled); cursor: default; }
+.backup-dialog__target[data-disabled] { opacity: var(--pn-opacity-target-disabled); }
 
 .backup-dialog__target:focus-visible {
   outline: var(--pn-ring-width) solid var(--pn-ring);

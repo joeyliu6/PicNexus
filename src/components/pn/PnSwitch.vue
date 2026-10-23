@@ -29,12 +29,11 @@ withDefaults(defineProps<{
   border: 0;
   border-radius: var(--pn-radius-switch);
   background: var(--pn-track-off);
-  cursor: pointer;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .pn-switch[data-state='checked'] { background: var(--pn-brand); }
-.pn-switch:disabled { cursor: default; opacity: var(--pn-opacity-disabled); }
+.pn-switch:disabled { opacity: var(--pn-opacity-disabled); }
 
 .pn-switch__thumb {
   position: absolute;

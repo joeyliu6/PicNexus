@@ -145,7 +145,6 @@ function repair(): void {
   font: inherit;
   font-weight: var(--pn-weight-medium);
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

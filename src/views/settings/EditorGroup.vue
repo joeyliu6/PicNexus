@@ -146,7 +146,6 @@ const cliExample = computed(() => {
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

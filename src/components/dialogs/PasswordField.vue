@@ -67,13 +67,11 @@ const shown = ref(false);
   border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-text3);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
 .password-field__eye:not(:disabled):hover { background: var(--pn-ghost-hover); }
 .password-field__eye:not(:disabled):active { background: var(--pn-ghost-press); }
-.password-field__eye:disabled { cursor: default; }
 
 .password-field__msg { font-size: var(--pn-text-footnote); }
 .password-field__msg--muted { color: var(--pn-text3); }

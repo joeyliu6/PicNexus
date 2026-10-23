@@ -174,7 +174,7 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
   color: var(--pn-text2);
 }
 
-.first-use__chips { display: flex; gap: var(--pn-space-8); padding: 0; border: 0; background: transparent; font: inherit; cursor: pointer; }
+.first-use__chips { display: flex; gap: var(--pn-space-8); padding: 0; border: 0; background: transparent; font: inherit; }
 
 .first-use__chip {
   display: flex;
@@ -218,7 +218,6 @@ const formatModel = computed({ get: () => props.format, set: (value: LinkFormat)
   color: var(--pn-text1);
   font: inherit;
   font-weight: var(--pn-weight-medium);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

@@ -72,7 +72,6 @@ const earlierModel = computed({
   font: inherit;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  cursor: pointer;
 
   /* 选中换到另一年：白底与阴影按「快」过渡；悬停只变字色，按「即时」 */
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);

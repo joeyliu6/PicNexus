@@ -105,7 +105,6 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
   background: transparent;
   color: var(--pn-text1);
   font: inherit;
-  cursor: pointer;
 }
 
 .general__theme:focus-visible { outline: none; }

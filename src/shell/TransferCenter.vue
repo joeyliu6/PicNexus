@@ -211,7 +211,6 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -237,7 +236,6 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -311,7 +309,6 @@ const pct = (done: number, total: number) => `${total ? (done / total) * 100 : 0
   color: var(--pn-text2);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

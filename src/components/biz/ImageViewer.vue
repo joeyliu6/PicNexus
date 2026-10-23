@@ -112,7 +112,6 @@ const frameStyle = computed(() => (props.width && props.height
   border-radius: var(--pn-radius-md);
   background: var(--pn-lightbox-button);
   color: var(--pn-text1);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

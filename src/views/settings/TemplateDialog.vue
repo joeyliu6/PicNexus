@@ -122,7 +122,6 @@ onBeforeUnmount(() => clearTimeout(timer));
   color: var(--pn-text2);
   font-family: var(--pn-font-mono);
   font-size: var(--pn-text-caption);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

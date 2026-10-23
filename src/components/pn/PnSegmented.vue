@@ -63,7 +63,6 @@ function onUpdate(value: unknown) {
   color: var(--pn-text2);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
 
   /* 选中块浮起 / 落下与文字变深一起渐变（交接说明 5.3「快 150ms：开关」） */
   transition:

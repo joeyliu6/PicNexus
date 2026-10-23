@@ -35,7 +35,6 @@ defineEmits<{ click: [event: MouseEvent] }>();
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-footnote);
-  cursor: pointer;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 

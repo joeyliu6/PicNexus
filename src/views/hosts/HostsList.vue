@@ -178,7 +178,6 @@ function tabIndexOf(row: HostRow, index: number): number {
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -205,7 +204,6 @@ function tabIndexOf(row: HostRow, index: number): number {
   height: var(--pn-size-host-row);
   padding: var(--pn-space-host-row);
   border-radius: var(--pn-radius-host-row);
-  cursor: pointer;
   outline-offset: -2px;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
@@ -272,7 +270,6 @@ function tabIndexOf(row: HostRow, index: number): number {
   font: inherit;
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
-  cursor: pointer;
   opacity: 0;
   visibility: hidden;
   transition: opacity var(--pn-dur-instant) var(--pn-ease-in), visibility var(--pn-dur-instant), background-color var(--pn-dur-instant) var(--pn-ease-in);

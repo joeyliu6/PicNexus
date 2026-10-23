@@ -106,7 +106,6 @@ const groups = computed(() => buildCatalog(props.addedIds, query.value, filter.v
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -198,7 +197,6 @@ const groups = computed(() => buildCatalog(props.addedIds, query.value, filter.v
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), box-shadow var(--pn-dur-instant) var(--pn-ease-in);
 }
 

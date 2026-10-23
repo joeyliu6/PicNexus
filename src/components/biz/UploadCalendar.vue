@@ -209,7 +209,6 @@ watch(() => props.calendar.year, () => { focusKey.value = null; tip.value = null
   border: 0;
   border-radius: var(--pn-radius-calendar-cell);
   background: var(--pn-cell-empty);
-  cursor: pointer;
 
   /* 换年份时格子换色、点选时外圈出现 / 消失：按「快」过渡，不硬切。点了就选中，不另加按下色 */
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
@@ -225,7 +224,6 @@ watch(() => props.calendar.year, () => { focusKey.value = null; tip.value = null
 
 .upload-calendar__cell--outside {
   background: transparent;
-  cursor: default;
 }
 
 .upload-calendar__cell--picked { box-shadow: var(--pn-calendar-pick-ring); }

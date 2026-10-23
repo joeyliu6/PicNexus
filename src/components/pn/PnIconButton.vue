@@ -45,11 +45,10 @@ withDefaults(defineProps<{
   padding: 0;
   border: 0;
   border-radius: var(--pn-radius-button-sm);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.pn-icon-button:disabled { cursor: default; opacity: var(--pn-opacity-disabled); }
+.pn-icon-button:disabled { opacity: var(--pn-opacity-disabled); }
 
 .pn-icon-button--subtle { background: var(--pn-subtle); color: var(--pn-text1); }
 .pn-icon-button--subtle:not(:disabled):hover { background: var(--pn-ghost-press); }

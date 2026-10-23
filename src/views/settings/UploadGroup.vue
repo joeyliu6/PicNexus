@@ -184,7 +184,6 @@ function presetById(id: string | null): CompressionPreset | null {
   border-radius: 50%;
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--pn-check-border);
-  cursor: pointer;
   transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
@@ -202,7 +201,6 @@ function presetById(id: string | null): CompressionPreset | null {
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  cursor: pointer;
 }
 
 .upload__preset-name { font-weight: var(--pn-weight-medium); }

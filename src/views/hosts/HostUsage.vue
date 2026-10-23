@@ -75,7 +75,6 @@ const dead = computed(() => props.usage?.dead ?? 0);
   text-align: left;
 }
 
-.host-usage__stat--link { cursor: pointer; }
 
 .host-usage__num {
   font-size: var(--pn-text-title);

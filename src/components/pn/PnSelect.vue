@@ -64,10 +64,9 @@ withDefaults(defineProps<{
   color: var(--pn-text1);
   font: inherit;
   font-size: var(--pn-text-body);
-  cursor: pointer;
 }
 
-.pn-select:disabled { cursor: default; opacity: var(--pn-opacity-disabled); }
+.pn-select:disabled { opacity: var(--pn-opacity-disabled); }
 .pn-select__chevron { flex: none; color: var(--pn-text3); }
 </style>
 
@@ -91,12 +90,11 @@ withDefaults(defineProps<{
   padding: 0 var(--pn-space-8);
   border-radius: var(--pn-radius-sm);
   outline: none;
-  cursor: pointer;
 }
 
 .pn-select-menu__item[data-highlighted] { background: var(--pn-menu-sel); }
 .pn-select-menu__item[data-highlighted]:active { background: var(--pn-ghost-press); }
-.pn-select-menu__item[data-disabled] { color: var(--pn-disabled); cursor: default; }
+.pn-select-menu__item[data-disabled] { color: var(--pn-disabled); }
 
 .pn-select-menu__check {
   display: flex;

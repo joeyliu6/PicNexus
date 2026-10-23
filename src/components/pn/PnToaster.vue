@@ -118,7 +118,6 @@ function pinLeaving(el: Element): void {
   font: inherit;
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 

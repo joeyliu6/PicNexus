@@ -221,7 +221,6 @@ const docsText = computed(() => {
   border-radius: var(--pn-radius-button-sm);
   background: transparent;
   color: var(--pn-text2);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), opacity var(--pn-dur-fast) var(--pn-ease-in), visibility var(--pn-dur-fast);
 }
 

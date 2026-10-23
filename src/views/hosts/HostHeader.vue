@@ -167,7 +167,6 @@ function finishRename(): void {
   border-radius: var(--pn-radius-sm);
   background: transparent;
   color: var(--pn-text3);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -212,7 +211,6 @@ function finishRename(): void {
   border-radius: var(--pn-radius-md);
   font: inherit;
   font-weight: var(--pn-weight-medium);
-  cursor: pointer;
 }
 
 /* 状态按钮在「启用」（主按钮）与「✓ 已启用」（品牌浅底）之间切换：状态切换用 150ms */
@@ -248,7 +246,6 @@ function finishRename(): void {
 
 .host-head__test:disabled {
   color: var(--pn-text2);
-  cursor: default;
 }
 
 .host-head__face {

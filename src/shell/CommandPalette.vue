@@ -283,7 +283,6 @@ function hintOf(entry: CommandEntry): string {
   color: var(--pn-text1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
 }
 
 .command-palette__item--tall { min-height: var(--pn-size-palette-item-tall); }

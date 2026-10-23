@@ -224,7 +224,6 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
   border-radius: 50%;
   background: transparent;
   color: var(--pn-brand-text);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -248,7 +247,6 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
   font: inherit;
   font-size: var(--pn-text-footnote);
   white-space: nowrap;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
@@ -301,7 +299,6 @@ const yearLabel = computed(() => (year.value === 'all' ? '全部' : year.value =
   font: inherit;
   font-size: var(--pn-text-footnote);
   font-weight: var(--pn-weight-medium);
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), opacity var(--pn-dur-fast) var(--pn-ease-in), visibility var(--pn-dur-fast);
 }
 

@@ -301,7 +301,6 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
   background: transparent;
   color: inherit;
   font: inherit;
-  cursor: pointer;
   transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
