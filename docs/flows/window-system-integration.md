@@ -1,4 +1,3 @@
-| 按 F5 整个界面刷新了、Ctrl+F 弹出浏览器的查找栏 | `disable_browser_accelerator_keys` 没装上(看日志「关闭浏览器快捷键失败」),或 WebView2 Runtime 低于 1.0.2210.55(逐键关闭要这个版本) | 概览 |
 # 窗口 / 托盘 / 快捷键 / 文件关联流程
 
 > 桌面集成层:窗口生命周期、关闭到托盘、系统托盘菜单、CLI 启动参数、以及全局快捷键/文件关联的实现状态。修改这些行为时优先查看此文档。
@@ -235,6 +234,7 @@ flowchart LR
 | CLI 上传成功但 GUI 历史没更新 | CLI 是独立进程,不与 GUI 实例共享 DB 连接 | 图3 note1 |
 | macOS 打开 CLI 后仍提示 PATH 未生效 | `~/.local/bin` 不在当前 shell PATH;按设置页 message 把 export 行加入 `~/.zshrc` 后新开终端 | CLI PATH 管理 |
 | AppImage 打开 CLI 后命令失效 | 符号链接可能指向旧的 `/tmp/.mount_*` 临时挂载;应确认当前运行时存在 `$APPIMAGE`,再手动移走旧链接后重新打开 CLI | CLI PATH 管理 |
+| 按 F5 整个界面刷新了、Ctrl+F 弹出浏览器的查找栏 | `disable_browser_accelerator_keys` 没装上(看日志「关闭浏览器快捷键失败」),或 WebView2 Runtime 低于 1.0.2210.55(逐键关闭要这个版本) | 概览 |
 | 全局快捷键按了没反应 | 设置 › 快捷键里关掉了;或组合键被别的程序占用(启动时会提示「全局快捷键未生效」) | 概览 |
 | 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,还要在单实例回调里转发 `argv` | 图4 |
 
