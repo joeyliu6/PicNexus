@@ -41,11 +41,12 @@ flowchart TD
     I -- 成功 --> J
     J{enabledServices 为空?}
     J -- 是 --> J1[提示：请选择图床]
-    J -- 否 --> K
+    J -- 否 --> R0
 
-    K[checkNetworkConnectivity 网络检测]
+    R0["queueFiles：这几张先进队列（同一文件正在传的跳过）<br/>首页焦点卡 / 批量卡当场换成它们，下面各步都算「上传中」"]
+    R0 --> K[checkNetworkConnectivity 网络检测]
     K --> L{网络可用?}
-    L -- 否 --> L1[照样进队列并标成失败：原因「网络连接中断」<br/>首页卡片上可重试；首页不在屏时弹通知]
+    L -- 否 --> L1[已进队列的这几张标成失败：原因「网络连接中断」<br/>首页卡片上可重试；首页不在屏时弹通知]
     L -- 是 --> M
 
     %% 分批处理
@@ -60,7 +61,7 @@ flowchart TD
     Q1 --> R
     Q -- 否 --> R
 
-    R[queueManager.addFile 加入上传队列]
+    R[压缩过的换成压缩后的文件去传<br/>队列与历史仍记原图路径]
     R --> S[MultiServiceUploader.uploadToMultipleServices]
 
     %% 多图床并行
@@ -96,7 +97,8 @@ flowchart TD
     AH3 -- 否 --> O
     AH3 -- 是 --> AI["copyLinks 复制链接<br/>单张：复制来源一确定就复制（onPrimaryReady），不等其余图床<br/>多张：整批结束后一次复制"]
     AI --> AJ["showUploadSessionSummary 通知<br/>首页在屏时不弹（结果已在首页卡片上）"]
-    AJ --> AK[解锁 isUploading = false]
+    AJ --> AK0["收尾：进了队列却一直没开始传的（某一批中途抛错）<br/>标成失败「准备上传时出错」，可重试"]
+    AK0 --> AK[解锁 isUploading = false]
 
     %% 样式
     style A1 fill:#e3f2fd,stroke:#1976d2
@@ -322,6 +324,7 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
 | 点击上传无反应 | `isUploading` 未释放（上次上传异常退出） | 图1 节点 C |
+| 焦点卡一直「上传中」、进度条停在起点 | 图先进队列，联网检测、读尺寸、压缩都算上传中：开着压缩时一张 1200 万像素照片要压约 2.5 秒，批量按每 3 张一组压；联网检测最多等 1.5 秒。准备时出了意外的会标成「准备上传时出错」 | 图1 节点 R0 → Q1 |
 | 提示"没有有效图片" | 文件格式不在白名单 | 图1 节点 F |
 | 提示"请选择图床" | `enabledServices` 为空 | 图1 节点 J |
 | 进度条卡在 0% | Rust 后端未发送 progress 事件 | 图2 进度循环 |

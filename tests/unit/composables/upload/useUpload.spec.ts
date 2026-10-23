@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_CONFIG } from '@/config/types';
 import { MAX_FILES_PER_UPLOAD } from '@/composables/upload/FileValidator';
+import { isUploading } from '@/composables/upload/uploadState';
 
 const {
   configStoreGetMock,
@@ -143,7 +144,9 @@ function createQueueManager() {
       Object.assign(item, updates);
     }),
     updateServiceProgress: vi.fn(),
-    markItemComplete: vi.fn(),
+    // 同真队列：传完 / 失败就不再是「等待中」（上传收尾按这个找没开始传的）
+    markItemComplete: vi.fn(() => { item.status = 'success'; }),
+    markItemFailed: vi.fn(() => { item.status = 'error'; }),
   };
 }
 
@@ -182,13 +185,15 @@ function createMultiQueueManager() {
       Object.assign(item, updates);
     }),
     updateServiceProgress: vi.fn(),
-    markItemComplete: vi.fn(),
-    markItemFailed: vi.fn(),
+    markItemComplete: vi.fn((itemId: string) => { items.get(itemId).status = 'success'; }),
+    markItemFailed: vi.fn((itemId: string) => { items.get(itemId).status = 'error'; }),
   };
 }
 
 describe('useUploadManager', () => {
   beforeEach(() => {
+    // 上传锁是模块级的：某条用例中途失败留下的锁不能拖垮后面的用例
+    isUploading.value = false;
     selectedServicesRef.value = ['jd', 'upyun'];
     availableServicesRef.value = ['jd', 'upyun'];
     serviceConfigStatusRef.value = {};
@@ -664,6 +669,7 @@ describe('useUploadManager', () => {
 
     await handleFilesUpload(['C:/tmp/a.jpg']);
     const item = queueManager.getItem('queue-0');
+    expect(queueManager.addFile).toHaveBeenCalledTimes(1);
     expect(item.serviceProgress.jd).toMatchObject({ status: '✗ 失败', error: '网络连接中断' });
     expect(item.serviceProgress.upyun).toMatchObject({ status: '✗ 失败', error: '网络连接中断' });
     expect(queueManager.markItemFailed).toHaveBeenCalledWith('queue-0', '网络连接中断');
@@ -674,6 +680,63 @@ describe('useUploadManager', () => {
     shown = false;
     await handleFilesUpload(['C:/tmp/b.jpg', 'C:/tmp/c.jpg']);
     expect(toastErrorMock).toHaveBeenCalledWith('2 张上传失败', '网络连接中断，请检查网络后重试', 5000);
+  });
+
+  // 一动手图就进队列：联网检测、读尺寸、压缩都算「上传中」，首页焦点卡 / 批量卡当场换成这几张，
+  // 不然开着压缩传大照片要干等好几秒（实测 1200 万像素约 2.4 秒、10 张约 10.5 秒）
+  it('queues the images before checking the network, reading sizes or compressing', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
+      linkOutput: { ...DEFAULT_CONFIG.linkOutput!, autoCopy: false },
+      imageCompression: { ...DEFAULT_CONFIG.imageCompression!, enabled: true },
+    });
+    let networkUp!: (up: boolean) => void;
+    checkNetworkConnectivityMock.mockReturnValue(new Promise<boolean>((resolve) => { networkUp = resolve; }));
+    let compressed!: (files: Map<string, { path: string; size: number }>) => void;
+    compressImageBatchMock.mockReturnValue(new Promise((resolve) => { compressed = resolve; }));
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    const done = handleFilesUpload(['C:/tmp/a.jpg', 'C:/tmp/b.jpg']);
+    await vi.waitFor(() => expect(queueManager.addFile).toHaveBeenCalledTimes(2));
+    expect(fetchMetadataBatchMock).not.toHaveBeenCalled();
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+
+    networkUp(true);
+    await vi.waitFor(() => expect(compressImageBatchMock).toHaveBeenCalled());
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+    compressed(new Map([['C:/tmp/a.jpg', { path: 'C:/tmp/a.compressed.jpg', size: 1_000 }]]));
+    await done;
+
+    expect(queueManager.addFile).toHaveBeenCalledTimes(2);
+    expect(uploadToMultipleServicesMock.mock.calls.map((call) => call[0])).toEqual(['C:/tmp/a.compressed.jpg', 'C:/tmp/b.jpg']);
+    expect(queueManager.getItem('queue-0')).toMatchObject({ filePath: 'C:/tmp/a.jpg', compressedSize: 1_000 });
+  });
+
+  // 进了队列却因为准备时出了意外一直没开始传：标成失败、能重试，别让焦点卡一直「上传中」
+  it('fails the queued images that never started when preparing them goes wrong', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
+      linkOutput: { ...DEFAULT_CONFIG.linkOutput!, autoCopy: false },
+      imageCompression: { ...DEFAULT_CONFIG.imageCompression!, enabled: true },
+    });
+    compressImageBatchMock.mockResolvedValue(null);
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never, { resultsOnScreen: () => false });
+
+    await handleFilesUpload(['C:/tmp/a.jpg']);
+
+    const item = queueManager.getItem('queue-0');
+    expect(queueManager.markItemFailed).toHaveBeenCalledWith('queue-0', '准备上传时出错，请重试');
+    expect(item.serviceProgress.jd).toMatchObject({ status: '✗ 失败', error: '准备上传时出错，请重试' });
+    expect(item.historyId).toEqual(expect.any(String));
+    expect(toastErrorMock).toHaveBeenCalledWith('a.jpg 上传失败', '准备上传时出错，请重试', 5000);
   });
 
   it('does not toast a failed image while the caller shows it, and does otherwise', async () => {

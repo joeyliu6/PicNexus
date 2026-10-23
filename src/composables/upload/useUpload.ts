@@ -31,6 +31,18 @@ const log = createLogger('useUpload');
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
 
+/** 进了队列、准备时出了意外一直没开始传的那几张，失败原因这么写 */
+const PREPARE_FAILED_ERROR = '准备上传时出错，请重试';
+
+/** 进了上传队列的一张：队列与历史记原图路径 */
+interface QueuedFile {
+  itemId: string;
+  filePath: string;
+  fileName: string;
+}
+
+const fileNameOf = (filePath: string) => filePath.split(/[/\\]/).pop() || filePath;
+
 export interface UploadManagerOptions {
   /** 自动复制成功后回调（单张在第一个图床传完时，多张在整批结束时） */
   onCopied?: (result: CopyLinkResult) => void;
@@ -90,27 +102,36 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
   }
 
   /**
-   * 网络不通：不去白等每个图床超时，但这几张照样进队列、标成失败并写清原因，
+   * 用户一动手，这几张就进队列：首页焦点卡 / 批量卡当场换成它们，联网检测、读尺寸、压缩都算「上传中」
+   * （开着压缩传大照片要压好几秒，压完才进队列的话，这期间界面上什么都不变）。已经在传的同一个文件跳过
+   */
+  function queueFiles(queue: UploadQueueManager, filePaths: string[], services: string[]): QueuedFile[] {
+    return filePaths.flatMap((filePath) => {
+      const fileName = fileNameOf(filePath);
+      const itemId = queue.addFile(filePath, fileName, [...services]);
+      return itemId ? [{ itemId, filePath, fileName }] : [];
+    });
+  }
+
+  /**
+   * 进了队列却没开始传的（网络不通、准备时出了意外）：不去白等每个图床超时，每个图床都标成失败、写清原因，
    * 首页卡片上就有「重试」（HomeScreen H06）；首页不在屏时再弹通知
    */
-  function reportNetworkDown(queue: UploadQueueManager, filePaths: string[], services: string[]): void {
-    const nameOf = (filePath: string) => filePath.split(/[/\\]/).pop() || filePath;
-    for (const filePath of filePaths) {
-      const itemId = queue.addFile(filePath, nameOf(filePath), [...services]);
-      if (!itemId) continue;
+  function failBeforeUpload(queue: UploadQueueManager, items: readonly QueuedFile[], services: string[], error: string): void {
+    for (const { itemId } of items) {
       queue.updateItem(itemId, {
         // 和正常上传一样先分好历史记录 id，重试传上了就记在这条下面
         historyId: crypto.randomUUID(),
         serviceProgress: Object.fromEntries(services.map((serviceId) => [
           serviceId,
-          { serviceId, progress: 0, status: '✗ 失败', error: NETWORK_DOWN_ERROR },
+          { serviceId, progress: 0, status: '✗ 失败', error },
         ])),
       });
-      queue.markItemFailed(itemId, NETWORK_DOWN_ERROR);
+      queue.markItemFailed(itemId, error);
     }
-    if (options.resultsOnScreen?.()) return;
-    const { reason, advice } = describeUploadFailure(undefined, NETWORK_DOWN_ERROR);
-    const title = filePaths.length === 1 ? `${nameOf(filePaths[0])} 上传失败` : `${filePaths.length} 张上传失败`;
+    if (items.length === 0 || options.resultsOnScreen?.()) return;
+    const { reason, advice } = describeUploadFailure(undefined, error);
+    const title = items.length === 1 ? `${items[0].fileName} 上传失败` : `${items.length} 张上传失败`;
     toast.error(title, `${reason}，${advice}`, 5000);
   }
 
@@ -136,6 +157,9 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
 
     const { compressImageBatch, cleanupTempFiles } = useImageCompress();
     let compressionEnabled = false;
+    /** 这次进了队列的；结束时还没开始传的按失败处理 */
+    let queued: QueuedFile[] = [];
+    let queuedServices: string[] = [];
 
     try {
       log.info('接收到文件:', filePaths);
@@ -248,19 +272,24 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
         return;
       }
 
-      // ⭐ 异步检测网络（在处理之前）
+      queued = queueFiles(queueManager, valid, enabledServices);
+      queuedServices = enabledServices;
+      const duplicatesSkipped = valid.length - queued.length;
+      if (duplicatesSkipped > 0) log.info(`${duplicatesSkipped} 张已在上传中，这次跳过`);
+
+      // ⭐ 异步检测网络（图已经在队列里，这段算「上传中」）
       const isNetworkAvailable = await checkNetworkConnectivity();
       if (!isNetworkAvailable) {
-        reportNetworkDown(queueManager, valid, enabledServices);
+        failBeforeUpload(queueManager, queued, enabledServices, NETWORK_DOWN_ERROR);
         return;
       }
 
       // ⭐ 流水线处理：分批获取元数据 + 上传
       // 每批 50 张图片，限制同时进行的批次数量避免网络拥塞
-      const batches = chunkArray(valid, METADATA_BATCH_SIZE);
+      const batches = chunkArray(queued, METADATA_BATCH_SIZE);
       // 一次只跑一个批次，批内同时传 UPLOAD_CONCURRENCY 张，总并发才是 3 张
       const MAX_CONCURRENT_BATCHES = 1;
-      log.info(`开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
+      log.info(`开始流水线处理：${queued.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
 
       // 收集成功上传的链接（用于自动复制）
       const collectedLinks: CopyLinkItem[] = [];
@@ -271,13 +300,13 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
         failed: 0,
         partialServiceFailureCount: 0,
         partialFailedServices: [],
-        duplicatesSkipped: 0,
+        duplicatesSkipped,
       };
 
       const autoCopyEnabled = config.linkOutput?.autoCopy !== false;
       // 单张：「复制时使用」的链接一确定就复制，其余图床在后台继续；多张：整批结束后一次复制（交接说明规则 4.9）
       let earlyCopyResult: CopyLinkResult | null = null;
-      const onPrimaryReady = autoCopyEnabled && valid.length === 1
+      const onPrimaryReady = autoCopyEnabled && queued.length === 1
         ? async (_queueIndex: number, link: CopyLinkItem) => {
           const result = await copyLinks([link], { showSuccessToast: false, showErrorToast: false });
           earlyCopyResult = result;
@@ -290,7 +319,8 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       const activePreset = resolveActivePreset(compressionConfig);
 
       // 批次处理函数
-      const processBatch = async (batchFiles: string[], batchIndex: number) => {
+      const processBatch = async (batch: QueuedFile[], batchIndex: number) => {
+        const batchFiles = batch.map((file) => file.filePath);
         // 1. 批量获取元数据（并发控制）
         // 这会预填充缓存，后续 saveHistoryItemImmediate 会直接使用缓存
         try {
@@ -320,28 +350,15 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
           }
         }
 
-        // 2. 将该批文件加入队列
+        // 2. 压缩过的换成压缩后的文件去传
         // 关键：filePath 写入队列与历史的应该是用户原图路径，
         // uploadFilePath（可能是压缩后的临时文件）只用于喂给 uploader，
         // 否则上传后 cleanupTempFiles 把临时文件删掉，重试/元数据修复就找不到原图了
-        const queueItems = batchFiles.map((originalPath) => {
-          const compressed = compressedFiles.get(originalPath);
-          const fileName = originalPath.split(/[/\\]/).pop() || originalPath;
-          const itemId = queueManager!.addFile(originalPath, fileName, [...enabledServices]);
-          if (itemId && compressed?.size) queueManager!.updateItem(itemId, { compressedSize: compressed.size });
-          return { itemId, filePath: originalPath, uploadFilePath: compressed?.path ?? originalPath, fileName };
-        }).filter(item => item.itemId);
-
-        // 同批次内被 isFileInQueue 拦截的重复路径计数（addFile 返回 null 时被 filter 过滤）
-        const droppedAsDuplicate = batchFiles.length - queueItems.length;
-        if (droppedAsDuplicate > 0) {
-          uploadSummary.duplicatesSkipped = (uploadSummary.duplicatesSkipped ?? 0) + droppedAsDuplicate;
-          log.info(`批次 ${batchIndex + 1}: ${droppedAsDuplicate} 张重复路径被忽略`);
-        }
-
-        if (queueItems.length === 0) {
-          return;
-        }
+        const queueItems = batch.map(({ itemId, filePath, fileName }) => {
+          const compressed = compressedFiles.get(filePath);
+          if (compressed?.size) queueManager!.updateItem(itemId, { compressedSize: compressed.size });
+          return { itemId, filePath, uploadFilePath: compressed?.path ?? filePath, fileName };
+        });
 
         // 3. 立即开始上传该批
         const batchLinks = await processUploadQueue(
@@ -426,6 +443,9 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       const errorMsg = error instanceof Error ? error.message : String(error);
       toast.showConfig('error', TOAST_MESSAGES.upload.failed(errorMsg));
     } finally {
+      // 准备时出了意外（如某一批中途抛错）、一直没开始传的：标成失败，别让焦点卡一直「上传中」
+      const stuck = queued.filter(({ itemId }) => queueManager?.getItem(itemId)?.status === 'pending');
+      if (queueManager && stuck.length > 0) failBeforeUpload(queueManager, stuck, queuedServices, PREPARE_FAILED_ERROR);
       isUploading.value = false;
       // 清理压缩产生的临时文件
       if (compressionEnabled) {
