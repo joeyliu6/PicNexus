@@ -106,13 +106,17 @@ function messageOf(id: HotkeyId): { text: string; danger: boolean } | null {
   font-family: var(--pn-font-mono);
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
+/* 白底描边按钮：悬停 / 按下照次按钮的两级 */
 .shortcut__key:not(:disabled):hover { background: var(--pn-secondary-hover); }
+.shortcut__key:not(:disabled):active { background: var(--pn-secondary-press); }
 .shortcut__key:disabled { cursor: default; opacity: var(--pn-opacity-disabled); }
 
 .shortcut__key--recording,
-.shortcut__key--recording:not(:disabled):hover {
+.shortcut__key--recording:not(:disabled):hover,
+.shortcut__key--recording:not(:disabled):active {
   background: var(--pn-brand-soft);
   box-shadow: inset 0 0 0 1px var(--pn-brand), 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft);
   color: var(--pn-brand-text);

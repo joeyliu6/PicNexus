@@ -168,6 +168,29 @@ const STATES: Record<string, State> = {
   },
   'S03-shortcut': { group: '快捷键', data: SHORTCUTS_ON },
   'S04-editor': { group: '编辑器与命令行', data: EDITORS },
+  // 命令框里点了「复制」：「✓ 已复制」是 CopyButton 自己的绿（成功浅底），不被命令框里的透明底盖成灰字（设计没画，Patterns.dc.html 的已复制）。
+  // 绿字与灰字亮度几乎一样，像素比对的容差分不出来，所以另外直接比对成功色令牌
+  'S04b-editor-copied': {
+    group: '编辑器与命令行',
+    data: EDITORS,
+    act: async (page) => {
+      await page$(page).getByRole('button', { name: '复制', exact: true }).first().click();
+      const copied = page$(page).getByRole('button', { name: '已复制', exact: true });
+      await expect(copied).toBeVisible();
+      await expect.poll(() => copied.evaluate((el) => {
+        const token = (name: string, prop: 'color' | 'backgroundColor') => {
+          const probe = document.createElement('span');
+          probe.style[prop] = `var(${name})`;
+          document.body.append(probe);
+          const value = getComputedStyle(probe)[prop];
+          probe.remove();
+          return value;
+        };
+        const style = getComputedStyle(el);
+        return { green: style.color === token('--pn-success', 'color'), soft: style.backgroundColor === token('--pn-success-soft', 'backgroundColor') };
+      })).toEqual({ green: true, soft: true });
+    },
+  },
   'S05-backup': { group: '备份与同步', data: backup(), before: async (page) => { await passwordSet(page); await recentLogs(page); } },
   // 数据位置：配置存储也按这个命令找目录，只能给 mock 自己的那个
   'S06-privacy': { group: '数据与隐私', data: { historyRows: LOCAL_ROWS, invokeOverrides: { get_user_data_dir: { result: '/mock/appdata' } } } },

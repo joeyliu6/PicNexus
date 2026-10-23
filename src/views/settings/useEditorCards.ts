@@ -39,14 +39,17 @@ function messageOf(error: unknown): string {
   return getErrorMessage(error) || '操作失败';
 }
 
+// 读到的状态留在模块里（同 settingsEffects 的开机自启）：这一组随切换分组重新挂载，
+// 再进来时第一帧就是上次的结果，后台重读、变了才换，不先闪「尚未配置」「检测中…」再变回来
+const executablePath = ref('');
+const obsidian = ref<ObsidianState>('off');
+const cliPath = ref<CliPathStatus | null>(null);
+
 export function useEditorCards() {
   const settings = useSettingsConfig();
   const upload = useUploadController();
   const toast = useToast();
 
-  const executablePath = ref('');
-  const obsidian = ref<ObsidianState>('off');
-  const cliPath = ref<CliPathStatus | null>(null);
   const cliBusy = ref(false);
 
   const editor = computed<EditorServerConfig>(() => ({ ...DEFAULT_CONFIG.editorServer!, ...settings.config.value.editorServer }));
@@ -61,10 +64,15 @@ export function useEditorCards() {
     return ok;
   }
 
+  /** 进这一组时读一遍。Obsidian 没接入写「尚未配置」，刚接入、还没有结果写「检测中…」，有上次的结果就先照旧、静默重测 */
   async function load(): Promise<void> {
-    executablePath.value = await invoke<string>('get_executable_path').catch(() => '');
-    await Promise.all([refreshCliPath(), editor.value.enabled ? testObsidian() : Promise.resolve()]);
     if (!editor.value.enabled) obsidian.value = 'off';
+    else if (obsidian.value === 'off') obsidian.value = 'checking';
+    await Promise.all([
+      invoke<string>('get_executable_path').catch(() => '').then((path) => { executablePath.value = path; }),
+      refreshCliPath(),
+      probeObsidian(),
+    ]);
   }
 
   // ---- Typora ----
@@ -75,10 +83,15 @@ export function useEditorCards() {
 
   // ---- Obsidian ----
 
+  /** 「测试连接」、换图床、换端口：先写「检测中…」再出结果 */
   async function testObsidian(): Promise<void> {
+    if (editor.value.enabled) obsidian.value = 'checking';
+    await probeObsidian();
+  }
+
+  async function probeObsidian(): Promise<void> {
     if (!editor.value.enabled) { obsidian.value = 'off'; return; }
     const port = editor.value.port;
-    obsidian.value = 'checking';
     try {
       // 走 Rust 发请求：/status 故意不带 CORS 许可，网页里直接 fetch 会被当成跨域拦掉
       const body = JSON.parse(await invoke<string>('check_editor_server_status', { port })) as { app?: string };

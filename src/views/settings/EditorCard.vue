@@ -148,13 +148,17 @@ async function copy(): Promise<void> {
   white-space: nowrap;
 }
 
+/* 命令框里的「复制」是透明底（设计稿），盖掉 CopyButton 自带的白底描边；悬停 / 按下照文字按钮的两级
+   （半透明，叠在命令框的浅灰底上照样深一级）；「✓ 已复制」留着 CopyButton 自己的绿，不盖 */
 .editor-card__code .editor-card__copy {
   height: var(--pn-size-settings-preset-edit);
   padding: 0 var(--pn-space-8);
-  background: transparent;
   box-shadow: none;
-  color: var(--pn-text2);
 }
+
+.editor-card__code .editor-card__copy:not(.copy-button--done) { background: transparent; color: var(--pn-text2); }
+.editor-card__code .editor-card__copy:not(.copy-button--done):hover { background: var(--pn-ghost-hover); color: var(--pn-text1); }
+.editor-card__code .editor-card__copy:not(.copy-button--done):active { background: var(--pn-ghost-press); color: var(--pn-text1); }
 
 .editor-card__foot {
   display: flex;

@@ -218,11 +218,13 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
   gap: var(--pn-space-4);
 }
 
+/* 每多满足一条，一段条和那条规则一起变色，带过渡 */
 .backup-password__bar {
   flex: 1;
   height: var(--pn-size-backup-strength-bar);
   border-radius: var(--pn-radius-backup-strength-bar);
   background: var(--pn-backup-strength-track);
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .backup-password__bar--on { background: var(--pn-warning-fill); }
@@ -240,6 +242,7 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
   align-items: center;
   gap: var(--pn-space-6);
   color: var(--pn-text3);
+  transition: color var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .backup-password__rule--met { color: var(--pn-success); }

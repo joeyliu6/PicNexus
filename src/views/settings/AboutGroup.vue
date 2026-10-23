@@ -127,7 +127,12 @@ const LINKS = [
 
 .about__update { display: flex; flex-direction: column; }
 
-.about__auto { border-radius: 0 0 var(--pn-radius-settings-card) var(--pn-radius-settings-card); }
+/* 更新卡与「自动更新」上下相接，两块各带一圈描边，接缝处会叠成 2px（设计稿也这样叠）：
+   下面这块铺页面底色，盖住更新卡露在它里面的那 1px，接缝和卡片里别的分隔线一样只有 1px */
+.about__auto {
+  border-radius: 0 0 var(--pn-radius-settings-card) var(--pn-radius-settings-card);
+  background: var(--pn-canvas);
+}
 
 .about__link {
   display: flex;
@@ -141,12 +146,15 @@ const LINKS = [
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 会打开链接 / 弹窗的行：按下用设计稿 S10 里「正在导出」那一行的底色（同手动备份） */
 .about__link + .about__link { border-top: 1px solid var(--pn-border); }
 .about__link:first-child { border-radius: var(--pn-radius-settings-card) var(--pn-radius-settings-card) 0 0; }
 .about__link:last-child { border-radius: 0 0 var(--pn-radius-settings-card) var(--pn-radius-settings-card); }
 .about__link:hover { background: var(--pn-row-hover); }
+.about__link:active { background: var(--pn-selected); }
 .about__link-name { flex: 1; }
 
 .about__hint {

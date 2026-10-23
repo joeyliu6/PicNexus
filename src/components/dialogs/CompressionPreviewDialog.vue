@@ -190,6 +190,9 @@ function pickAnother() {
 
 .compress-view[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-expressive) var(--pn-ease-in); }
 
+/* 关闭时淡出：退场 ease-out、比进场快 30%（同对话框遮罩）；Reka 等这段动画播完才移除 */
+.compress-view[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
 .compress-view__top,
 .compress-view__bottom {
   display: flex;
@@ -340,12 +343,16 @@ function pickAnother() {
   font: inherit;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 按钮样式同灯箱（G08）：半透明白底，悬停、按下各亮一级（用灯箱按钮的同一组令牌） */
 .compress-view__button:hover { background: var(--pn-lightbox-button-hover); }
+.compress-view__button:active { background: var(--pn-lightbox-button-press); }
 .compress-view__button--icon { width: var(--pn-size-button-lg); padding: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .compress-view[data-state='open'] { animation-duration: var(--pn-dur-fade-expressive); }
+  .compress-view[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-expressive) * 0.7) var(--pn-ease-out) forwards; }
 }
 </style>

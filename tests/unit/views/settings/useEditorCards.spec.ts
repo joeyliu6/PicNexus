@@ -76,6 +76,62 @@ describe('useEditorCards', () => {
     expect(cards.cliPath.value?.inPath).toBe(true);
   });
 
+  // 每次切到这一组都是一套新的卡片（组件随分组卸载）；读到的状态要留到下次，进组时第一帧就对
+  describe('entering the group (each visit mounts a new card set)', () => {
+    const OBSIDIAN_ON = { ...DEFAULT_CONFIG.editorServer!, enabled: true, obsidianService: 'jd', cliEnabled: true };
+    const CLI = { supported: true, inPath: true, executableDir: 'C:/PicNexus', needsTerminalRestart: false };
+    const neverAnswers = () => new Promise<never>(() => {});
+
+    async function visitWithAnswers(): Promise<void> {
+      setupInvokeHandler(async (cmd) => {
+        if (cmd === 'check_editor_server_status') return JSON.stringify({ app: 'PicNexus' });
+        if (cmd === 'get_executable_path') return 'C:/PicNexus/picnexus.exe';
+        return CLI;
+      });
+      await useEditorCards().load();
+    }
+
+    it('Obsidian just turned on: says 检测中… from the first frame, never 尚未配置', async () => {
+      m.config.value.editorServer = { ...DEFAULT_CONFIG.editorServer!, enabled: false };
+      await visitWithAnswers();
+      m.config.value.editorServer = OBSIDIAN_ON;
+      setupInvokeHandler(async () => neverAnswers());
+      const cards = useEditorCards();
+      void cards.load();
+      expect(cards.obsidian.value).toBe('checking');
+    });
+
+    it('a later visit keeps showing the last results while it checks again quietly', async () => {
+      m.config.value.editorServer = OBSIDIAN_ON;
+      await visitWithAnswers();
+      setupInvokeHandler(async () => neverAnswers());
+      const again = useEditorCards();
+      void again.load();
+      expect(again.obsidian.value).toBe('ok');
+      expect(again.executablePath.value).toBe('C:/PicNexus/picnexus.exe');
+      expect(again.cliPath.value).toEqual(CLI);
+    });
+
+    it('a later visit after Obsidian was turned off says 尚未配置 at once, not the old result', async () => {
+      m.config.value.editorServer = OBSIDIAN_ON;
+      await visitWithAnswers();
+      m.config.value.editorServer = { ...DEFAULT_CONFIG.editorServer!, enabled: false };
+      setupInvokeHandler(async () => neverAnswers());
+      const again = useEditorCards();
+      void again.load();
+      expect(again.obsidian.value).toBe('off');
+    });
+
+    it('测试连接 still shows 检测中… while it checks', async () => {
+      m.config.value.editorServer = OBSIDIAN_ON;
+      await visitWithAnswers();
+      setupInvokeHandler(async () => neverAnswers());
+      const cards = useEditorCards();
+      void cards.testObsidian();
+      expect(cards.obsidian.value).toBe('checking');
+    });
+  });
+
   it('从 PATH 移除 that fails keeps the CLI on and says so in red', async () => {
     m.config.value.editorServer = { ...DEFAULT_CONFIG.editorServer!, cliEnabled: true };
     setupInvokeHandler(async (cmd) => {

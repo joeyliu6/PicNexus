@@ -147,9 +147,12 @@ const cliExample = computed(() => {
   font: inherit;
   font-size: var(--pn-text-footnote);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 透明底的菜单触发器：悬停 / 按下照文字按钮的两级 */
 .editors__picker:hover { background: var(--pn-ghost-hover); }
+.editors__picker:active { background: var(--pn-ghost-press); }
 .editors__chev { color: var(--pn-text3); }
 
 .editors__spacer { flex: 1; }

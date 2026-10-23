@@ -113,8 +113,12 @@ function onEscape(event: KeyboardEvent): void {
 
 .onboarding[data-state='open'] { animation: pn-dialog-in var(--pn-dur-expressive) var(--pn-ease-in); }
 
+/* 关闭时与遮罩一起退场（缩到 0.98 并淡出，ease-out、比进场快 30%），不先一下消失；Reka 等这段动画播完才移除 */
+.onboarding[data-state='closed'] { animation: pn-dialog-out calc(var(--pn-dur-expressive) * 0.7) var(--pn-ease-out) forwards; }
+
 @media (prefers-reduced-motion: reduce) {
   .onboarding[data-state='open'] { animation: pn-dialog-fade var(--pn-dur-fade-expressive) var(--pn-ease-in); }
+  .onboarding[data-state='closed'] { animation: pn-fade-out calc(var(--pn-dur-fade-expressive) * 0.7) var(--pn-ease-out) forwards; }
 }
 
 .onboarding__sr {
@@ -132,6 +136,9 @@ function onEscape(event: KeyboardEvent): void {
   min-height: 0;
   overflow-y: auto;
 }
+
+/* 换到另一步：新一步的内容原地淡入（不做位移；上一步直接让位，不会叠在一起或空一帧） */
+.onboarding__body > * { animation: pn-dialog-fade var(--pn-dur-fast) var(--pn-ease-in); }
 
 .onboarding__foot {
   display: flex;
@@ -158,7 +165,7 @@ function onEscape(event: KeyboardEvent): void {
   height: var(--pn-size-onboarding-dot);
   border-radius: var(--pn-radius-onboarding-dot);
   background: var(--pn-border-strong);
-  transition: width var(--pn-dur-standard) var(--pn-ease-out), background-color var(--pn-dur-standard) var(--pn-ease-out);
+  transition: width var(--pn-dur-standard) var(--pn-ease-in), background-color var(--pn-dur-standard) var(--pn-ease-in);
 }
 
 .onboarding__dot--on { width: var(--pn-size-onboarding-dot-on); background: var(--pn-text1); }

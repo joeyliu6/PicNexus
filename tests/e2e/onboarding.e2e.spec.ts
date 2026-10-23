@@ -97,6 +97,27 @@ test('after skipping a restore, the long notice waits until onboarding closes so
   await expect(page.locator('.pn-toast', { hasText: '已使用默认配置启动' })).toContainText('picnexus-encrypted-settings-20261019-083404.json');
 });
 
+// 关掉引导时弹窗和遮罩一起退场（缩到 0.98 并淡出、0.175 秒），不是弹窗先一下消失、只剩遮罩在淡；
+// 「减少动态效果」时只淡出、不缩（decisions/onboarding.md）。CSS 动画只在真浏览器里跑，所以记下每一次动画的开始
+for (const motion of ['no-preference', 'reduce'] as const) {
+  test(`closing fades the dialog out together with the overlay (${motion})`, async ({ page }) => {
+    await openApp(page, { config: FIRST_RUN });
+    await page.emulateMedia({ reducedMotion: motion });
+    await expect(dialog(page)).toBeVisible();
+    await page.evaluate(() => {
+      const log: string[] = [];
+      (window as unknown as { __motionLog: string[] }).__motionLog = log;
+      document.addEventListener('animationstart', (e) => { log.push(`${e.animationName} ${(e.target as Element).getAttribute('class')}`); }, true);
+    });
+    await dialog(page).getByRole('button', { name: '跳过' }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    const log = await page.evaluate(() => (window as unknown as { __motionLog: string[] }).__motionLog);
+    expect(log.filter((entry) => / pn-dialog-overlay$| onboarding$/.test(entry) && entry.includes('-out ')).sort()).toEqual(motion === 'reduce'
+      ? ['pn-fade-out pn-dialog-overlay', 'pn-fade-out pn-layer onboarding']
+      : ['pn-dialog-out pn-layer onboarding', 'pn-fade-out pn-dialog-overlay']);
+  });
+}
+
 // 待拍板 ㉜（选 B）：欢迎页插图也守规则 4、5——「失效」用琥珀色（需要留意的状态，不是红色的「操作失败」），
 // 「正常」不标颜色（不画绿色）
 test('the welcome art paints 失效 amber and leaves 正常 uncoloured', async ({ page }) => {

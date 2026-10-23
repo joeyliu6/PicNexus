@@ -33,9 +33,11 @@ const saved = computed(() => !!props.rowId && settings.isSaved(props.rowId));
         <slot name="desc">{{ desc }}</slot>
       </span>
     </div>
-    <span v-if="saved" class="setting-row__saved" role="status">
-      <PnIcon name="check" :size="12" :stroke="2.4" />已保存
-    </span>
+    <Transition name="setting-row-saved">
+      <span v-if="saved" class="setting-row__saved" role="status">
+        <PnIcon name="check" :size="12" :stroke="2.4" />已保存
+      </span>
+    </Transition>
     <slot />
   </div>
 </template>
@@ -86,4 +88,11 @@ const saved = computed(() => !!props.rowId && settings.isSaved(props.rowId));
   color: var(--pn-success);
   font-size: var(--pn-text-footnote);
 }
+
+/* 「已保存」原地淡入、1.5 秒后淡出，不是硬切 */
+.setting-row-saved-enter-active,
+.setting-row-saved-leave-active { transition: opacity var(--pn-dur-fast) var(--pn-ease-in); }
+
+.setting-row-saved-enter-from,
+.setting-row-saved-leave-to { opacity: 0; }
 </style>

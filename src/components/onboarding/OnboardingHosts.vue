@@ -35,7 +35,7 @@ const laterCount = laterHostCount();
           <span class="hosts__sub">{{ host.desc }}</span>
         </span>
         <span class="hosts__box" aria-hidden="true">
-          <PnIcon v-if="hosts[host.id]" name="check" :size="12" :stroke="3.5" />
+          <PnIcon class="hosts__tick" name="check" :size="12" :stroke="3.5" />
         </span>
       </button>
     </div>
@@ -90,8 +90,10 @@ const laterCount = laterHostCount();
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
+/* 勾选卡：点了就切换，底色、描边、勾选框与勾一起过渡；设计稿没有悬停态 */
 .hosts__card--on { background: var(--pn-brand-soft); box-shadow: inset 0 0 0 var(--pn-space-2) var(--pn-brand); }
 
 .hosts__plate {
@@ -123,9 +125,12 @@ const laterCount = laterHostCount();
   background: var(--pn-elevated);
   box-shadow: inset 0 0 0 var(--pn-space-1) var(--pn-check-border);
   color: var(--pn-on-fill);
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .hosts__card--on .hosts__box { background: var(--pn-brand); box-shadow: none; }
+.hosts__tick { opacity: 0; transition: opacity var(--pn-dur-fast) var(--pn-ease-in); }
+.hosts__card--on .hosts__tick { opacity: 1; }
 
 .hosts__risk { font-size: var(--pn-text-footnote); line-height: var(--pn-leading-footnote); color: var(--pn-text3); }
 

@@ -29,6 +29,8 @@ const log = createLogger('SettingsView');
 
 /** 跳来的那一行高亮多久 */
 const HIGHLIGHT_MS = 1500;
+/** 高亮淡出用多久（同 --pn-dur-standard；淡出期间留着 .settings-flash--fading 让过渡生效） */
+const FLASH_FADE_MS = 200;
 
 const settings = useSettingsConfig();
 const effects = useSettingsEffects();
@@ -71,10 +73,13 @@ async function applyTarget(): Promise<void> {
   if (!element) return;
   element.scrollIntoView({ block: 'center' });
   clearTimeout(highlightTimer);
-  highlighted?.classList.remove('settings-flash');
+  highlighted?.classList.remove('settings-flash', 'settings-flash--fading');
   highlighted = element;
   element.classList.add('settings-flash');
-  highlightTimer = setTimeout(() => { element.classList.remove('settings-flash'); }, HIGHLIGHT_MS);
+  highlightTimer = setTimeout(() => {
+    element.classList.replace('settings-flash', 'settings-flash--fading');
+    highlightTimer = setTimeout(() => { element.classList.remove('settings-flash--fading'); }, FLASH_FADE_MS);
+  }, HIGHLIGHT_MS);
 }
 
 // 别的窗口（托盘）或图床页改了配置：这一页显示的值跟着换
@@ -151,11 +156,13 @@ watch(() => [targetTab?.value, targetSection?.value], () => { if (active.value) 
 
 .settings__spacer { flex: 1; align-self: stretch; }
 
+/* 滚动条的位置常驻：切到更长的分组时右边不会因为冒出滚动条而缩进去一截 */
 .settings__scroll {
   flex: 1;
   min-height: 0;
   padding: var(--pn-space-settings-page);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .settings__scroll--narrow { padding: var(--pn-space-settings-page-narrow); }
@@ -201,11 +208,16 @@ watch(() => [targetTab?.value, targetSection?.value], () => { if (active.value) 
 .settings__banner-text b { font-weight: var(--pn-weight-semibold); }
 </style>
 
-<!-- 命令面板跳来的那一项（行、卡片、外观三卡都可能）：浅蓝底 + 外环闪 1.5 秒；类名加在各组件的根元素上，不能 scoped -->
+<!-- 命令面板跳来的那一项（行、卡片、外观三卡都可能）：浅蓝底 + 外环闪 1.5 秒；类名加在各组件的根元素上，不能 scoped。
+     淡出那 0.2 秒换成 .settings-flash--fading 把过渡留住（过渡不写在卡片 / 行本身上：切换主题时它们要和别的元素一起硬切） -->
 <style>
+.settings-flash,
+.settings-flash--fading {
+  transition: background-color var(--pn-dur-standard) var(--pn-ease-in), box-shadow var(--pn-dur-standard) var(--pn-ease-in);
+}
+
 .settings-flash {
   background-color: var(--pn-brand-soft);
   box-shadow: 0 0 0 var(--pn-ring-soft-width) var(--pn-ring-soft);
-  transition: background-color var(--pn-dur-standard) var(--pn-ease-in), box-shadow var(--pn-dur-standard) var(--pn-ease-in);
 }
 </style>

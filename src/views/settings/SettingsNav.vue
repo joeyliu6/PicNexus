@@ -81,8 +81,11 @@ defineEmits<{ select: [id: SettingsGroupId] }>();
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 点了就选中，选中态立刻出现，不另加按下色。悬停只变底色；文字、图标颜色只在选中时变，不带过渡
+   （带了的话切换深浅色时这一列字会比整页慢半拍，先暗后亮闪一下） */
 .settings-nav__item:hover { background: var(--pn-host-row-hover); }
 
 .settings-nav__item--on,

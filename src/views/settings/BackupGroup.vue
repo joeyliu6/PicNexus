@@ -303,10 +303,13 @@ const MANUAL = computed(() => [
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 会打开弹窗 / 选文件的行：按下用设计稿 S10 里「正在导出」那一行的底色 */
 .backup__link + .backup__link { border-top: 1px solid var(--pn-border); }
 .backup__link:hover { background: var(--pn-row-hover); }
+.backup__link:active { background: var(--pn-selected); }
 .backup__link-label { flex: 1; }
 .backup__chevron { flex: none; color: var(--pn-text3); }
 </style>

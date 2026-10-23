@@ -111,6 +111,8 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
 .general__theme:focus-visible { outline: none; }
 .general__theme:focus-visible .general__preview { box-shadow: 0 0 0 var(--pn-ring-offset) var(--pn-canvas), 0 0 0 calc(var(--pn-ring-offset) + var(--pn-ring-width)) var(--pn-ring); }
 
+/* 三张卡的样子是固定的，没有悬停态，点了就选中。选中描边（2 + 2）不带过渡：选中总和整页换主题同时发生，
+   带过渡时描边比整页慢半拍，深浅切换那一下卡片外圈会闪一圈旧主题的颜色 */
 .general__preview {
   display: flex;
   width: 100%;

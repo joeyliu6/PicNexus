@@ -192,10 +192,13 @@ const ITEMS = computed(() => [
   background: transparent;
   color: var(--pn-text2);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.cloud__more:hover,
-.cloud__more[data-state='open'] { background: var(--pn-selected); }
+/* 「⋯」：悬停 / 按下照文字按钮的两级；菜单开着时按设计稿（S14）用选中底色，鼠标还停在上面也不变回悬停色（这条写在后面、同权重） */
+.cloud__more:not(:disabled):hover { background: var(--pn-ghost-hover); }
+.cloud__more:not(:disabled):active { background: var(--pn-ghost-press); }
+.cloud__more[data-state='open']:not(:disabled) { background: var(--pn-selected); }
 .cloud__more:disabled { cursor: default; opacity: var(--pn-opacity-disabled); }
 
 .cloud__item {
@@ -213,8 +216,10 @@ const ITEMS = computed(() => [
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
+/* 勾选行：点了就切换勾选，勾的颜色有过渡，不另加按下色 */
 .cloud__item:last-child { border-radius: 0 0 var(--pn-radius-xl) var(--pn-radius-xl); }
 .cloud__item:not(:disabled):hover { background: var(--pn-row-hover); }
 .cloud__item:disabled { cursor: default; }
@@ -231,6 +236,6 @@ const ITEMS = computed(() => [
   line-height: var(--pn-leading-footnote);
 }
 
-.cloud__check { flex: none; color: var(--pn-disabled); }
+.cloud__check { flex: none; color: var(--pn-disabled); transition: color var(--pn-dur-fast) var(--pn-ease-in); }
 .cloud__item[aria-checked='true'] .cloud__check { color: var(--pn-brand-text); }
 </style>

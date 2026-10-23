@@ -177,5 +177,8 @@ async function remove(): Promise<void> {
   flex-direction: column;
 }
 
+/* 红字文字按钮：悬停 / 按下用红色浅底的两级，不用灰色（同图床页「移除图床」）；多一层 .pn-button 才盖得住 PnButton 的 ghost */
 .preset__delete { color: var(--pn-danger); }
+.preset__delete.pn-button:not(:disabled):hover { background: var(--pn-danger-soft); }
+.preset__delete.pn-button:not(:disabled):active { background: var(--pn-danger-soft-press); }
 </style>

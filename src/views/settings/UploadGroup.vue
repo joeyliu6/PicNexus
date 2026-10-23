@@ -90,7 +90,9 @@ function presetById(id: string | null): CompressionPreset | null {
     <SettingsSection title="图片压缩" note="只压缩上传出去的副本，本机原图不会改动。">
       <template #aside>
         <span class="upload__aside" data-setting-row="compression">
-          <span v-if="settings.isSaved('compression')" class="upload__saved" role="status"><PnIcon name="check" :size="12" :stroke="2.4" />已保存</span>
+          <Transition name="upload-saved">
+            <span v-if="settings.isSaved('compression')" class="upload__saved" role="status"><PnIcon name="check" :size="12" :stroke="2.4" />已保存</span>
+          </Transition>
           上传前压缩
           <PnSwitch :model-value="compression.enabled" label="上传前压缩" @update:model-value="(v) => patchCompression((c) => ({ ...c, enabled: v }))" />
         </span>
@@ -149,6 +151,13 @@ function presetById(id: string | null): CompressionPreset | null {
   color: var(--pn-success);
 }
 
+/* 「已保存」淡入淡出（同 SettingRow） */
+.upload-saved-enter-active,
+.upload-saved-leave-active { transition: opacity var(--pn-dur-fast) var(--pn-ease-in); }
+
+.upload-saved-enter-from,
+.upload-saved-leave-to { opacity: 0; }
+
 .upload__presets { display: flex; flex-direction: column; }
 
 .upload__preset {
@@ -176,6 +185,7 @@ function presetById(id: string | null): CompressionPreset | null {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--pn-check-border);
   cursor: pointer;
+  transition: background-color var(--pn-dur-fast) var(--pn-ease-in), box-shadow var(--pn-dur-fast) var(--pn-ease-in);
 }
 
 .upload__radio[data-state='checked'] { background: var(--pn-brand); box-shadow: none; }

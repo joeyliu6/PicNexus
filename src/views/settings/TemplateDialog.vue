@@ -123,9 +123,12 @@ onBeforeUnmount(() => clearTimeout(timer));
   font-family: var(--pn-font-mono);
   font-size: var(--pn-text-caption);
   cursor: pointer;
+  transition: background-color var(--pn-dur-instant) var(--pn-ease-in), color var(--pn-dur-instant) var(--pn-ease-in);
 }
 
-.template__token:hover { color: var(--pn-text1); }
+/* 浅灰底的小按钮：悬停 / 按下再深一级、两级 */
+.template__token:hover { background: var(--pn-ghost-press); color: var(--pn-text1); }
+.template__token:active { background: var(--pn-subtle-press); color: var(--pn-text1); }
 
 .template__preview {
   display: flex;

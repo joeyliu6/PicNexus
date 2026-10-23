@@ -97,7 +97,8 @@ const recordsDesc = computed(() => (recordCount.value === null
     <SettingsSection title="存储" note="清理缓存不影响上传记录，缩略图将在需要时重新下载。">
       <SettingsCard>
         <SettingRow row-id="dataDir" title="数据位置" truncate>
-          <template #desc><span class="privacy__path" :title="dataDir">{{ dataDir }}</span></template>
+          <!-- 路径读到之前先用一个不折行的空格占住这一行：不然这一行先矮 7px，路径到了再撑开，下面的行跟着往下跳 -->
+          <template #desc><span class="privacy__path" :title="dataDir">{{ dataDir || '\u00a0' }}</span></template>
           <PnButton variant="secondary" size="sm" class="privacy__btn" :disabled="!dataDir" @click="openDataDir">打开</PnButton>
         </SettingRow>
         <SettingRow row-id="cache" title="应用缓存" desc="缩略图与临时文件" truncate>
