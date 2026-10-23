@@ -12,6 +12,7 @@ import TransferButton from '@/shell/TransferButton.vue';
 import WindowControls from '@/shell/WindowControls.vue';
 import { measureFlip, playFlip } from '@/utils/flipReorder';
 import type { HostRow } from './hostList';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   rows: readonly HostRow[];
@@ -108,8 +109,8 @@ function tabIndexOf(row: HostRow, index: number): number {
           >
             <span class="hosts-list__plate"><HostIcon :host="row.id" :name="row.name" :size="17" /></span>
             <span class="hosts-list__text">
-              <span class="hosts-list__name">{{ row.name }}</span>
-              <span class="hosts-list__sub" :class="{ 'hosts-list__sub--bad': row.problem && !row.testing }">
+              <span v-overflow-title class="hosts-list__name">{{ row.name }}</span>
+              <span v-overflow-title class="hosts-list__sub" :class="{ 'hosts-list__sub--bad': row.problem && !row.testing }">
                 <PnIcon v-if="row.problem && !row.testing" name="warning" :size="12" />{{ row.sub }}
               </span>
             </span>

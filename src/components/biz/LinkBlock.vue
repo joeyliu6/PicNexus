@@ -3,6 +3,7 @@
 // compact = 图库详情里那块（11px、只占一行，过长省略，高度与旁边的按钮一致）；broken = 这条链接已失效：网址变红、其余变灰（GalleryScreen.dc.html G06）
 import { computed } from 'vue';
 import { splitLinkSegments } from '@/utils/linkSegments';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   /** 按当前格式生成好的链接文字 */
@@ -17,7 +18,7 @@ const segments = computed(() => splitLinkSegments(props.text, props.url, props.f
 </script>
 
 <template>
-  <div class="link-block pn-selectable" :class="{ 'link-block--compact': compact, 'link-block--broken': broken }"><span v-for="(segment, i) in segments" :key="i" :class="`link-block__${segment.kind}`">{{ segment.text }}</span></div>
+  <div v-overflow-title class="link-block pn-selectable" :class="{ 'link-block--compact': compact, 'link-block--broken': broken }"><span v-for="(segment, i) in segments" :key="i" :class="`link-block__${segment.kind}`">{{ segment.text }}</span></div>
 </template>
 
 <style scoped>

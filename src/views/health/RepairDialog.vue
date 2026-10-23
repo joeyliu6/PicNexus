@@ -9,6 +9,7 @@ import PnIconButton from '@/components/pn/PnIconButton.vue';
 import { formatCount } from '@/utils/formatters';
 import { parentDir, problemDetail, type DocProblem } from './docIndex';
 import type { DocFolder } from './useDocFolders';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const open = defineModel<boolean>('open', { required: true });
 
@@ -67,7 +68,7 @@ function repair(): void {
             <PnIcon name="file" :size="15" :stroke="1.6" class="repair-dialog__muted-icon" />
             <span class="repair-dialog__doc-text">
               <span class="repair-dialog__doc-name">{{ doc.name }}</span>
-              <span class="repair-dialog__doc-detail">{{ parentDir(doc.path) }} · {{ problemDetail(doc) }}</span>
+              <span v-overflow-title class="repair-dialog__doc-detail">{{ parentDir(doc.path) }} · {{ problemDetail(doc) }}</span>
             </span>
             <PnIconButton icon="openExternal" label="用编辑器打开" :icon-size="14" :stroke="1.6" @click="emit('openDoc', doc.path)" />
           </div>

@@ -217,12 +217,12 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
               </span>
               <span v-if="compact" class="list__hosts">
                 <PetalGlyph :states="petalsOf(row)" :size="13" :label="petalLabelOf(row)" />
-                <span class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
+                <span v-overflow-title class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
               </span>
             </span>
             <span v-if="!compact" class="list__hosts" role="gridcell">
               <PetalGlyph :states="petalsOf(row)" :size="15" :label="petalLabelOf(row)" />
-              <span class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
+              <span v-overflow-title class="list__muted list__ellipsis">{{ hostNames(row) }}</span>
             </span>
             <span v-if="!narrow" class="list__muted" role="gridcell">{{ sizeText(row) }}</span>
             <span class="list__muted" role="gridcell">{{ formatListTime(row.timestamp, props.now) }}</span>

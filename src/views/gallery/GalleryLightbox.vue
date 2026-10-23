@@ -29,6 +29,7 @@ import { hostRows, lightboxFailure } from './detailHosts';
 import { useGalleryActions } from './useGalleryActions';
 import type { GalleryGridApi } from './useGalleryGrid';
 import type { GalleryLightboxApi } from './useGalleryLightbox';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   grid: GalleryGridApi;
@@ -206,12 +207,12 @@ async function removeRecord(): Promise<void> {
 
       <div v-if="item" class="lightbox__bottom">
         <div class="lightbox__info">
-          <span class="lightbox__name">{{ item.localFileName }}</span>
+          <span v-overflow-title class="lightbox__name">{{ item.localFileName }}</span>
           <span class="lightbox__muted">{{ metaLine }}</span>
         </div>
         <span class="lightbox__hosts">
           <PetalGlyph :states="petals" :size="15" />
-          <span class="lightbox__hosts-text">{{ hostLine }}</span>
+          <span v-overflow-title class="lightbox__hosts-text">{{ hostLine }}</span>
         </span>
         <div class="lightbox__spacer" />
         <button type="button" class="lightbox__button" :class="{ 'lightbox__button--done': copiedKey === 'link' }" @click="copyLink">{{ copiedKey === 'link' ? '已复制' : '复制链接' }}</button>

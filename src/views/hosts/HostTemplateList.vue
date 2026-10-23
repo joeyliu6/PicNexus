@@ -5,6 +5,7 @@ import { ref } from 'vue';
 import PnButton from '@/components/pn/PnButton.vue';
 import PnDialog from '@/components/pn/PnDialog.vue';
 import PnInput from '@/components/pn/PnInput.vue';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 export interface TemplateItem {
   name: string;
@@ -69,7 +70,7 @@ function submit(): void {
         <span class="host-templates__text">
           <span class="host-templates__name">{{ item.name }}</span>
           <span class="host-templates__tpl">{{ item.template }}</span>
-          <span v-if="item.preview" class="host-templates__preview">{{ item.preview }}</span>
+          <span v-if="item.preview" v-overflow-title class="host-templates__preview">{{ item.preview }}</span>
         </span>
         <button v-if="item.removable" type="button" class="host-templates__remove" @click.stop="emit('remove', index)">删除</button>
       </div>

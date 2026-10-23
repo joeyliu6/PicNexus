@@ -11,6 +11,7 @@ import type { CompressionPreset } from '@/config/types';
 import { useImageZoom } from '@/composables/image/useImageZoom';
 import { useCompressionTask } from '@/composables/image/useCompressionTask';
 import { formatFileSize } from '@/utils/formatters';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   visible: boolean;
@@ -106,7 +107,7 @@ function pickAnother() {
       <DialogContent class="pn-layer compress-view" data-theme="dark" tabindex="-1" :aria-describedby="undefined" @open-auto-focus="focusViewer">
         <div class="compress-view__top">
           <DialogTitle class="compress-view__title">压缩预览</DialogTitle>
-          <span v-if="done" class="compress-view__file">{{ fileName }}</span>
+          <span v-if="done" v-overflow-title class="compress-view__file">{{ fileName }}</span>
           <div class="compress-view__spacer" />
           <button type="button" class="compress-view__button compress-view__button--icon" aria-label="关闭" title="关闭  Esc" @click="setOpen(false)">
             <PnIcon name="close" :size="13" :stroke="2" />

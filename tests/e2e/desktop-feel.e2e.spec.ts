@@ -114,3 +114,17 @@ test('a cut-off file name shows its full name on hover, a short one does not', a
   await name('微信图片').hover();
   await expect(name('微信图片')).toHaveAttribute('title', long);
 });
+
+test('a long host name in the hosts list shows in full on hover', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const long = '家里 NAS（客厅那台群晖，照片和截图都备份在这里，别动）';
+  const nas = { id: 'nas', name: long, url: 'https://nas.example.com/dav', username: 'me', passwordEncrypted: 'mock-encrypted', remotePath: '/picnexus', publicDomain: 'https://nas.example.com/picnexus', publicUrlTemplate: '{domain}/{path}', uniqueFileName: true };
+  await openApp(page, { config: { availableServices: ['jd', 'webdav:nas'], enabledServices: ['jd', 'webdav:nas'], webdav_profiles: [nas] } });
+  await navItem(page, '图床').click();
+  const name = (text: string) => page.locator('.hosts-list__name', { hasText: text });
+
+  await name('京东').hover();
+  await expect(name('京东')).not.toHaveAttribute('title');
+  await name('家里 NAS').hover();
+  await expect(name('家里 NAS')).toHaveAttribute('title', long);
+});

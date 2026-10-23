@@ -13,6 +13,7 @@ import type { UploadHost } from '@/composables/upload/useUploadController';
 import { describeCompressionPreset } from '@/utils/compressionPresetText';
 import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 import UploadToPanel from './UploadToPanel.vue';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   hosts: readonly UploadHost[];
@@ -63,7 +64,7 @@ const compressionLabel = computed(() => (props.compression.enabled ? props.activ
       <template #trigger>
         <button type="button" class="home-options__trigger" aria-haspopup="dialog" :title="warningText || undefined">
           <span class="home-options__key">上传到</span>
-          <span class="home-options__value">{{ uploadToLabel }}</span>
+          <span v-overflow-title class="home-options__value">{{ uploadToLabel }}</span>
           <PnIcon v-if="warningText" name="warning" :size="13" :stroke="1.8" class="home-options__warn" />
           <PnIcon name="chevronDown" :size="13" :stroke="1.8" class="home-options__key" />
         </button>

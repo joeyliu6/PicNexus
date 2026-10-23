@@ -3,6 +3,7 @@
 // viewable：点缩略图看大图（发 view）
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 withDefaults(defineProps<{
   name: string;
@@ -40,7 +41,7 @@ defineEmits<{ view: [] }>();
         <span class="recent-row__name" :title="fullName">{{ name }}</span>
         <span class="recent-row__time">{{ time }}</span>
       </div>
-      <div class="recent-row__second"><slot name="second" /></div>
+      <div v-overflow-title class="recent-row__second"><slot name="second" /></div>
     </div>
     <div class="recent-row__action" :class="{ 'recent-row__action--swaps': !!$slots.hover }">
       <div class="recent-row__rest"><slot name="action" /></div>

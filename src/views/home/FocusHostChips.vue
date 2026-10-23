@@ -6,6 +6,7 @@ import HostIcon from '@/components/biz/HostIcon.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import PnPopover from '@/components/pn/PnPopover.vue';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const props = defineProps<{
   /** 已完成的图床，按图床顺序 */
@@ -68,7 +69,7 @@ function copyAll(): void {
         <span class="focus-chips__more-title">其他 {{ moreHosts.length }} 个图床</span>
         <div v-for="host in moreHosts" :key="host.id" class="focus-chips__more-row">
           <HostIcon :host="host.id" :name="nameOf(host.id)" :size="16" class="focus-chips__chip-icon" />
-          <span class="focus-chips__more-name">{{ nameOf(host.id) }}</span>
+          <span v-overflow-title class="focus-chips__more-name">{{ nameOf(host.id) }}</span>
           <span class="focus-chips__muted">正常</span>
           <button type="button" class="focus-chips__more-copy" :aria-label="`复制${nameOf(host.id)}的链接`" @click="copyHost(host.id)">
             <PnIcon :name="isCopied(host.id) ? 'check' : 'copy'" :size="12" :stroke="isCopied(host.id) ? 2.4 : 1.9" />

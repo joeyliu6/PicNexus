@@ -7,6 +7,7 @@ import { computed } from 'vue';
 import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import ThumbnailImage from '@/components/common/ThumbnailImage.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
+import { vOverflowTitle } from '@/utils/overflowTitle';
 
 const open = defineModel<boolean>('open', { default: false });
 
@@ -40,7 +41,7 @@ const frameStyle = computed(() => (props.width && props.height
           <ThumbnailImage :srcs="srcs" :alt="name" :confirmed-http-hosts="confirmedHttpHosts" />
         </div>
         <div class="image-viewer__bottom">
-          <span class="image-viewer__name">{{ name }}</span>
+          <span v-overflow-title class="image-viewer__name">{{ name }}</span>
           <span v-if="meta" class="image-viewer__meta">{{ meta }}</span>
         </div>
       </DialogContent>
