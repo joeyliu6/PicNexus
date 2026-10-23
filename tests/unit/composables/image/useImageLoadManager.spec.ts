@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref, type Ref } from 'vue';
+import { defineComponent, nextTick, ref, type Ref } from 'vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { useImageLoadManager } from '@/composables/image/useImageLoadManager';
 import type { VisibleItem } from '@/composables/timeline/useVirtualTimeline';
@@ -100,18 +100,37 @@ describe('useImageLoadManager', () => {
     expect(h.api.isImageLoaded('current')).toBe(true);
   });
 
-  it('cleanupExpiredImages 删除超过 destroyDelay 的非可见图片，并保留当前可见图片', () => {
-    const h = mountManager({ destroyDelay: 100 });
+  // 回归：离开屏幕 2.5 秒就忘了「已加载」，换个筛选再换回来，浏览器里现成的图又从占位色淡入一遍
+  it('离开屏幕再久也记得图片已加载（只按上限淘汰）', async () => {
+    const h = mountManager();
 
-    h.visibleItems.value = [makeVisibleItem('visible')];
-    h.api.onImageLoad('visible');
-    h.api.onImageLoad('gone');
+    h.visibleItems.value = [makeVisibleItem('seen')];
+    h.api.onImageLoad('seen');
+    h.visibleItems.value = [];
+    await vi.advanceTimersByTimeAsync(60_000);
 
-    vi.setSystemTime(new Date('2026-01-01T00:00:00.101Z'));
-    h.api.cleanupExpiredImages();
+    expect(h.api.isImageLoaded('seen')).toBe(true);
+  });
 
-    expect(h.api.isImageLoaded('visible')).toBe(true);
-    expect(h.api.isImageLoaded('gone')).toBe(false);
+  it('超过上限时先淘汰最久没在屏幕上的', async () => {
+    const h = mountManager({ maxCache: 2 });
+
+    h.visibleItems.value = [makeVisibleItem('a')];
+    h.api.onImageLoad('a');
+    vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
+    h.visibleItems.value = [makeVisibleItem('b')];
+    h.api.onImageLoad('b');
+    // a 又回到屏幕上，b 离开
+    vi.setSystemTime(new Date('2026-01-01T00:00:02.000Z'));
+    h.visibleItems.value = [makeVisibleItem('a')];
+    await nextTick();
+    vi.setSystemTime(new Date('2026-01-01T00:00:03.000Z'));
+    h.visibleItems.value = [makeVisibleItem('c')];
+    h.api.onImageLoad('c');
+
+    expect(h.api.isImageLoaded('a')).toBe(true);
+    expect(h.api.isImageLoaded('b')).toBe(false);
+    expect(h.api.isImageLoaded('c')).toBe(true);
   });
 
   it('onImageError 先按 maxRetry 重试，超过次数后标记失败', async () => {
@@ -177,7 +196,7 @@ describe('useImageLoadManager', () => {
     expect(img.assignedSrc).toEqual([]);
   });
 
-  it('组件卸载时停止清理定时器并清空加载状态', async () => {
+  it('组件卸载时清空加载状态并取消重试', async () => {
     const h = mountManager({ maxRetry: 1 });
     const img = makeImageTarget('https://example.com/c.jpg');
 

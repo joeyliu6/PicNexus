@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import { useVirtualTimeline } from '@/composables/timeline/useVirtualTimeline';
@@ -9,9 +9,18 @@ import type { ServiceType } from '@/config/types';
 
 const mountedWrappers: VueWrapper[] = [];
 
+let resizeCallback: ResizeObserverCallback | null = null;
+
 class ResizeObserverMock {
+  constructor(callback: ResizeObserverCallback) {
+    resizeCallback = callback;
+  }
   observe = vi.fn();
   disconnect = vi.fn();
+}
+
+function resize(width: number, height: number) {
+  resizeCallback!([{ contentRect: { width, height } } as ResizeObserverEntry], {} as ResizeObserver);
 }
 
 function makeMeta(id: string, aspectRatio = 1.4): ImageMeta {
@@ -160,6 +169,55 @@ describe('useVirtualTimeline', () => {
 
     expect(el.scrollTop).toBe(140);
     expect(api.scrollTop.value).toBe(140);
+  });
+
+  // 回归：分组换了、布局还没重算的那一帧，格子按新分组取图、却还摆在旧布局的位置上——
+  // 换筛选时网格先出一帧只有日期标题的空网格。画面上的格子与位置要出自同一份布局
+  it('keeps drawing the pictures of the laid-out groups until the new layout is ready', async () => {
+    const { api, el, groups } = mountVirtualTimeline([makeGroup([makeMeta('old-a'), makeMeta('old-b')])]);
+    setElementMetrics(el, { width: 520, height: 240 });
+    api.forceUpdateVisibleArea();
+
+    groups.value = [makeGroup([makeMeta('new-a')])];
+    await nextTick();
+    expect(api.visibleItems.value.map(item => item.meta.id)).toEqual(['old-a', 'old-b']);
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(api.visibleItems.value.map(item => item.meta.id)).toEqual(['new-a']);
+  });
+
+  // 换了一份结果（换筛选）：新内容与新位置同一帧换上，从最上面开始看
+  it('shows a new result from the top in one step', () => {
+    const items = Array.from({ length: 12 }, (_, index) => makeMeta(`old-${index}`, 1));
+    const { api, el, groups } = mountVirtualTimeline([makeGroup(items)]);
+    setElementMetrics(el, { width: 360, height: 180 });
+    api.forceUpdateVisibleArea();
+    el.scrollTop = 300;
+    api.handleScroll();
+
+    groups.value = [makeGroup([makeMeta('new-a'), makeMeta('new-b')])];
+    api.showFromTop();
+
+    expect(el.scrollTop).toBe(0);
+    expect(api.scrollTop.value).toBe(0);
+    expect(api.visibleItems.value.map(item => item.meta.id)).toEqual(['new-a', 'new-b']);
+    expect(api.displayMode.value).toBe('normal');
+  });
+
+  // 筛选条收起、滚动区变高：要画的范围当场跟上，底部那一条不空着；宽度变了才防抖重排
+  it('follows a taller viewport at once and lays out a new width after a pause', async () => {
+    const { api } = mountVirtualTimeline([makeGroup([makeMeta('one')])]);
+    await nextTick(); // 挂上滚动区后的那次 watch 会重建尺寸监听，等它先跑完
+    resize(520, 240);
+    expect(api.viewportHeight.value).toBe(240);
+
+    resize(520, 276);
+    expect(api.viewportHeight.value).toBe(276);
+
+    resize(400, 276);
+    expect(api.containerWidth.value).toBe(520);
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(api.containerWidth.value).toBe(400);
   });
 
   it('scrolls a known item into view through the layout position map', () => {

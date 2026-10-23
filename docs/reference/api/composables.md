@@ -34,7 +34,8 @@
 | useClipboardImage | 剪贴板图片处理 | `src/composables/upload/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
 | useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
-| useVirtualTimeline | 图库网格的虚拟滚动（按天分组的等高行布局） | `src/composables/timeline/useVirtualTimeline.ts` |
+| useVirtualTimeline | 图库网格的虚拟滚动（按天分组的等高行布局）；格子按算出布局的那份分组画（`layoutGroups`），换一份结果用 `showFromTop`（新布局与回到顶部同一帧） | `src/composables/timeline/useVirtualTimeline.ts` |
+| useTimelineDayPagination | 图库网格按天读记录：按天统计 + 第一屏那几天（`firstScreenDays`）读好再一起换上，换筛选时读好之前 `isSwitching`、分组仍是旧的；之后按可见天补读；记录有变化（`reloadAll`）时变了的已读天与第一屏新出现的天读好再换上 | `src/composables/timeline/useTimelineDayPagination.ts` |
 | useTimelineJump | 图库刻度条跳到某年某月（只给年份时跳这一年最新的月）；跳转中再来的请求只留最后一个，落地后接着跳 | `src/composables/timeline/useTimelineJump.ts` |
 | useTimelineLightbox | 图库网格里打开的灯箱：按天翻页（日内快翻 + 跨日按需加载，打开前先把那一天读进来）；当前图与 ±1 预热都过 `safeImageUrl` | `src/composables/timeline/useTimelineLightbox.ts` |
 | useListLightbox / useGalleryLightbox | 列表里打开的灯箱按列表眼前的顺序翻页（「3 / 21」是第几行）；`useGalleryLightbox` 按打开的地方在网格（按天 / 失效两组）/ 列表之间选一份，灯箱组件只认它 | `src/views/gallery/` |
@@ -42,7 +43,7 @@
 | useImagePreload | 图库滚动预热下一屏；只预热候选链里第一条通过 `safeImageUrl` 的地址 | `src/composables/timeline/useImagePreload.ts` |
 | usePhotoSwipeBridge | PhotoSwipe 灯箱的打开 / 关闭 / 换图，`pswpEl` 供自绘 UI Teleport；`blockKeys` 返回 true 时按键不归灯箱（灯箱里的菜单开着）；长图（高宽比超过 2.5）按窗口宽度从顶部显示、滚轮上下滚动 | `src/composables/history/usePhotoSwipeBridge.ts` |
 | useHistoryViewState | 图库多选：Ctrl·⌘ 单击 / Shift 连选；`selectMany(ids)` 只加不减（全选当前结果用 `historyDB.getIdsByFilter` 查出的全部 id） | `src/composables/history/useHistoryViewState.ts` |
-| useGalleryGrid / useGalleryList / useGalleryActions | 图库页的网格数据、列表分页、批量与单张操作（复制、补充备份、重新检测、移除记录、改用备份的通知） | `src/views/gallery/` |
+| useGalleryGrid / useGalleryList / useGalleryActions | 图库页的网格数据、列表分页、批量与单张操作（复制、补充备份、重新检测、移除记录、改用备份的通知）；列表换筛选 / 排序、记录有变化时读好再整份换上（`isSwitching` / `total`，组件用 `ensureVisible` 告诉它屏幕上是哪几行） | `src/views/gallery/` |
 | useLinkCheckManager | 链接检测引擎（单例）：一次读完全部检测行（`loadHistoryRows`，`force` 不管 5 分钟缓存）、全量 / 子集检测、暂停 / 继续 / 取消、单条重检、`activeRun`（本轮覆盖哪些链接、何时开始） | `src/composables/link-check/useLinkCheck.ts` |
 | useLinkHealth | 链接健康页状态（单例）：健康模型、页面处在哪种状态、检测进度那句话、单行重试（「仍然失效」） | `src/views/health/useLinkHealth.ts` |
 | useHealthRepair | 修复（改用最快的可访问备份 + 换文档旧链接）、撤销、写不成的文档只重试那几个；文档索引 | `src/views/health/useHealthRepair.ts` |

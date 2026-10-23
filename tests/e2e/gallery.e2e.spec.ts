@@ -1,5 +1,218 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { historyRow, openApp } from '../redesign/helpers';
+import type { E2ESeed } from './mocks/state';
+
+/**
+ * 换筛选时网格的每一次变化（LoadingRules ①「切换直接显示内容」）：DOM 每变一次查一遍，记下不该出现的画面——
+ * 有日期标题却没有一张图、没有字的日期标题、灰色占位块、加载过的缩略图又从透明淡入。
+ */
+async function watchGridFrames(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __gridProblems: Set<string>; __gridWatch?: MutationObserver; __seenThumbs: Set<string> };
+    const seen = w.__seenThumbs;
+    w.__gridProblems = new Set();
+    const main = document.querySelector('.gallery__main')!;
+    const check = () => {
+      const grid = main.querySelector<HTMLElement>('.grid');
+      if (!grid || !grid.offsetParent) return;
+      const days = [...grid.querySelectorAll('.grid__day:not(.grid__day--sticky)')];
+      if (days.length > 0 && !grid.querySelector('.tile')) w.__gridProblems.add('day headings without pictures');
+      if (days.some((day) => !day.textContent?.trim())) w.__gridProblems.add('a day heading without its title');
+      if (grid.querySelector('.grid__slot')) w.__gridProblems.add('grey placeholder blocks');
+      for (const img of grid.querySelectorAll<HTMLImageElement>('.tile img:not([data-checked])')) {
+        img.dataset.checked = '';
+        if (seen.has(img.src) && !img.classList.contains('tile__img--loaded')) w.__gridProblems.add('a picture seen before fades in again');
+      }
+    };
+    w.__gridWatch?.disconnect();
+    w.__gridWatch = new MutationObserver(check);
+    w.__gridWatch.observe(main, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+const gridProblems = (page: Page) => page.evaluate(() => [...(window as unknown as { __gridProblems: Set<string> }).__gridProblems]);
+
+/** 屏幕上的格子都有了结果（图显示出来或判了失败），没有灰色占位块 */
+async function settleGrid(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() => {
+    const grid = document.querySelector('.gallery .grid');
+    if (!grid || grid.querySelector('.grid__slot') || !grid.querySelector('.tile')) return false;
+    return [...grid.querySelectorAll('.tile')].every((tile) => tile.querySelector('.tile__broken')
+      || tile.querySelector('img.tile__img--loaded'));
+  })).toBe(true);
+}
+
+/** 30 张图，隔一天一张；每 3 张收藏一张，每 5 张有一张查出失效 */
+function filterRows(): Record<string, unknown>[] {
+  const DAY = 24 * 60;
+  return Array.from({ length: 30 }, (_, i) => ({
+    ...historyRow(i + 1, `第${i + 1}张.png`, i * 2 * DAY),
+    is_favorited: i % 3 === 0 ? 1 : 0,
+    ...(i % 5 === 0 ? { link_check_status: JSON.stringify({ jd: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx', statusCode: 404 } }) } : {}),
+  }));
+}
+
+/** 列表视图的每一次变化：屏幕上的行不该先变成骨架条 */
+async function watchListFrames(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __listProblems: Set<string>; __listWatch?: MutationObserver };
+    w.__listProblems = new Set();
+    const main = document.querySelector('.gallery__main')!;
+    const check = () => {
+      if (main.querySelector('.list__row[aria-busy="true"]')) w.__listProblems.add('skeleton rows');
+    };
+    w.__listWatch?.disconnect();
+    w.__listWatch = new MutationObserver(check);
+    w.__listWatch.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy'] });
+  });
+}
+
+const listProblems = (page: Page) => page.evaluate(() => [...(window as unknown as { __listProblems: Set<string> }).__listProblems]);
+
+/** 列表屏幕上的行都读回来了（没有骨架条） */
+async function settleList(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() => !!document.querySelector('.list__row')
+    && !document.querySelector('.list__row[aria-busy="true"]'))).toBe(true);
+}
+
+/** 图库开着时用命令面板「上传剪贴板图片」传一张（剪贴板里有图由种子的 clipboard_has_image 给出） */
+async function pasteUpload(page: Page): Promise<void> {
+  await page.keyboard.press('Control+K');
+  await page.locator('.command-palette__input').fill('上传剪贴板');
+  await expect(page.locator('.command-palette')).toContainText('上传剪贴板图片');
+  await page.keyboard.press('Enter');
+}
+
+const CLIPBOARD_IMAGE: E2ESeed = { invokeOverrides: { clipboard_has_image: { result: true } } };
+
+async function openFilterGallery(page: Page, seed: E2ESeed = {}): Promise<void> {
+  await openApp(page, { historyRows: filterRows(), ...seed });
+  // 记下加载出来过的缩略图（换回来时它们应当直接显示）
+  await page.evaluate(() => {
+    const seen = new Set<string>();
+    (window as unknown as { __seenThumbs: Set<string> }).__seenThumbs = seen;
+    document.addEventListener('load', (event) => {
+      if (event.target instanceof HTMLImageElement && event.target.closest('.tile')) seen.add(event.target.src);
+    }, true);
+  });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  await settleGrid(page);
+}
+
+// 回归：换筛选时先出一帧只有日期标题的空网格、再出整屏灰色占位块，图才淡入；新结果停在旧的滚动位置上
+test('changing a filter swaps in the new pictures at once, from the top', async ({ page }) => {
+  await openFilterGallery(page);
+  const gallery = page.locator('.gallery');
+  await page.locator('.gallery__scroll').evaluate((el) => { el.scrollTop = 1500; });
+  await settleGrid(page);
+
+  await watchGridFrames(page);
+  await gallery.getByRole('button', { name: '★ 收藏' }).click();
+  await expect(gallery.getByText('找到 10 张')).toBeVisible();
+  await settleGrid(page);
+  expect(await gridProblems(page)).toEqual([]);
+  await expect(page.locator('.gallery__scroll')).toHaveJSProperty('scrollTop', 0);
+  await expect(gallery.locator('.tile[aria-label="第1张.png"]')).toBeInViewport();
+
+  await watchGridFrames(page);
+  await gallery.getByPlaceholder('搜索文件名').fill('第1');
+  await expect(gallery.getByText('找到 5 张')).toBeVisible();
+  await settleGrid(page);
+  expect(await gridProblems(page)).toEqual([]);
+});
+
+// 已经加载过的缩略图换回来时直接显示，不再从占位色淡入；离开屏幕久了（超过几秒）也一样
+test('pictures seen before show at once when a filter is cleared', async ({ page }) => {
+  await openFilterGallery(page);
+  const gallery = page.locator('.gallery');
+  await gallery.getByRole('button', { name: '★ 收藏' }).click();
+  await expect(gallery.getByText('找到 10 张')).toBeVisible();
+  await settleGrid(page);
+  await page.clock.runFor(5000);
+
+  await watchGridFrames(page);
+  await gallery.getByText('清除全部').click();
+  await expect(gallery.getByText('共 30 张')).toBeVisible();
+  await settleGrid(page);
+  expect(await gridProblems(page)).toEqual([]);
+});
+
+// 回归：图库开着时上传一张，今天那一行先整行变成灰色占位块，新记录读回来才又出图
+test('an upload while the grid is open keeps today\'s pictures on screen', async ({ page }) => {
+  await openFilterGallery(page, CLIPBOARD_IMAGE);
+  const gallery = page.locator('.gallery');
+
+  await watchGridFrames(page);
+  await pasteUpload(page);
+  await expect(gallery.getByText('共 31 张')).toBeVisible();
+  await expect(gallery.locator('.tile[aria-label="clipboard.png"]')).toBeVisible();
+  await settleGrid(page);
+  expect(await gridProblems(page)).toEqual([]);
+});
+
+// 回归：列表点表头排序 / 换筛选时整屏的行先变成骨架条一帧，新的才出来；新结果从最上面看起
+test('the list swaps in a new sort or filter at once, from the top', async ({ page }) => {
+  // 150 行：滚到第二页（每页 100 行）再换，换上的新结果只有第一页，旧位置上没有可画的行
+  const rows = Array.from({ length: 150 }, (_, i) => ({ ...historyRow(i + 1, `第${i + 1}张.png`, i * 30), is_favorited: i % 15 === 0 ? 1 : 0 }));
+  await openApp(page, { historyRows: rows });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const gallery = page.locator('.gallery');
+  await gallery.getByLabel('列表', { exact: true }).click();
+  await settleList(page);
+  await page.locator('.list__scroll').evaluate((el) => { el.scrollTop = 6500; });
+  await expect(page.locator('.list__row[data-index="121"]')).toBeVisible();
+  await settleList(page);
+
+  await watchListFrames(page);
+  await page.locator('.list__sort').filter({ hasText: '文件名' }).click();
+  await expect(page.locator('.list__head [aria-sort="ascending"]')).toBeVisible();
+  await settleList(page);
+  expect(await listProblems(page)).toEqual([]);
+  await expect(page.locator('.list__scroll')).toHaveJSProperty('scrollTop', 0);
+  await expect(page.locator('.list__row[data-index="0"]')).toBeInViewport();
+
+  await watchListFrames(page);
+  await gallery.getByRole('button', { name: '★ 收藏' }).click();
+  await expect(gallery.getByText('找到 10 张')).toBeVisible();
+  await expect(page.locator('.list')).toHaveAttribute('aria-rowcount', '11');
+  await settleList(page);
+  expect(await listProblems(page)).toEqual([]);
+});
+
+// 回归：列表开着时上传一张，整屏的行先变成骨架条再读回来
+test('an upload while the list is open keeps its rows on screen', async ({ page }) => {
+  await openFilterGallery(page, CLIPBOARD_IMAGE);
+  const gallery = page.locator('.gallery');
+  await gallery.getByLabel('列表', { exact: true }).click();
+  await settleList(page);
+
+  await watchListFrames(page);
+  await pasteUpload(page);
+  await expect(gallery.getByText('共 31 张')).toBeVisible();
+  await expect(page.locator('.list__row').first()).toContainText('clipboard.png');
+  await settleList(page);
+  expect(await listProblems(page)).toEqual([]);
+});
+
+// 只筛「失效」时网格换成两组（不按天），换进、换出也一次换好
+test('switching to and from the two 失效 groups swaps the grid at once', async ({ page }) => {
+  await openFilterGallery(page);
+  const gallery = page.locator('.gallery');
+
+  await watchGridFrames(page);
+  await gallery.getByRole('button', { name: '状态' }).click();
+  await page.locator('.pn-menu').getByText('失效', { exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(gallery.locator('.grid__day-title').first()).toHaveText('失效 · 无可用备份');
+  await settleGrid(page);
+  expect(await gridProblems(page)).toEqual([]);
+
+  await watchGridFrames(page);
+  await gallery.getByText('清除全部').click();
+  await expect(gallery.getByText('共 30 张')).toBeVisible();
+  await settleGrid(page);
+  expect(await gridProblems(page)).toEqual([]);
+});
 
 // 命令面板选中图片按 Ctrl+Enter「在图库中定位」（交接说明 8.1）：
 // 打开图库、跳到那张图所在的那一天、选中它并打开详情。目标放在最旧的一天，首屏看不到。

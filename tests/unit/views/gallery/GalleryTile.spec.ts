@@ -145,6 +145,30 @@ describe('GalleryTile picture-ratio rules', () => {
   });
 });
 
+// 图库记得这张图加载过（换筛选回来、滚回来的格子直接显示），但这一格的 <img> 是新的：
+// 首选地址这次卡住时照样到点换下一条，不因为「加载过」就一直等
+describe('GalleryTile address fallback', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('still moves on from a stalled address when the picture was loaded before', async () => {
+    const image = meta('截图.png', 1600, 1000);
+    const wrapper = mountWithDefaults(GalleryTile, {
+      props: {
+        meta: image, x: 0, y: 0, width: 240, height: 150,
+        selected: false, favorited: false, selecting: false, focused: false, copied: false,
+        loaded: true, failed: false, displayMode: 'normal', thumbnailUrls: ['https://proxy.example/a.png', 'https://jd.example/a.png'],
+      },
+    });
+    mounted.push(wrapper);
+    expect(wrapper.find('img').attributes('src')).toBe('https://proxy.example/a.png');
+    expect(wrapper.find('img').classes()).toContain('tile__img--loaded');
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.find('img').attributes('src')).toBe('https://jd.example/a.png');
+  });
+});
+
 describe('GalleryTile animated GIF', () => {
   const drawImage = vi.fn();
 

@@ -2,9 +2,9 @@
  * useTimelineDayPagination - 时间轴按日按需加载
  *
  * 替代 sharedImageMetas 全量路径，专为时间轴设计：
- * 1. 首屏只拉 getDayStats（<50ms），生成骨架 groups
+ * 1. 先拉 getDayStats（<50ms）与第一屏那几天的记录，一起换上；其余的天是骨架
  * 2. 滚动可见时 ensureDaysLoaded 合并查询 getItemsByDayRange（按天）
- * 3. 筛选条件变化时重置并重载
+ * 3. 换筛选同 1：新结果读好之前分组仍是屏幕上那一份，读好后一次换上（LoadingRules ①「切换直接显示内容」）
  */
 
 import {
@@ -36,6 +36,8 @@ const MAX_ASPECT_RATIOS_CACHE = 200;
 /** 从毫秒时间戳提取 dayKey（month 0-11，与 DayStats 一致），统一来源 utils/formatters */
 const tsToDayKey = getDayKey;
 
+const dayKeyOf = (stat: DayStats): string => `${stat.year}-${stat.month}-${stat.day}`;
+
 /**
  * 格式化日期为中文标签（带 memoization）
  *
@@ -61,6 +63,11 @@ export interface UseTimelineDayPaginationParams {
   /** 全部筛选条件；内容不变时换一个新对象不会重载 */
   filter: Ref<DayStatsFilter>;
   visible: Ref<boolean>;
+  /**
+   * 新结果第一屏会显示哪几天（按天汇总按时间降序）：读结果时先把这几天的记录读回来，
+   * 与按天汇总一起换上——换上的那一刻屏幕上就是图，不经过骨架。不给就只等按天汇总。
+   */
+  firstScreenDays?: (stats: DayStats[]) => string[];
 }
 
 export interface UseTimelineDayPaginationReturn {
@@ -71,22 +78,23 @@ export interface UseTimelineDayPaginationReturn {
   loadedDayKeys: Ref<Set<string>>;
   /** 由 dayStats + dayMetaCache 派生的完整 groups（含骨架天） */
   groups: ComputedRef<PhotoGroup[]>;
-  /** dayStats 的 count 总和 */
-  totalCount: ComputedRef<number>;
   isLoadingStats: Ref<boolean>;
   isDayLoading: Ref<boolean>;
   hasLoadedStats: Ref<boolean>;
   /** 全量 aspectRatios 是否已预取完成（规模防护降级模式下恒为 false） */
   isFullyPreloaded: Ref<boolean>;
+  /** 正在换筛选：新结果还在读，分组仍是屏幕上那一份筛选的（读好后连同第一屏一次换上） */
+  isSwitching: ComputedRef<boolean>;
 
+  /** 读当前筛选的结果（按天汇总 + 第一屏那几天的记录），读好后一次换上，再接着预取宽高比 */
   loadDayStats(): Promise<void>;
   /** 合并查询 dayKeys 对应的 metas，不重复加载 */
   ensureDaysLoaded(dayKeys: string[]): Promise<void>;
   /** 预取指定 dayKeys 的 aspectRatios（降级模式或 isFullyPreloaded=false 时使用） */
   prefetchDayAspectRatios(dayKeys: string[]): Promise<void>;
   /**
-   * 重载 dayStats（history-updated/cleared 时调用）；张数变了的天退回骨架重取，
-   * changedIds 所在的已加载天原地换新（改用备份、检测结果这类不改张数的变化）
+   * 重载 dayStats（history-updated/cleared 时调用）：张数变了、含 changedIds 的已读天，以及第一屏里新出现的天，
+   * 先重读，读好再与新的按天汇总一起换上（屏幕上的图不先退回骨架）
    */
   reloadAll(changedIds?: readonly string[]): Promise<void>;
   /** dayStats 降序中比 dayKey 更早的那天的 key（灯箱 prev 跨日） */
@@ -98,7 +106,16 @@ export interface UseTimelineDayPaginationReturn {
 export function useTimelineDayPagination(
   params: UseTimelineDayPaginationParams,
 ): UseTimelineDayPaginationReturn {
-  const { filter, visible } = params;
+  const { filter, visible, firstScreenDays } = params;
+
+  /**
+   * 屏幕上这份结果是按哪份筛选读的：之后按需读别的天、预取宽高比都照它，
+   * 换筛选、新结果读好之前，滚到的天不会混进新筛选的图
+   */
+  let shownFilter: DayStatsFilter = filter.value;
+  /** shownFilter 的 JSON；null = 还没读过 */
+  const shownFilterKey = ref<string | null>(null);
+  const isSwitching = computed(() => shownFilterKey.value !== JSON.stringify(filter.value));
 
   const dayStats = shallowRef<DayStats[]>([]);
   const dayMetaCache = new Map<string, ImageMeta[]>();
@@ -125,8 +142,6 @@ export function useTimelineDayPagination(
   let dayLoadVersion = 0;
   // 在途 ensureDaysLoaded 计数：仅当归 0 时 isDayLoading 才置 false
   let inflightDayCount = 0;
-
-  const totalCount = computed(() => dayStats.value.reduce((sum, d) => sum + d.count, 0));
 
   // groups computed 里 stable 字段（id/label/year/month/day/date/expectedCount）
   // 在 dayStats 不变时就是同一份数据；但 groups 会被 loadedDayKeys / aspectRatiosRevision 触发频繁重算。
@@ -192,56 +207,113 @@ export function useTimelineDayPagination(
   });
 
   function buildFilter(): DayStatsFilter {
-    return filter.value;
+    return shownFilter;
   }
 
   /**
-   * v7：timeline 挂载时并行加载 dayStats + 全量 aspectRatios
+   * 读回这几天的记录（stats 里的顺序）：挨着的几天合成一条范围查询，不把夹在中间没要的天一起读回来
+   */
+  async function readDays(stats: DayStats[], keys: ReadonlySet<string>, query: DayStatsFilter): Promise<Map<string, ImageMeta[]>> {
+    const runs: DayStats[][] = [];
+    let run: DayStats[] = [];
+    for (const stat of stats) {
+      if (keys.has(dayKeyOf(stat))) {
+        run.push(stat);
+      } else if (run.length > 0) {
+        runs.push(run);
+        run = [];
+      }
+    }
+    if (run.length > 0) runs.push(run);
+
+    const days = new Map<string, ImageMeta[]>(runs.flat().map((stat) => [dayKeyOf(stat), []]));
+    const batches = await Promise.all(runs.map((part) => historyDB.getItemsByDayRange(
+      Math.min(...part.map((s) => s.minTimestamp)),
+      Math.max(...part.map((s) => s.maxTimestamp)),
+      query,
+    )));
+    for (const items of batches) {
+      for (const item of items) days.get(tsToDayKey(item.timestamp))?.push(item);
+    }
+    return days;
+  }
+
+  /**
+   * 换上一份新的按天汇总：已读的天只留 kept（照旧）与 fresh（刚读回来的），旧结果在途的按天读取 / 宽高比预取作废
+   */
+  function commitStats(stats: DayStats[], kept: ReadonlySet<string>, fresh: Map<string, ImageMeta[]>): void {
+    dayLoadVersion++;
+    // aspectRatios cache 里缓存的 count 可能已过期（新增/删除改变了天内数量/顺序），全清最稳
+    aspectRatiosVersion++;
+    dayAspectRatiosCache.clear();
+    for (const key of [...dayMetaCache.keys()]) {
+      if (!kept.has(key)) dayMetaCache.delete(key);
+    }
+    for (const [key, metas] of fresh) dayMetaCache.set(key, metas);
+    isFullyPreloaded.value = false;
+    dayStats.value = stats;
+    loadedDayKeys.value = new Set([...kept, ...fresh.keys()]);
+  }
+
+  /**
+   * 读当前筛选的结果，读好后一次换上（首次加载、换筛选都走这里）
    *
    * 流程：
-   * 1. 先查 dayStats（轻量聚合，<200ms），拿到 totalCount
-   * 2. totalCount ≤ MAX_PRELOAD_THRESHOLD → 顺序拉 getAllAspectRatios 填满 cache
-   *    （两个查询不真正并行，避免超阈值时浪费 SQL 成本；但两个 SQL 都是短查询，感知无差异）
-   * 3. totalCount > MAX_PRELOAD_THRESHOLD → 打 log.warn，进入降级模式，跳转走懒加载
+   * 1. 查 dayStats（轻量聚合，<200ms）；第一屏那几天（firstScreenDays）的记录接着读回来
+   * 2. 两样都到了才换上：按天汇总、已读的天、筛选一起换，旧结果在途的按天读取 / 宽高比预取作废。
+   *    读的过程中分组仍是屏幕上那一份——不出现「全是骨架的新分组」，也不出现「旧日期配新图」
+   * 3. 换上之后预取全量 aspectRatios（只影响还没读的天的骨架形状）：
+   *    totalCount ≤ MAX_PRELOAD_THRESHOLD → getAllAspectRatios 填满 cache；超过 → 降级模式，跳转走懒加载
    *
-   * 之所以顺序而非并行：超阈值用户（>20万张）如果并行查完整 aspectRatios 会浪费 3-10 秒 SQL
-   * 时间 + 内存，然后整批丢弃。顺序让这批用户直接跳过全量查询。
+   * 宽高比放在换上之后：图多时要读上百毫秒到一两秒，等它会让换筛选慢半拍；第一屏的天已是真图，用不上它。
    */
   async function loadDayStats(): Promise<void> {
     const version = ++statsVersion;
-    const aspectVersion = aspectRatiosVersion;
+    const next = filter.value;
     isLoadingStats.value = true;
-    isFullyPreloaded.value = false;
     try {
-      const result = await historyDB.getDayStats(buildFilter());
+      const stats = await historyDB.getDayStats(next);
       if (version !== statsVersion) return;
-      dayStats.value = result;
+      const fresh = await readDays(stats, new Set(firstScreenDays?.(stats) ?? []), next);
+      if (version !== statsVersion) return;
+
+      shownFilter = next;
+      commitStats(stats, new Set(), fresh);
       hasLoadedStats.value = true;
-      log.debug(`dayStats 加载完成: ${result.length} 天`);
+      shownFilterKey.value = JSON.stringify(next);
+      log.debug(`dayStats 加载完成: ${stats.length} 天，先读了 ${fresh.size} 天`);
 
-      const totalCount = result.reduce((sum, d) => sum + d.count, 0);
-      if (totalCount > MAX_PRELOAD_THRESHOLD) {
-        log.warn(
-          `照片总数 ${totalCount} 超过全量预取阈值 ${MAX_PRELOAD_THRESHOLD},`
-          + `切换懒加载降级模式（跳转时走 ±2 月 prefetch）`,
-        );
-        return;
-      }
-
-      // 全量 aspectRatios 预取（20 万以内 < 2s，HDD 可能略慢但 overlay 全程遮盖）
-      const t0 = performance.now();
-      const rows = await historyDB.getAllAspectRatios(buildFilter());
-      if (version !== statsVersion || aspectVersion !== aspectRatiosVersion) return;
-
-      populateFullAspectCache(rows);
-      isFullyPreloaded.value = true;
-      aspectRatiosRevision.value++;
-      log.info(`aspectRatios 全量预取: ${rows.length} 条,耗时 ${(performance.now() - t0).toFixed(1)}ms`);
+      await preloadAspectRatios(version, stats);
     } catch (e) {
       if (version === statsVersion) log.error('loadDayStats 失败:', e);
     } finally {
       if (version === statsVersion) isLoadingStats.value = false;
     }
+  }
+
+  /**
+   * 全量 aspectRatios 预取（还没读的天按真实比例画骨架、跳转可直接落点）
+   *
+   * 超阈值用户（>20万张）直接跳过：查完整 aspectRatios 要 3-10 秒 SQL + 内存，跳转改走懒加载。
+   */
+  async function preloadAspectRatios(version: number, stats: DayStats[]): Promise<void> {
+    const totalCount = stats.reduce((sum, d) => sum + d.count, 0);
+    if (totalCount > MAX_PRELOAD_THRESHOLD) {
+      log.warn(
+        `照片总数 ${totalCount} 超过全量预取阈值 ${MAX_PRELOAD_THRESHOLD},`
+        + `切换懒加载降级模式（跳转时走 ±2 月 prefetch）`,
+      );
+      return;
+    }
+    const aspectVersion = aspectRatiosVersion;
+    const t0 = performance.now();
+    const rows = await historyDB.getAllAspectRatios(buildFilter());
+    if (version !== statsVersion || aspectVersion !== aspectRatiosVersion) return;
+
+    populateFullAspectCache(rows);
+    isFullyPreloaded.value = true;
+    aspectRatiosRevision.value++;
+    log.info(`aspectRatios 全量预取: ${rows.length} 条,耗时 ${(performance.now() - t0).toFixed(1)}ms`);
   }
 
   /** 把 getAllAspectRatios 返回的扁平 rows 按 dayKey 分桶写入 cache（内部顺序保留 timestamp DESC, id DESC） */
@@ -459,68 +531,50 @@ export function useTimelineDayPagination(
   }
 
   /**
-   * 全量重载 dayStats，同时尽量保留已加载天的 items 缓存
-   * 保留条件：新 dayStats 里存在 + count 未变。count 变了说明该天有新增/删除，
-   * 必须降级回 skeleton 让 ensureDaysLoaded 重新拉取 items，否则新增项对用户不可见。
-   * changedIds 所在的天张数没变也得重取（内容变了）：先留着旧的，新的回来再原地替换，不闪骨架。
+   * 记录有变化（同一份筛选）：重读按天汇总，读好再与要重读的天一起换上，屏幕上的图不先退回骨架
+   * - 已读、张数没变、不含 changedIds 的天照旧留着；
+   * - 已读但张数变了（新增 / 删除）或含 changedIds（改用备份、检测结果这类不改张数的变化）的天：
+   *   旧格子先留着，重读回来与新的按天汇总一起换上；
+   * - 第一屏里还没有现成格子的天（当天第一次上传，新的一天出现在最上面）也一起读回来，不先画成一行灰块；
+   * - 其余没读过的天照旧是骨架，滚到时再读。
    */
   async function reloadAll(changedIds?: readonly string[]): Promise<void> {
-    dayLoadVersion++;
-    // aspectRatios cache 里缓存的 count 可能已过期（新增/删除改变了天内数量/顺序），全清最稳
-    aspectRatiosVersion++;
-    dayAspectRatiosCache.clear();
-    isFullyPreloaded.value = false; // loadDayStats 完成后会重置为 true（若未超阈值）
-    const oldCountByKey = new Map<string, number>();
-    for (const s of dayStats.value) {
-      oldCountByKey.set(`${s.year}-${s.month}-${s.day}`, s.count);
+    // 还没读过、或正在换筛选：新结果本来就是现读的，读最新的一份就行
+    if (!hasLoadedStats.value || isSwitching.value) {
+      await loadDayStats();
+      return;
     }
-    const staleLoaded = loadedDayKeys.value;
+    const version = ++statsVersion;
+    const query = buildFilter();
     const changed = new Set(changedIds ?? []);
-    const changedDays = new Set<string>();
-    if (changed.size > 0) {
-      for (const [key, metas] of dayMetaCache) {
-        if (metas.some((meta) => changed.has(meta.id))) changedDays.add(key);
-      }
-    }
-
-    await loadDayStats();
-
-    // 遍历新 dayStats：只有已加载且 count 未变的天才保留，count 变了必须降级回 skeleton 重拉
-    const kept = new Set<string>();
-    for (const s of dayStats.value) {
-      const key = `${s.year}-${s.month}-${s.day}`;
-      if (staleLoaded.has(key) && oldCountByKey.get(key) === s.count) {
-        kept.add(key);
-      }
-    }
-    for (const key of [...dayMetaCache.keys()]) {
-      if (!kept.has(key)) dayMetaCache.delete(key);
-    }
-    loadedDayKeys.value = kept;
-
-    const refresh = [...kept].filter((key) => changedDays.has(key));
-    if (refresh.length > 0) await refreshLoadedDays(refresh);
-  }
-
-  /** 已加载的几天原地重取：一条范围查询，只替换这几天的缓存，替换完再触发 groups 重算 */
-  async function refreshLoadedDays(keys: string[]): Promise<void> {
-    const wanted = new Set(keys);
-    const stats = dayStats.value.filter((s) => wanted.has(`${s.year}-${s.month}-${s.day}`));
-    if (stats.length === 0) return;
-    const version = dayLoadVersion;
+    isLoadingStats.value = true;
     try {
-      const items = await historyDB.getItemsByDayRange(
-        Math.min(...stats.map((s) => s.minTimestamp)),
-        Math.max(...stats.map((s) => s.maxTimestamp)),
-        buildFilter(),
-      );
-      if (version !== dayLoadVersion) return;
-      const buckets = new Map<string, ImageMeta[]>(keys.map((key) => [key, []]));
-      for (const item of items) buckets.get(tsToDayKey(item.timestamp))?.push(item);
-      for (const [key, bucket] of buckets) dayMetaCache.set(key, bucket);
-      loadedDayKeys.value = new Set(loadedDayKeys.value);
+      const stats = await historyDB.getDayStats(query);
+      if (version !== statsVersion) return;
+
+      const oldCountByKey = new Map(dayStats.value.map((s) => [dayKeyOf(s), s.count]));
+      /** 这一天已读、张数没变、内容也没变：格子照旧 */
+      const unchanged = (stat: DayStats) => {
+        const key = dayKeyOf(stat);
+        return loadedDayKeys.value.has(key)
+          && oldCountByKey.get(key) === stat.count
+          && !dayMetaCache.get(key)?.some((meta) => changed.has(meta.id));
+      };
+      const firstScreen = new Set(firstScreenDays?.(stats) ?? []);
+      const reread = new Set(stats
+        .filter((stat) => (loadedDayKeys.value.has(dayKeyOf(stat)) || firstScreen.has(dayKeyOf(stat))) && !unchanged(stat))
+        .map(dayKeyOf));
+      const fresh = await readDays(stats, reread, query);
+      if (version !== statsVersion) return;
+
+      // 重读的过程中按需读进来的天也算：张数没变的照旧留着
+      const kept = new Set(stats.filter((stat) => !fresh.has(dayKeyOf(stat)) && unchanged(stat)).map(dayKeyOf));
+      commitStats(stats, kept, fresh);
+      await preloadAspectRatios(version, stats);
     } catch (e) {
-      if (version === dayLoadVersion) log.error('refreshLoadedDays 失败:', e);
+      if (version === statsVersion) log.error('reloadAll 失败:', e);
+    } finally {
+      if (version === statsVersion) isLoadingStats.value = false;
     }
   }
 
@@ -547,16 +601,11 @@ export function useTimelineDayPagination(
     return `${d.year}-${d.month}-${d.day}`;
   }
 
-  // 筛选条件变化 → 重置 cache + 重载 dayStats（按内容比，调用方每次算出新对象也不会白重载）
+  // 筛选条件变化 → 读新结果，读好后一次换上（按内容比，调用方每次算出新对象也不会白重载）。
+  // 读的过程中缓存与分组都还是屏幕上那一份，换上时才作废。
   // 不守卫 hasLoadedStats：首次加载在途时若用户切 filter，应让新 filter 赢得竞态，
   // loadDayStats 内部的 statsVersion 会自动作废在途的旧请求
   watch(() => JSON.stringify(filter.value), () => {
-    dayLoadVersion++;
-    aspectRatiosVersion++;
-    dayMetaCache.clear();
-    dayAspectRatiosCache.clear();
-    loadedDayKeys.value = new Set();
-    isFullyPreloaded.value = false;
     void loadDayStats();
   });
 
@@ -572,8 +621,7 @@ export function useTimelineDayPagination(
   });
 
   // 历史记录变更事件
-  // - updated（新增/重试/改用备份/检测结果）：走 reloadAll，新 day 会以 skeleton 进入；已加载天保留不闪，
-  //   事件里点名的记录所在的天原地重取
+  // - updated（新增/重试/改用备份/检测结果）：走 reloadAll，变了的已读天与第一屏新出现的天读好再换上，不闪骨架
   // - deleted：能命中缓存走增量，命中不到兜底 reloadAll
   // - cleared：reloadAll
   const unlistens: Array<() => void> = [];
@@ -600,11 +648,11 @@ export function useTimelineDayPagination(
     dayMetaCache,
     loadedDayKeys,
     groups,
-    totalCount,
     isLoadingStats,
     isDayLoading,
     hasLoadedStats,
     isFullyPreloaded,
+    isSwitching,
     loadDayStats,
     ensureDaysLoaded,
     prefetchDayAspectRatios,

@@ -72,6 +72,20 @@ describe('dead sections', () => {
     expect(api.groups.value.map((g) => g.heading)).toEqual([{ title: '失效 · 无可用备份', sub: '1,206 张' }]);
   });
 
+  // 换筛选时网格留着眼前这两组，直到按新筛选读好才换（只认按眼前这份筛选读出来的）
+  it('is ready only with the groups read for the current filter', async () => {
+    const { api, filterRef } = mountSections({ statusFilter: ['dead'] }, { available: [meta('a')], none: [] });
+    expect(api.isReady.value).toBe(false);
+    await flush();
+    expect(api.isReady.value).toBe(true);
+
+    filterRef.value = { statusFilter: ['dead'], favoritesOnly: true };
+    expect(api.isReady.value).toBe(false);
+    expect(api.groups.value.map((g) => g.items.map((i) => i.id))).toEqual([['a']]);
+    await flush();
+    expect(api.isReady.value).toBe(true);
+  });
+
   it('reads again when the records change, and stays idle while another filter is on', async () => {
     const { api, enabled } = mountSections({ statusFilter: ['dead'] }, { available: [meta('a')], none: [] });
     await flush();

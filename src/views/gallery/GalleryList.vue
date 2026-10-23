@@ -6,7 +6,7 @@
 // 这一行的「复制」「⋯」接在它后面，其余行的按钮不进 Tab 顺序。
 // 列数按列表自己的宽度定（打开详情、收起侧栏都会变）：放不下七列先去掉「尺寸 · 大小」；再窄把图床写到文件名下面一行、
 // 「状态」收成文件名旁的 ⚠，文件名始终有地方显示。
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
@@ -71,16 +71,24 @@ const narrow = computed(() => layout.value !== 'wide');
 const compact = computed(() => layout.value === 'compact');
 
 const virtualizer = useVirtualizer(computed(() => ({
-  count: props.grid.totalCount.value,
+  count: list.total.value,
   getScrollElement: () => scroller.value,
   estimateSize: () => ROW_HEIGHT,
   overscan: 8,
 })));
 const visible = computed(() => virtualizer.value.getVirtualItems().map((item) => ({ item, row: list.rowAt(item.index) })));
-// 屏幕上的行变了，或排序 / 筛选 / 记录变化让已取的页作废了（行没变也得重取），都把可见行补齐
+// 屏幕上的行变了，或换上了新的一份（行没变也得补齐）：告诉列表数据屏幕上是哪几行，没取的去取
 watch(() => [virtualizer.value.getVirtualItems().map((item) => item.index), list.generation.value] as const, ([indexes]) => {
-  for (const index of indexes) void list.ensure(index);
+  list.ensureVisible(indexes);
 }, { immediate: true });
+onUnmounted(() => list.ensureVisible([]));
+
+// 换了筛选 / 排序：新结果从最上面看起。滚动区与虚拟列表记的位置一起当场归零，
+// 换上新行的这一帧就画最上面那几行（只改滚动区的话，虚拟列表要等滚动事件才知道，中间一帧会按旧位置画、屏幕上是空的）
+watch(() => list.shownKey.value, () => {
+  if (scroller.value) scroller.value.scrollTop = 0;
+  virtualizer.value.scrollOffset = 0;
+});
 
 const selectedIds = computed(() => new Set(viewState.selectedIdList.value));
 const hostNames = (row: GalleryListRow) => (row.mirrorServices?.length ? row.mirrorServices.map((m) => m.serviceId) : [row.primaryService])
@@ -127,7 +135,7 @@ function applyPendingFocus(): void {
 watch(visible, () => void nextTick(applyPendingFocus));
 
 function moveTo(index: number): void {
-  const target = Math.max(0, Math.min(index, props.grid.totalCount.value - 1));
+  const target = Math.max(0, Math.min(index, list.total.value - 1));
   activeIndex.value = target;
   pendingFocus = target;
   virtualizer.value.scrollToIndex(target, { align: 'auto' });
@@ -142,7 +150,7 @@ function onRowFocus(index: number, row: GalleryListRow | null, event: FocusEvent
 function onRowKeydown(index: number, row: GalleryListRow | null, event: KeyboardEvent): void {
   if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
   const page = Math.max(1, Math.floor((scroller.value?.clientHeight ?? ROW_HEIGHT) / ROW_HEIGHT) - 1);
-  const moves: Record<string, number> = { ArrowDown: index + 1, ArrowUp: index - 1, PageDown: index + page, PageUp: index - page, Home: 0, End: props.grid.totalCount.value - 1 };
+  const moves: Record<string, number> = { ArrowDown: index + 1, ArrowUp: index - 1, PageDown: index + page, PageUp: index - page, Home: 0, End: list.total.value - 1 };
   if (event.key in moves) {
     event.preventDefault();
     moveTo(moves[event.key]);
@@ -157,7 +165,7 @@ function onRowKeydown(index: number, row: GalleryListRow | null, event: Keyboard
 </script>
 
 <template>
-  <div ref="root" class="list" :class="{ 'list--narrow': narrow, 'list--compact': compact }" role="grid" aria-label="图片列表" aria-multiselectable="true" :aria-rowcount="grid.totalCount.value + 1">
+  <div ref="root" class="list" :class="{ 'list--narrow': narrow, 'list--compact': compact }" role="grid" aria-label="图片列表" aria-multiselectable="true" :aria-rowcount="list.total.value + 1">
     <div class="list__head" role="row" aria-rowindex="1">
       <span role="columnheader" aria-label="缩略图" />
       <span role="columnheader" :aria-sort="ariaSort('name')">

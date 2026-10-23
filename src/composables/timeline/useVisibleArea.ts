@@ -19,7 +19,7 @@ import { DEFAULT_OPTIONS } from './types';
  * @param scrollTop 滚动位置 ref
  * @param viewportHeight 视口高度 ref
  * @param layoutResult 布局结果 ref
- * @param groups 图片分组数据
+ * @param groups 算出 layoutResult 的那份分组（格子按它取图，与布局永远对得上）
  * @param options 配置选项
  */
 export function useVisibleArea(

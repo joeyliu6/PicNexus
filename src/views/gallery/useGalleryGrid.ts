@@ -1,9 +1,12 @@
 // 图库网格的数据与虚拟滚动（交接说明 8.2）：按天分组、等高行、按需加载可见天、刻度条拖动跳转、灯箱。
 // 「状态」只勾了「失效」时改按有没有可用备份分两组（useDeadSections），不按天、没有刻度条。
 // 复用时间轴那组 composables，尺寸照 GalleryScreen.dc.html，筛选由页面整份传进来。
+// 换筛选（LoadingRules ①「切换直接显示内容」）：新结果连同第一屏的图读好之前屏幕上留着旧的，
+// 读好后一次换上、从最上面看起；不出现只有日期标题的空网格，也不出现整屏灰色占位块。
 
 import { computed, onUnmounted, watch, type Ref } from 'vue';
 import type { DayStatsFilter } from '@/services/database/types';
+import type { PhotoGroup } from '@/composables/timeline/types';
 import type { ImageMeta } from '@/types/image-meta';
 import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
 import { useHistoryManager } from '@/composables/history/useHistory';
@@ -18,6 +21,7 @@ import { useImagePreload } from '@/composables/timeline/useImagePreload';
 import { useTimelineLightbox } from '@/composables/timeline/useTimelineLightbox';
 import { useTimelineJump } from '@/composables/timeline/useTimelineJump';
 import { useTimelineDayPagination } from '@/composables/timeline/useTimelineDayPagination';
+import { firstScreenDayKeys } from '@/composables/timeline/useTimelineLayout';
 import { useVisibleDayBuffer } from '@/composables/timeline/useVisibleDayBuffer';
 import { useScrollAnchor } from '@/composables/timeline/useScrollAnchor';
 import { useVirtualTimeline } from '@/composables/timeline/useVirtualTimeline';
@@ -49,13 +53,40 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
 
   const scrubber = useTimelineSidebarControl({ scrollHideDelay: SCRUBBER_HIDE_MS, hoverHideDelay: 300 });
 
-  const pagination = useTimelineDayPagination({ filter, visible });
-  const { dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, isLoadingStats, hasLoadedStats, isFullyPreloaded } = pagination;
+  /** 第一屏按多大估：滚动区量得到就按它；还没显示出来（列表视图、空状态）按窗口估，只多不少 */
+  function firstScreenViewport(): { width: number; height: number } {
+    const el = scrollContainer.value;
+    return { width: el?.clientWidth || window.innerWidth, height: el?.clientHeight || window.innerHeight };
+  }
 
-  /** 按有没有可用备份分两组（G06 / G07）的那种排法 */
-  const sectioned = computed(() => isDeadOnly(filter.value));
-  const sections = useDeadSections(filter, sectioned);
-  const groups = computed(() => (sectioned.value ? sections.groups.value : pagination.groups.value));
+  const pagination = useTimelineDayPagination({
+    filter,
+    visible,
+    // 网格没在显示（列表视图）：不必先读，按天汇总一到就换上（列表的总数跟着它），屏幕附近的天随后照常补读
+    firstScreenDays: (stats) => (visible.value ? firstScreenDayKeys(stats, firstScreenViewport(), GALLERY_GRID) : []),
+  });
+  const { dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, isLoadingStats, isFullyPreloaded } = pagination;
+
+  /** 「状态」只勾了「失效」：按有没有可用备份分两组（G06 / G07） */
+  const wantSectioned = computed(() => isDeadOnly(filter.value));
+  const sections = useDeadSections(filter, wantSectioned);
+
+  /**
+   * 屏幕上的这份结果：要换的那一份（按天的或两组的）按眼前的筛选读好之前，一直是上一份；
+   * key = 它是按哪份筛选读的，变了就是换了一份结果
+   */
+  const filterKey = computed(() => JSON.stringify(filter.value));
+  const shown = computed<{ sectioned: boolean; groups: PhotoGroup[]; key: string }>((previous) => {
+    const sectionedNext = wantSectioned.value;
+    const ready = sectionedNext ? sections.isReady.value : !pagination.isSwitching.value;
+    if (previous && !ready) return previous;
+    return { sectioned: sectionedNext, groups: sectionedNext ? sections.groups.value : pagination.groups.value, key: filterKey.value };
+  });
+  /** 按有没有可用备份分两组（G06 / G07）的那种排法（屏幕上的） */
+  const sectioned = computed(() => shown.value.sectioned);
+  const groups = computed(() => shown.value.groups);
+  /** 屏幕上还是上一份筛选的结果，新的在读 */
+  const isSwitching = computed(() => shown.value.key !== filterKey.value);
 
   /** 按月汇总（刻度条的年月刻度、拖动跳转都用它），新的在前；分两组时没有刻度条 */
   const months = computed<MonthTick[]>(() => {
@@ -92,7 +123,7 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
 
   const virtual = useVirtualTimeline(scrollContainer, groups, GALLERY_GRID);
 
-  const imageLoad = useImageLoadManager(virtual.visibleItems, { maxCache: 500, destroyDelay: 2500, maxRetry: 1 });
+  const imageLoad = useImageLoadManager(virtual.visibleItems, { maxCache: 500, maxRetry: 1 });
   // 用户刚确认完明文 HTTP 域名：之前因此判失败的缩略图应该自己恢复（按名单内容比，见 confirmedHttpHostsKey）
   watch(() => confirmedHttpHostsKey(confirmedHttpHosts.value), () => imageLoad.clearFailed());
   const loadedImages = computed(() => new Set(imageLoad.loadedImages.value));
@@ -166,13 +197,22 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     prefetchDayAspectRatios,
     loadedDayKeys,
     isFullyPreloaded,
-    hasLoadedStats,
+    hasLoadedStats: pagination.hasLoadedStats,
     forceNormalMode: virtual.forceNormalMode,
     suspendScrollAnchor: anchor.suspend,
     resumeScrollAnchor: anchor.resume,
   });
 
   const visibleDayBuffer = useVisibleDayBuffer({ visibleDayKeys: virtual.visibleDayKeys, dayStats, ensureDaysLoaded });
+
+  // 换了一份结果：立刻按新分组排好、从最上面看起（与新内容同一帧），之前记下的滚动位置作废。
+  // 视口锚点只管同一份结果里的重排，这一次先停掉，免得把位置拉回旧内容那里
+  watch(() => shown.value.key, () => {
+    anchor.suspend();
+    virtual.showFromTop();
+    scrollRestore.resetToTop();
+    anchor.resume();
+  });
 
   function onScroll(): void {
     scrollRestore.trackScrollPosition();
@@ -211,9 +251,13 @@ export function useGalleryGrid(scrollContainer: Ref<HTMLElement | null>, filter:
     sectioned,
     sectionItems: sections.items,
     sectionLightbox,
-    totalCount: computed(() => (sectioned.value ? sections.total.value : pagination.totalCount.value)),
-    isLoadingStats: computed(() => (sectioned.value ? sections.isLoading.value : isLoadingStats.value)),
-    hasLoadedStats: computed(() => (sectioned.value ? sections.hasLoaded.value : hasLoadedStats.value)),
+    /** 屏幕上这份结果的张数 */
+    totalCount: computed(() => groups.value.reduce((sum, group) => sum + (group.expectedCount ?? group.items.length), 0)),
+    isSwitching,
+    /** 换筛选的新结果还没换上，或屏幕上这份还在读（按天的还在预取宽高比） */
+    isLoadingStats: computed(() => isSwitching.value || (sectioned.value ? sections.isLoading.value : isLoadingStats.value)),
+    /** 读出过结果（冷启动骨架只在这之前出现） */
+    hasLoadedStats: computed(() => pagination.hasLoadedStats.value || sections.hasLoaded.value),
     allLoadedMetas,
     getThumbnailUrls,
     toggleFavorite,

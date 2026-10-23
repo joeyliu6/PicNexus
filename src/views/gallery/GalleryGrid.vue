@@ -34,7 +34,8 @@ const fastModeItems = virtual.fastModeItems;
 const displayMode = virtual.displayMode;
 const totalHeight = virtual.totalHeight;
 
-const groupById = computed(() => new Map(props.grid.groups.value.map((g) => [g.id, g])));
+/** 日期标题按算出眼前这份布局的分组写（与格子同一份，新布局换上之前不会出现没有字的标题） */
+const groupById = computed(() => new Map(virtual.layoutGroups.value.map((g) => [g.id, g])));
 
 function heading(groupId: string): { title: string; sub: string } {
   const group = groupById.value.get(groupId);

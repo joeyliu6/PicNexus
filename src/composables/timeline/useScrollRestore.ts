@@ -210,6 +210,17 @@ export function useScrollRestore(options: UseScrollRestoreOptions) {
     return false;
   }
 
+  /** 换了一份结果（换筛选）：之前记下的位置不再对应眼前的内容，下次显示时从最上面开始 */
+  function resetToTop() {
+    pendingRestore = null;
+    savedPosition = 0;
+    savedTabPosition = 0;
+    lastKnownScrollTop = 0;
+    lastStableScrollTop = 0;
+    lastStableProgress = 0;
+    lastStableAnchorId = null;
+  }
+
   // ==================== 生命周期 ====================
 
   onDeactivated(() => {
@@ -284,6 +295,7 @@ export function useScrollRestore(options: UseScrollRestoreOptions) {
     saveStablePosition,
     doRestore,
     trackScrollPosition,
+    resetToTop,
     /** 读取当前稳定滚动位置（只读） */
     getLastStableScrollTop: () => lastStableScrollTop,
     getLastStableProgress: () => lastStableProgress,

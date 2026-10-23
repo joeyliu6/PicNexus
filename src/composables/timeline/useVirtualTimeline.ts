@@ -82,14 +82,16 @@ export function useVirtualTimeline(
 
   const {
     layoutResult,
+    layoutGroups,
     isCalculating,
-    calculateFullLayout,
     recalculateLayoutAsync,
+    relayoutNow,
     suspendLayout,
     resumeLayout,
     updateGroup,
   } = useTimelineLayout(containerWidth, groups, config);
 
+  // 格子按算出眼前这份布局的分组取图（不是最新的 groups）：新布局换上之前，画面一直是上一份完整的布局
   const {
     visibleRowRange,
     visibleItems,
@@ -98,7 +100,7 @@ export function useVirtualTimeline(
     currentStickyHeader,
     totalHeight,
     visibleDayKeys,
-  } = useVisibleArea(scrollTop, viewportHeight, layoutResult, groups, config);
+  } = useVisibleArea(scrollTop, viewportHeight, layoutResult, layoutGroups, config);
 
   const {
     scrollVelocity,
@@ -206,11 +208,7 @@ export function useVirtualTimeline(
       - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     if (currentWidth > 0 && Math.abs(currentWidth - containerWidth.value) > 1) {
       containerWidth.value = currentWidth;
-      const result = calculateFullLayout();
-      if (result) {
-        layoutResult.value = result;
-        isCalculating.value = false;
-      }
+      relayoutNow();
     }
 
     // 重置速度检测状态
@@ -221,6 +219,18 @@ export function useVirtualTimeline(
     // 会被 updateScrollVelocity 误判为高速滚动 → 重新置 fast → 取消恢复 timer，
     // 导致 displayMode 永久卡 fast、GalleryTile 的 img v-if 不通过、图片永不加载。
     forceNormalMode();
+  }
+
+  /**
+   * 换了一份结果（换筛选）：立刻按新的分组排好、从最上面开始显示——新内容与新位置在同一帧换上，
+   * 不经过「旧位置上的新内容」。跳回顶部前先把测速的起点放到 0，这次跳动不会被当成高速滚动画成灰块。
+   * 调用方负责先暂停视口锚点（useScrollAnchor），否则排着的那次重算的锚点会把位置拉回去。
+   */
+  function showFromTop() {
+    relayoutNow();
+    forceNormalMode(0);
+    if (containerRef.value) containerRef.value.scrollTop = 0;
+    scrollTop.value = 0;
   }
 
   /**
@@ -236,11 +246,7 @@ export function useVirtualTimeline(
       - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     if (currentWidth > 0 && Math.abs(currentWidth - containerWidth.value) > 1) {
       containerWidth.value = currentWidth;
-      const result = calculateFullLayout();
-      if (result) {
-        layoutResult.value = result;
-        isCalculating.value = false;
-      }
+      relayoutNow();
     }
 
     viewportHeight.value = containerRef.value.clientHeight;
@@ -306,19 +312,19 @@ export function useVirtualTimeline(
         return;
       }
 
-      // 后续回调使用防抖
+      // 后续回调：高度当场跟上（只影响画哪几行，便宜；筛选条收起、滚动区变高时底部那一条不会空着），
+      // 宽度变化要重算布局，防抖
+      viewportHeight.value = newHeight;
       if (resizeDebounceTimer) {
         clearTimeout(resizeDebounceTimer);
+        resizeDebounceTimer = null;
       }
+      if (Math.abs(newWidth - containerWidth.value) <= 1) return;
 
       resizeDebounceTimer = window.setTimeout(() => {
         resizeDebounceTimer = null;
-        if (Math.abs(newWidth - containerWidth.value) > 1) {
-          containerWidth.value = newWidth;
-          // 宽度变化需要重算布局
-          recalculateLayoutAsync();
-        }
-        viewportHeight.value = newHeight;
+        containerWidth.value = newWidth;
+        recalculateLayoutAsync();
       }, 200);
     });
 
@@ -403,8 +409,9 @@ export function useVirtualTimeline(
     // 快速模式可见数据
     fastModeItems,
 
-    // 布局数据（用于高级用途）
+    // 布局数据（用于高级用途）；layoutGroups = 算出 layoutResult 的那份分组（日期标题、格子按它取）
     layoutResult,
+    layoutGroups,
 
     // 方法
     scrollTo,
@@ -413,6 +420,7 @@ export function useVirtualTimeline(
     scrollToProgress,
     forceUpdateVisibleArea,
     forceNormalMode,
+    showFromTop,
     restoreScrollTop,
     recalculateLayout: recalculateLayoutAsync,
     suspendLayout,

@@ -60,12 +60,18 @@ const gridView = ref<InstanceType<typeof GalleryGrid> | null>(null);
 const grid = useGalleryGrid(scroller, queryFilter, computed(() => active.value && view.value === 'grid'));
 const { viewState, historyManager } = grid;
 
-/** 列表视图的数据与排序：放在页面上，切回网格再回来排序还在，列表里打开的灯箱也按它翻页 */
+/**
+ * 列表视图的数据与排序：放在页面上，切回网格再回来排序还在，列表里打开的灯箱也按它翻页。
+ * 总数用网格那份（同一份筛选的按天统计），网格还在读新筛选时列表的新行也先不换
+ */
 const listSort = ref<GalleryListSort>({ key: 'time', descending: true });
-const list = useGalleryList(queryFilter, listSort);
+const list = useGalleryList(queryFilter, listSort, {
+  total: grid.totalCount,
+  pending: computed(() => !grid.hasLoadedStats.value || grid.isSwitching.value),
+});
 const lightbox = useGalleryLightbox(grid, useListLightbox({
   list,
-  total: grid.totalCount,
+  total: list.total,
   detailCache: historyManager.detailCache,
   config: grid.config,
   confirmedHttpHosts: () => grid.confirmedHttpHosts.value,
@@ -99,11 +105,16 @@ const hostOptions = computed(() => {
 });
 
 const chips = computed(() => filterChips(filters.value, hostName));
-/** 新条件的统计还没回来：计数与空状态沿用上一次的判断，不闪中间态（如「共 0 张」「暂无图片」） */
-const reloading = computed(() => grid.hasLoadedStats.value && grid.isLoadingStats.value);
+/**
+ * 新条件的结果还没换上：计数与空状态沿用上一次的判断，与眼前的网格 / 列表同一刻换，
+ * 不闪中间态（如「共 0 张」「暂无图片」）
+ */
+const reloading = computed(() => grid.hasLoadedStats.value && (view.value === 'list' ? list.isSwitching.value : grid.isSwitching.value));
+/** 眼前这一份的张数：列表视图按列表换上的那一刻算（与它的行一致） */
+const shownTotal = computed(() => (view.value === 'list' ? list.total.value : grid.totalCount.value));
 const count = computed<string>((previous) => (reloading.value && previous !== undefined
   ? previous
-  : countText(appliedFilters.value, grid.totalCount.value, !grid.hasLoadedStats.value)));
+  : countText(appliedFilters.value, shownTotal.value, !grid.hasLoadedStats.value)));
 
 function setFilters(next: GalleryFilters): void {
   filters.value = next;
@@ -114,7 +125,7 @@ watch(queryFilter, () => viewState.clearSelection());
 
 const emptyKind = computed<GalleryEmptyKind | null>((previous) => {
   if (reloading.value) return previous ?? null;
-  if (!grid.hasLoadedStats.value || grid.totalCount.value > 0) return null;
+  if (!grid.hasLoadedStats.value || shownTotal.value > 0) return null;
   if (!hasActiveFilters(appliedFilters.value)) return 'empty';
   if (appliedFilters.value.favoritesOnly && historyManager.favoriteSet.value.size === 0) return 'favEmpty';
   return 'noResults';

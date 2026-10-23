@@ -1,19 +1,19 @@
 /**
  * 图片加载状态管理 Composable
- * 管理图片的加载状态、LRU 缓存、延迟清理
+ * 管理图片的加载状态（LRU 上限）与失败重试
+ *
+ * 「已加载」不因离开屏幕而过期：换个筛选再换回来、滚走再滚回来，新建的格子凭它直接显示图，
+ * 不再从占位色淡入一遍（LoadingRules ①）。只在超过上限时淘汰最久没在屏幕上的。
  *
  * 性能优化说明：
  * - 使用 shallowRef + triggerRef 避免深度响应式开销
- * - cleanupExpiredImages 直接在原 Set 上操作，避免无效复制
  */
-import { shallowRef, triggerRef, onUnmounted, type Ref } from 'vue';
+import { shallowRef, triggerRef, onUnmounted, watch, type Ref } from 'vue';
 import type { VisibleItem } from '@/composables/timeline/useVirtualTimeline';
 
 interface UseImageLoadManagerOptions {
   /** 最大缓存数量 */
   maxCache?: number;
-  /** 延迟销毁时间（毫秒） */
-  destroyDelay?: number;
   /** 最大重试次数 */
   maxRetry?: number;
 }
@@ -24,7 +24,6 @@ export function useImageLoadManager(
 ) {
   const {
     maxCache = 500,
-    destroyDelay = 2500,
     maxRetry = 1,
   } = options;
 
@@ -34,7 +33,7 @@ export function useImageLoadManager(
   /** 加载失败的图片 ID 集合 */
   const failedImages = shallowRef(new Set<string>());
 
-  /** 图片最后可见时间戳（用于延迟销毁） */
+  /** 已加载的图最后一次在屏幕上的时间（超过上限时淘汰最久没看到的） */
   const lastVisibleTime = new Map<string, number>();
 
   /** 图片加载重试次数 */
@@ -43,8 +42,13 @@ export function useImageLoadManager(
   /** 重试定时器集合（onUnmounted 时全部取消，防止 unmount 后仍触发无效请求） */
   const retryTimers = new Set<ReturnType<typeof setTimeout>>();
 
-  /** 清理定时器 */
-  let cleanupTimer: number | undefined;
+  // 屏幕上的已加载图记下「刚看过」
+  watch(visibleItems, (items) => {
+    const now = Date.now();
+    for (const item of items) {
+      if (loadedImages.value.has(item.meta.id)) lastVisibleTime.set(item.meta.id, now);
+    }
+  });
 
   /**
    * 找到最老的可淘汰项（LRU 策略）
@@ -85,7 +89,6 @@ export function useImageLoadManager(
     }
 
     triggerRef(loadedImages);
-    startCleanupTimer();
   }
 
   /**
@@ -135,67 +138,6 @@ export function useImageLoadManager(
   }
 
   /**
-   * 延迟清理过期的图片状态
-   */
-  function cleanupExpiredImages() {
-    const now = Date.now();
-    const cache = loadedImages.value;
-
-    // 提前判断：没有已加载图片时直接返回
-    if (cache.size === 0) {
-      stopCleanupTimer();
-      return;
-    }
-
-    const visibleIds = new Set(visibleItems.value.map((v) => v.meta.id));
-    let hasDeleted = false;
-
-    // 更新当前可见图片的时间戳
-    for (const id of visibleIds) {
-      lastVisibleTime.set(id, now);
-    }
-
-    // 检查并删除过期图片（直接在原 Set 上操作）
-    for (const id of cache) {
-      const lastTime = lastVisibleTime.get(id);
-      if (!visibleIds.has(id) && lastTime && now - lastTime > destroyDelay) {
-        cache.delete(id);
-        lastVisibleTime.delete(id);
-        imageRetryCount.delete(id);
-        hasDeleted = true;
-      }
-    }
-
-    // 只有真的删除了才触发响应式更新
-    if (hasDeleted) {
-      triggerRef(loadedImages);
-
-      // 清理后如果为空，停止定时器
-      if (cache.size === 0) {
-        stopCleanupTimer();
-      }
-    }
-  }
-
-  /**
-   * 启动延迟清理定时器
-   */
-  function startCleanupTimer() {
-    if (cleanupTimer) return;
-    cleanupTimer = window.setInterval(cleanupExpiredImages, 1000);
-  }
-
-  /**
-   * 停止延迟清理定时器
-   */
-  function stopCleanupTimer() {
-    if (cleanupTimer) {
-      clearInterval(cleanupTimer);
-      cleanupTimer = undefined;
-    }
-  }
-
-  /**
    * 只撤销「失败」状态，保留已加载缓存
    *
    * 供「判失败的前提变了」这类场景用：用户在设置页确认了某个明文 HTTP 域名之后，
@@ -224,7 +166,6 @@ export function useImageLoadManager(
 
   // 组件卸载时清理
   onUnmounted(() => {
-    stopCleanupTimer();
     clearAll();
   });
 
@@ -235,7 +176,6 @@ export function useImageLoadManager(
     onImageError,
     isImageLoaded,
     isImageFailed,
-    cleanupExpiredImages,
     clearFailed,
     clearAll,
   };

@@ -77,35 +77,9 @@ const visibleItems = computed(() => {
 
 删除 `<template v-if="displayMode === 'fast'">` 分支，统一使用 visibleItems 渲染。
 
-#### 3. 延迟销毁策略（2.5 秒）
+#### 3. 已加载状态不过期
 
-滚动离开可见区域的图片不立即从 loadedImages 中移除，延迟 2.5 秒再清理：
-
-```typescript
-const lastVisibleTime = new Map<string, number>();
-const DESTROY_DELAY = 2500;
-
-function cleanupExpiredImages() {
-  const now = Date.now();
-  const visibleIds = new Set(visibleItems.value.map(v => v.item.id));
-
-  // 更新当前可见图片的时间戳
-  for (const id of visibleIds) {
-    lastVisibleTime.set(id, now);
-  }
-
-  // 清理超时的图片状态
-  for (const id of loadedImages.value) {
-    const lastTime = lastVisibleTime.get(id);
-    if (!visibleIds.has(id) && lastTime && now - lastTime > DESTROY_DELAY) {
-      // 从 loadedImages 中移除
-    }
-  }
-}
-
-// 每秒执行一次清理检查
-setInterval(cleanupExpiredImages, 1000);
-```
+滚出屏幕的图不从 loadedImages 移除，离开多久都一样：滚回来、换个筛选再换回来时，新建的格子凭它直接显示图，不再从占位色淡入（[useImageLoadManager.ts](../../../src/composables/image/useImageLoadManager.ts)）。只在超过上限时淘汰最久没在屏幕上的（见 6）。不做按时间过期：过期后同一张图会再淡入一遍，换筛选时整屏图一起闪。
 
 #### 4. 图片加载节流
 
@@ -150,19 +124,7 @@ function onImageError(event: Event, id: string) {
 
 #### 6. LRU 淘汰策略
 
-loadedImages 超过 500 时，优先移除不在可见区域的图片：
-
-```typescript
-if (newSet.size > MAX_LOADED_CACHE) {
-  const visibleIds = new Set(visibleItems.value.map(v => v.item.id));
-  for (const existingId of newSet) {
-    if (!visibleIds.has(existingId) && existingId !== id) {
-      newSet.delete(existingId);
-      break;
-    }
-  }
-}
-```
+loadedImages 超过 500 时，移除不在可见区域、最久没在屏幕上的那张（屏幕上的图随可见区域的变化记下「刚看过」）。
 
 ## 修改文件
 
@@ -182,7 +144,6 @@ if (newSet.size > MAX_LOADED_CACHE) {
 | 参数 | 值 | 说明 |
 |------|-----|------|
 | `MAX_LOADED_CACHE` | 500 | loadedImages 缓存上限 |
-| `DESTROY_DELAY` | 2500ms | 延迟销毁时间 |
 | `MAX_RETRY` | 1 | 图片加载失败最大重试次数 |
 | `overscan` | 3 | 可见区域上下预渲染行数 |
 | `thumbUrlCache` | 500 | 缩略图 URL 缓存上限 |
@@ -192,5 +153,5 @@ if (newSet.size > MAX_LOADED_CACHE) {
 - ✅ 已加载图片在滚动时保持显示（不再闪烁）
 - ✅ 快速滚动到新区域时显示 Skeleton
 - ✅ 性能良好（itemMap 缓存优化）
-- ✅ 内存可控（LRU 淘汰 + 延迟销毁 + 合理上限）
+- ✅ 内存可控（LRU 淘汰 + 合理上限）
 - ✅ 图片加载失败自动重试

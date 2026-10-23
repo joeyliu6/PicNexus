@@ -8,7 +8,7 @@
 
 `useHistory` 模块级只维护 **stats**（totalCount / favoriteSet / favoriteCount / serviceCounts / timePeriodStats），不全量加载记录。图库的两种视图各自按需查：
 
-- **网格**：`useGalleryGrid` → `useTimelineDayPagination`。先按天聚合（`getDayStats`）画出每天的骨架，再只读屏幕附近那几天的记录（`getItemsByDayRange`，`useVisibleDayBuffer` 管前后缓冲）；等高行布局需要的宽高比先整批预取（`getAllAspectRatios`），量太大时跳过、跳转时按月补取（`getDayAspectRatiosByRange`）。
+- **网格**：`useGalleryGrid` → `useTimelineDayPagination`。先按天聚合（`getDayStats`）并读回第一屏那几天的记录，一起换上（其余的天是骨架），之后只读屏幕附近那几天（`getItemsByDayRange`，`useVisibleDayBuffer` 管前后缓冲）；等高行布局需要的宽高比在换上之后整批预取（`getAllAspectRatios`），量太大时跳过、跳转时按月补取（`getDayAspectRatiosByRange`）。格子按算出布局的那份分组画（`useVirtualTimeline` 的 `layoutGroups`），新布局换上之前画面一直是上一份完整的布局。
 - **列表**：`useGalleryList` → `getListPage(filter, sort, offset, 100)`，只取屏幕附近的那几页，表头可按上传时间 / 文件名 / 大小排序。
 
 两种视图用同一份筛选（图 2）。模块 stats 有 5 分钟 TTL，图库每次显示时 `loadStats()`，`history-updated` 事件 / `invalidateCache()` 让它失效。
@@ -68,8 +68,8 @@ flowchart TD
     D -- 是 --> D1[等在途收藏写入落盘]
     D -- 否 --> E
     D1 --> E["appendFilterClause 拼 WHERE"]
-    E --> F1[网格：天聚合重算，已加载的天作废；只筛失效时按有没有可用备份分两组]
-    E --> F2[列表：页缓存作废，从第 0 页重取]
+    E --> F1["网格：新结果（天聚合 + 第一屏那几天）读好前留着旧的，读好后一次换上、从最上面看起；只筛失效时按有没有可用备份分两组"]
+    E --> F2["列表：新的第一页读好前留着旧的行，读好后连同总数一次换上、从最上面看起"]
     F1 & F2 --> G{有结果?}
     G -- 否 --> G1["空状态：没有匹配的图片 / 还没有收藏"]
     G -- 是 --> G2["标题右侧「找到 N 张」"]
@@ -122,9 +122,9 @@ flowchart TD
 
 | 事件 | 网格（useTimelineDayPagination） | 列表（useGalleryList） | 模块 stats（useHistory） |
 |------|------|------|------|
-| `history-updated`（上传、重试、补充备份、改用、重新检测、撤销移除） | `reloadAll(ids)`：重读按天汇总；张数变了的天回到骨架重取，张数没变、装着这些 id 的已加载天一条范围查询就地重读（角标、详情跟着变，不闪）；新的天以骨架进入 | 页缓存作废重取 | 防抖 300ms 后重查 |
-| `history-deleted` | `removeItemsByIds` 增量去掉；有 id 不在已加载的天里时兜底 `reloadAll` | 页缓存作废重取 | 本窗口删的已就地扣减，跳过；别的窗口删的按 ids 扣减 |
-| `history-cleared` | `reloadAll` | 页缓存作废重取 | 清零 |
+| `history-updated`（上传、重试、补充备份、改用、重新检测、撤销移除） | `reloadAll(ids)`：重读按天汇总；张数变了或装着这些 id 的已加载天、第一屏里新出现的天先重读，读好再与新汇总一起换上（旧格子留到那一刻，不退回骨架）；其余没读过的天照旧是骨架 | 屏幕上的那几页（和第一页）重读，读好连同总数原地换上 | 防抖 300ms 后重查 |
+| `history-deleted` | `removeItemsByIds` 增量去掉；有 id 不在已加载的天里时兜底 `reloadAll` | 同上：屏幕上的那几页重读后原地换 | 本窗口删的已就地扣减，跳过；别的窗口删的按 ids 扣减 |
+| `history-cleared` | `reloadAll` | 同上 | 清零 |
 | 点星标 | 不重查，格子上的星标跟着 favoriteSet 变 | 同左 | favoriteSet 乐观更新，写盘失败回滚 |
 
 ---
@@ -135,8 +135,9 @@ flowchart TD
 |------|------|-----|---------|
 | 模块级 stats（useHistory） | totalCount + favoriteSet + serviceCounts + timePeriodStats | 5 分钟 | `isStatsCacheValid()` 失败 / `history-updated` 事件 / `invalidateCache()`；删除 / 清空路径就地扣减计数并重查 timePeriodStats（`refreshTimePeriodStats`） |
 | 详情缓存（useImageDetailCache） | 按条目 LRU | 无限制 | 收藏切换 / 删除 / 清空 |
-| 按天缓存（useTimelineDayPagination 的 dayMetaCache） | 已加载天的 ImageMeta | 页面存活期 | 筛选变化、`history-*` 事件 |
-| 列表页缓存（useGalleryList） | 已取的页（每页 100 行） | 页面存活期 | 筛选 / 排序变化、`history-*` 事件 |
+| 按天缓存（useTimelineDayPagination 的 dayMetaCache） | 已加载天的 ImageMeta | 页面存活期 | 换筛选（新结果换上的那一刻）、`history-*` 事件 |
+| 已加载的缩略图（useImageLoadManager 的 loadedImages） | 格子的 `<img>` 加载过的图片 id，上限 500，超过时淘汰最久没在屏幕上的 | 页面存活期 | 不因离开屏幕过期（再出现时直接显示）；确认明文 HTTP 域名只清失败态 |
+| 列表页缓存（useGalleryList） | 已取的页（每页 100 行） | 页面存活期 | 换筛选 / 排序（新的第一页读好后整份换上）、`history-*` 事件（屏幕上那几页重读后原地换，其余作废） |
 | 候选列表缓存 · HistoryItem 版（`thumbnailCandidatesCache`） | 按 `item.id` 的 Map，上限 500 | 会话级 | `history-updated/deleted/cleared` 事件 + 前缀 / 知乎配置 watch（**注册于 `useThumbCache()` 首次调用，目前只有图库灯箱会触发**） |
 | 候选列表缓存 · ImageMeta 版（`metaCandidatesCache`） | 以 meta 对象为键的 WeakMap | 随 meta 对象被 GC | 换新 meta 对象（镜像变化后重查 DB）或配置指纹变化；**不接事件、不受上一行的 watch 影响** |
 
@@ -148,6 +149,10 @@ flowchart TD
 |------|---------|-------------|
 | 图库空白、计数为 0 | 数据库没连上（`historyDB.open` 失败），或 `loadStats` 报错 | 图 1 节点 B / D |
 | 一整天只有灰色占位块 | 那一天的记录没读回来：`getItemsByDayRange` 报错，或可见天缓冲没触发 | 图 1 节点 G2 |
+| 换筛选时网格先空一帧（只有日期标题）、出整屏灰块，或旧位置上出现新图 | 新结果没连同第一屏那几天一起换上（`firstScreenDays`），或画格子没按布局自己的那份分组取图（`layoutGroups`）；两组 ↔ 按天看 `useGalleryGrid` 的 `shown` 是否等目标读好 | 图 2 节点 F1 |
+| 列表换筛选 / 排序、上传后整屏先变成骨架条 | `useGalleryList` 没等新的页读回来就换掉了旧的页，或换上时没把虚拟列表的位置一起归零 | 图 2 节点 F2 |
+| 图库开着时上传，今天那一行先变灰块 | `reloadAll` 没把张数变了的已读天先重读再换上 | 记录变化表 |
+| 换筛选后加载过的缩略图又淡入一遍 | `loadedImages` 被提前清掉（它不该按离开屏幕的时间过期） | 缓存机制 |
 | 搜索无结果 | 搜索只匹配文件名（`local_file_name_lower`），不包含链接 | 图 2 搜索一行 |
 | 状态筛选「失效」漏了图 | 判的是「复制时使用」那份的检测结果；备份失效、复制来源正常的不算 | 图 2 状态一行 |
 | 刚点了星标，打开「★ 收藏」却没有它 | 查询没等在途收藏写入：检查 `pendingFavoriteWrites` 的注册是否在写方法入口同步完成、查询是否走了 `dbForFilter` | 图 2「读己之写」 |

@@ -3,7 +3,7 @@
 // 悬停：左上选择框、右上收藏、左下花瓣（几份备份）、右下「复制」。
 // 多选：选中的图在自己的格子里缩小到 86%，露出浅蓝底 + 左上蓝色对勾，不向外扩边；未选中的常驻空心圆圈。
 // 不同比例怎么画见 ImageRatios.dc.html（G13）：长图从顶部显示、底部渐隐；小图按原尺寸居中；透明格式衬棋盘格；GIF 停在第一帧。
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PetalGlyph from '@/components/biz/PetalGlyph.vue';
 import PnIcon from '@/components/pn/PnIcon.vue';
 import { useThumbnailFallbackChain } from '@/composables/image/useThumbnailFallbackChain';
@@ -51,13 +51,20 @@ const hover = ref(false);
 /** 悬停按钮那一层（刚复制过时也留着「已复制」）：四个角被它占着，常驻的角标都让开 */
 const overlay = computed(() => (hover.value || props.copied) && !props.selecting);
 
+/**
+ * 这一格的 <img> 把眼前这条地址读完了没有。loaded（图库记得这张图加载过）可能是之前的格子读的：
+ * 图照样直接显示，但这次首选地址卡住时仍要到点换下一条
+ */
+const srcLoaded = ref(false);
+
 // 候选链：主图失败自动换其他备份的地址，都失败才报错（交接说明 8.2「冷启动」）
 const { currentSrc, handleError, handleLoad } = useThumbnailFallbackChain({
   urls: () => props.thumbnailUrls,
-  isWaiting: () => !props.failed && !props.loaded && props.displayMode !== 'fast',
+  isWaiting: () => !props.failed && !srcLoaded.value && props.displayMode !== 'fast',
   onExhausted: (e) => emit('imageError', e),
   confirmedHttpHosts: () => props.confirmedHttpHosts,
 });
+watch(currentSrc, () => { srcLoaded.value = false; });
 
 /** 选中时隐藏健康角标（G04）；格子太窄时 ⚠ 角标只留 ⚠，「仅 1 份」不画 */
 const badge = computed(() => {
@@ -128,6 +135,7 @@ function captureFirstFrame(img: HTMLImageElement): void {
 }
 
 function onLoad(event: Event): void {
+  srcLoaded.value = true;
   handleLoad();
   if (animated.value) captureFirstFrame(event.target as HTMLImageElement);
   emit('imageLoad');

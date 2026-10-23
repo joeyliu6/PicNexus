@@ -25,16 +25,22 @@ export function isDeadOnly(filter: DayStatsFilter): boolean {
 export function useDeadSections(filter: Ref<DayStatsFilter>, enabled: Ref<boolean>) {
   /** 两组各自的图（与 SECTIONS 同序）；null = 还没读过 */
   const loaded = shallowRef<ImageMeta[][] | null>(null);
+  /** loaded 是按哪份筛选读的（JSON） */
+  const loadedKey = ref<string | null>(null);
   const isLoading = ref(false);
   let version = 0;
 
   async function load(): Promise<void> {
     const mine = ++version;
+    const key = JSON.stringify(filter.value);
     isLoading.value = true;
     try {
       const result = await Promise.all(SECTIONS.map((section) =>
         historyDB.getItemsByDayRange(0, Number.MAX_SAFE_INTEGER, { ...filter.value, backup: section.backup })));
-      if (mine === version) loaded.value = result;
+      if (mine === version) {
+        loaded.value = result;
+        loadedKey.value = key;
+      }
     } catch (error) {
       if (mine === version) log.error('读取失效图片失败', error);
     } finally {
@@ -49,6 +55,7 @@ export function useDeadSections(filter: Ref<DayStatsFilter>, enabled: Ref<boolea
     } else {
       version++;
       loaded.value = null;
+      loadedKey.value = null;
       isLoading.value = false;
     }
   }, { immediate: true });
@@ -86,6 +93,8 @@ export function useDeadSections(filter: Ref<DayStatsFilter>, enabled: Ref<boolea
     items,
     total: computed(() => items.value.length),
     hasLoaded: computed(() => loaded.value !== null),
+    /** 两组是按眼前这份筛选读的（换筛选时网格留着上一份，直到这里读好） */
+    isReady: computed(() => loaded.value !== null && loadedKey.value === JSON.stringify(filter.value)),
     isLoading,
   };
 }

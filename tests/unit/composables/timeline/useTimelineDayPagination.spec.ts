@@ -79,6 +79,7 @@ function mountPagination(overrides: {
   searchTerm?: Ref<string>;
   favoritesOnly?: Ref<boolean>;
   visible?: Ref<boolean>;
+  firstScreenDays?: (stats: DayStats[]) => string[];
 } = {}) {
   const filter: Ref<ServiceType | 'all'> = overrides.filter ?? ref<ServiceType | 'all'>('all');
   const searchTerm: Ref<string> = overrides.searchTerm ?? ref('');
@@ -89,7 +90,7 @@ function mountPagination(overrides: {
   const Harness = defineComponent({
     setup() {
       const query = computed<DayStatsFilter>(() => ({ serviceFilter: filter.value, searchTerm: searchTerm.value, favoritesOnly: favoritesOnly.value }));
-      api = useTimelineDayPagination({ filter: query, visible });
+      api = useTimelineDayPagination({ filter: query, visible, firstScreenDays: overrides.firstScreenDays });
       return () => null;
     },
   });
@@ -110,7 +111,8 @@ afterEach(() => {
   for (const wrapper of mountedWrappers.splice(0)) {
     wrapper.unmount();
   }
-  vi.clearAllMocks();
+  // 连没用掉的 mockResolvedValueOnce 一起清：一条用例中途失败时，剩下的不能串到下一条
+  vi.resetAllMocks();
 });
 
 describe('useTimelineDayPagination', () => {
@@ -145,7 +147,6 @@ describe('useTimelineDayPagination', () => {
     expect(api.hasLoadedStats.value).toBe(true);
     expect(api.isLoadingStats.value).toBe(false);
     expect(api.isFullyPreloaded.value).toBe(true);
-    expect(api.totalCount.value).toBe(2);
     expect(api.groups.value).toHaveLength(1);
     expect(api.groups.value[0]).toMatchObject({
       id: '2024-0-2',
@@ -236,6 +237,57 @@ describe('useTimelineDayPagination', () => {
     expect(api.groups.value[0].id).toBe('2024-0-3');
   });
 
+  // 回归：换筛选当场把已读的天清空、按天汇总一到就换上全是骨架的分组——网格先出一帧只有日期标题，
+  // 再出整屏灰块，图才出来。新结果要等第一屏那几天的图也读回来，再与按天汇总一起换上
+  it('keeps the shown result while a new filter is read, then swaps in its first screen at once', async () => {
+    const firstScreenDays = (stats: DayStats[]) => stats.slice(0, 1).map((s) => `${s.year}-${s.month}-${s.day}`);
+    historyDbMock.getDayStats.mockResolvedValueOnce([dayStat(2024, 0, 2, 1)]);
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([makeMeta('old', localTs(2024, 0, 2, 12))]);
+    const filter = ref<ServiceType | 'all'>('all');
+    const { api } = mountPagination({ filter, firstScreenDays });
+    await flushPromisesAndTicks(3);
+    const shown = () => api.groups.value.map((g) => [g.id, g.isSkeleton, g.items.map((meta) => meta.id)]);
+    expect(shown()).toEqual([['2024-0-2', false, ['old']]]);
+    expect(api.isSwitching.value).toBe(false);
+
+    let resolveStats!: (stats: DayStats[]) => void;
+    let resolveItems!: (items: ImageMeta[]) => void;
+    historyDbMock.getDayStats.mockReturnValueOnce(new Promise((resolve) => { resolveStats = resolve; }));
+    historyDbMock.getItemsByDayRange.mockReturnValueOnce(new Promise((resolve) => { resolveItems = resolve; }));
+    filter.value = 'weibo' as ServiceType;
+    await flushPromisesAndTicks(2);
+    expect(api.isSwitching.value).toBe(true);
+    expect(shown()).toEqual([['2024-0-2', false, ['old']]]);
+
+    const newDay = dayStat(2024, 0, 3, 2);
+    resolveStats([newDay, dayStat(2024, 0, 1, 4)]);
+    await flushPromisesAndTicks(2);
+    expect(shown()).toEqual([['2024-0-2', false, ['old']]]);
+    expect(historyDbMock.getItemsByDayRange).toHaveBeenLastCalledWith(newDay.minTimestamp, newDay.maxTimestamp, expect.objectContaining({ serviceFilter: 'weibo' }));
+
+    resolveItems([makeMeta('new-a', localTs(2024, 0, 3, 14)), makeMeta('new-b', localTs(2024, 0, 3, 10))]);
+    await flushPromisesAndTicks(2);
+    expect(shown()).toEqual([['2024-0-3', false, ['new-a', 'new-b']], ['2024-0-1', true, []]]);
+    expect(api.isSwitching.value).toBe(false);
+  });
+
+  // 换筛选还没读完时滚到别的天：按屏幕上这份结果的筛选读，不把新筛选的图塞进旧的天里
+  it('reads days scrolled into view during a switch with the filter of the shown result', async () => {
+    historyDbMock.getDayStats.mockResolvedValueOnce([dayStat(2024, 0, 2, 1), dayStat(2024, 0, 1, 1)]);
+    const filter = ref<ServiceType | 'all'>('all');
+    const { api } = mountPagination({ filter });
+    await flushPromisesAndTicks(2);
+
+    historyDbMock.getDayStats.mockReturnValueOnce(new Promise(() => {}));
+    filter.value = 'weibo' as ServiceType;
+    await flushPromisesAndTicks(2);
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([makeMeta('older', localTs(2024, 0, 1, 12))]);
+    await api.ensureDaysLoaded(['2024-0-1']);
+
+    expect(historyDbMock.getItemsByDayRange).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number), expect.objectContaining({ serviceFilter: 'all' }));
+    expect(api.dayMetaCache.get('2024-0-1')?.map((meta) => meta.id)).toEqual(['older']);
+  });
+
   it('prefetches aspect ratios by day range only when the full preload is unavailable', async () => {
     const dayOne = dayStat(2024, 0, 2, 2);
     historyDbMock.getDayStats.mockResolvedValueOnce([dayOne]);
@@ -285,6 +337,51 @@ describe('useTimelineDayPagination', () => {
     // 原地换新：那一天不退回骨架，别的天不动
     expect(api.loadedDayKeys.value.has('2024-0-2')).toBe(true);
     expect(api.dayMetaCache.get('2024-0-1')?.[0].id).toBe('untouched');
+  });
+
+  // 回归：图库开着时上传一张，今天那一天张数变了，整天先退回骨架（一整行灰块）再补读。
+  // 张数变了的已读天要留着旧格子，新记录读回来再与新的按天汇总一起换上
+  it('keeps a loaded day whose count changed on screen until its records are read again', async () => {
+    const firstScreenDays = (stats: DayStats[]) => stats.slice(0, 1).map((s) => `${s.year}-${s.month}-${s.day}`);
+    historyDbMock.getDayStats.mockResolvedValueOnce([dayStat(2024, 0, 2, 1), dayStat(2024, 0, 1, 1)]);
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([makeMeta('old', localTs(2024, 0, 2, 12))]);
+    const { api } = mountPagination({ firstScreenDays });
+    await flushPromisesAndTicks(3);
+    const shown = () => api.groups.value.map((g) => [g.id, g.isSkeleton, g.items.map((meta) => meta.id)]);
+    expect(shown()).toEqual([['2024-0-2', false, ['old']], ['2024-0-1', true, []]]);
+
+    let resolveItems!: (items: ImageMeta[]) => void;
+    historyDbMock.getDayStats.mockResolvedValueOnce([dayStat(2024, 0, 2, 2), dayStat(2024, 0, 1, 1)]);
+    historyDbMock.getItemsByDayRange.mockReturnValueOnce(new Promise((resolve) => { resolveItems = resolve; }));
+    const onUpdated = cacheEventMock.onCacheEventType.mock.calls.find(([type]) => type === 'history-updated')![1];
+    onUpdated({ ids: ['uploaded'] });
+    await flushPromisesAndTicks(3);
+    expect(shown()).toEqual([['2024-0-2', false, ['old']], ['2024-0-1', true, []]]);
+
+    resolveItems([makeMeta('uploaded', localTs(2024, 0, 2, 18)), makeMeta('old', localTs(2024, 0, 2, 12))]);
+    await flushPromisesAndTicks(3);
+    expect(shown()).toEqual([['2024-0-2', false, ['uploaded', 'old']], ['2024-0-1', true, []]]);
+    expect(api.groups.value[0].expectedCount).toBe(2);
+  });
+
+  // 当天第一次上传：新的一天出现在最上面，读回来再换上，不先画成一行灰块
+  it('reads a new day at the top of the first screen before swapping it in', async () => {
+    const firstScreenDays = (stats: DayStats[]) => stats.slice(0, 2).map((s) => `${s.year}-${s.month}-${s.day}`);
+    historyDbMock.getDayStats.mockResolvedValueOnce([dayStat(2024, 0, 1, 1)]);
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([makeMeta('yesterday', localTs(2024, 0, 1, 12))]);
+    const { api } = mountPagination({ firstScreenDays });
+    await flushPromisesAndTicks(3);
+
+    historyDbMock.getDayStats.mockResolvedValueOnce([dayStat(2024, 0, 2, 1), dayStat(2024, 0, 1, 1)]);
+    historyDbMock.getItemsByDayRange.mockResolvedValueOnce([makeMeta('today', localTs(2024, 0, 2, 9))]);
+    const onUpdated = cacheEventMock.onCacheEventType.mock.calls.find(([type]) => type === 'history-updated')![1];
+    onUpdated({ ids: ['today'] });
+    await flushPromisesAndTicks(3);
+
+    expect(api.groups.value.map((g) => [g.id, g.isSkeleton, g.items.map((meta) => meta.id)])).toEqual([
+      ['2024-0-2', false, ['today']],
+      ['2024-0-1', false, ['yesterday']],
+    ]);
   });
 
   it('reloads when a gallery filter changes, but not for an equal filter object', async () => {
