@@ -36,10 +36,6 @@ export const TOAST_MESSAGES = {
       summary: '暂无数据',
       detail: '没有可操作的数据'
     } as StaticMessage,
-    loadFailed: (error: string): ToastMessageConfig => ({
-      summary: '加载失败',
-      detail: error
-    })
   },
 
   // === 配置相关 ===

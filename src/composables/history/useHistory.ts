@@ -254,7 +254,7 @@ export function useHistoryManager() {
       dataVersion.value++;
     } catch (error) {
       log.error('[历史记录] 加载统计失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.loadFailed(String(error)));
+      toast.error('未能读取图库', `${getErrorMessage(error)}，请重试`);
     }
   }
 
@@ -423,7 +423,7 @@ export function useHistoryManager() {
       sharedFavoriteSet.value = rollbackSet;
       favoriteCount.value += previousState ? 1 : -1;
       log.error('[历史记录] 切换收藏失败:', error);
-      toast.showConfig('error', { summary: '操作失败', detail: String(error) });
+      toast.error(targetState ? '未能收藏' : '未能取消收藏', `${getErrorMessage(error)}，请重试`);
       throw error;
     } finally {
       pendingToggleIds.delete(id);
@@ -458,7 +458,7 @@ export function useHistoryManager() {
 
     } catch (error) {
       log.error('[历史记录] 批量收藏操作失败:', error);
-      toast.showConfig('error', { summary: '操作失败', detail: String(error) });
+      toast.error(favorited ? '未能收藏' : '未能取消收藏', `${getErrorMessage(error)}，请重试`);
     }
   }
 

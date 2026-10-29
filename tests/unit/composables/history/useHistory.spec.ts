@@ -126,7 +126,6 @@ vi.mock('@/utils/debounce', () => ({
 vi.mock('@/constants', () => ({
   TOAST_MESSAGES: {
     common: {
-      loadFailed: (msg: string) => ({ summary: '加载失败', detail: msg }),
       exportSuccess: (n: number) => ({ summary: '成功', detail: `已导出 ${n} 条` }),
       exportFailed: (msg: string) => ({ summary: '失败', detail: msg }),
       copyFailed: (msg: string) => ({ summary: '失败', detail: msg }),
@@ -230,6 +229,15 @@ describe('useHistoryManager', () => {
       expect(favoriteCount.value).toBe(countBefore);
     });
 
+    // 错误 = 原因 + 处理办法（交接说明第 9 节），说清是收藏还是取消收藏没成，不写笼统的「操作失败」
+    it('DB 失败时说「未能收藏」+ 原因 + 请重试', async () => {
+      historyDBSetFavoriteMock.mockRejectedValueOnce(new Error('磁盘已满'));
+      const { toggleFavorite } = useHistoryManager();
+
+      await expect(toggleFavorite('toggle-wording')).rejects.toThrow('磁盘已满');
+      expect(toastErrorMock).toHaveBeenCalledWith('未能收藏', '磁盘已满，请重试');
+    });
+
     it('防重入：同一 ID 并发调用不重复执行', async () => {
       // setFavorite 延迟返回
       let resolveSetFav!: () => void;
@@ -287,6 +295,28 @@ describe('useHistoryManager', () => {
       const { batchSetFavorite } = useHistoryManager();
       await batchSetFavorite([], true);
       expect(historyDBBatchSetFavoriteMock).not.toHaveBeenCalled();
+    });
+
+    it('批量取消收藏失败：说「未能取消收藏」+ 原因 + 请重试', async () => {
+      historyDBGetFavoriteIdListMock.mockResolvedValue(['batch-err-a']);
+      historyDBBatchSetFavoriteMock.mockRejectedValueOnce(new Error('数据库被锁定'));
+      const { loadStats, batchSetFavorite } = useHistoryManager();
+      await loadStats();
+
+      await batchSetFavorite(['batch-err-a'], false);
+      expect(toastErrorMock).toHaveBeenCalledWith('未能取消收藏', '数据库被锁定，请重试');
+    });
+  });
+
+  // 读不出图库统计：说清没读到什么，给原因 + 处理办法（不写「加载失败」+ 原话）
+  describe('loadStats failure', () => {
+    it('说「未能读取图库」+ 原因 + 请重试', async () => {
+      historyDBGetCountMock.mockRejectedValueOnce(new Error('数据库文件被占用'));
+      const { loadStats } = useHistoryManager();
+      invalidateCache();
+
+      await loadStats();
+      expect(toastErrorMock).toHaveBeenCalledWith('未能读取图库', '数据库文件被占用，请重试');
     });
   });
 
