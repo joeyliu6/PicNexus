@@ -34,6 +34,8 @@ const props = defineProps<{
   displayMode: 'fast' | 'smooth' | 'normal';
   thumbnailUrls: string[];
   confirmedHttpHosts?: ReadonlySet<string>;
+  /** 「上传到」勾了 2 个及以上图床：这时才标「仅 1 份」（只传一个图床时张张都只有 1 份） */
+  backupsExpected: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -69,7 +71,7 @@ watch(currentSrc, () => { srcLoaded.value = false; });
 
 /** 选中时隐藏健康角标（G04）；格子太窄时 ⚠ 角标只留 ⚠，「仅 1 份」不画 */
 const badge = computed(() => {
-  const health = props.selected ? null : badgeOf(props.meta);
+  const health = props.selected ? null : badgeOf(props.meta, props);
   const fit = health ? badgeFit(health, props.width) : 'none';
   return health && fit !== 'none' ? { ...health, iconOnly: fit === 'icon' } : null;
 });
@@ -93,7 +95,7 @@ const tag = computed(() => {
 
 /** 读屏在文件名之后读的状态：问题角标、收藏、比例说明（格子上那几个角标只给眼睛看，被悬停层盖住时这里也照读） */
 const description = computed(() => {
-  const health = badgeOf(props.meta);
+  const health = badgeOf(props.meta, props);
   const parts = [props.failed && '图片加载失败', health && (health.warn ? `⚠ ${health.text}` : health.text), props.favorited && '已收藏', displayTag(props.meta), animated.value && 'GIF'];
   return parts.filter(Boolean).join('，') || undefined;
 });

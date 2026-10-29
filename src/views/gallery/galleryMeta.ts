@@ -25,11 +25,14 @@ export function petalLabelOf(meta: ImageMeta): string {
   return `${copies} 份均正常`;
 }
 
-/** 格子上的常驻角标：只在需要注意时出现（⚠ 失效 / ⚠ 可能受限 / 仅 1 份） */
-export function badgeOf(meta: ImageMeta): { text: string; warn: boolean } | null {
+/**
+ * 格子上的常驻角标：只在需要注意时出现（⚠ 失效 / ⚠ 可能受限 / 仅 1 份）。
+ * backupsExpected =「上传到」勾了 2 个及以上图床：只勾一个时张张都只有 1 份，「仅 1 份」是常态，不标
+ */
+export function badgeOf(meta: ImageMeta, { backupsExpected }: { backupsExpected: boolean }): { text: string; warn: boolean } | null {
   if (meta.copyLinkHealth === 'dead') return { text: '失效', warn: true };
   if (meta.copyLinkHealth === 'limited') return { text: '可能受限', warn: true };
-  if (copiesOf(meta) === 1) return { text: '仅 1 份', warn: false };
+  if (backupsExpected && copiesOf(meta) === 1) return { text: '仅 1 份', warn: false };
   return null;
 }
 

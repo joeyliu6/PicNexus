@@ -16,11 +16,20 @@ const meta = (copyLinkHealth: ImageMeta['copyLinkHealth'], copies = 2): ImageMet
 // GalleryScreen.dc.html：常驻角标只在需要注意时出现；正常不打任何标记（交接说明规则 4）
 describe('gallery tile and row rules', () => {
   it('shows a badge only when something needs attention', () => {
-    expect(badgeOf(meta('ok'))).toBeNull();
-    expect(badgeOf(meta('unchecked'))).toBeNull();
-    expect(badgeOf(meta('dead'))).toEqual({ text: '失效', warn: true });
-    expect(badgeOf(meta('limited'))).toEqual({ text: '可能受限', warn: true });
-    expect(badgeOf(meta('ok', 1))).toEqual({ text: '仅 1 份', warn: false });
+    const backups = { backupsExpected: true };
+    expect(badgeOf(meta('ok'), backups)).toBeNull();
+    expect(badgeOf(meta('unchecked'), backups)).toBeNull();
+    expect(badgeOf(meta('dead'), backups)).toEqual({ text: '失效', warn: true });
+    expect(badgeOf(meta('limited'), backups)).toEqual({ text: '可能受限', warn: true });
+    expect(badgeOf(meta('ok', 1), backups)).toEqual({ text: '仅 1 份', warn: false });
+  });
+
+  // 「上传到」只勾一个图床时张张都只有 1 份：每格都标「仅 1 份」等于没标，只剩杂乱
+  it('leaves 仅 1 份 off when uploads go to a single host, but still flags broken links', () => {
+    const single = { backupsExpected: false };
+    expect(badgeOf(meta('ok', 1), single)).toBeNull();
+    expect(badgeOf(meta('dead', 1), single)).toEqual({ text: '失效', warn: true });
+    expect(badgeOf(meta('limited', 1), single)).toEqual({ text: '可能受限', warn: true });
   });
 
   // GalleryScreen.dc.html 的花瓣只数份数（全是品牌蓝）；健康状况由 ⚠ 角标说，

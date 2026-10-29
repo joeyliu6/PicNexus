@@ -546,3 +546,19 @@ test('on macOS ⌘⌫ removes the focused picture, and in the search box it only
   await expect(tile('第1张.png')).toHaveCount(0);
   await expect(tile('第2张.png')).toBeFocused();
 });
+
+// 「上传到」只勾一个图床时张张都只有 1 份：格子上不标「仅 1 份」；勾上第二个图床，没备份上的那些才标出来
+test('仅 1 份 shows on tiles only once uploads go to two or more hosts', async ({ page }) => {
+  await openApp(page, { historyRows: [historyRow(1, '只传了京东.png', 10)] });
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  const tile = page.locator('.gallery .tile[aria-label="只传了京东.png"]');
+  await expect(tile).toBeVisible();
+  await expect(tile.locator('.tile__badge')).toHaveCount(0);
+
+  await page.locator('.app-sidebar__item').filter({ hasText: '快传' }).click();
+  await page.locator('.home-options__trigger').filter({ hasText: '上传到' }).click();
+  await page.locator('.upload-to__chip').filter({ hasText: '七鱼' }).click();
+  await page.keyboard.press('Escape');
+  await page.locator('.app-sidebar__item').filter({ hasText: '图库' }).click();
+  await expect(tile.locator('.tile__badge')).toHaveText('仅 1 份');
+});

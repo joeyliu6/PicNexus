@@ -26,12 +26,12 @@ function meta(name: string, width: number, height: number, extra: Partial<ImageM
 const mounted: VueWrapper[] = [];
 
 /** 一格 150 高（行高），宽按格子的比例给 */
-function mountTile(image: ImageMeta, cell: { width: number; height: number } = { width: 150, height: 150 }) {
+function mountTile(image: ImageMeta, cell: { width: number; height: number } = { width: 150, height: 150 }, backupsExpected = true) {
   const wrapper = mountWithDefaults(GalleryTile, {
     props: {
       meta: image, x: 0, y: 0, ...cell,
       selected: false, favorited: false, selecting: false, focused: false, copied: false,
-      loaded: false, failed: false, displayMode: 'normal', thumbnailUrls: [image.primaryUrl],
+      loaded: false, failed: false, displayMode: 'normal', thumbnailUrls: [image.primaryUrl], backupsExpected,
     },
   });
   mounted.push(wrapper);
@@ -120,6 +120,21 @@ describe('GalleryTile picture-ratio rules', () => {
     expect(limited.find('.tile__badge-warn').exists()).toBe(true);
     expect(single.find('.tile__badge').exists()).toBe(false);
     expect(wide.find('.tile__badge').text()).toBe('可能受限');
+  });
+
+  // 「上传到」只勾一个图床：每张都只有 1 份，格子上不标、读屏也不读（失效照标）
+  it('leaves 仅 1 份 off, on screen and for screen readers, when uploads go to one host', async () => {
+    const one: ImageMeta['mirrorServices'] = [{ serviceId: 'jd', url: 'https://jd.example/a' }];
+    const flagged = mountTile(meta('合影.jpg', 4000, 3000, { mirrorServices: one }), { width: 200, height: 150 });
+    const quiet = mountTile(meta('合影.jpg', 4000, 3000, { mirrorServices: one }), { width: 200, height: 150 }, false);
+    const dead = mountTile(meta('旧图.jpg', 4000, 3000, { mirrorServices: one, copyLinkHealth: 'dead' }), { width: 200, height: 150 }, false);
+    await Promise.all([load(flagged), load(quiet), load(dead)]);
+
+    expect(flagged.find('.tile__badge').text()).toBe('仅 1 份');
+    expect(flagged.attributes('aria-description')).toContain('仅 1 份');
+    expect(quiet.find('.tile__badge').exists()).toBe(false);
+    expect(quiet.attributes('aria-description') ?? '').not.toContain('仅 1 份');
+    expect(dead.find('.tile__badge').text()).toBe('失效');
   });
 
   it('lays a checkerboard only under formats that can be transparent', async () => {

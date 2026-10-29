@@ -16,6 +16,8 @@ const props = defineProps<{
   /** 刚点了「复制」的那张：按钮原地显示「已复制」 */
   copiedId: string | null;
   now: number;
+  /** 「上传到」勾了 2 个及以上图床：格子才标「仅 1 份」 */
+  backupsExpected: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -170,6 +172,7 @@ defineExpose({ focusTile, ownsFocus });
       :display-mode="displayMode"
       :thumbnail-urls="grid.getThumbnailUrls(item.meta)"
       :confirmed-http-hosts="grid.confirmedHttpHosts.value"
+      :backups-expected="backupsExpected"
       @open="emit('open', item.meta)"
       @open-lightbox="emit('openLightbox', item.meta)"
       @toggle-select="(event: MouseEvent) => grid.toggleSelect(item.meta.id, event)"

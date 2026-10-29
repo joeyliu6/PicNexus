@@ -9,6 +9,7 @@ import { useCopyLink } from '@/composables/useCopyLink';
 import { useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import { useToast } from '@/composables/useToast';
 import { useDebouncedTrue } from '@/composables/useDebouncedTrue';
+import { useUploadController } from '@/composables/upload/useUploadController';
 import TitleRow from '@/shell/TitleRow.vue';
 import { locateRequest, type LocateRequest } from '@/shell/galleryLocate';
 import { useSidebarCollapse } from '@/shell/useSidebarCollapse';
@@ -38,6 +39,9 @@ import { useListLightbox } from './useListLightbox';
 
 const router = useRouter();
 const { copyLinks } = useCopyLink();
+const upload = useUploadController();
+/** 「上传到」只勾一个图床时张张都只有 1 份，格子上不再标「仅 1 份」（筛选、详情照常） */
+const backupsExpected = computed(() => upload.hosts.value.filter((host) => host.selected).length >= 2);
 const { narrow } = useSidebarCollapse();
 const actions = useGalleryActions();
 const platform = uiPlatform();
@@ -377,6 +381,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
             :focused-id="focusedId"
             :copied-id="copiedKey"
             :now="now"
+            :backups-expected="backupsExpected"
             @open="openDetail"
             @open-lightbox="openLightbox"
             @copy="copyMeta"
