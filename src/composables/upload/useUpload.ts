@@ -374,7 +374,6 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
             saveHistoryItem,
             toast,
             onPrimaryReady,
-            quietFailures: options.resultsOnScreen,
           },
           undefined,
           uploadSummary

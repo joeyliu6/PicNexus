@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CopyLinkItem } from '@/composables/useCopyLink';
 import { processUploadQueue } from '@/composables/upload/UploadExecutor';
+import type { UploadSessionSummary } from '@/utils/uploadSummary';
 import { DEFAULT_CONFIG, DEFAULT_LINK_PREFIXES, type UserConfig } from '@/config/types';
 import { formatLinkWithConfig } from '@/composables/useCopyLink';
 import { generateThumbnailUrl } from '@/composables/image/useThumbCache';
@@ -494,11 +495,12 @@ describe('processUploadQueue', () => {
       '请检查网络连接和服务配置',
     ].join('\n');
 
-    async function runAllFailed(quietFailures?: () => boolean) {
+    async function runAllFailed() {
       uploadToMultipleServicesMock.mockRejectedValueOnce(new Error(combined));
       const queueManager = createQueueManager();
       queueManager.seed('q-1', 'a.png', ['jd', 'webdav:nas']);
       const toast = { showConfig: vi.fn() };
+      const summary: UploadSessionSummary = { total: 1, success: 0, failed: 0 };
       await processUploadQueue(
         [{ itemId: 'q-1', filePath: 'C:/tmp/a.png', uploadFilePath: 'C:/tmp/a.png', fileName: 'a.png' }],
         { services: { jd: {} } } as any,
@@ -511,10 +513,11 @@ describe('processUploadQueue', () => {
           reconcileHistoryPrimary: vi.fn(async () => true),
           saveHistoryItem: vi.fn(async () => undefined),
           toast: toast as any,
-          quietFailures,
         },
+        undefined,
+        summary,
       );
-      return { queueManager, toast };
+      return { queueManager, toast, summary };
     }
 
     it("keeps each host's own reason instead of the combined message", async () => {
@@ -524,11 +527,12 @@ describe('processUploadQueue', () => {
       expect(patch.serviceProgress['webdav:nas'].error).toBe('WebDAV 上传失败: 401 Unauthorized');
     });
 
-    it('stays quiet while the page already shows the failure', async () => {
-      const loud = await runAllFailed();
-      expect(loud.toast.showConfig).toHaveBeenCalledWith('error', expect.anything());
-      const quiet = await runAllFailed(() => true);
-      expect(quiet.toast.showConfig).not.toHaveBeenCalled();
+    // 一张图只报一次：通知交给整次上传的汇总（原来每张失败的图先弹一条，汇总再弹一条「上传失败」）
+    it('leaves the notice to the session summary and records why the first picture failed', async () => {
+      const { toast, summary } = await runAllFailed();
+      expect(toast.showConfig).not.toHaveBeenCalled();
+      expect(summary.failed).toBe(1);
+      expect(summary.firstFailure).toEqual({ fileName: 'a.png', reason: '网络超时', advice: '请检查网络后重试' });
     });
   });
 

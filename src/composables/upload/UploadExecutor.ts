@@ -14,6 +14,7 @@ import { useServiceAvailability } from '@/composables/service/useServiceAvailabi
 import type { useToast } from '@/composables/useToast';
 import { TOAST_MESSAGES } from '@/constants';
 import { SERVICE_DISPLAY_NAMES } from '@/constants/serviceNames';
+import { COOKIE_BASED_SERVICES } from '@/constants/serviceRequiredFields';
 import {
   getFileExtension,
   getSupportedServicesForFormat,
@@ -21,7 +22,7 @@ import {
 } from '@/constants/serviceFormats';
 import { AUTH_CONFIG_ERROR_CODES } from '@/types/serviceHealth';
 import { createLogger } from '@/utils/logger';
-import { reasonsByService, summarizeAllServicesFailed } from '@/utils/uploadFailureMessage';
+import { describeUploadFailure, reasonsByService } from '@/utils/uploadFailureMessage';
 import { isStatusSuccess } from '@/utils/uploadStatus';
 import { resolveQueueStatus } from '@/services/retryStatus';
 
@@ -80,8 +81,6 @@ export interface UploadExecutorContext {
    * 固定了图床就等它，它失败了再退回最先完成的。单张上传靠它「第一个图床传完就复制，其余后台继续」。
    */
   onPrimaryReady?: (queueIndex: number, link: CopyLinkItem) => void | Promise<void>;
-  /** 返回 true 时某张图失败不弹通知（首页卡片已经把失败和原因画出来了） */
-  quietFailures?: () => boolean;
 }
 
 /**
@@ -118,7 +117,6 @@ export async function processUploadQueue(
     saveHistoryItem,
     toast,
     onPrimaryReady,
-    quietFailures,
   } = ctx;
   const pinnedCopySource = config.linkOutput?.copyFromService;
 
@@ -397,45 +395,18 @@ export async function processUploadQueue(
         const errorMsg = error instanceof Error ? error.message : String(error);
         log.error(`${fileName} 上传失败:`, errorMsg);
 
-        // 从错误消息中提取图床信息（所有图床失败时包含详细信息）
-        const failedServices: string[] = [];
-
-        // 尝试从错误消息中解析失败的图床
-        const servicePattern = /- (\w+):/g;
-        let match;
-        while ((match = servicePattern.exec(errorMsg)) !== null) {
-          failedServices.push(match[1]);
-        }
-
-        // 智能错误提示 - 带图床名称（页面已经画出失败时不弹）
-        if (quietFailures?.()) {
-          // 首页焦点卡 / 批量卡片上有失败原因和下一步，不再叠一条通知
-        } else if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
-          // Cookie 相关错误（通常是微博）
-          const serviceName = failedServices.length > 0 ? failedServices.join('、') : '微博';
-          toast.showConfig('error', TOAST_MESSAGES.auth.tokenFailed(serviceName, '登录凭证/Cookie 已过期，请前往更新'));
-        } else if (errorMsg.includes('认证失败') || errorMsg.includes('authentication')) {
-          // 认证错误
-          const serviceName = failedServices.length > 0 ? failedServices.join('、') : '图床';
-          toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceName, '请检查 AK/SK 或 Token 配置是否正确'));
-        } else if (errorMsg.includes('所有图床上传均失败')) {
-          // 所有图床都失败。把每个图床的原因带上——这一支原先只弹「未能上传至任何图床」，
-          // 原因明明在 errorMsg 里却整段丢掉，用户看不出该去改哪儿。
-          // 解析不出来时才退回那句笼统的（比如错误格式变了）。
-          const reasons = summarizeAllServicesFailed(errorMsg);
-          toast.showConfig('error', TOAST_MESSAGES.upload.failed(
-            reasons ? `${fileName}：${reasons}` : `${fileName} 未能上传至任何图床`,
-          ));
-        } else {
-          // 通用错误
-          toast.showConfig('error', TOAST_MESSAGES.upload.failed(`${fileName}: ${errorMsg}`));
+        // 每个图床记它自己的原因；整段汇总只在解析不出时兜底
+        const ownReasons = reasonsByService(errorMsg);
+        // 不在这里弹通知：整次上传结束时的汇总照第一张失败的图写「原因 + 处理办法」，一张图只报一次
+        if (uploadSummary && !uploadSummary.firstFailure) {
+          const [firstHost, firstReason] = ownReasons.entries().next().value ?? [attemptedServices[0], errorMsg];
+          const cookieLogin = (COOKIE_BASED_SERVICES as readonly string[]).includes(firstHost);
+          uploadSummary.firstFailure = { fileName, ...describeUploadFailure(firstHost, firstReason, { cookieLogin }) };
         }
 
         const item = queueManager.getItem(itemId);
         if (item) {
           const updatedServiceProgress = { ...(item.serviceProgress || {}) };
-          // 每个图床记它自己的原因；整段汇总只在解析不出时兜底
-          const ownReasons = reasonsByService(errorMsg);
           attemptedServices.forEach(serviceId => {
             // 上传还没结束就被单独重试的图床：已成功或仍在重试的，结果归重试链路，这里不能改成失败
             const current = updatedServiceProgress[serviceId];

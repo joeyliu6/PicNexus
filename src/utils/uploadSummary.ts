@@ -5,6 +5,13 @@ export interface UploadFailedServiceSummary {
   count: number;
 }
 
+/** 第一张整张失败的图：通知照它写「原因 + 处理办法」（交接说明第 9 节，与首页卡片、重试通知同一套说法） */
+export interface UploadFailureNote {
+  fileName: string;
+  reason: string;
+  advice: string;
+}
+
 export interface UploadSessionSummary {
   total: number;
   success: number;
@@ -13,6 +20,7 @@ export interface UploadSessionSummary {
   partialFailedServices?: UploadFailedServiceSummary[];
   /** 因路径已在上传队列被静默丢弃的张数（同批次重复路径） */
   duplicatesSkipped?: number;
+  firstFailure?: UploadFailureNote;
 }
 
 export interface UploadCopySummary {
@@ -41,11 +49,15 @@ function formatFailedServices(summary: UploadSessionSummary): string {
     .join('、');
 }
 
+/** 几句话接成一段：没以句号收尾的补上「。」 */
+function sentences(parts: string[]): string {
+  return parts.filter(Boolean).map((part) => (/[。！？]$/u.test(part) ? part : `${part}。`)).join('');
+}
+
 function appendDuplicates(detail: string, summary: UploadSessionSummary): string {
   const skipped = summary.duplicatesSkipped ?? 0;
   if (skipped === 0) return detail;
-  const suffix = `已忽略 ${skipped} 张重复文件。`;
-  return detail ? `${detail}${suffix}` : suffix;
+  return sentences([detail, `已忽略 ${skipped} 张重复文件。`]);
 }
 
 export function buildUploadSummaryToast(
@@ -65,12 +77,16 @@ export function buildUploadSummaryToast(
     return null;
   }
 
-  // 全部失败：显示 error toast
+  // 全部失败：单张写文件名，多张写张数；说明是第一张失败的原因 + 处理办法
   if (summary.success === 0) {
+    const failure = summary.firstFailure;
+    const title = summary.total > 1
+      ? `${summary.total} 张上传失败`
+      : failure ? `${failure.fileName} 上传失败` : '上传失败';
     return {
       severity: 'error',
-      summary: '上传失败',
-      detail: appendDuplicates('所有图片上传失败，请检查网络或图床配置。', summary),
+      summary: title,
+      detail: appendDuplicates(failure ? `${failure.reason}，${failure.advice}` : '请检查网络或图床配置后重试', summary),
     };
   }
 
@@ -105,14 +121,13 @@ export function buildUploadSummaryToast(
     };
   }
 
-  // 场景二：有整张图失败（所有图床都挂了）
+  // 场景二：有整张图失败（所有图床都挂了）：先说第一张为什么失败
   if (summary.failed > 0) {
     const summaryText = `${summary.success} 张成功，${summary.failed} 张失败`;
-    const parts = [copyDetail, '可在首页重试失败的图片。'].filter(Boolean);
     return {
       severity: 'warn',
       summary: summaryText,
-      detail: appendDuplicates(parts.join(''), summary),
+      detail: appendDuplicates(sentences([summary.firstFailure?.reason ?? '', copyDetail, '可在首页重试失败的图片。']), summary),
     };
   }
 

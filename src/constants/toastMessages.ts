@@ -200,14 +200,6 @@ export const TOAST_MESSAGES = {
       summary: '验证成功',
       detail: `${serviceName} Cookie 有效`
     }),
-    tokenFailed: (serviceName: string, error: string): ToastMessageConfig => ({
-      summary: '认证失败',
-      detail: `${serviceName} Token 验证失败：${error}`
-    }),
-    connectionFailed: (serviceName: string, error: string): ToastMessageConfig => ({
-      summary: '连接失败',
-      detail: `${serviceName} 连接失败：${error}`
-    }),
     testFailed: (error: string): ToastMessageConfig => ({
       summary: '测试失败',
       detail: error

@@ -739,7 +739,8 @@ describe('useUploadManager', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('a.jpg 上传失败', '准备上传时出错，请重试', 5000);
   });
 
-  it('does not toast a failed image while the caller shows it, and does otherwise', async () => {
+  // 一张图失败只报一次：首页在屏时不报（卡片上画着），不在屏时只有整次上传的那条汇总，写原因 + 处理办法
+  it('reports a failed image once, with its reason, only while the caller does not show it', async () => {
     const allFailed = new Error('所有图床上传均失败：\n  - jd: 京东上传失败: 请求超时\n\n请检查网络连接和服务配置');
     const { useUploadManager } = await import('@/composables/upload/useUpload');
     let shown = true;
@@ -748,10 +749,13 @@ describe('useUploadManager', () => {
     uploadToMultipleServicesMock.mockRejectedValueOnce(allFailed);
     await handleFilesUpload(['C:/tmp/test.jpg']);
     expect(toastShowConfigMock).not.toHaveBeenCalledWith('error', expect.anything());
+    expect(toastErrorMock).not.toHaveBeenCalled();
 
     shown = false;
     uploadToMultipleServicesMock.mockRejectedValueOnce(allFailed);
     await handleFilesUpload(['C:/tmp/test.jpg']);
-    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.anything());
+    expect(toastShowConfigMock).not.toHaveBeenCalledWith('error', expect.anything());
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock).toHaveBeenCalledWith('test.jpg 上传失败', '网络超时，请检查网络后重试');
   });
 });

@@ -58,16 +58,45 @@ describe('buildUploadSummaryToast', () => {
 
   // --- 全部失败 ---
 
-  it('全部失败：显示 error toast', () => {
+  // 同首页卡片与重试通知：原因 + 处理办法（交接说明第 9 节），单张写文件名，多张写张数
+  const TIMEOUT = { fileName: '会议截图.png', reason: '网络超时', advice: '请检查网络后重试' };
+
+  it('单张全部失败：标题写文件名，说明写原因与处理办法', () => {
     const payload = buildUploadSummaryToast(
-      { total: 2, success: 0, failed: 2 },
+      { total: 1, success: 0, failed: 1, firstFailure: TIMEOUT },
+      { autoCopyEnabled: true, copiedCount: 0, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'error',
+      summary: '会议截图.png 上传失败',
+      detail: '网络超时，请检查网络后重试',
+    });
+  });
+
+  it('多张全部失败：标题写张数，说明照第一张的原因', () => {
+    const payload = buildUploadSummaryToast(
+      { total: 2, success: 0, failed: 2, firstFailure: TIMEOUT },
+      { autoCopyEnabled: true, copiedCount: 0, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'error',
+      summary: '2 张上传失败',
+      detail: '网络超时，请检查网络后重试',
+    });
+  });
+
+  it('全部失败但不知道原因：给出处理办法', () => {
+    const payload = buildUploadSummaryToast(
+      { total: 1, success: 0, failed: 1 },
       { autoCopyEnabled: true, copiedCount: 0, format: 'url' }
     );
 
     expect(payload).toEqual({
       severity: 'error',
       summary: '上传失败',
-      detail: '所有图片上传失败，请检查网络或图床配置。',
+      detail: '请检查网络或图床配置后重试',
     });
   });
 
@@ -110,14 +139,14 @@ describe('buildUploadSummaryToast', () => {
 
   it('全部失败 + 部分重复被忽略：error toast 末尾追加提示', () => {
     const payload = buildUploadSummaryToast(
-      { total: 2, success: 0, failed: 2, duplicatesSkipped: 1 },
+      { total: 2, success: 0, failed: 2, duplicatesSkipped: 1, firstFailure: { fileName: 'a.png', reason: '网络超时', advice: '请检查网络后重试' } },
       { autoCopyEnabled: false, copiedCount: 0, format: 'url' }
     );
 
     expect(payload).toEqual({
       severity: 'error',
-      summary: '上传失败',
-      detail: '所有图片上传失败，请检查网络或图床配置。已忽略 1 张重复文件。',
+      summary: '2 张上传失败',
+      detail: '网络超时，请检查网络后重试。已忽略 1 张重复文件。',
     });
   });
 
@@ -153,6 +182,19 @@ describe('buildUploadSummaryToast', () => {
       severity: 'warn',
       summary: '3 张成功，2 张失败',
       detail: '成功的链接已复制。可在首页重试失败的图片。',
+    });
+  });
+
+  it('部分图片整体失败：先说第一张失败的原因', () => {
+    const payload = buildUploadSummaryToast(
+      { total: 5, success: 3, failed: 2, firstFailure: { fileName: 'b.png', reason: '网络超时', advice: '请检查网络后重试' } },
+      { autoCopyEnabled: true, copiedCount: 3, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'warn',
+      summary: '3 张成功，2 张失败',
+      detail: '网络超时。成功的链接已复制。可在首页重试失败的图片。',
     });
   });
 

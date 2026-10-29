@@ -68,9 +68,8 @@ export function formatMigrateFailureSummary(details: MigrateFailureDetail[]): st
 }
 
 /**
- * 把「所有图床上传均失败」那条聚合错误压成一句人能读的话
- *
- * `MultiServiceUploader` 抛出来的原文长这样（多行、带 serviceId、带尾注）：
+ * 「所有图床上传均失败」那条汇总里每个图床各自的原因（按出现顺序）。
+ * `MultiServiceUploader` 抛出来的原文多行、带 serviceId、带尾注：
  *
  * ```
  * 所有图床上传均失败：
@@ -79,29 +78,7 @@ export function formatMigrateFailureSummary(details: MigrateFailureDetail[]): st
  * 请检查网络连接和服务配置
  * ```
  *
- * Why 需要它：`UploadExecutor` 原先在这一支里**把整段原文丢掉**，只弹一句
- * 「未能上传至任何图床」。原因明明在手里却不给——2026-08-20 真机验收时
- * 用户上传失败，界面一个字都没说为什么，最后是靠命令行跑同一份配置才知道是
- * 「路径不存在」。（队列卡片的 tooltip 里有，但那要鼠标悬停才看得见。）
- *
- * Why 不改 `MultiServiceUploader` 去抛结构化错误：那是高风险文件（见 AGENTS.md），
- * 而这里要的信息它已经写进消息里了，解析一下比改抛出契约划算得多。
- *
- * @returns 形如 `dufs 本地 · 路径不存在，请检查远程路径配置`；解析不出来返回空串
- */
-export function summarizeAllServicesFailed(errorMsg: string): string {
-  const details: MigrateFailureDetail[] = [];
-  for (const [serviceId, rawReason] of reasonsByService(errorMsg)) {
-    const reason = cleanMigrateError(serviceId, rawReason);
-    if (reason) details.push({ serviceId, message: reason });
-  }
-
-  // 复用迁移那套拼法，两处的失败摘要读起来是同一个调子
-  return formatMigrateFailureSummary(details);
-}
-
-/**
- * 「所有图床上传均失败」那条汇总里每个图床各自的原因（按出现顺序）
+ * 原因要一直带到界面上（2026-08-20 真机验收时只弹「未能上传至任何图床」，用户看不出该改哪儿）。
  *
  * 只认「缩进 + 短横线」的条目，免得把尾注那行也吃进来；复合 ID（`webdav:xxx`）里
  * 也有冒号，所以按「冒号 + 空白」切。

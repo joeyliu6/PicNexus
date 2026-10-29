@@ -96,7 +96,7 @@ flowchart TD
     AH2 --> AH3{所有批次完成?}
     AH3 -- 否 --> O
     AH3 -- 是 --> AI["copyLinks 复制链接<br/>单张：复制来源一确定就复制（onPrimaryReady），不等其余图床<br/>多张：整批结束后一次复制"]
-    AI --> AJ["showUploadSessionSummary 通知<br/>首页在屏时不弹（结果已在首页卡片上）"]
+    AI --> AJ["showUploadSessionSummary 通知：一次上传只弹这一条<br/>失败写第一张的原因 + 处理办法；首页在屏时不弹（结果已在首页卡片上）"]
     AJ --> AK0["收尾：进了队列却一直没开始传的（某一批中途抛错）<br/>标成失败「准备上传时出错」，可重试"]
     AK0 --> AK[解锁 isUploading = false]
 
