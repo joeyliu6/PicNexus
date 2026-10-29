@@ -40,6 +40,25 @@ describe('BackupPasswordDialog', () => {
     expect(wrapper.emitted('confirm')?.[0]).toEqual([{ mode: 'set', password: 'Password123' }]);
   });
 
+  // 两次输入一致、「设置」却还是灰的：缺的那几条必须项标红说清为什么；打字时与设计稿一样只是灰点，选做的两条从不标红
+  it('设置：两次一致但不合要求时，把没满足的必须项标红', async () => {
+    mountDialog('set');
+    await nextTick();
+    const blocked = () => [...body().querySelectorAll('.backup-password__rule--blocked')].map((el) => el.textContent?.replace(/^[✓·]/, '').trim());
+    await type('backup-password-new', 'abcdefgh');
+    expect(blocked()).toEqual([]);
+    await type('backup-password-confirm', 'abcdefgh');
+    expect(button('设置')!.disabled).toBe(true);
+    expect(blocked()).toEqual(['包含数字']);
+    await type('backup-password-new', 'abc');
+    await type('backup-password-confirm', 'abc');
+    expect(blocked()).toEqual(['至少 8 位', '包含数字']);
+    await type('backup-password-new', 'abcdefgh1');
+    await type('backup-password-confirm', 'abcdefgh1');
+    expect(blocked()).toEqual([]);
+    expect(button('设置')!.disabled).toBe(false);
+  });
+
   it('修改：当前密码不对时清空当前密码并写原因', async () => {
     const wrapper = mountDialog('change');
     await nextTick();

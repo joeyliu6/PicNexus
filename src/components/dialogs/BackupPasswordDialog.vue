@@ -50,16 +50,19 @@ const loading = ref(false);
 const failedAttempts = ref(0);
 const exhausted = computed(() => props.mode === 'restore' && failedAttempts.value >= MAX_ATTEMPTS);
 
+/** required = validateBackupPassword 要求的两条；另两条只算强度 */
 const rules = computed(() => [
-  { text: '至少 8 位', met: next.value.length >= 8 },
-  { text: '包含数字', met: /\d/.test(next.value) },
-  { text: '大小写字母', met: /[a-z]/.test(next.value) && /[A-Z]/.test(next.value) },
-  { text: '特殊符号', met: /[^a-zA-Z0-9]/.test(next.value) },
+  { text: '至少 8 位', met: next.value.length >= 8, required: true },
+  { text: '包含数字', met: /\d/.test(next.value), required: true },
+  { text: '大小写字母', met: /[a-z]/.test(next.value) && /[A-Z]/.test(next.value), required: false },
+  { text: '特殊符号', met: /[^a-zA-Z0-9]/.test(next.value), required: false },
 ]);
 const strength = computed(() => rules.value.filter((r) => r.met).length);
 /** 修改模式不画强度条：新密码不合要求时在它下面说原因，免得「修改」变灰却不知为何 */
 const newHint = computed(() => (props.mode === 'change' && next.value ? validateBackupPassword(next.value).message : ''));
 const matches = computed(() => !!confirmNext.value && confirmNext.value === next.value);
+/** 设置模式：两次一致、「设置」却还是灰的，没满足的必须项标红说清为什么（打字时同设计稿只是灰点） */
+const showBlocked = computed(() => props.mode === 'set' && matches.value && !validateBackupPassword(next.value).valid);
 const confirmMessage = computed(() => {
   if (!confirmNext.value) return null;
   return matches.value ? { text: '✓ 两次输入一致', tone: 'success' as const } : { text: '两次输入的密码不一致', tone: 'danger' as const };
@@ -176,7 +179,12 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
           <span v-for="i in 4" :key="i" class="backup-password__bar" :class="{ 'backup-password__bar--on': i <= strength, 'backup-password__bar--good': strength >= 3 }" />
         </div>
         <div class="backup-password__rules">
-          <span v-for="rule in rules" :key="rule.text" class="backup-password__rule" :class="{ 'backup-password__rule--met': rule.met }">
+          <span
+            v-for="rule in rules"
+            :key="rule.text"
+            class="backup-password__rule"
+            :class="{ 'backup-password__rule--met': rule.met, 'backup-password__rule--blocked': showBlocked && rule.required && !rule.met }"
+          >
             <span class="backup-password__mark" aria-hidden="true">{{ rule.met ? '✓' : '·' }}</span>{{ rule.text }}
           </span>
         </div>
@@ -245,6 +253,7 @@ defineExpose({ onPasswordFailed, onPasswordSuccess, resetLoading });
 }
 
 .backup-password__rule--met { color: var(--pn-success); }
+.backup-password__rule--blocked { color: var(--pn-danger); }
 
 .backup-password__mark {
   width: var(--pn-space-12);
