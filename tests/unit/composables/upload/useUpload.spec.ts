@@ -432,6 +432,11 @@ describe('useUploadManager', () => {
 
     await handleFilesUpload(['C:/tmp/test.jpg']);
 
+    // 书面说法：「尚未确认」（同「尚未检测」），不写口头的「还没确认」
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.objectContaining({
+      summary: '已跳过未确认风险的图床',
+      detail: '部分公共图床尚未确认风险，本次只上传到其余图床；在首页「上传到」重新勾选即可确认。',
+    }));
     expect(queueManager.addFile).toHaveBeenCalledWith('C:/tmp/test.jpg', 'test.jpg', ['upyun']);
     expect(uploadToMultipleServicesMock).toHaveBeenCalledWith(
       'C:/tmp/test.jpg',

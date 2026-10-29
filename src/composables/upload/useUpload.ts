@@ -251,7 +251,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       if (blockedRiskServices.length > 0) {
         toast.showConfig('warn', {
           summary: '已跳过未确认风险的图床',
-          detail: '部分公共图床还没确认风险，本次只上传到其余图床；在首页「上传到」重新勾选即可确认。',
+          detail: '部分公共图床尚未确认风险，本次只上传到其余图床；在首页「上传到」重新勾选即可确认。',
           life: 6000,
         });
       }
