@@ -363,7 +363,7 @@ export function useLinkCheckManager() {
       const rows = checkRows.value;
       const rowSnapshot = createRowsSnapshot(rows);
       if (rows.length === 0) {
-        toast.info('无可检测的链接', '历史记录为空');
+        toast.info('无可检测的链接', '图库中暂无图片');
         return null;
       }
 

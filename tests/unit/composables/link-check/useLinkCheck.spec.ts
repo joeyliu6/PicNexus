@@ -595,3 +595,14 @@ describe('useLinkCheckManager.checkSubset', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('保存检测结果失败', 'database locked');
   });
 });
+
+// 一张图都没有时点检测：说法同图库的空状态（新界面不叫「历史记录」）
+describe('useLinkCheckManager.checkAllHistoryLinks', () => {
+  it('图库里一张图都没有：说「图库中暂无图片」', async () => {
+    historyDBStreamMock.mockImplementationOnce(async function* () { /* 没有记录 */ });
+    const manager = await freshManager();
+
+    expect(await manager.checkAllHistoryLinks()).toBeNull();
+    expect(toastInfoMock).toHaveBeenCalledWith('无可检测的链接', '图库中暂无图片');
+  });
+});

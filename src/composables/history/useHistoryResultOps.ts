@@ -167,7 +167,7 @@ export function createResultOps(ctx: ResultOpsContext) {
 
       const confirmed = await confirm(
         copy?.message
-          ?? `将从 PicNexus 的记录里移除 ${targets.length} 个图床链接，图床上的文件不会被删除；只剩这些链接的图片会从历史记录里消失。移除后无法撤销。`,
+          ?? `将从 PicNexus 的记录里移除 ${targets.length} 个图床链接，图床上的文件不会被删除；只剩这些链接的图片会从图库里消失。移除后无法撤销。`,
         {
           header: copy?.header ?? `移除 ${targets.length} 个链接？`,
           acceptLabel: copy?.acceptLabel ?? `移除 ${targets.length} 个`,

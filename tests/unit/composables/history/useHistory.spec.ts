@@ -20,7 +20,13 @@ const {
   onCacheEventMock,
   emitHistoryDeletedMock,
   emitHistoryClearedMock,
+  toastSuccessMock,
+  toastErrorMock,
+  undoShowMock,
 } = vi.hoisted(() => ({
+  toastSuccessMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  undoShowMock: vi.fn(),
   historyDBOpenMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetFavoriteIdListMock: vi.fn().mockResolvedValue([]),
   historyDBSetFavoriteMock: vi.fn().mockResolvedValue(undefined),
@@ -59,9 +65,9 @@ vi.mock('@/services/database', () => ({
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     showConfig: toastShowConfigMock,
-    success: vi.fn(),
+    success: toastSuccessMock,
     warn: vi.fn(),
-    error: vi.fn(),
+    error: toastErrorMock,
     info: vi.fn(),
   }),
 }));
@@ -100,7 +106,7 @@ vi.mock('@/config/types', async (importOriginal) => {
 
 vi.mock('@/composables/useUndoToast', () => ({
   useUndoToast: () => ({
-    show: vi.fn().mockResolvedValue(true),
+    show: undoShowMock,
   }),
 }));
 
@@ -121,8 +127,6 @@ vi.mock('@/constants', () => ({
   TOAST_MESSAGES: {
     common: {
       loadFailed: (msg: string) => ({ summary: '加载失败', detail: msg }),
-      clearSuccess: (msg: string) => ({ summary: '成功', detail: `已清空 ${msg}` }),
-      clearFailed: (msg: string) => ({ summary: '失败', detail: msg }),
       exportSuccess: (n: number) => ({ summary: '成功', detail: `已导出 ${n} 条` }),
       exportFailed: (msg: string) => ({ summary: '失败', detail: msg }),
       copyFailed: (msg: string) => ({ summary: '失败', detail: msg }),
@@ -293,6 +297,7 @@ describe('useHistoryManager', () => {
       historyDBGetCountMock.mockResolvedValue(3);
       historyDBGetFavoriteIdListMock.mockResolvedValue(['1']);
       confirmMock.mockResolvedValue(true);
+      undoShowMock.mockResolvedValue(true);
 
       const { loadStats, clearHistory, totalCount, favoriteCount, favoriteSet } = useHistoryManager();
       await loadStats();
@@ -304,6 +309,21 @@ describe('useHistoryManager', () => {
       expect(favoriteCount.value).toBe(0);
       expect(favoriteSet.value.size).toBe(0);
       expect(emitHistoryClearedMock).toHaveBeenCalled();
+    });
+
+    // 同设置 › 数据与隐私「清空全部记录」那一行的叫法（新界面不叫「历史记录」）；失败写原因 + 处理办法
+    it('撤销倒计时、清空后与失败时都说「全部记录」', async () => {
+      confirmMock.mockResolvedValue(true);
+      undoShowMock.mockResolvedValue(true);
+      const { clearHistory } = useHistoryManager();
+
+      await clearHistory();
+      expect(undoShowMock).toHaveBeenCalledWith('将清空全部记录', 5, 'warn');
+      expect(toastSuccessMock).toHaveBeenCalledWith('已清空全部记录');
+
+      historyDBClearMock.mockRejectedValueOnce(new Error('磁盘已满'));
+      await clearHistory();
+      expect(toastErrorMock).toHaveBeenCalledWith('未能清空记录', '磁盘已满，请重试');
     });
   });
 

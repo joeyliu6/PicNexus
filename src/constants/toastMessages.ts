@@ -19,14 +19,6 @@ export const TOAST_MESSAGES = {
       summary: '复制失败',
       detail: error
     }),
-    clearSuccess: (target: string): ToastMessageConfig => ({
-      summary: '已清空',
-      detail: target
-    }),
-    clearFailed: (error: string): ToastMessageConfig => ({
-      summary: '清空失败',
-      detail: error
-    }),
     exportSuccess: (count: number): ToastMessageConfig => ({
       summary: '已导出',
       detail: `${formatCount(count)} 条记录`

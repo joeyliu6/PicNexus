@@ -16,6 +16,7 @@ import {
   type CacheEventPayload,
   type HistoryEventData
 } from '@/events/cacheEvents';
+import { getErrorMessage } from '@/types/errors';
 import { createLogger } from '@/utils/logger';
 import { debounce } from '@/utils/debounce';
 import { createBulkOps } from './useHistoryBulkOps';
@@ -272,14 +273,15 @@ export function useHistoryManager() {
       }
 
       // 还没清，5 秒后才执行（确认框里写了「确认后有 5 秒可以撤销」）：用琥珀色，不用「已完成」的绿色
-      const proceed = await undoToast.show('将清空所有历史记录', CLEAR_UNDO_SECONDS, 'warn');
+      // 叫法同设置 › 数据与隐私「清空全部记录」那一行
+      const proceed = await undoToast.show('将清空全部记录', CLEAR_UNDO_SECONDS, 'warn');
       if (!proceed) {
         return;
       }
 
       await historyDB.clear();
 
-      toast.showConfig('success', TOAST_MESSAGES.common.clearSuccess('所有历史记录'));
+      toast.success('已清空全部记录');
 
       totalCount.value = 0;
       favoriteCount.value = 0;
@@ -297,7 +299,7 @@ export function useHistoryManager() {
 
     } catch (error) {
       log.error('[历史记录] 清空失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.clearFailed(String(error)));
+      toast.error('未能清空记录', `${getErrorMessage(error)}，请重试`);
     }
   }
 
