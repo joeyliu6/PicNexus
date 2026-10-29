@@ -141,14 +141,6 @@
 
 **当前处置**：待处理
 
-### [ ] 图床凭证框没有单测
-
-- **来源**：2026-10-17 阶段 7 收尾时发现。旧设置页的 `SensitiveField` 有一套单测钉着「看一眼不等于改一次」「清空先确认」「圆点个数固定」，随旧设置页删除；图床页的 `HostSecretField`（阶段 6）实现了同样的规则，却没有对应测试
-- **要做的**：给 `src/views/hosts/HostSecretField.vue` 补组件测试，覆盖 [sensitive-field-contract.md](./reference/patterns/sensitive-field-contract.md)「不变量」四条，每条做一次变异确认会红
-- **优先级**：中
-
-**当前处置**：待处理
-
 ### [ ] 给"try 里 await invoke、catch 里 `String(err)`"加静态护栏
 
 - **来源**：同上。本次人工扫出 6 处把 Rust `AppError` 渲染成 `[object Object]` 的站点（08-24 已修过一处同类），
@@ -302,6 +294,10 @@
 ## 已完成
 
 更早完成的条目原样搬到了 [archive/TODO-done.md](./archive/TODO-done.md)，按标题搜。
+
+### [x] 图床凭证框没有单测
+
+2026-10-30 补上：`hostSecretField.spec.ts` 钉住 [sensitive-field-contract.md](./reference/patterns/sensitive-field-contract.md) 的不变量，`useHosts.spec.ts` 钉住加密字段清空写空串；每条都在改坏的代码上红过。
 
 ### [x] 上传进行中再拖入 / 粘贴会被丢掉（「请稍候」）
 

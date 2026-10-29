@@ -169,6 +169,24 @@ describe('useHosts', () => {
     expect(m.invoke).toHaveBeenCalledWith('probe_s3_storage', expect.objectContaining({ config: expect.objectContaining({ httpDomainConfirmedFor: 'img.example.com' }) }));
   });
 
+  // sensitive-field-contract.md：加密类字段清空时直接写空串，不能 encrypt('')（那会存进一段非空密文，界面成了「删了但还显示已保存」）
+  it('清空 WebDAV 密码存成空串，新填的才加密', async () => {
+    m.disk!.webdav_profiles = [{
+      id: 'nas', name: '家里 NAS', url: 'https://dav.example.com/dav', username: 'u', passwordEncrypted: 'enc(p)',
+      remotePath: '/', publicDomain: 'https://img.example.com', publicUrlTemplate: '{domain}/{path}', uniqueFileName: true,
+    }] as UserConfig['webdav_profiles'];
+    m.disk!.availableServices = ['jd', 'r2', 'webdav:nas'];
+    recomputeHosts();
+    m.invoke.mockResolvedValue({ success: true, message: '', failedStep: null, field: null });
+    const hosts = useHosts();
+    await hosts.enter();
+
+    await hosts.saveField('webdav:nas', 'passwordEncrypted', 'new-pass');
+    expect(m.disk!.webdav_profiles![0].passwordEncrypted).toBe('enc(new-pass)');
+    await hosts.saveField('webdav:nas', 'passwordEncrypted', '');
+    expect(m.disk!.webdav_profiles![0].passwordEncrypted).toBe('');
+  });
+
   it('WebDAV 判不出局域网：P12 列出要放行的地址（写成 IP 的局域网地址不用确认，不列）', async () => {
     m.disk!.webdav_profiles = [{
       id: 'nas', name: '家里 NAS', url: 'http://192.168.1.20:5005/dav', username: 'u', passwordEncrypted: 'enc(p)',
