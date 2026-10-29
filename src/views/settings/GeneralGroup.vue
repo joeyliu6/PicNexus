@@ -22,6 +22,11 @@ const THEMES: { mode: ThemeMode; name: string }[] = [
 
 const behavior = computed(() => settings.config.value.appBehavior ?? DEFAULT_CONFIG.appBehavior!);
 const autoStart = computed(() => effects.autoStartActual.value ?? behavior.value.autoStart);
+const closeToTray = computed(() => behavior.value.closeToTray !== false);
+/** 脚注说关窗口之后的事，跟着「关闭窗口时最小化到托盘」走（设计稿只画了开着的那句） */
+const startupNote = computed(() => (closeToTray.value
+  ? '关闭窗口后 PicNexus 仍在托盘运行，全局快捷键和后台检测照常可用。'
+  : '关闭窗口即退出 PicNexus，全局快捷键和后台检测随之停止。'));
 function setSilentStart(on: boolean): void {
   void settings.patch('silentStart', (c) => { c.appBehavior = { ...(c.appBehavior ?? DEFAULT_CONFIG.appBehavior!), minimizeToTrayOnStart: on }; });
 }
@@ -66,7 +71,7 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
       </div>
     </SettingsSection>
 
-    <SettingsSection title="启动" note="关闭窗口后 PicNexus 仍在托盘运行，全局快捷键和后台检测照常可用。">
+    <SettingsSection title="启动" :note="startupNote">
       <SettingsCard>
         <SettingRow row-id="autoStart" title="开机自动启动" desc="登录系统后在托盘中运行">
           <PnSwitch :model-value="autoStart" label="开机自动启动" @update:model-value="effects.changeAutoStart" />
@@ -75,7 +80,7 @@ function onThemeKey(event: KeyboardEvent, index: number): void {
           <PnSwitch :model-value="behavior.minimizeToTrayOnStart" label="静默启动" @update:model-value="setSilentStart" />
         </SettingRow>
         <SettingRow row-id="closeToTray" title="关闭窗口时最小化到托盘" desc="关闭窗口后不退出应用">
-          <PnSwitch :model-value="behavior.closeToTray !== false" label="关闭窗口时最小化到托盘" @update:model-value="effects.changeCloseToTray" />
+          <PnSwitch :model-value="closeToTray" label="关闭窗口时最小化到托盘" @update:model-value="effects.changeCloseToTray" />
         </SettingRow>
       </SettingsCard>
     </SettingsSection>
