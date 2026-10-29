@@ -6,8 +6,6 @@ import PnMenu from '@/components/pn/PnMenu.vue';
 import PnMenuItem from '@/components/pn/PnMenuItem.vue';
 import { uiPlatform } from '@/utils/platform';
 
-defineProps<{ busy: boolean }>();
-
 defineEmits<{
   pick: [];
   paste: [];

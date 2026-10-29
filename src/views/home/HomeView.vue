@@ -122,7 +122,7 @@ async function openInBrowser(item: HistoryItem) {
         />
 
         <template v-else-if="ready">
-          <HomeDropBar :busy="upload.busy.value" @pick="upload.pickAndUpload()" @paste="upload.pasteClipboard()" @url="urlDialogOpen = true" />
+          <HomeDropBar @pick="upload.pickAndUpload()" @paste="upload.pasteClipboard()" @url="urlDialogOpen = true" />
           <HomeOptionsRow
             :hosts="hosts"
             :format="format"
