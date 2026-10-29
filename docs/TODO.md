@@ -80,6 +80,7 @@
 
 - **来源**：2026-10-19 阶段 11 清死代码时发现，不是这次改动造成的，按「不顺手改范围外的文件」没删
 - **清单**：`makeCopyBadgeKey`、`supportsCookieAutoFetch`、`getAllCookieProviders`、`PRIVATE_SERVICES`、`PUBLIC_SERVICES`、`PUBLIC_SERVICE_RISK_TOOLTIP`、`sanitizeConfig`、`getErrorType`、`isNetworkError`、`getUploadErrorService`、`getUploadErrorCode`、`getErrorHint`、`extractMetaFromHistoryItem`、`formatTime`、`findUnknownPlaceholders`、`resetCachedSyncDeviceIdForTests`（全项目除定义处外没有任何引用）
+- **另有**：`src/constants/toastMessages.ts` 里 30 条没人用的通知模板（2026-10-30 循环打磨时数出来，knip 查不到对象属性）：`cloudStorage`、`hint` 两组整组，`upload` 的 success / partialSuccess / retrying / retrySuccess / retryFailed / queueCleared / completedCleared / noRetryNeeded，`auth` 的 tokenValid / configValid / cookieValid / testFailed / serviceAvailable / serviceUnavailable，`common` 的 copyFailed / noData，`config.saveSuccess`、`history.noLink`、`clipboard.pasteFailed`；其中有旧文件管理器的文案（「移动功能开发中」等）
 - **要做的**：用 `/kill-dead-code` 逐条确认后删除
 - **优先级**：低
 
