@@ -24,7 +24,7 @@ defineProps<{
         <span class="tool-card__title">{{ title }}</span>
         <span v-if="num" class="tool-card__num" :class="{ 'tool-card__num--warning': numTone === 'warning' }">{{ num }}</span>
       </span>
-      <span class="tool-card__desc">{{ desc }}</span>
+      <span class="tool-card__desc pn-wrap-phrases">{{ desc }}</span>
       <div v-if="progress !== undefined" class="tool-card__bar" role="progressbar" :aria-label="`${title}进度`" :aria-valuenow="Math.round(progress * 100)" aria-valuemin="0" aria-valuemax="100">
         <span :style="{ width: `${progress * 100}%` }" />
       </div>

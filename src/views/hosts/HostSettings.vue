@@ -201,7 +201,7 @@ function setUniqueName(value: boolean): void {
     <!-- 免配置 -->
     <div v-if="descriptor.kind === 'builtin'" class="host-settings__box">
       <span class="host-settings__box-title">免配置，开箱即用</span>
-      <span class="host-settings__muted">无需账号。此为非官方适配的公共图床，可能随时失效，建议同时上传到自有存储（如 Cloudflare R2）作为备份。</span>
+      <span class="host-settings__muted pn-wrap-phrases">无需账号。此为非官方适配的公共图床，可能随时失效，建议同时上传到自有存储（如 Cloudflare R2）作为备份。</span>
     </div>
 
     <!-- Cookie：字段（点进去即可粘贴）+「重新登录…」（打开官方登录页，登录后自动填入） -->
@@ -237,7 +237,7 @@ function setUniqueName(value: boolean): void {
       <div v-if="descriptor.id === 'zhihu' && !draft" class="host-settings__box host-settings__box--row">
         <div class="host-settings__switch-text">
           <span class="host-settings__box-title">让知乎图片正常显示</span>
-          <span class="host-settings__muted">在链接后自动补一个参数，避免外链 403</span>
+          <span class="host-settings__muted pn-wrap-phrases">在链接后自动补一个参数，避免外链 403</span>
         </div>
         <PnSwitch :model-value="zhihu.sourceParamEnabled !== false" label="让知乎图片正常显示" @update:model-value="(v: boolean) => setService('zhihu', { sourceParamEnabled: v })" />
       </div>
@@ -291,7 +291,7 @@ function setUniqueName(value: boolean): void {
           <div v-if="descriptor.kind === 'webdav' && !draft" class="host-settings__box host-settings__box--row">
             <div class="host-settings__switch-text">
               <span class="host-settings__box-title">防止图片互相覆盖</span>
-              <span class="host-settings__muted">上传时自动重命名，image.png 会存成 image_20260818_a3f9.png；关闭后同名图片会覆盖旧图且无法找回。</span>
+              <span class="host-settings__muted pn-wrap-phrases">上传时自动重命名，image.png 会存成 image_20260818_a3f9.png；关闭后同名图片会覆盖旧图且无法找回。</span>
             </div>
             <PnSwitch :model-value="uniqueName" label="防止图片互相覆盖" @update:model-value="setUniqueName" />
           </div>
@@ -300,7 +300,7 @@ function setUniqueName(value: boolean): void {
       <div v-if="descriptor.id === 'r2' && !draft" class="host-settings__box host-settings__box--row">
         <div class="host-settings__switch-text">
           <span class="host-settings__box-title">使用第三方服务加速缩略图</span>
-          <span class="host-settings__muted">图库缩略图由 wsrv.nl 生成，加载更快、更省流量；图片地址会发送至该服务。</span>
+          <span class="host-settings__muted pn-wrap-phrases">图库缩略图由 wsrv.nl 生成，加载更快、更省流量；图片地址会发送至该服务。</span>
         </div>
         <PnSwitch :model-value="r2Thumb" label="使用第三方服务加速缩略图" @update:model-value="(v: boolean) => setService('r2', { thumbnailProxyEnabled: v })" />
       </div>

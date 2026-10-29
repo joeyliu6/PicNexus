@@ -102,6 +102,15 @@ textarea,
   user-select: text;
 }
 
+/*
+ * 卡片、弹窗里的短说明：中文优先在标点、空格处换行，一句放不下才在字间断开。
+ * 设计稿文案照抄，但这边的字体比设计稿宽，按字断行时常把最后一两个字挤到下一行（「图 / 片」「修 / 改」）
+ */
+.pn-wrap-phrases {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 /* 缩略图、侧栏导航项拖不起来（不会拖出一张半透明的图或一个链接） */
 img,
 a { -webkit-user-drag: none; }

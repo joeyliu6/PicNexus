@@ -44,7 +44,7 @@ const laterCount = laterHostCount();
 
     <div class="hosts__later">
       <PnIcon name="hosts" :size="16" :stroke="1.7" class="hosts__later-icon" />
-      <span>微博、GitHub、Cloudflare R2、WebDAV 等 {{ laterCount }} 种图床，可稍后在「图床」页添加。</span>
+      <span class="pn-wrap-phrases">微博、GitHub、Cloudflare R2、WebDAV 等 {{ laterCount }} 种图床，可稍后在「图床」页添加。</span>
     </div>
   </div>
 </template>

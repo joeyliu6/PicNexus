@@ -33,7 +33,7 @@ const format = computed({ get: () => props.format, set: (value: LinkFormat) => e
         </span>
         <span class="howto__text">
           <span class="howto__name">{{ way.title }}</span>
-          <span class="howto__sub">{{ way.body }}</span>
+          <span class="howto__sub pn-wrap-phrases">{{ way.body }}</span>
         </span>
       </div>
     </div>
@@ -41,7 +41,7 @@ const format = computed({ get: () => props.format, set: (value: LinkFormat) => e
     <div class="howto__format">
       <span class="howto__text howto__text--grow">
         <span class="howto__name">默认链接格式</span>
-        <span class="howto__sub">Markdown 适用于博客与笔记，URL 仅包含地址。可在设置中修改</span>
+        <span class="howto__sub pn-wrap-phrases">Markdown 适用于博客与笔记，URL 仅包含地址。可在设置中修改</span>
       </span>
       <PnSegmented v-model="format" :segments="SEGMENTS" label="默认链接格式" />
     </div>
