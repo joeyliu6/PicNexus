@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 命令面板（HomeScreen.dc.html H15 / H16）：宽 640、圆角 16，与对话框同一遮罩和阴影；↑↓ 选择，Enter 执行。
-// 图片：Enter 复制链接（面板不关，行内显示「已复制」），Ctrl Enter 在图库中定位；设置项 Enter 跳到那一项。
+// 图片：Enter 复制链接（面板不关，行内显示「已复制」），Ctrl+Enter 在图库中定位；设置项 Enter 跳到那一项。
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { emit as tauriEmit } from '@tauri-apps/api/event';

@@ -6,6 +6,7 @@ import PnButton from '@/components/pn/PnButton.vue';
 import PnDialog from '@/components/pn/PnDialog.vue';
 import { useUrlDownload } from '@/composables/upload/useUrlDownload';
 import { uiPlatform } from '@/utils/platform';
+import { formatShortcut } from '@/utils/shortcutText';
 
 const open = defineModel<boolean>('open', { default: false });
 
@@ -22,8 +23,8 @@ const input = ref('');
 watch(open, (value) => { if (value) input.value = ''; });
 
 const count = computed(() => parseUrls(input.value).length);
-/** 写法照命令面板（⌘ 2 / Ctrl 2）；macOS 上按的是 ⌘ */
-const submitKeys = uiPlatform() === 'macos' ? '⌘ Enter' : 'Ctrl Enter';
+/** 写法同全应用的快捷键（交接说明 3.3：Ctrl+Enter，macOS ⌘Enter；H10 画的「Ctrl Enter」不照做，同命令面板） */
+const submitKeys = formatShortcut('CommandOrControl+Enter', uiPlatform());
 const target = computed(() => (props.hostNames.length ? `下载后上传到${props.hostNames.join('、')}` : '下载后上传'));
 
 function submit() {
