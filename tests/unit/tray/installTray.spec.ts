@@ -151,6 +151,24 @@ describe('installTray', () => {
     expect(m.applyTrayIcon).toHaveBeenLastCalledWith([1, 1, 1, 1], expect.anything());
   });
 
+  // 两次上传同时进行：新的那次先传完，状态行接着说还在传的那次
+  it('上传中：新的那次先传完时，状态行说还在传的那一次', async () => {
+    const upload = fakeController();
+    upload.ready.value = true;
+    install(upload);
+    await flushPromisesAndTicks();
+
+    const uploading = (fileName: string) => ({
+      id: fileName, fileName, filePath: `C:/${fileName}`, enabledServices: ['jd', 'r2'], status: 'uploading',
+      serviceProgress: { jd: { serviceId: 'jd', progress: 100, status: '✓ 完成' }, r2: { serviceId: 'r2', progress: 0, status: '等待中...' } },
+    });
+    upload.items.value = { older: [uploading('older.png')], newer: [uploading('newer.png')] };
+    upload.sessions.push({ id: 'newer', finished: true, itemIds: ['newer.png'] }, { id: 'older', finished: false, itemIds: ['older.png'] });
+    await flushPromisesAndTicks();
+
+    expect(lastRows()[0]).toMatchObject({ kind: 'status', text: '正在上传 older.png\t1 / 2' });
+  });
+
   it('悬停托盘图标时重看剪贴板：没有图片第一项变灰', async () => {
     const upload = fakeController();
     upload.ready.value = true;

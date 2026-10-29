@@ -26,9 +26,6 @@ export interface CompressedFile {
 /** 累计节省的字节数（本次会话） */
 const totalBytesSaved = ref(0);
 
-/** 待清理的临时文件路径（批量上传会话结束时由 cleanupTempFiles 统一删除） */
-const pendingCleanup: string[] = [];
-
 /** 当前激活的压缩预设：找不到时退回第一个，再退回内置默认 */
 export function resolveActivePreset(config: ImageCompressionConfig): CompressionPreset {
   return config.presets?.find(p => p.id === config.activePresetId)
@@ -48,11 +45,17 @@ async function deleteCompressedFiles(filePaths: string[]): Promise<void> {
 
 export function useImageCompress() {
   /**
+   * 这一份实例压出来、待清理的临时文件：每次批量上传各用一份实例，结束时 cleanupTempFiles 只删自己的
+   * （几次上传可以同时进行，共用一份清单会把另一次还在传的文件删掉）
+   */
+  const pendingCleanup: string[] = [];
+
+  /**
    * 压缩单张图片
    * @param filePath 原图路径
    * @param preset 当前激活的压缩预设
    * @param fileSize 文件大小（字节），用于跳过小文件判断
-   * @param outputs 产物登记处：默认进会话级 pendingCleanup；单张上传传自己的数组自行清理
+   * @param outputs 产物登记处：默认进这份实例的 pendingCleanup；单张上传传自己的数组自行清理
    */
   async function compressImage(
     filePath: string,
@@ -184,9 +187,8 @@ export function useImageCompress() {
   /**
    * 单张上传（如重试）前按当前压缩设置准备文件。
    *
-   * 产物不进会话级 pendingCleanup：重试可能发生在另一次批量上传进行中，
-   * 那次会话结束时的 cleanupTempFiles 会把重试正在上传的临时文件删掉。
-   * 调用方上传结束后必须调用返回的 cleanup。
+   * 产物不进 pendingCleanup：重试用的实例（RetryService 一直握着）没有「这次上传结束」的时刻，
+   * 每张图传完各删各的。调用方上传结束后必须调用返回的 cleanup。
    */
   async function prepareSingleUpload(
     filePath: string,

@@ -124,6 +124,30 @@ describe('useImageCompress', () => {
     expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['C:/tmp/retry-out.jpg'] });
   });
 
+  // 两次上传同时进行：先结束的那次只删自己压出来的临时文件，另一次还在传的文件留着
+  it('每次上传只清理自己压出来的临时文件', async () => {
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === 'compress_image') {
+        const name = (args as { filePath: string }).filePath.split('/').pop()?.replace('.png', '');
+        return { outputPath: `C:/tmp/${name}-out.webp`, originalSize: 5_000_000, compressedSize: 1_000_000, ratio: 0.2, width: 10, height: 10, format: 'webp' };
+      }
+      return 1;
+    });
+
+    const { useImageCompress } = await import('@/composables/image/useImageCompress');
+    const first = useImageCompress();
+    const second = useImageCompress();
+    await first.compressImageBatch(['C:/pics/a.png'], makePreset());
+    await second.compressImageBatch(['C:/pics/b.png'], makePreset());
+
+    await first.cleanupTempFiles();
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['C:/tmp/a-out.webp'] });
+    expect(invokeMock).not.toHaveBeenCalledWith('cleanup_compressed_files', expect.objectContaining({ filePaths: expect.arrayContaining(['C:/tmp/b-out.webp']) }));
+
+    await second.cleanupTempFiles();
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['C:/tmp/b-out.webp'] });
+  });
+
   it('prepareSingleUpload：压缩关闭时原样返回，不调后端', async () => {
     const { useImageCompress } = await import('@/composables/image/useImageCompress');
     const { prepareSingleUpload } = useImageCompress();

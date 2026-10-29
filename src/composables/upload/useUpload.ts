@@ -1,7 +1,7 @@
 ﻿// src/composables/useUpload.ts
 // 上传管理 Composable - 上传流程编排（核心协调器）
 
-import { isUploading } from './uploadState';
+import { activeUploads, isUploading } from './uploadState';
 import { configStore } from '@/store/instances';
 import { filterValidFiles, selectFiles, MAX_FILES_PER_UPLOAD } from './FileValidator';
 import { processUploadQueue } from './UploadExecutor';
@@ -44,8 +44,6 @@ interface QueuedFile {
 const fileNameOf = (filePath: string) => filePath.split(/[/\\]/).pop() || filePath;
 
 export interface UploadManagerOptions {
-  /** 自动复制成功后回调（单张在第一个图床传完时，多张在整批结束时） */
-  onCopied?: (result: CopyLinkResult) => void;
   /** 返回 true 时上传结果已画在页面上（首页焦点卡 / 批量卡片）：不弹汇总通知，也不为单张失败弹通知 */
   resultsOnScreen?: () => boolean;
 }
@@ -53,7 +51,17 @@ export interface UploadManagerOptions {
 export interface UploadRequestOptions {
   /** 只对这一次上传使用这些图床（首页「换个图床」），不改「上传到」的勾选 */
   services?: string[];
+  /** 这一次的图进了队列（首页按「一次上传操作」把它们归成一组）；几次上传同时进行时各记各的 */
+  onQueued?: (itemIds: string[]) => void;
+  /** 这一次自动复制成功后（单张在第一个图床传完时，多张在整批结束时） */
+  onCopied?: (result: CopyLinkResult) => void;
 }
+
+/**
+ * 最近一次进了队列的上传是第几次：几次上传同时进行时，只有最新的那次自动复制，
+ * 较早那次晚传完不覆盖剪贴板里新的那张的链接（焦点卡也已换成新的那张）
+ */
+let latestQueued = 0;
 
 /**
  * 上传管理 Composable
@@ -140,20 +148,11 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
    * @param filePaths 文件路径列表
    */
   async function handleFilesUpload(filePaths: string[], request: UploadRequestOptions = {}): Promise<void> {
-    // 防止重入：上传期间不接受新上传
-    if (isUploading.value) {
-      toast.showConfig('warn', { summary: '请稍候', detail: '当前有上传任务进行中，请等待完成后再试' });
-      return;
-    }
-
     // 验证输入
     if (!Array.isArray(filePaths) || filePaths.length === 0) {
       log.warn('无效的文件列表:', filePaths);
       return;
     }
-
-    // 立即锁定，防止 await 间隙的竞态
-    isUploading.value = true;
 
     const { compressImageBatch, cleanupTempFiles } = useImageCompress();
     let compressionEnabled = false;
@@ -161,6 +160,9 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
     let queued: QueuedFile[] = [];
     let queuedServices: string[] = [];
 
+    // 几次上传可以同时进行：上一次还有图床在传（慢、重试、等超时）时，这一次照样立即开始。
+    // 紧贴着 try：finally 里减回去，这中间不能有会抛错的语句
+    activeUploads.value += 1;
     try {
       log.info('接收到文件:', filePaths);
 
@@ -274,6 +276,9 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
 
       queued = queueFiles(queueManager, valid, enabledServices);
       queuedServices = enabledServices;
+      const order = queued.length > 0 ? ++latestQueued : latestQueued;
+      const isNewest = () => queued.length > 0 && order === latestQueued;
+      if (queued.length > 0) request.onQueued?.(queued.map(({ itemId }) => itemId));
       const duplicatesSkipped = valid.length - queued.length;
       if (duplicatesSkipped > 0) log.info(`${duplicatesSkipped} 张已在上传中，这次跳过`);
 
@@ -308,9 +313,10 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       let earlyCopyResult: CopyLinkResult | null = null;
       const onPrimaryReady = autoCopyEnabled && queued.length === 1
         ? async (_queueIndex: number, link: CopyLinkItem) => {
+          if (!isNewest()) return;
           const result = await copyLinks([link], { showSuccessToast: false, showErrorToast: false });
           earlyCopyResult = result;
-          if (result.ok) options.onCopied?.(result);
+          if (result.ok) request.onCopied?.(result);
         }
         : undefined;
 
@@ -423,12 +429,12 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
 
       // 自动复制链接到剪贴板（使用统一 useCopyLink）；单张已在第一时间复制过
       let copyResult: CopyLinkResult | null = earlyCopyResult;
-      if (autoCopyEnabled && collectedLinks.length > 0 && !copyResult) {
+      if (autoCopyEnabled && collectedLinks.length > 0 && !copyResult && isNewest()) {
         copyResult = await copyLinks(collectedLinks, {
           showSuccessToast: false,
           showErrorToast: false,
         });
-        if (copyResult.ok) options.onCopied?.(copyResult);
+        if (copyResult.ok) request.onCopied?.(copyResult);
       }
 
       showUploadSessionSummary(uploadSummary, {
@@ -445,7 +451,7 @@ export function useUploadManager(queueManager?: UploadQueueManager, options: Upl
       // 准备时出了意外（如某一批中途抛错）、一直没开始传的：标成失败，别让焦点卡一直「上传中」
       const stuck = queued.filter(({ itemId }) => queueManager?.getItem(itemId)?.status === 'pending');
       if (queueManager && stuck.length > 0) failBeforeUpload(queueManager, stuck, queuedServices, PREPARE_FAILED_ERROR);
-      isUploading.value = false;
+      activeUploads.value -= 1;
       // 清理压缩产生的临时文件
       if (compressionEnabled) {
         cleanupTempFiles().catch((err: unknown) => log.warn('清理压缩临时文件失败:', err));

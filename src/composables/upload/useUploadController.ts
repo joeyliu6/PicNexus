@@ -68,14 +68,10 @@ function createController() {
   const { queueItems, removeItem } = useQueueState();
 
   const sessions = reactive<UploadSession[]>([]);
-  let current: UploadSession | null = null;
   let homeVisible: () => boolean = () => false;
 
-  const queueManager = new UploadQueueManager({ onItemAdded: (itemId) => { current?.itemIds.push(itemId); } });
-  const uploadManager = useUploadManager(queueManager, {
-    onCopied: (result) => { if (current) current.copied = { count: result.copiedCount, format: result.format }; },
-    resultsOnScreen: () => homeVisible(),
-  });
+  const queueManager = new UploadQueueManager();
+  const uploadManager = useUploadManager(queueManager, { resultsOnScreen: () => homeVisible() });
   // 首页在屏时卡片上已经画出重试的结果，重试服务的通知只在别的页面弹（交接说明：不做双重反馈）
   const whenOffHome = <A extends unknown[]>(show: (...args: A) => void) => (...args: A) => { if (!homeVisible()) show(...args); };
   const retryService = new RetryService({
@@ -153,17 +149,20 @@ function createController() {
 
   // ---- 发起上传 ----
 
+  /** 每次拖入 / 粘贴 / 选文件是一次会话；上一次还没传完时这一次照样立即开始，图和「已复制」各记各的 */
   async function uploadFiles(filePaths: string[], request: UploadRequestOptions = {}): Promise<void> {
     if (filePaths.length === 0) return;
     const session = reactive<UploadSession>({ id: crypto.randomUUID(), startedAt: Date.now(), itemIds: [], finished: false, copied: null });
     sessions.unshift(session);
-    current = session;
     try {
-      await uploadManager.handleFilesUpload(filePaths, request);
+      await uploadManager.handleFilesUpload(filePaths, {
+        ...request,
+        onQueued: (itemIds) => { session.itemIds.push(...itemIds); },
+        onCopied: (result) => { session.copied = { count: result.copiedCount, format: result.format }; },
+      });
     } finally {
       session.finished = true;
-      if (current === session) current = null;
-      // 一张都没进队列（不是图片 / 正在上传被拒）：这次操作不留在列表里
+      // 一张都没进队列（不是图片 / 同一张已在传）：这次操作不留在列表里
       if (session.itemIds.length === 0) sessions.splice(sessions.indexOf(session), 1);
     }
   }

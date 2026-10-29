@@ -74,17 +74,6 @@ describe('UploadQueueManager', () => {
       expect(item.isRetrying).toBe(false);
     });
 
-    it('reports each added item so the home page can group one upload together', () => {
-      const added: string[] = [];
-      const hooked = new UploadQueueManager({ onItemAdded: (itemId) => added.push(itemId) });
-
-      const first = hooked.addFile('/img/hook-1.png', 'hook-1.png', ['jd']);
-      const duplicate = hooked.addFile('/img/hook-1.png', 'hook-1.png', ['jd']);
-
-      expect(added).toEqual([first]);
-      expect(duplicate).toBeNull();
-    });
-
     it('启用 r2 时同步向后兼容字段 uploadToR2 / r2Status', () => {
       const id = manager.addFile('/img/a.png', 'a.png', ['weibo', 'r2'])!;
 

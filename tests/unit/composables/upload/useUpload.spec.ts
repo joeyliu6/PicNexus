@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_CONFIG } from '@/config/types';
 import { MAX_FILES_PER_UPLOAD } from '@/composables/upload/FileValidator';
-import { isUploading } from '@/composables/upload/uploadState';
+import { activeUploads, isUploading } from '@/composables/upload/uploadState';
 
 const {
   configStoreGetMock,
@@ -192,8 +192,8 @@ function createMultiQueueManager() {
 
 describe('useUploadManager', () => {
   beforeEach(() => {
-    // 上传锁是模块级的：某条用例中途失败留下的锁不能拖垮后面的用例
-    isUploading.value = false;
+    // 进行中的上传次数是模块级的：某条用例中途失败留下的计数不能拖垮后面的用例
+    activeUploads.value = 0;
     selectedServicesRef.value = ['jd', 'upyun'];
     availableServicesRef.value = ['jd', 'upyun'];
     serviceConfigStatusRef.value = {};
@@ -631,9 +631,9 @@ describe('useUploadManager', () => {
     const onCopied = vi.fn();
     const queueManager = createQueueManager();
     const { useUploadManager } = await import('@/composables/upload/useUpload');
-    const { handleFilesUpload } = useUploadManager(queueManager as never, { onCopied, resultsOnScreen: () => true });
+    const { handleFilesUpload } = useUploadManager(queueManager as never, { resultsOnScreen: () => true });
 
-    await handleFilesUpload(['C:/tmp/test.jpg']);
+    await handleFilesUpload(['C:/tmp/test.jpg'], { onCopied });
 
     expect(onCopied).toHaveBeenCalledWith({ ok: true, copiedCount: 1, format: 'markdown' });
     expect(toastSuccessMock).not.toHaveBeenCalled();
@@ -738,6 +738,69 @@ describe('useUploadManager', () => {
     expect(item.serviceProgress.jd).toMatchObject({ status: '✗ 失败', error: '准备上传时出错，请重试' });
     expect(item.historyId).toEqual(expect.any(String));
     expect(toastErrorMock).toHaveBeenCalledWith('a.jpg 上传失败', '准备上传时出错，请重试', 5000);
+  });
+
+  /** 第一次上传卡在图床上，直到 release()：其余照默认的模拟结果 */
+  function holdFirstUpload(): { release: () => void } {
+    const defaultUpload = uploadToMultipleServicesMock.getMockImplementation()!;
+    const hold = { release: () => {} };
+    uploadToMultipleServicesMock.mockImplementationOnce(async (...args: unknown[]) => {
+      await new Promise<void>((resolve) => { hold.release = resolve; });
+      return defaultUpload(...args);
+    });
+    return hold;
+  }
+
+  // 上传进行中再拖入 / 粘贴：立即开始，与还没传完的那次同时进行（原来弹「请稍候」并丢掉这次）
+  it('starts a second upload at once while the first is still uploading', async () => {
+    const hold = holdFirstUpload();
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+    const queuedFirst = vi.fn();
+    const queuedSecond = vi.fn();
+
+    const first = handleFilesUpload(['C:/tmp/first.jpg'], { onQueued: queuedFirst });
+    await vi.waitFor(() => expect(uploadToMultipleServicesMock).toHaveBeenCalledTimes(1));
+    await handleFilesUpload(['C:/tmp/second.jpg'], { onQueued: queuedSecond });
+
+    expect(toastShowConfigMock).not.toHaveBeenCalledWith('warn', expect.objectContaining({ summary: '请稍候' }));
+    expect(queuedFirst).toHaveBeenCalledWith(['queue-0']);
+    expect(queuedSecond).toHaveBeenCalledWith(['queue-1']);
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('queue-1', expect.anything());
+    expect(isUploading.value).toBe(true);
+
+    hold.release();
+    await first;
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('queue-0', expect.anything());
+    expect(isUploading.value).toBe(false);
+  });
+
+  // 较早那次晚传完：剪贴板里已是新的那张的链接（焦点卡也换成了新的那张），不再覆盖
+  it('leaves the clipboard to the newer upload when an earlier one finishes later', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
+      linkOutput: { ...DEFAULT_CONFIG.linkOutput!, autoCopy: true },
+    });
+    copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 1, format: 'url' });
+    const hold = holdFirstUpload();
+    const { useUploadManager } = await import('@/composables/upload/useUpload');
+    const { handleFilesUpload } = useUploadManager(createMultiQueueManager() as never);
+    const copiedFirst = vi.fn();
+    const copiedSecond = vi.fn();
+
+    const first = handleFilesUpload(['C:/tmp/first.jpg'], { onCopied: copiedFirst });
+    await vi.waitFor(() => expect(uploadToMultipleServicesMock).toHaveBeenCalledTimes(1));
+    await handleFilesUpload(['C:/tmp/second.jpg'], { onCopied: copiedSecond });
+    expect(copiedSecond).toHaveBeenCalledTimes(1);
+    const copies = copyLinksMock.mock.calls.length;
+
+    hold.release();
+    await first;
+    expect(copyLinksMock.mock.calls.length).toBe(copies);
+    expect(copiedFirst).not.toHaveBeenCalled();
   });
 
   // 一张图失败只报一次：首页在屏时不报（卡片上画着），不在屏时只有整次上传的那条汇总，写原因 + 处理办法

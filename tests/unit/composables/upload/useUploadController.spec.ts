@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { DEFAULT_CONFIG } from '@/config/types';
 import type { QueueItem } from '@/core/UploadQueue';
+import type { UploadRequestOptions } from '@/composables/upload/useUpload';
 
 const m = vi.hoisted(() => ({
   handleFilesUpload: vi.fn(),
@@ -23,8 +24,7 @@ const m = vi.hoisted(() => ({
   retryOptions: null as null | { toast: { error: (title: string, message: string) => void } },
   listeners: {} as Record<string, (event: { payload: unknown }) => void>,
   fresh: {} as Record<string, unknown>,
-  onItemAdded: null as null | ((id: string) => void),
-  managerOptions: null as null | { onCopied?: (r: unknown) => void; resultsOnScreen?: () => boolean },
+  managerOptions: null as null | { resultsOnScreen?: () => boolean },
   available: ['jd', 'weibo', 'webdav:nas'],
   selected: ['jd'],
 }));
@@ -37,9 +37,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('@/core/UploadQueue', () => ({
-  UploadQueueManager: class {
-    constructor(options: { onItemAdded?: (id: string) => void }) { m.onItemAdded = options.onItemAdded ?? null; }
-  },
+  UploadQueueManager: class {},
 }));
 
 vi.mock('@/composables/upload/useUpload', () => ({
@@ -113,10 +111,9 @@ describe('useUploadController', () => {
 
   it('groups the items of one upload into a session and drops sessions that added nothing', async () => {
     const upload = useUploadController();
-    m.handleFilesUpload.mockImplementationOnce(async () => {
-      m.onItemAdded?.('q-1');
-      m.onItemAdded?.('q-2');
-      m.managerOptions?.onCopied?.({ ok: true, copiedCount: 2, format: 'markdown' });
+    m.handleFilesUpload.mockImplementationOnce(async (_paths: string[], request: UploadRequestOptions) => {
+      request.onQueued?.(['q-1', 'q-2']);
+      request.onCopied?.({ ok: true, copiedCount: 2, format: 'markdown' });
     });
     await upload.uploadFiles(['C:/a.png', 'C:/b.png']);
     expect(upload.sessions).toHaveLength(1);
@@ -125,6 +122,24 @@ describe('useUploadController', () => {
     m.handleFilesUpload.mockResolvedValueOnce(undefined);
     await upload.uploadFiles(['C:/not-an-image.zip']);
     expect(upload.sessions).toHaveLength(1);
+  });
+
+  // 两次上传同时进行、先开始的那次晚进队列：图记在它自己那一次里，不跑到后开始的那次
+  it('keeps the pictures of two overlapping uploads in their own sessions', async () => {
+    const upload = useUploadController();
+    let queueFirst!: () => void;
+    m.handleFilesUpload
+      .mockImplementationOnce((_paths: string[], request: UploadRequestOptions) => new Promise<void>((resolve) => {
+        queueFirst = () => { request.onQueued?.(['first']); resolve(); };
+      }))
+      .mockImplementationOnce(async (_paths: string[], request: UploadRequestOptions) => { request.onQueued?.(['second']); });
+
+    const first = upload.uploadFiles(['C:/first.png']);
+    await upload.uploadFiles(['C:/second.png']);
+    queueFirst();
+    await first;
+
+    expect(upload.sessions.map((session) => session.itemIds)).toEqual([['second'], ['first']]);
   });
 
   it('keeps the summary toast quiet only while the home page is on screen', () => {
@@ -141,7 +156,7 @@ describe('useUploadController', () => {
     m.selectFiles.mockResolvedValue(['C:/tray.png']);
 
     await upload.pickAndUpload({ showHint: false });
-    expect(m.handleFilesUpload).toHaveBeenCalledWith(['C:/tray.png'], {});
+    expect(m.handleFilesUpload).toHaveBeenCalledWith(['C:/tray.png'], expect.objectContaining({ onQueued: expect.any(Function) }));
     expect(upload.showFastUploadHint.value).toBe(false);
 
     await upload.pickAndUpload();
@@ -218,8 +233,9 @@ describe('useUploadController', () => {
 
     async function upload(...items: QueueItem[]) {
       const controller = useUploadController();
-      m.handleFilesUpload.mockImplementationOnce(async () => {
-        for (const queued of items) { useQueueState().addItem(queued); m.onItemAdded?.(queued.id); }
+      m.handleFilesUpload.mockImplementationOnce(async (_paths: string[], request: UploadRequestOptions) => {
+        for (const queued of items) useQueueState().addItem(queued);
+        request.onQueued?.(items.map((queued) => queued.id));
       });
       await controller.uploadFiles(items.map((i) => i.filePath));
       return { controller, session: controller.sessions[0] };
@@ -285,8 +301,10 @@ describe('useUploadController', () => {
     it('waits for a running batch before copying it in a new format', async () => {
       const controller = useUploadController();
       let finish!: () => void;
-      m.handleFilesUpload.mockImplementationOnce(() => new Promise<void>((resolve) => {
-        for (const queued of [item('a', { jd: 'done' }), item('b', { jd: 'uploading' })]) { useQueueState().addItem(queued); m.onItemAdded?.(queued.id); }
+      m.handleFilesUpload.mockImplementationOnce((_paths: string[], request: UploadRequestOptions) => new Promise<void>((resolve) => {
+        const batch = [item('a', { jd: 'done' }), item('b', { jd: 'uploading' })];
+        for (const queued of batch) useQueueState().addItem(queued);
+        request.onQueued?.(batch.map((queued) => queued.id));
         finish = resolve;
       }));
       const running = controller.uploadFiles(['C:/a.png', 'C:/b.png']);

@@ -139,17 +139,10 @@ function buildLinkFields(item: QueueItem): Record<string, string> {
   return fields;
 }
 
-export interface UploadQueueManagerOptions {
-  /** 每加入一个文件就回调（首页按「一次上传操作」把条目归组用） */
-  onItemAdded?: (itemId: string) => void;
-}
-
 export class UploadQueueManager {
   private queueState = useQueueState();  // 统一使用全局状态管理
-  private readonly onItemAdded?: (itemId: string) => void;
 
-  constructor(options: UploadQueueManagerOptions = {}) {
-    this.onItemAdded = options.onItemAdded;
+  constructor() {
     log.debug('初始化队列管理器（新架构）');
   }
 
@@ -212,7 +205,6 @@ export class UploadQueueManager {
 
     // 添加到队列
     this.queueState.addItem(item);
-    this.onItemAdded?.(id);
 
     log.debug(`添加文件到队列: ${fileName} (图床: ${enabledServices.join(', ')})`);
     return id;

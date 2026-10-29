@@ -74,9 +74,10 @@ export function installTray(upload: UploadController): () => void {
   const stops: WatchStopHandle[] = [];
   let disposed = false;
 
+  // 几次上传可以同时进行：说最新的那次还在传的（新的那次先传完时接着说较早那次）
   const uploadStatus = computed(() => {
-    const session = upload.sessions[0];
-    return session && !session.finished ? trayUploadStatus(upload.itemsOf(session)) : null;
+    const session = upload.sessions.find((s) => !s.finished);
+    return session ? trayUploadStatus(upload.itemsOf(session)) : null;
   });
   const shortcutsEnabled = computed(() => ({ ...DEFAULT_CONFIG.globalShortcut!, ...upload.config.value.globalShortcut }).enabled);
   const rows = computed(() => buildTrayMenu({
