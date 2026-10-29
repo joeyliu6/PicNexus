@@ -17,6 +17,7 @@ const open = defineModel<boolean>('open', { default: false });
 
 const NEW = '__new__';
 const DEFAULT_PATH = '/PicNexus/';
+const JIANGUOYUN = { name: '坚果云', url: 'https://dav.jianguoyun.com/dav/' };
 const LOOPBACK_HTTP = /^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i;
 
 const settings = useSettingsConfig();
@@ -39,8 +40,9 @@ const profileOptions = computed(() => [...profiles.value.map((p) => ({ value: p.
 function load(id: string): void {
   editingId.value = id;
   const profile = profiles.value.find((p) => p.id === id);
-  name.value = profile?.name ?? (profiles.value.length ? `WebDAV ${profiles.value.length + 1}` : '坚果云');
-  url.value = profile?.url ?? '';
+  // 第一份连接按坚果云预填：名称与地址都是真值（只放占位字的话，灰色地址像已经填好，点了才说「请填写服务器地址」）
+  name.value = profile?.name ?? (profiles.value.length ? `WebDAV ${profiles.value.length + 1}` : JIANGUOYUN.name);
+  url.value = profile?.url ?? (profiles.value.length ? '' : JIANGUOYUN.url);
   username.value = profile?.username ?? '';
   password.value = '';
   remotePath.value = profile?.remotePath || DEFAULT_PATH;
@@ -125,7 +127,7 @@ async function disable(): Promise<void> {
       <div class="target__grid">
         <label class="target__field">
           <span class="target__label">名称</span>
-          <PnInput v-model="name" size="dialog" placeholder="坚果云" />
+          <PnInput v-model="name" size="dialog" :placeholder="JIANGUOYUN.name" />
         </label>
         <label class="target__field">
           <span class="target__label">远程目录</span>
@@ -134,7 +136,7 @@ async function disable(): Promise<void> {
       </div>
       <label class="target__field">
         <span class="target__label">服务器地址</span>
-        <PnInput v-model="url" size="dialog" mono type="url" placeholder="https://dav.jianguoyun.com/dav/" />
+        <PnInput v-model="url" size="dialog" mono type="url" :placeholder="JIANGUOYUN.url" />
       </label>
       <label class="target__field">
         <span class="target__label">用户名</span>
