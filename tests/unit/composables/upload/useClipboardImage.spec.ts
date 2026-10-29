@@ -213,7 +213,8 @@ describe('useClipboardImage.pasteAndUpload', () => {
     expect(toastWarnMock).not.toHaveBeenCalled();
   });
 
-  // Patterns.dc.html 通知样例：「剪贴板里没有图片 / 复制一张图片后再按 Ctrl V」（灰色 i，不是警告）
+  // Patterns.dc.html 通知样例：「剪贴板里没有图片 / 复制一张图片后再按 Ctrl V」（灰色 i，不是警告）；
+  // 快捷键照全应用的写法（交接说明 3.3：Ctrl+V，macOS ⌘V），与投放区的「或按 Ctrl+V 粘贴」一致
   it('剪贴板里既没有图片也没有图片链接时，说清怎么做', async () => {
     readTextMock.mockResolvedValue('https://example.com/readme.txt');
     setupInvokeHandler(async (cmd) => {
@@ -223,7 +224,7 @@ describe('useClipboardImage.pasteAndUpload', () => {
 
     await useClipboardImage().pasteAndUpload(vi.fn());
 
-    expect(toastInfoMock).toHaveBeenCalledWith('剪贴板里没有图片', '复制一张图片后再按 Ctrl V');
+    expect(toastInfoMock).toHaveBeenCalledWith('剪贴板里没有图片', '复制一张图片后再按 Ctrl+V');
     expect(toastWarnMock).not.toHaveBeenCalled();
   });
 });

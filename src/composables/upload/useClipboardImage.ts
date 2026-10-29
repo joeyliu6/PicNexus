@@ -9,6 +9,7 @@ import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 import { isStatusError } from '@/utils/uploadStatus';
 import { uiPlatform } from '@/utils/platform';
+import { formatShortcut } from '@/utils/shortcutText';
 import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('useClipboardImage');
@@ -139,8 +140,8 @@ export function useClipboardImage() {
       return;
     }
 
-    // 不算出错，说清怎么做（Patterns.dc.html 通知样例，灰色 i）
-    toast.info('剪贴板里没有图片', `复制一张图片后再按 ${uiPlatform() === 'macos' ? '⌘ V' : 'Ctrl V'}`);
+    // 不算出错，说清怎么做（Patterns.dc.html 通知样例，灰色 i）；快捷键照全应用的写法（Ctrl+V / ⌘V）
+    toast.info('剪贴板里没有图片', `复制一张图片后再按 ${formatShortcut('CommandOrControl+V', uiPlatform())}`);
   }
 
   return {
