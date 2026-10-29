@@ -254,7 +254,17 @@ function create() {
     return true;
   }
 
+  /** 缺必填项：这一格标红「X 未填写 / 请填写后再试」，返回 true。测试、连接之前都先看这一步，不拿空值去测（空 Token 会被说成「Token 无效」） */
+  function markMissing(hostId: string, values: HostValues): boolean {
+    const missing = firstMissingField(hostId, values);
+    if (!missing) return false;
+    const label = describeHost(hostId)?.fields.find((f) => f.key === missing)?.label ?? missing;
+    tester.markFailed(hostId, { phase: 'fail', step: 'credentials', field: missing, reason: joinCjk('请填写', label), passed: [], missing: true });
+    return true;
+  }
+
   async function test(hostId: string, values?: HostValues) {
+    if (markMissing(hostId, values ?? readHostValues(config.value, hostId))) return null;
     const record = await testRecord(hostId, values);
     if (values?.lanHttpConfirmed === 'true') record.lanHttpConfirmed = true;
     if (!(await ensureHttpConsent(hostId, record))) return null;
@@ -330,12 +340,7 @@ function create() {
     if (!current) return;
     const descriptor = describeHost(current.descriptorId);
     if (!descriptor) return;
-    const missing = firstMissingField(current.hostId, current.values);
-    if (missing) {
-      const label = descriptor.fields.find((f) => f.key === missing)?.label ?? missing;
-      tester.markFailed(current.hostId, { phase: 'fail', step: 'credentials', field: missing, reason: joinCjk('请填写', label), passed: [], missing: true });
-      return;
-    }
+    if (markMissing(current.hostId, current.values)) return;
     if (descriptor.publicRisk && !(await risk.ensureAccepted())) return;
     if (descriptor.kind !== 'builtin') {
       const state = await test(current.hostId, current.values);

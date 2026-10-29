@@ -126,6 +126,22 @@ describe('useHosts', () => {
     expect(hosts.pane.value).toBe('detail');
   });
 
+  // 头部「测试连接」与「测试并连接」同一个口径：缺必填项先标红，不拿空值去测（空 Token 会被说成「Token 无效」）
+  it('测试连接：缺必填项标红不测，连接表单与已连接的图床都一样', async () => {
+    const hosts = useHosts();
+    await hosts.enter();
+    hosts.openConnect('s3');
+    const id = hosts.draft.value!.hostId;
+    await hosts.test(id, hosts.draft.value!.values);
+    expect(hosts.tester.stateOf(id)).toMatchObject({ phase: 'fail', field: 'endpoint', reason: '请填写 Endpoint', missing: true });
+
+    m.disk!.services = { ...m.disk!.services, r2: { ...R2, secretAccessKey: '' } } as UserConfig['services'];
+    await hosts.enter();
+    await hosts.test('r2');
+    expect(hosts.tester.stateOf('r2')).toMatchObject({ phase: 'fail', field: 'secretAccessKey', missing: true });
+    expect(m.invoke).not.toHaveBeenCalled();
+  });
+
   it('公共图床连接前过 P11，取消就不连', async () => {
     m.disk!.availableServices = ['r2'];
     recomputeHosts();
