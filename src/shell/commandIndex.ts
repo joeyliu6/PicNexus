@@ -81,7 +81,10 @@ export function splitMatch(text: string, query: string): [string, string, string
   return [text.slice(0, index), text.slice(index, index + q.length), text.slice(index + q.length)];
 }
 
-/** 「Mod 1」→ Windows / Linux「Ctrl 1」，macOS「⌘ 1」 */
+/**
+ * 「Mod 1」→ Windows / Linux「Ctrl+1」，macOS「⌘1」：同设置 › 快捷键与投放区（交接说明 3.3；
+ * HomeScreen 命令面板画的「Ctrl 1」不照做）
+ */
 export function shortcutLabel(shortcut: string | undefined, mac: boolean): string {
-  return shortcut ? shortcut.replace('Mod', mac ? '⌘' : 'Ctrl') : '';
+  return shortcut ? shortcut.replace(/^Mod /u, mac ? '⌘' : 'Ctrl+') : '';
 }

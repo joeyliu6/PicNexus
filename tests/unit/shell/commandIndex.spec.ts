@@ -9,9 +9,10 @@ describe('commandIndex', () => {
     expect(splitMatch('设置', '  ')).toBeNull();
   });
 
-  it('writes the modifier per platform', () => {
-    expect(shortcutLabel('Mod 2', false)).toBe('Ctrl 2');
-    expect(shortcutLabel('Mod ,', true)).toBe('⌘ ,');
+  // 交接说明 3.3：Windows / Linux 写 Ctrl+2，macOS 写 ⌘2（同设置 › 快捷键、投放区）
+  it('writes the shortcut the way the rest of the app does', () => {
+    expect(shortcutLabel('Mod 2', false)).toBe('Ctrl+2');
+    expect(shortcutLabel('Mod ,', true)).toBe('⌘,');
     expect(shortcutLabel(undefined, true)).toBe('');
   });
 });
