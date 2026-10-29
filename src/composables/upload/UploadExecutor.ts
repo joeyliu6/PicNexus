@@ -14,7 +14,6 @@ import { useServiceAvailability } from '@/composables/service/useServiceAvailabi
 import type { useToast } from '@/composables/useToast';
 import { TOAST_MESSAGES } from '@/constants';
 import { SERVICE_DISPLAY_NAMES } from '@/constants/serviceNames';
-import { COOKIE_BASED_SERVICES } from '@/constants/serviceRequiredFields';
 import {
   getFileExtension,
   getSupportedServicesForFormat,
@@ -22,7 +21,7 @@ import {
 } from '@/constants/serviceFormats';
 import { AUTH_CONFIG_ERROR_CODES } from '@/types/serviceHealth';
 import { createLogger } from '@/utils/logger';
-import { describeUploadFailure, reasonsByService } from '@/utils/uploadFailureMessage';
+import { describeUploadFailureForNotice, reasonsByService } from '@/utils/uploadFailureMessage';
 import { isStatusSuccess } from '@/utils/uploadStatus';
 import { resolveQueueStatus } from '@/services/retryStatus';
 
@@ -358,21 +357,22 @@ export async function processUploadQueue(
         const thumbUrl = primary.url;
 
         if (uploadSummary && result.partialFailures?.length) {
-          const failureCounts = new Map(
-            (uploadSummary.partialFailedServices ?? []).map(item => [item.serviceName, item.count])
+          // 每个图床记张数和第一次失败的原因（通知写在最前面）
+          const failures = new Map(
+            (uploadSummary.partialFailedServices ?? []).map(item => [item.serviceName, item])
           );
 
-          result.partialFailures.forEach(({ serviceId }) => {
+          result.partialFailures.forEach(({ serviceId, error }) => {
             const serviceName = (SERVICE_DISPLAY_NAMES as Record<string, string>)[serviceId] || serviceId;
-            failureCounts.set(serviceName, (failureCounts.get(serviceName) ?? 0) + 1);
+            const seen = failures.get(serviceName);
+            failures.set(serviceName, seen
+              ? { ...seen, count: seen.count + 1 }
+              : { serviceName, count: 1, reason: describeUploadFailureForNotice(serviceId, error).reason });
           });
 
           uploadSummary.partialServiceFailureCount =
             (uploadSummary.partialServiceFailureCount ?? 0) + result.partialFailures.length;
-          uploadSummary.partialFailedServices = Array.from(
-            failureCounts,
-            ([serviceName, count]) => ({ serviceName, count })
-          );
+          uploadSummary.partialFailedServices = [...failures.values()];
         }
 
         if (primary.url) await announcePrimary(primary.serviceId, primary.url);
@@ -400,8 +400,7 @@ export async function processUploadQueue(
         // 不在这里弹通知：整次上传结束时的汇总照第一张失败的图写「原因 + 处理办法」，一张图只报一次
         if (uploadSummary && !uploadSummary.firstFailure) {
           const [firstHost, firstReason] = ownReasons.entries().next().value ?? [attemptedServices[0], errorMsg];
-          const cookieLogin = (COOKIE_BASED_SERVICES as readonly string[]).includes(firstHost);
-          uploadSummary.firstFailure = { fileName, ...describeUploadFailure(firstHost, firstReason, { cookieLogin }) };
+          uploadSummary.firstFailure = { fileName, ...describeUploadFailureForNotice(firstHost, firstReason) };
         }
 
         const item = queueManager.getItem(itemId);

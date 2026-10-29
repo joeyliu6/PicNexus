@@ -495,8 +495,8 @@ describe('processUploadQueue', () => {
       '请检查网络连接和服务配置',
     ].join('\n');
 
-    async function runAllFailed() {
-      uploadToMultipleServicesMock.mockRejectedValueOnce(new Error(combined));
+    async function runAllFailed(message = combined) {
+      uploadToMultipleServicesMock.mockRejectedValueOnce(new Error(message));
       const queueManager = createQueueManager();
       queueManager.seed('q-1', 'a.png', ['jd', 'webdav:nas']);
       const toast = { showConfig: vi.fn() };
@@ -534,6 +534,45 @@ describe('processUploadQueue', () => {
       expect(summary.failed).toBe(1);
       expect(summary.firstFailure).toEqual({ fileName: 'a.png', reason: '网络超时', advice: '请检查网络后重试' });
     });
+
+    // T05：通知离开了首页卡片，登录过期写清是哪个图床、去哪儿登录
+    it('names the host and the hosts page when its login expired', async () => {
+      const { summary } = await runAllFailed(['所有图床上传均失败：', '  - weibo: 微博上传失败: 认证失败: 401'].join('\n'));
+      expect(summary.firstFailure).toEqual({ fileName: 'a.png', reason: '微博登录已过期', advice: '请在图床页重新登录' });
+    });
+  });
+
+  // 图有了链接、只是某个图床没传上：汇总记下这个图床第一次失败的原因，通知写在最前面
+  it('records why a host failed while the picture still got a link', async () => {
+    uploadToMultipleServicesMock.mockImplementationOnce(async () => ({
+      primaryService: 'jd',
+      primaryUrl: 'https://img.example/b.png',
+      results: [{ serviceId: 'jd', status: 'success', result: { serviceId: 'jd', fileKey: 'b', url: 'https://img.example/b.png' } }],
+      partialFailures: [{ serviceId: 'qiyu', error: '七鱼上传失败: 请求超时' }],
+      isPartialSuccess: true,
+    }));
+    const queueManager = createQueueManager();
+    queueManager.seed('q-b', 'b.png', ['jd', 'qiyu']);
+    const summary: UploadSessionSummary = { total: 1, success: 0, failed: 0 };
+
+    await processUploadQueue(
+      [{ itemId: 'q-b', filePath: 'C:/tmp/b.png', uploadFilePath: 'C:/tmp/b.png', fileName: 'b.png' }],
+      { services: { jd: {} } } as any,
+      ['jd', 'qiyu'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+      undefined,
+      summary,
+    );
+
+    expect(summary.partialFailedServices).toEqual([{ serviceName: '七鱼', count: 1, reason: '网络超时' }]);
   });
 
   it('fails before upload when no selected service supports the file format', async () => {

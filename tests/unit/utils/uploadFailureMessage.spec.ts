@@ -6,6 +6,7 @@ import {
   categorizeMigrateError,
   reasonsByService,
   describeUploadFailure,
+  describeUploadFailureForNotice,
 } from '@/utils/uploadFailureMessage';
 import type { MigrateFailureDetail } from '@/types/batchMigrate';
 
@@ -206,5 +207,17 @@ describe('describeUploadFailure', () => {
     expect(describeUploadFailure('webdav:nas', 'WebDAV 错误: 路径不存在，请检查远程路径配置'))
       .toEqual({ reason: 'WebDAV 错误: 路径不存在', advice: '请检查远程路径配置' });
     expect(describeUploadFailure('jd', '')).toEqual({ reason: '上传失败', advice: '请稍后重试' });
+  });
+});
+
+// 通知离开了首页卡片（卡片上有图床名和「重新登录…」）：登录过期要说清是哪个图床、去哪儿登录（T05）
+describe('describeUploadFailureForNotice', () => {
+  it('names the host and the hosts page when a login expired', () => {
+    expect(describeUploadFailureForNotice('weibo', '微博上传失败: 认证失败: 401')).toEqual({ reason: '微博登录已过期', advice: '请在图床页重新登录' });
+  });
+
+  it('words everything else like the home card', () => {
+    expect(describeUploadFailureForNotice('jd', '京东图床上传失败: 请求超时，请检查网络连接')).toEqual({ reason: '网络超时', advice: '请检查网络后重试' });
+    expect(describeUploadFailureForNotice('r2', 'R2 上传失败: 403 forbidden').reason).toBe('凭证无效');
   });
 });

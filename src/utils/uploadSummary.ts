@@ -3,6 +3,8 @@ import type { LinkFormat } from './linkFormatter';
 export interface UploadFailedServiceSummary {
   serviceName: string;
   count: number;
+  /** 这个图床第一次失败的原因（通知里写在最前面） */
+  reason?: string;
 }
 
 /** 第一张整张失败的图：通知照它写「原因 + 处理办法」（交接说明第 9 节，与首页卡片、重试通知同一套说法） */
@@ -141,10 +143,11 @@ export function buildUploadSummaryToast(
     ? `上传完成，${failedLabel}`
     : `${summary.success} 张图片上传完成，${failedLabel}`;
 
-  const parts = [copyDetail, '可在首页重试失败的图片。'].filter(Boolean);
+  // 图都有链接，只是某个图床没传上：先说它为什么失败，重试的是图床（首页「重试此图床」）
+  const firstReason = summary.partialFailedServices?.find((service) => service.reason)?.reason ?? '';
   return {
     severity: 'warn',
     summary: summaryText,
-    detail: appendDuplicates(parts.join(''), summary),
+    detail: appendDuplicates(sentences([firstReason, copyDetail, '可在首页重试失败的图床。']), summary),
   };
 }

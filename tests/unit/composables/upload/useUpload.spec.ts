@@ -519,9 +519,10 @@ describe('useUploadManager', () => {
 
     await handleFilesUpload(['C:/tmp/test.jpg']);
 
+    // 认不出的原因保留原文，写在最前面；重试的是没传上的图床
     expect(toastWarnMock).toHaveBeenCalledWith(
       '上传完成，又拍云上传失败',
-      '成功的链接已复制。可在首页重试失败的图片。'
+      'service error。成功的链接已复制。可在首页重试失败的图床。'
     );
     expect(toastSuccessMock).not.toHaveBeenCalled();
   });

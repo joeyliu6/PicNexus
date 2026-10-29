@@ -1,4 +1,5 @@
 import { getServiceDisplayName, getServiceAliases } from '@/constants/serviceNames';
+import { COOKIE_BASED_SERVICES } from '@/constants/serviceRequiredFields';
 import type { MigrateFailureDetail } from '@/types/batchMigrate';
 
 function escapeRegExp(value: string): string {
@@ -111,6 +112,9 @@ const UPLOAD_FAILURE_TEXT: Partial<Record<MigrateErrorCategory, UploadFailureTex
   图床服务异常: { reason: '图床服务异常', advice: '请稍后重试' },
 };
 
+/** Cookie 登录的图床遇到权限问题：首页卡片上就在「重新登录…」按钮旁边 */
+const LOGIN_EXPIRED: UploadFailureText = { reason: '登录已过期', advice: '请重新登录' };
+
 /**
  * 把一个图床的上传错误说成「原因 + 处理办法」
  * - 认得出的归到固定说法；「权限不足」对 Cookie 登录的图床说「登录已过期」
@@ -125,7 +129,7 @@ export function describeUploadFailure(
   const { category } = categorizeMigrateError('upload', cleaned);
   if (category === '权限不足') {
     return options.cookieLogin
-      ? { reason: '登录已过期', advice: '请重新登录' }
+      ? { ...LOGIN_EXPIRED }
       : { reason: '凭证无效', advice: '请检查图床配置后重试' };
   }
   const known = UPLOAD_FAILURE_TEXT[category];
@@ -134,6 +138,19 @@ export function describeUploadFailure(
   const [reason, ...rest] = cleaned.split(/[，。]/u);
   const advice = rest.join('，').replace(/[，。\s]+$/u, '').trim();
   return { reason: reason.trim(), advice: advice || '请稍后重试' };
+}
+
+
+/**
+ * 通知里的说法：离开了首页卡片（卡片上有图床名和「重新登录…」按钮），登录过期要说清是哪个图床、
+ * 去哪儿登录（T05：「微博登录已过期，请在图床页重新登录」）；其余同 describeUploadFailure
+ */
+export function describeUploadFailureForNotice(serviceId: string, raw: string): UploadFailureText {
+  const cookieLogin = (COOKIE_BASED_SERVICES as readonly string[]).includes(serviceId);
+  const text = describeUploadFailure(serviceId, raw, { cookieLogin });
+  return cookieLogin && text.reason === LOGIN_EXPIRED.reason
+    ? { reason: `${getServiceDisplayName(serviceId)}${LOGIN_EXPIRED.reason}`, advice: '请在图床页重新登录' }
+    : text;
 }
 
 /**

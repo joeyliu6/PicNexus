@@ -22,7 +22,7 @@ import {
   resolveQueueStatus,
 } from './retryStatus';
 import { COOKIE_BASED_SERVICES } from '@/constants/serviceRequiredFields';
-import { describeUploadFailure, NETWORK_DOWN_ERROR, reasonsByService } from '@/utils/uploadFailureMessage';
+import { describeUploadFailure, describeUploadFailureForNotice, NETWORK_DOWN_ERROR, reasonsByService } from '@/utils/uploadFailureMessage';
 
 const log = createLogger('RetryService');
 
@@ -550,7 +550,7 @@ export class RetryService {
     // 每个图床记它自己的原因；通知按第一个失败的图床写「原因 + 处理办法」（交接说明第 9 节）
     const ownReasons = reasonsByService(errorMsg);
     const [firstHost, firstReason] = ownReasons.entries().next().value ?? [enabledServices[0], errorMsg];
-    const failure = describeUploadFailure(firstHost, firstReason, { cookieLogin: isCookieHost(firstHost) });
+    const failure = describeUploadFailureForNotice(firstHost, firstReason);
     this.options.toast.error(`${item.fileName} 上传失败`, `${failure.reason}，${failure.advice}`, 5000);
 
     // 更新所有服务的失败状态

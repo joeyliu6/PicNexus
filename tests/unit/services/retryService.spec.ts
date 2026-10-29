@@ -849,8 +849,8 @@ describe('RetryService', () => {
     const item = queueManager.items.get('item-1')!;
     expect(item.serviceProgress.weibo?.error).toBe('微博上传失败: 认证失败: 401');
     expect(item.serviceProgress.r2?.error).toBe('R2 上传失败: 请求超时');
-    // 通知同样写「原因 + 处理办法」（交接说明第 9 节）
-    expect(toast.error).toHaveBeenCalledWith('demo.png 上传失败', '登录已过期，请重新登录', 5000);
+    // 通知同样写「原因 + 处理办法」（交接说明第 9 节）；离开了首页卡片，登录过期写清是哪个图床、去哪儿登录（T05）
+    expect(toast.error).toHaveBeenCalledWith('demo.png 上传失败', 'name:weibo登录已过期，请在图床页重新登录', 5000);
   });
 
   it('saves the full retry result and warns on partial failures', async () => {

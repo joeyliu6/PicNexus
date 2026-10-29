@@ -166,7 +166,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '2 张图片上传完成，又拍云上传失败',
-      detail: '成功的链接已复制。可在首页重试失败的图片。已忽略 4 张重复文件。',
+      detail: '成功的链接已复制。可在首页重试失败的图床。已忽略 4 张重复文件。',
     });
   });
 
@@ -228,7 +228,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '上传完成，又拍云上传失败',
-      detail: '成功的链接已复制。可在首页重试失败的图片。',
+      detail: '成功的链接已复制。可在首页重试失败的图床。',
     });
   });
 
@@ -247,7 +247,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '2 张图片上传完成，又拍云（2 张）上传失败',
-      detail: '成功的链接已复制。可在首页重试失败的图片。',
+      detail: '成功的链接已复制。可在首页重试失败的图床。',
     });
   });
 
@@ -269,7 +269,7 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '上传完成，腾讯云、又拍云上传失败',
-      detail: '成功的链接已复制。可在首页重试失败的图片。',
+      detail: '成功的链接已复制。可在首页重试失败的图床。',
     });
   });
 
@@ -288,7 +288,26 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'warn',
       summary: '上传完成，又拍云上传失败',
-      detail: '可在首页重试失败的图片。',
+      detail: '可在首页重试失败的图床。',
+    });
+  });
+
+  it('单个图床失败：先说这个图床为什么失败', () => {
+    const payload = buildUploadSummaryToast(
+      {
+        total: 1,
+        success: 1,
+        failed: 0,
+        partialServiceFailureCount: 1,
+        partialFailedServices: [{ serviceName: '七鱼', count: 1, reason: '网络超时' }],
+      },
+      { autoCopyEnabled: true, copiedCount: 1, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'warn',
+      summary: '上传完成，七鱼上传失败',
+      detail: '网络超时。成功的链接已复制。可在首页重试失败的图床。',
     });
   });
 });
