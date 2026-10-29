@@ -8,11 +8,11 @@ import { formatUpdateFailure } from '@/utils/updateFailureMessage';
  */
 describe('formatUpdateFailure', () => {
   describe('网络类', () => {
-    it('reqwest 0.11 带 URL 的连接失败 → 连不上更新服务器（用户实际遇到的那条）', () => {
+    it('reqwest 0.11 带 URL 的连接失败 → 无法连接更新服务器（用户实际遇到的那条）', () => {
       const raw = 'error sending request for url (https://github.com/joeyliu6/PicNexus/releases/latest/download/latest.json)';
       const text = formatUpdateFailure('check', raw);
 
-      expect(text.title).toBe('连不上更新服务器');
+      expect(text.title).toBe('无法连接更新服务器');
       expect(text.hint).toContain('手动下载');
       // 关键回归：翻译后的文案里不能再出现英文原文或长 URL
       expect(text.hint).not.toContain('error sending request');
@@ -20,11 +20,11 @@ describe('formatUpdateFailure', () => {
     });
 
     it('reqwest 0.12 不带 URL 的连接失败同样命中', () => {
-      expect(formatUpdateFailure('check', 'error sending request').title).toBe('连不上更新服务器');
+      expect(formatUpdateFailure('check', 'error sending request').title).toBe('无法连接更新服务器');
     });
 
     it('超时归入网络类（reqwest 顶层 Display 不含 timeout，这里兜的是其它来源）', () => {
-      expect(formatUpdateFailure('check', 'operation timed out').title).toBe('连不上更新服务器');
+      expect(formatUpdateFailure('check', 'operation timed out').title).toBe('无法连接更新服务器');
     });
 
     it('同一个网络错误在下载阶段换一套措辞', () => {
@@ -52,28 +52,28 @@ describe('formatUpdateFailure', () => {
     it('latest.json 少了 signature 字段属于发布配置问题，不能报成"包被篡改"', () => {
       const text = formatUpdateFailure('check', 'missing field `signature` at line 1 column 120');
 
-      expect(text.title).toBe('暂时读不到更新信息');
+      expect(text.title).toBe('无法读取更新信息');
     });
   });
 
   describe('更新信息解析类', () => {
-    it('ReleaseNotFound → 暂时读不到更新信息', () => {
+    it('ReleaseNotFound → 无法读取更新信息', () => {
       const text = formatUpdateFailure('check', 'Could not fetch a valid release JSON from the remote');
 
-      expect(text.title).toBe('暂时读不到更新信息');
+      expect(text.title).toBe('无法读取更新信息');
       expect(text.hint).toContain('手动下载');
     });
 
     it('JSON 解析失败同样归此类', () => {
       expect(formatUpdateFailure('check', 'expected value at line 1 column 1').title)
-        .toBe('暂时读不到更新信息');
+        .toBe('无法读取更新信息');
     });
   });
 
   describe('平台类', () => {
     it('TargetNotFound → 当前系统暂无更新包', () => {
       const raw = 'the platform `windows-x86_64` was not found in the response `platforms` object';
-      expect(formatUpdateFailure('check', raw).title).toBe('当前系统暂无更新包');
+      expect(formatUpdateFailure('check', raw)).toEqual({ title: '当前系统暂无更新包', hint: '此版本暂未提供当前系统的更新包，请稍后重试' });
     });
 
     it('UnsupportedArch 同样归平台类', () => {
@@ -150,5 +150,13 @@ describe('formatUpdateFailure', () => {
       expect(text.title).toBe('检查更新失败');
       expect(text.hint).not.toBe('');
     });
+  });
+});
+
+// 交接说明第 9 节：书面、简洁，不用口头语；处理办法同 S21「请稍后重试或前往发布页手动下载」
+describe('update failure wording', () => {
+  it('writes the network and unreadable cases like S21', () => {
+    expect(formatUpdateFailure('check', 'error sending request').hint).toBe('网络不通或 GitHub 访问受限，请稍后重试或前往发布页手动下载');
+    expect(formatUpdateFailure('check', 'expected value at line 1 column 1').hint).toBe('更新服务返回的内容无法识别，请稍后重试或前往发布页手动下载');
   });
 });

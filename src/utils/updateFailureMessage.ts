@@ -61,7 +61,7 @@ const UPDATE_FAILURE_RULES: FailureRule[] = [
     pattern: /does not have any endpoints set|must use a secure protocol|relative URL without a base|invalid (?:IPv[46] address|port number|domain character)/iu,
     resolve: () => ({
       title: '更新功能未正确配置',
-      hint: '这是应用自身的问题，重试无效，请点「手动下载」',
+      hint: '应用的更新设置有误，重试无效，请点「手动下载」',
     }),
   },
 
@@ -69,7 +69,7 @@ const UPDATE_FAILURE_RULES: FailureRule[] = [
   {
     // minisign-verify 的 Display + error.rs: SignatureUtf8 / Base64 透传
     // 刻意不写裸 `signature`：latest.json 少字段时 serde 报 `missing field \`signature\``，
-    // 那是发布配置漏了，不是包被篡改，必须让它落到下面的"读不到更新信息"规则
+    // 那是发布配置漏了，不是包被篡改，必须让它落到下面的"无法读取更新信息"规则
     pattern: /signature verification failed|invalid signature|invalid encoding in minisign data|unexpected signature algorithm|could not be decoded, please check if it is a valid base64/iu,
     resolve: () => ({
       title: '更新包校验未通过',
@@ -83,7 +83,7 @@ const UPDATE_FAILURE_RULES: FailureRule[] = [
     pattern: /was not found in the response `platforms` object|were found in the response `platforms` object|unsupported application architecture|unsupported os/iu,
     resolve: () => ({
       title: '当前系统暂无更新包',
-      hint: '这个版本还没适配你的系统，可稍后再试',
+      hint: '此版本暂未提供当前系统的更新包，请稍后重试',
     }),
   },
 
@@ -118,8 +118,8 @@ const UPDATE_FAILURE_RULES: FailureRule[] = [
     // 注意：latest.json 返回 404 时插件不会报 404，只会走到 ReleaseNotFound
     pattern: /could not fetch a valid release json|error decoding response body|expected value at line|missing field|invalid type: |failed to format date/iu,
     resolve: () => ({
-      title: '暂时读不到更新信息',
-      hint: '更新服务返回的内容无法识别，可稍后重试或手动下载',
+      title: '无法读取更新信息',
+      hint: '更新服务返回的内容无法识别，请稍后重试或前往发布页手动下载',
     }),
   },
 
@@ -134,8 +134,8 @@ const UPDATE_FAILURE_RULES: FailureRule[] = [
         hint: '无法连接 GitHub，请稍后重试或前往发布页手动下载',
       }
       : {
-        title: '连不上更新服务器',
-        hint: '网络不通或 GitHub 访问受限，可重试或手动下载',
+        title: '无法连接更新服务器',
+        hint: '网络不通或 GitHub 访问受限，请稍后重试或前往发布页手动下载',
       },
   },
 
