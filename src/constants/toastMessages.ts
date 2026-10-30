@@ -15,10 +15,6 @@ type StaticMessage = ToastMessageConfig;
 export const TOAST_MESSAGES = {
   // === 通用操作 ===
   common: {
-    copyFailed: (error: string): ToastMessageConfig => ({
-      summary: '复制失败',
-      detail: error
-    }),
     exportSuccess: (count: number): ToastMessageConfig => ({
       summary: '已导出',
       detail: `${formatCount(count)} 条记录`
@@ -32,17 +28,10 @@ export const TOAST_MESSAGES = {
       summary: '未选择',
       detail: '请先选择要操作的项目'
     } as StaticMessage,
-    noData: {
-      summary: '暂无数据',
-      detail: '没有可操作的数据'
-    } as StaticMessage,
   },
 
   // === 配置相关 ===
   config: {
-    saveSuccess: {
-      summary: '已保存'
-    } as StaticMessage,
     /** 改动即保存的地方（设置页、图床页、首页与托盘的「上传到 / 复制为 / 压缩」）没写进去：红色，原因 + 重试 */
     notSaved: (error: unknown): ToastMessageConfig => ({
       summary: '未能保存',
@@ -89,24 +78,7 @@ export const TOAST_MESSAGES = {
 
   // === 上传相关 ===
   upload: {
-    success: UI_COPY.toast.upload.success,
-    partialSuccess: (success: number, fail: number): ToastMessageConfig => ({
-      summary: '部分上传失败',
-      detail: `成功 ${success} 个，失败 ${fail} 个`
-    }),
     failed: UI_COPY.toast.upload.failed,
-    retrying: (fileName: string, current: number, max: number): ToastMessageConfig => ({
-      summary: '正在重试',
-      detail: `${fileName} (${current}/${max})`
-    }),
-    retrySuccess: (serviceName: string): ToastMessageConfig => ({
-      summary: '修复成功',
-      detail: `${serviceName} 已补充上传成功`
-    }),
-    retryFailed: (serviceName: string, error: string): ToastMessageConfig => ({
-      summary: '重试失败',
-      detail: `${serviceName}: ${error}`
-    }),
     noService: {
       summary: '未选择图床',
       detail: '请选择至少一个图床服务'
@@ -122,18 +94,6 @@ export const TOAST_MESSAGES = {
     noImage: {
       summary: '未检测到图片',
       detail: '请选择有效的图片文件（支持 JPG, PNG, GIF, WEBP, BMP, SVG, TIFF, ICO, AVIF）'
-    } as StaticMessage,
-    queueCleared: {
-      summary: '已清空',
-      detail: '上传队列已清空'
-    } as StaticMessage,
-    completedCleared: {
-      summary: '已清空',
-      detail: '已完成的上传项已清理'
-    } as StaticMessage,
-    noRetryNeeded: {
-      summary: '无需重试',
-      detail: '没有失败的上传项'
     } as StaticMessage,
     selectFailed: (error: string): ToastMessageConfig => ({
       summary: '文件选择失败',
@@ -176,22 +136,6 @@ export const TOAST_MESSAGES = {
 
   // === 认证相关 ===
   auth: {
-    tokenValid: (serviceName: string): ToastMessageConfig => ({
-      summary: '验证成功',
-      detail: `${serviceName} Token 有效`
-    }),
-    configValid: (serviceName: string): ToastMessageConfig => ({
-      summary: '验证成功',
-      detail: `${serviceName} 配置有效`
-    }),
-    cookieValid: (serviceName: string): ToastMessageConfig => ({
-      summary: '验证成功',
-      detail: `${serviceName} Cookie 有效`
-    }),
-    testFailed: (error: string): ToastMessageConfig => ({
-      summary: '测试失败',
-      detail: error
-    }),
     // 交接说明 8.7：登录成功小窗自动关闭，主窗口通知「已登录 微博」
     cookieUpdated: (serviceName: string): ToastMessageConfig => ({
       summary: `已登录 ${serviceName}`,
@@ -208,12 +152,6 @@ export const TOAST_MESSAGES = {
       summary: '打开登录窗口失败',
       detail: error,
       life: 5000
-    }),
-    serviceAvailable: (serviceName: string): ToastMessageConfig => ({
-      summary: `${serviceName}可用`
-    }),
-    serviceUnavailable: (serviceName: string): ToastMessageConfig => ({
-      summary: `${serviceName}不可用`
     })
   },
 
@@ -222,10 +160,6 @@ export const TOAST_MESSAGES = {
     jumpFailed: (error: string): ToastMessageConfig => ({
       summary: '跳转失败',
       detail: error
-    }),
-    noLink: (serviceName?: string): ToastMessageConfig => ({
-      summary: '无可用链接',
-      detail: serviceName ? `${serviceName} 图床没有可用的链接` : '该项目没有可用的链接'
     }),
     noLoadableData: {
       summary: '无可用数据',
@@ -246,65 +180,5 @@ export const TOAST_MESSAGES = {
       summary: '未能移除',
       detail: `${error}，请稍后重试`
     })
-  },
-
-  // === 剪贴板 ===
-  clipboard: {
-    pasteFailed: (error?: string): ToastMessageConfig => ({
-      summary: '粘贴失败',
-      detail: error || '无法读取剪贴板图片'
-    })
-  },
-
-  // === 云存储 ===
-  cloudStorage: {
-    dragNotSupported: (count: number): ToastMessageConfig => ({
-      summary: '提示',
-      detail: `拖拽上传 ${count} 个文件暂不支持，请使用上传按钮`
-    }),
-    folderRenameNotSupported: {
-      summary: '暂不支持',
-      detail: '文件夹重命名功能暂不支持'
-    } as StaticMessage,
-    renameHint: {
-      summary: '提示',
-      detail: '重命名功能需要先下载再上传，建议在 Web 控制台操作'
-    } as StaticMessage,
-    moveHint: {
-      summary: '提示',
-      detail: '移动功能开发中，建议在 Web 控制台操作'
-    } as StaticMessage,
-    createFolderHint: {
-      summary: '提示',
-      detail: '创建文件夹功能开发中，可直接上传文件时指定路径'
-    } as StaticMessage,
-    folderDownloadNotSupported: {
-      summary: '无法下载',
-      detail: '不支持下载文件夹'
-    } as StaticMessage,
-    downloadStarted: (fileName: string): ToastMessageConfig => ({
-      summary: '开始下载',
-      detail: `正在下载 "${fileName}"`
-    }),
-    downloadFailed: {
-      summary: '下载失败',
-      detail: '无法获取下载链接'
-    } as StaticMessage,
-    invalidFile: {
-      summary: '无法复制',
-      detail: '请选择有效的文件'
-    } as StaticMessage,
-    renameFailed: (error: string): ToastMessageConfig => ({
-      summary: '重命名失败',
-      detail: error
-    })
-  },
-
-  // === 通用提示 ===
-  hint: {
-    tauriDragDrop: {
-      summary: '请使用 Tauri 文件拖拽',
-      detail: '文件拖拽功能由 Tauri 提供'
-    } as StaticMessage
   }
 } as const;
