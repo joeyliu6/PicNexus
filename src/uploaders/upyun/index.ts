@@ -1,1 +1,0 @@
-export { UpyunUploader } from './UpyunUploader';

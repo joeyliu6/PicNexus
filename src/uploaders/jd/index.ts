@@ -1,1 +1,0 @@
-export { JDUploader } from './JDUploader';

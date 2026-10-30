@@ -1,4 +1,4 @@
-// 上传器统一导出和初始化
+// 上传器注册：启动时注册内建图床，多份图床（自定义 S3 / WebDAV）按 profile 列表重建
 
 import { UploaderFactory } from './base/UploaderFactory';
 import { WeiboUploader } from './weibo/WeiboUploader';
@@ -119,26 +119,3 @@ export function syncWebDAVUploaders(profiles: WebDAVStorageProfile[]): void {
     UploaderFactory.register(`webdav:${profile.id}`, () => new WebDAVUploader());
   }
 }
-
-// 导出所有上传器
-export { WeiboUploader } from './weibo';
-export { R2Uploader } from './r2';
-
-export { JDUploader } from './jd';
-export { NowcoderUploader } from './nowcoder';
-export { QiyuUploader } from './qiyu';
-export { ZhihuUploader } from './zhihu';
-export { NamiUploader } from './nami';
-export { BilibiliUploader } from './bilibili';
-export { ChaoxingUploader } from './chaoxing';
-export { SmmsUploader } from './smms';
-export { GithubUploader } from './github';
-export { ImgurUploader } from './imgur';
-export { TencentUploader } from './tencent';
-export { AliyunUploader } from './aliyun';
-export { QiniuUploader } from './qiniu';
-export { UpyunUploader } from './upyun';
-export { CustomS3Uploader } from './custom-s3';
-export { WebDAVUploader } from './webdav';
-export { UploaderFactory } from './base/UploaderFactory';
-

@@ -1,1 +1,0 @@
-export { QiyuUploader } from './QiyuUploader';

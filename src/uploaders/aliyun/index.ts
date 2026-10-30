@@ -1,1 +1,0 @@
-export { AliyunUploader } from './AliyunUploader';
