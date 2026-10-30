@@ -1,20 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  JDUploadError,
   convertToJDError,
 } from '@/uploaders/jd/JDError';
 import { UploadErrorCode } from '@/uploaders/base/ErrorTypes';
-
-describe('JDUploadError 构造', () => {
-  it('保留 message / code / originalError', () => {
-    const cause = new Error('cause');
-    const err = new JDUploadError('boom', UploadErrorCode.RATE_LIMIT, cause);
-    expect(err.name).toBe('JDUploadError');
-    expect(err.message).toBe('boom');
-    expect(err.code).toBe(UploadErrorCode.RATE_LIMIT);
-    expect(err.originalError).toBe(cause);
-  });
-});
 
 describe('convertToJDError - 分类', () => {
   it.each([

@@ -1,20 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  NamiUploadError,
   convertToNamiError,
 } from '@/uploaders/nami/NamiError';
 import { UploadErrorCode } from '@/uploaders/base/ErrorTypes';
-
-describe('NamiUploadError 构造', () => {
-  it('保留 message / code / originalError', () => {
-    const cause = new Error('cause');
-    const err = new NamiUploadError('boom', UploadErrorCode.NETWORK_ERROR, cause);
-    expect(err.name).toBe('NamiUploadError');
-    expect(err.message).toBe('boom');
-    expect(err.code).toBe(UploadErrorCode.NETWORK_ERROR);
-    expect(err.originalError).toBe(cause);
-  });
-});
 
 describe('convertToNamiError - 分类逻辑', () => {
   it.each([

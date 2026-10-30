@@ -5,20 +5,6 @@ import { UploadErrorCode, createStructuredError } from '@/uploaders/base/ErrorTy
 import { getErrorMessage } from '@/types/errors';
 
 /**
- * 京东上传错误类
- */
-export class JDUploadError extends Error {
-  constructor(
-    message: string,
-    public readonly code?: UploadErrorCode,
-    public readonly originalError?: unknown
-  ) {
-    super(message);
-    this.name = 'JDUploadError';
-  }
-}
-
-/**
  * 转换通用错误为京东结构化错误
  */
 export function convertToJDError(error: unknown): StructuredError {

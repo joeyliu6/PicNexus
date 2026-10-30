@@ -5,20 +5,6 @@ import { UploadErrorCode, createStructuredError } from '@/uploaders/base/ErrorTy
 import { getErrorMessage } from '@/types/errors';
 
 /**
- * 纳米上传错误类
- */
-export class NamiUploadError extends Error {
-  constructor(
-    message: string,
-    public readonly code?: UploadErrorCode,
-    public readonly originalError?: unknown
-  ) {
-    super(message);
-    this.name = 'NamiUploadError';
-  }
-}
-
-/**
  * 转换通用错误为纳米结构化错误
  */
 export function convertToNamiError(error: unknown): StructuredError {
