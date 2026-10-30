@@ -25,7 +25,6 @@ import {
   writeText,
 } from '@tauri-apps/plugin-clipboard-manager';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { fetch as httpFetch } from '@tauri-apps/plugin-http';
 import {
   isPermissionGranted,
   requestPermission,
@@ -175,10 +174,6 @@ vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
 vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
   Command: vi.fn(),
-}));
-
-vi.mock('@tauri-apps/plugin-http', () => ({
-  fetch: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-notification', () => ({
@@ -495,8 +490,11 @@ export function getShellOpenMock() {
   return vi.mocked(shellOpen);
 }
 
+/** 模拟 WebDAV 服务端：`webdav_request` 的默认 mock 把请求转给它，测试按 fetch 的形状配置响应 */
+const webdavServerFetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+
 export function getHttpFetchMock() {
-  return vi.mocked(httpFetch);
+  return webdavServerFetch;
 }
 
 export function getNotificationMocks() {

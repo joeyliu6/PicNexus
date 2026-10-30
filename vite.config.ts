@@ -38,7 +38,6 @@ export default defineConfig({
             '@tauri-apps/plugin-clipboard-manager',
             '@tauri-apps/plugin-dialog',
             '@tauri-apps/plugin-fs',
-            '@tauri-apps/plugin-http',
             '@tauri-apps/plugin-shell',
             '@tauri-apps/plugin-sql'
           ]

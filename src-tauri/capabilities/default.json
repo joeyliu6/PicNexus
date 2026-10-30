@@ -71,19 +71,6 @@
     "sql:allow-execute",
     "sql:allow-select",
     "sql:allow-close",
-    {
-      "identifier": "http:default",
-      "allow": [
-        { "url": "https://api.github.com/*" },
-        { "url": "https://sm.ms/*" },
-        { "url": "https://api.imgur.com/*" },
-        { "url": "https://www.baidu.com/*" },
-        { "url": "https://www.qq.com/*" },
-        { "url": "https://www.cloudflare.com/*" },
-        { "url": "http://127.0.0.1:*" },
-        { "url": "http://localhost:*" }
-      ]
-    },
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

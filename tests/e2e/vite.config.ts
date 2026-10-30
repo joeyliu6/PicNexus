@@ -24,7 +24,6 @@ export default defineConfig({
       '@tauri-apps/plugin-dialog': mock('dialog'),
       '@tauri-apps/plugin-clipboard-manager': mock('clipboard'),
       '@tauri-apps/plugin-shell': mock('shell'),
-      '@tauri-apps/plugin-http': mock('http'),
       '@tauri-apps/plugin-global-shortcut': mock('globalShortcut'),
       '@tauri-apps/plugin-notification': mock('notification'),
       '@tauri-apps/plugin-updater': mock('updater'),
