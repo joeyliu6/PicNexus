@@ -85,7 +85,7 @@ src-tauri/
 | `clipboard_has_image` | `clipboard.rs` | 检测剪贴板是否有图片 |
 | `read_clipboard_image` | `clipboard.rs` | 读取剪贴板图片到临时文件 |
 | `check_image_link` | `link_checker.rs` | 检测图片链接有效性 |
-| `download_image_from_url` | `link_checker.rs` | 下载远程图片 |
+| `download_url_image` | `link_checker.rs` | 下载远程图片到临时文件（从 URL 下载、粘贴图片链接、补充备份） |
 | `get_image_metadata` | `image_meta.rs` | 获取图片元数据（宽高、格式等） |
 | `read_file_bytes` | `utils.rs` | 读取文件字节 |
 

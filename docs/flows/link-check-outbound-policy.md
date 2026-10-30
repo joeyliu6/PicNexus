@@ -8,7 +8,7 @@
 | 路径 | 命令 | 校验函数 | DNS 层裁决 | 理由 |
 |------|------|----------|-----------|------|
 | 只读探测 | `check_image_link` / `batch_check_links` | `validate_probe_url`（同步）= `validate_url_with_policy(AllowPrivate)` + 前端传入的确认主机名名单 | ❌ 不做 | 预解析结果并不绑定 reqwest 的实际连接（它会自己再解析一次），所以拦不住 DNS rebinding，只能拦「手滑粘了内网 URL」——而字面量 IP 判据已覆盖。批量上限 10 万条，每条还要多付一次 DNS 查询 |
-| 下载重传 | `download_image_from_url` / `download_url_image` | `validate_fetch_url`（async）= `validate_external_url(Deny)` + DNS 裁决 | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
+| 下载重传 | `download_url_image` | `validate_fetch_url`（async）= `validate_external_url(Deny)` + DNS 裁决 | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
 
 除 DNS 外，两条路径 2026-08-21 起还差一个 **scheme × 地址段** 维度（探测对齐了上传 / 渲染 /
 CSP 三处 2026-08 为局域网图床放开的判据，下载重传保持旧口径）：

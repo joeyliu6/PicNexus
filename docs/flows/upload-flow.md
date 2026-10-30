@@ -200,7 +200,7 @@ sequenceDiagram
 
 ## S3 系图床：对象名与 Content-Type
 
-适用于全部 6 个走 `upload_to_s3_compatible` 的图床：**阿里云 OSS / 腾讯云 COS / 七牛云 / 又拍云 / Cloudflare R2 / 自定义 S3**（它们都继承 `BaseS3Uploader`，`R2Uploader` 也不例外——`src-tauri/src/commands/r2.rs` 的 `upload_to_r2` 目前无前端调用方）。
+适用于全部 6 个走 `upload_to_s3_compatible` 的图床：**阿里云 OSS / 腾讯云 COS / 七牛云 / 又拍云 / Cloudflare R2 / 自定义 S3**（它们都继承 `BaseS3Uploader`，`R2Uploader` 也不例外；`src-tauri/src/commands/r2.rs` 只剩 R2 的连接测试）。
 
 ### 对象名（key）唯一化
 

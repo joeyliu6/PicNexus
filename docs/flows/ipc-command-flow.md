@@ -42,7 +42,7 @@ flowchart TD
     %% 命令注册
     M5 --> H[.invoke_handler<br/>generate_handler! 注册全部命令<br/>build.rs APP_COMMANDS 登记同一份清单]
     H --> H1[上传系列<br/>upload_file_stream/upload_to_jd/github/...]
-    H --> H2[Token 获取<br/>fetch_qiyu_token/fetch_nami_token]
+    H --> H2[Token 获取<br/>fetch_nami_token]
     H --> H3[检测类<br/>check_image_link/batch_check_links]
     H --> H4[工具类<br/>compress_image/scan_md_folder/clipboard_has_image]
     H --> H5[系统类<br/>system::open_log_dir/open_target::open_path<br/>app_key::get_or_create_secure_key]

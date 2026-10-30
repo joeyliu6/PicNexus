@@ -107,8 +107,8 @@ flowchart TD
 > ⚠️ **判 `suspicious` 前必须先归一化 Content-Type。** `is_suspicious_image_response` 走
 > `content_type_mime()`：切掉 `; charset=...` 参数、去空白、转小写，再比 `image/` 前缀。
 > RFC 9110 规定类型/子类型大小写不敏感且允许带参数，直接拿原串 `starts_with("image/")`
-> 会把返回 `Image/JPEG` 的正常图误标成「疑似」。同文件的 `download_image_from_url`
-> 与 `download_url_image`（前端 URL 下载走的就是它）用的是同一个函数，**三处判据不许各写一份**。
+> 会把返回 `Image/JPEG` 的正常图误标成「疑似」。同文件的 `download_url_image`
+> （前端 URL 下载走的就是它）用的是同一个函数，**两处判据不许各写一份**。
 >
 > 别在 `download_url_image` 里把结果绑到叫 `content_type_mime` 的局部变量上——那会遮住同名函数，
 > 后来人想在这个函数里再调用它时会撞上「试图调用 String」的编译错误。

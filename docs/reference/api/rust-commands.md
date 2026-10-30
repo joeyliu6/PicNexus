@@ -2,7 +2,7 @@
 
 > 完整参数/返回值定义请直接阅读 `src-tauri/src/commands/` 源文件，以下为导航索引。
 >
-> 哪个窗口能调用哪个命令，看 `src-tauri/capabilities/*.json` 里的 `allow-<命令名>`；全部命令登记在 `src-tauri/build.rs` 的 `APP_COMMANDS`。外部网页（登录窗口跳去的站点、统计窗口）调用任何命令都会被拒。`upload_to_r2`、`fetch_qiyu_token`、`download_image_from_url` 已注册但没有前端调用方，任何窗口都不放行。
+> 哪个窗口能调用哪个命令，看 `src-tauri/capabilities/*.json` 里的 `allow-<命令名>`；全部命令登记在 `src-tauri/build.rs` 的 `APP_COMMANDS`。外部网页（登录窗口跳去的站点、统计窗口）调用任何命令都会被拒。
 
 ---
 
@@ -35,7 +35,6 @@
 | | `set_clipboard_watch` | 自动上传剪贴板的后台监听开关（`enabled: bool`）：开着时发现剪贴板里出现新图片就发 `clipboard-image-changed` 事件（只认打开之后新复制的；Windows 看剪贴板序号，其他系统比对图片指纹），前端 `clipboardWatch.ts` 照粘贴上传 |
 | **工具** | `get_image_metadata` | 获取图片元数据 |
 | | `check_image_link` | 检测链接有效性 |
-| | `download_image_from_url` | 下载远程图片 |
 | | `download_url_image` | 从 URL 下载图片到临时文件 |
 | | `read_file_bytes` | 读取文件字节 |
 | **图片压缩** | `compress_image` | 压缩图片（质量/尺寸/格式转换） |
@@ -45,7 +44,6 @@
 | | `delete_s3_object` | 删除单个对象 |
 | | `delete_s3_objects` | 批量删除对象 |
 | **Token** | `fetch_nami_token` | 获取纳米 Token |
-| | `fetch_qiyu_token` | 获取七鱼 Token |
 | | `check_chrome_installed` | 检查 Chrome |
 | **编辑器 Server** | `update_server_config` | 启动/停止/更新 HTTP Server |
 | | `check_editor_server_status` | 从 Rust 侧探测 `http://127.0.0.1:<port>/status`，返回原始 JSON 文本<br/>`/status` 故意不带 CORS 许可（防任意网页探测本机是否在跑 PicNexus），设置页 webview 与该端口不同源，前端 `fetch` 必被浏览器拦截；Rust 发起的请求不受 CORS 约束 |
