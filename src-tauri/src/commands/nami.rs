@@ -35,8 +35,6 @@ struct STSCredentials {
     access_key: String,
     secret_access_key: String,
     session_token: String,
-    #[allow(dead_code)]
-    expire_in: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]

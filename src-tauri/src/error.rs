@@ -247,81 +247,24 @@ impl AppError {
 // ==================== Result 扩展 trait ====================
 
 /// 为 Result<T, E> 提供错误消息转换的便捷方法
-#[allow(dead_code)]
 pub trait IntoAppError<T> {
-    /// 将错误转换为网络错误
-    fn into_network_err(self) -> Result<T, AppError>;
-
-    /// 将错误转换为文件 IO 错误
-    fn into_file_io_err(self) -> Result<T, AppError>;
-
-    /// 将错误转换为配置错误
-    fn into_config_err(self) -> Result<T, AppError>;
-
-    /// 将错误转换为外部服务错误
-    fn into_external_err(self) -> Result<T, AppError>;
-
-    /// 将错误转换为存储错误
-    fn into_storage_err(self) -> Result<T, AppError>;
-
-    /// 将错误转换为 WebDAV 错误
-    fn into_webdav_err(self) -> Result<T, AppError>;
-
-    /// 将错误转换为文件 IO 错误（带自定义前缀）
-    fn into_file_io_err_with(self, prefix: &str) -> Result<T, AppError>;
-
     /// 将错误转换为网络错误（带自定义前缀）
     fn into_network_err_with(self, prefix: &str) -> Result<T, AppError>;
 
     /// 将错误转换为外部服务错误（带自定义前缀）
     fn into_external_err_with(self, prefix: &str) -> Result<T, AppError>;
 
-    /// 将错误转换为存储错误（带自定义前缀）
-    fn into_storage_err_with(self, prefix: &str) -> Result<T, AppError>;
-
     /// 将错误转换为验证错误（带自定义前缀）
     fn into_validation_err_with(self, prefix: &str) -> Result<T, AppError>;
 }
 
 impl<T, E: std::fmt::Display> IntoAppError<T> for Result<T, E> {
-    fn into_network_err(self) -> Result<T, AppError> {
-        self.map_err(|e| AppError::network(e.to_string()))
-    }
-
-    fn into_file_io_err(self) -> Result<T, AppError> {
-        self.map_err(|e| AppError::file_io(e.to_string()))
-    }
-
-    fn into_config_err(self) -> Result<T, AppError> {
-        self.map_err(|e| AppError::config(e.to_string()))
-    }
-
-    fn into_external_err(self) -> Result<T, AppError> {
-        self.map_err(|e| AppError::external(e.to_string()))
-    }
-
-    fn into_storage_err(self) -> Result<T, AppError> {
-        self.map_err(|e| AppError::storage(e.to_string()))
-    }
-
-    fn into_webdav_err(self) -> Result<T, AppError> {
-        self.map_err(|e| AppError::webdav(e.to_string()))
-    }
-
-    fn into_file_io_err_with(self, prefix: &str) -> Result<T, AppError> {
-        self.map_err(|e| AppError::file_io(format!("{}: {}", prefix, e)))
-    }
-
     fn into_network_err_with(self, prefix: &str) -> Result<T, AppError> {
         self.map_err(|e| AppError::network(format!("{}: {}", prefix, e)))
     }
 
     fn into_external_err_with(self, prefix: &str) -> Result<T, AppError> {
         self.map_err(|e| AppError::external(format!("{}: {}", prefix, e)))
-    }
-
-    fn into_storage_err_with(self, prefix: &str) -> Result<T, AppError> {
-        self.map_err(|e| AppError::storage(format!("{}: {}", prefix, e)))
     }
 
     fn into_validation_err_with(self, prefix: &str) -> Result<T, AppError> {
@@ -571,57 +514,6 @@ mod tests {
     }
 
     #[test]
-    fn into_network_err_wraps_display() {
-        let r: Result<(), AppError> = err().into_network_err();
-        match r.unwrap_err() {
-            AppError::Network { message } => assert_eq!(message, "底层错误"),
-            _ => panic!("应为 Network"),
-        }
-    }
-
-    #[test]
-    fn into_file_io_err_wraps_display() {
-        let r: Result<(), AppError> = err().into_file_io_err();
-        assert!(matches!(r.unwrap_err(), AppError::FileIo { .. }));
-    }
-
-    #[test]
-    fn into_config_err_wraps_display() {
-        let r: Result<(), AppError> = err().into_config_err();
-        assert!(matches!(r.unwrap_err(), AppError::Config { .. }));
-    }
-
-    #[test]
-    fn into_external_err_wraps_display() {
-        let r: Result<(), AppError> = err().into_external_err();
-        assert!(matches!(r.unwrap_err(), AppError::External { .. }));
-    }
-
-    #[test]
-    fn into_storage_err_wraps_display() {
-        let r: Result<(), AppError> = err().into_storage_err();
-        assert!(matches!(r.unwrap_err(), AppError::Storage { .. }));
-    }
-
-    #[test]
-    fn into_webdav_err_wraps_display() {
-        let r: Result<(), AppError> = err().into_webdav_err();
-        assert!(matches!(r.unwrap_err(), AppError::WebDAV { .. }));
-    }
-
-    #[test]
-    fn into_file_io_err_with_prepends_prefix() {
-        let r: Result<(), AppError> = err().into_file_io_err_with("读取配置");
-        match r.unwrap_err() {
-            AppError::FileIo { message } => {
-                assert!(message.starts_with("读取配置: "));
-                assert!(message.ends_with("底层错误"));
-            }
-            _ => panic!("应为 FileIo"),
-        }
-    }
-
-    #[test]
     fn into_network_err_with_prepends_prefix() {
         let r: Result<(), AppError> = err().into_network_err_with("调用 API");
         match r.unwrap_err() {
@@ -640,15 +532,6 @@ mod tests {
     }
 
     #[test]
-    fn into_storage_err_with_prepends_prefix() {
-        let r: Result<(), AppError> = err().into_storage_err_with("上传到 R2");
-        match r.unwrap_err() {
-            AppError::Storage { message } => assert!(message.starts_with("上传到 R2: ")),
-            _ => panic!("应为 Storage"),
-        }
-    }
-
-    #[test]
     fn into_validation_err_with_prepends_prefix() {
         let r: Result<(), AppError> = err().into_validation_err_with("参数校验");
         match r.unwrap_err() {
@@ -659,7 +542,7 @@ mod tests {
 
     #[test]
     fn ok_passes_through_unchanged() {
-        let r: Result<i32, AppError> = Ok::<i32, &str>(42).into_network_err();
+        let r: Result<i32, AppError> = Ok::<i32, &str>(42).into_network_err_with("调用 API");
         assert_eq!(r.unwrap(), 42);
     }
 }

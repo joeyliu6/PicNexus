@@ -20,9 +20,6 @@ pub struct WebDAVConfig {
     url: String,
     username: String,
     password: String,
-    #[allow(dead_code)]
-    #[serde(rename = "remotePath")]
-    remote_path: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -224,7 +221,6 @@ mod webdav_connection_tests {
             url,
             username: "user".to_string(),
             password: "pass".to_string(),
-            remote_path: "/PicNexus".to_string(),
         };
 
         let result = probe_webdav_connection(&reqwest::Client::new(), &config).await;
