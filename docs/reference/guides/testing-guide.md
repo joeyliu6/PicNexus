@@ -66,7 +66,7 @@ import { createQueueItem } from '../../factories';
 
 ## Mock 规范
 
-普通 Tauri API 使用统一 `tauriMock`。包括 `invoke`、`event`、`path`、`fs`、`dialog`、`shell`、`http`、`updater`、`process` 等，测试里只配置行为，不重复写整段 `vi.mock('@tauri-apps/...')`。
+普通 Tauri API 使用统一 `tauriMock`。包括 `invoke`、`event`、`path`、`fs`、`dialog`、`shell`、`updater`、`process` 等，测试里只配置行为，不重复写整段 `vi.mock('@tauri-apps/...')`。
 
 剪贴板用 `tauriMock` 的 `getClipboardMocks()`。剪贴板读写错误、文本返回、写入断言都走它，避免和普通 `invoke` mock 混在一起。
 

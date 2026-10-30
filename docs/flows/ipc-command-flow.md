@@ -61,7 +61,6 @@ flowchart TD
     CAP --> CAP1[core:window:* / event:*]
     CAP --> CAP2[sidecar 由 Rust portable::run_sidecar 启动<br/>前端不暴露 shell spawn]
     CAP --> CAP3[fs:allow-* + 作用域<br/>appdata/appcache/applog/temp + 用户对话框临时授权]
-    CAP --> CAP4[http:allow-* + URL<br/>限定外部服务 + localhost/127.0.0.1 HTTP]
     CAP --> CAP5[远程页面一律拒绝:capability 不写 remote<br/>登录窗口跳去的外部网站、analytics-transport 都调不了命令]
 
     style A fill:#e3f2fd,stroke:#1976d2

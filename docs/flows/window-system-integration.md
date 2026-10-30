@@ -210,7 +210,6 @@ flowchart LR
 | `tauri-plugin-clipboard-manager` | 剪贴板 | [上传流程](./upload-flow.md) |
 | `tauri-plugin-notification` | 系统通知 | — |
 | `tauri-plugin-shell` | 打开外部链接；token sidecar 由 Rust `portable::run_sidecar` 管理 | — |
-| `tauri-plugin-http` | HTTP 客户端 | — |
 | `tauri-plugin-global-shortcut` | 全局快捷键 | 概览 |
 | `tauri-plugin-updater` | 自动更新 | [auto-update-flow](./auto-update-flow.md) |
 | `tauri-plugin-process` | 进程管理 / relaunch | — |
