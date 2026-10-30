@@ -51,11 +51,6 @@ function isDuplicate(severity: string, summary: string, detail?: string): boolea
   return false;
 }
 
-/**
- * `useToast()` 的返回值类型：模块级函数以参数形式接收通知能力时使用（便于测试替换）
- */
-export type ToastApi = ReturnType<typeof useToast>;
-
 /** 带一个动作按钮的通知（「撤销」「重试」「去登录」）的额外选项 */
 export interface ToastActionOptions {
   /** 停留毫秒数 */

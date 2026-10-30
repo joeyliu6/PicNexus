@@ -10,13 +10,6 @@
 
 import { ref, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue';
 import { findGroupScrollPosition } from '@/utils/justifiedLayout';
-import type {
-  LayoutItem,
-  TimelineLayoutResult,
-  TimelineLayoutOptions,
-  LayoutRow,
-  TimelineGroupLayout,
-} from '@/utils/justifiedLayout';
 
 // 子模块
 import { useTimelineLayout } from './useTimelineLayout';
@@ -28,17 +21,13 @@ import { DEFAULT_OPTIONS } from './types';
 import type {
   PhotoGroup,
   VisibleItem,
-  VisibleHeader,
   VirtualTimelineOptions,
-  FastModeItem,
 } from './types';
 
 export type {
   PhotoGroup,
   VisibleItem,
-  VisibleHeader,
   VirtualTimelineOptions,
-  FastModeItem,
 };
 
 /**
@@ -431,13 +420,3 @@ export function useVirtualTimeline(
     handleScroll,
   };
 }
-
-// ==================== 辅助类型导出 ====================
-
-export type {
-  LayoutItem,
-  TimelineLayoutResult,
-  TimelineLayoutOptions,
-  LayoutRow,
-  TimelineGroupLayout,
-};

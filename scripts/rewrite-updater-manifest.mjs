@@ -63,10 +63,3 @@ export function rewriteUpdaterManifest(manifest) {
     nextUrl: nsis.url,
   };
 }
-
-export const UPDATER_MANIFEST_KEYS = {
-  GENERIC_KEY,
-  NSIS_KEY,
-  MSI_KEY,
-  NSIS_SUFFIX,
-};

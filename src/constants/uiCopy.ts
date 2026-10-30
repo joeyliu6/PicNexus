@@ -21,5 +21,3 @@ export const UI_COPY = {
     },
   },
 } as const;
-
-export type UiCopy = typeof UI_COPY;

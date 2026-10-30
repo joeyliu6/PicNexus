@@ -525,10 +525,3 @@ export function useConfigManager() {
     getActivePrefix
   };
 }
-
-/**
- * `useConfigManager()` 的返回值类型
- *
- * 模块级函数需要读写配置时接这个类型的参数（便于测试替换）。
- */
-export type ConfigManagerApi = ReturnType<typeof useConfigManager>;

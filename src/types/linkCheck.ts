@@ -43,16 +43,6 @@ export interface BatchCheckResult {
   cancelled: boolean;
 }
 
-export interface BatchCheckRequest {
-  links: BatchCheckRequestItem[];
-  batch_id?: string;
-  concurrency?: number;
-  per_host_limit?: number;
-  timeout_secs?: number;
-  /** 已确认明文 HTTP 主机名（fake-ip 逃生舱），漏传会让这批图床被误判「策略拦截」 */
-  confirmed_http_hosts?: string[];
-}
-
 export interface BatchCheckRequestItem {
   url: string;
   history_id?: string;
