@@ -131,13 +131,10 @@ export type CloudHistoryPayload =
   | { kind: 'unusable'; reason: string };
 
 /**
- * 「云端数据不可用、已中止」的统一标记
+ * 「云端数据不可用、已中止」的统一措辞
  *
- * HistorySync 的「上传失败」toast 据此决定**不再拼**「请检查网络或 WebDAV 配置后重试」——
- * 那是对网络故障的通用指引，拼在中止文案后面会让用户以为问题出在网络/配置，转而忽略
- * 文案里的自愈指引（改用「强制覆盖云端」）。ConfigSync 的同步失败 toast 本就不拼后缀，
- * 无需此标记；但它的空配置文案也复用同一标记（见 `CLOUD_CONFIG_EMPTY_REASON`），
- * 确保两处「已中止…」措辞不会各写各的跑偏。
+ * 下面三条中止原因（记录为空 / 记录不是数组 / 配置为空）都拼这一句，
+ * 确保几处「已中止…」措辞不会各写各的跑偏。
  */
 export const CLOUD_DATA_ABORT_MARKER = '已中止以避免覆盖云端数据';
 
@@ -153,10 +150,6 @@ export const CLOUD_HISTORY_NON_ARRAY_REASON =
 /** 云端 settings.json 为 0 字节时的中止原因（ConfigSync 用；逃生舱是「上传到云端」） */
 export const CLOUD_CONFIG_EMPTY_REASON =
   `云端配置文件为空，${CLOUD_DATA_ABORT_MARKER}；如确定云端没有数据，请用「⋯ › 用本机覆盖云端…」`;
-
-export function isCloudDataAbortReason(errorCode: string): boolean {
-  return errorCode.includes(CLOUD_DATA_ABORT_MARKER);
-}
 
 /**
  * 解析「上传前拉取的云端历史」

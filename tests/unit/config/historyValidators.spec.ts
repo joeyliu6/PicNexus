@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isImportableHistoryItem, isValidHistoryItem } from '@/config/types';
+import { isImportableHistoryItem } from '@/config/types';
 
 /** 一条刚好满足导入门槛的最小记录 */
 function minimalImportable(overrides: Record<string, unknown> = {}) {
@@ -78,26 +78,5 @@ describe('isImportableHistoryItem', () => {
     ['results 含 undefined', [undefined]],
   ])('拒绝 %s', (_label, badEntry) => {
     expect(isImportableHistoryItem(minimalImportable({ results: badEntry }))).toBe(false);
-  });
-});
-
-describe('isValidHistoryItem 与 isImportableHistoryItem 的分工', () => {
-  it('isValidHistoryItem 判「完整 HistoryItem 形状」，因此要求 id 且深检 results', () => {
-    const noId = minimalImportable();
-    expect(isImportableHistoryItem(noId)).toBe(true);
-    expect(isValidHistoryItem(noId)).toBe(false);
-
-    const badResults = minimalImportable({ id: 'x', results: [{ garbage: true }] });
-    expect(isImportableHistoryItem(badResults)).toBe(true);
-    expect(isValidHistoryItem(badResults)).toBe(false);
-  });
-
-  it('两者对同一条完整合法记录都为真', () => {
-    const full = minimalImportable({
-      id: 'x',
-      results: [{ serviceId: 'weibo', status: 'success' }],
-    });
-    expect(isImportableHistoryItem(full)).toBe(true);
-    expect(isValidHistoryItem(full)).toBe(true);
   });
 });

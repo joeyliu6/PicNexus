@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
 import {
   blankProfile, addProfile, connectHost, migrateLegacyCustomS3, disconnectHost, firstMissingField, readHostValues, renameProfile, restoreHost,
-  snapshotHost, writeHostValue, writeHostValues,
+  snapshotHost, writeHostValues,
 } from '@/views/hosts/hostConfig';
 
 function base(): UserConfig {
@@ -22,7 +22,7 @@ describe('hostConfig', () => {
   it('GitHub 的「仓库」读成 owner/repo，写回时拆开', () => {
     const config = base();
     expect(readHostValues(config, 'github').repo).toBe('lumen/pics');
-    const next = writeHostValue(config, 'github', 'repo', ' other / repo-2 ');
+    const next = writeHostValues(config, 'github', { repo: ' other / repo-2 ' });
     expect(next.services?.github).toMatchObject({ owner: 'other', repo: 'repo-2' });
     expect(config.services?.github).toMatchObject({ owner: 'lumen' });
   });
@@ -31,8 +31,8 @@ describe('hostConfig', () => {
     const profile = { ...blankProfile('webdav', 'nas', []), url: 'http://192.168.1.2/dav', lanHttpConfirmed: true };
     const { config, hostId } = addProfile(base(), profile, 'webdav');
     expect(hostId).toBe('webdav:nas');
-    expect(writeHostValue(config, hostId, 'username', 'u').webdav_profiles?.[0].lanHttpConfirmed).toBe(true);
-    expect(writeHostValue(config, hostId, 'url', 'http://192.168.1.3/dav').webdav_profiles?.[0].lanHttpConfirmed).toBe(false);
+    expect(writeHostValues(config, hostId, { username: 'u' }).webdav_profiles?.[0].lanHttpConfirmed).toBe(true);
+    expect(writeHostValues(config, hostId, { url: 'http://192.168.1.3/dav' }).webdav_profiles?.[0].lanHttpConfirmed).toBe(false);
     expect(renameProfile(config, hostId, '家里 NAS').webdav_profiles?.[0].name).toBe('家里 NAS');
   });
 

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUndoToast } from '@/composables/useUndoToast';
-import { suppressToasts } from '@/composables/useToast';
 import { __resetToastsForTests, runToastAction, useToastItems } from '@/components/pn/toastStore';
 
 const toasts = useToastItems();
@@ -12,7 +11,6 @@ describe('useUndoToast', () => {
   });
 
   afterEach(() => {
-    suppressToasts(false);
     vi.useRealTimers();
   });
 
@@ -89,10 +87,5 @@ describe('useUndoToast', () => {
   it('can show a pending action in amber', () => {
     void useUndoToast().show('将清空所有历史记录', 5, 'warn');
     expect(toasts[0]).toMatchObject({ life: 5000, kind: 'warn' });
-  });
-
-  it('proceeds right away while toasts are suppressed, since nobody can press undo', async () => {
-    suppressToasts(true);
-    await expect(useUndoToast().show('delete', 5)).resolves.toBe(true);
   });
 });

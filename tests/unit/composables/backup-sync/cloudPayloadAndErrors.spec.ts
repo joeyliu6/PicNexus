@@ -13,24 +13,7 @@ import {
   parseCloudHistoryForUpload,
   extractErrorCode,
   isWebDAVNotFoundError,
-  isCloudDataAbortReason,
-  CLOUD_HISTORY_EMPTY_REASON,
-  CLOUD_HISTORY_NON_ARRAY_REASON,
-  CLOUD_CONFIG_EMPTY_REASON,
 } from '@/composables/backup-sync/backupSyncUtils';
-
-// 不变式：三个中止文案必须都命中 isCloudDataAbortReason（含历史的两个 + 配置的一个）。
-// HistorySync 靠它决定「上传失败」toast 不拼「请检查网络或 WebDAV 配置后重试」误导后缀。
-// 若将来有人改了措辞导致这里不命中，此测试会先倒下。
-it('三个「已中止」文案都命中 isCloudDataAbortReason 统一标记', () => {
-  expect(isCloudDataAbortReason(CLOUD_HISTORY_EMPTY_REASON)).toBe(true);
-  expect(isCloudDataAbortReason(CLOUD_HISTORY_NON_ARRAY_REASON)).toBe(true);
-  expect(isCloudDataAbortReason(CLOUD_CONFIG_EMPTY_REASON)).toBe(true);
-  // 恰好命中一次标记，不是多写了个「已中止…」的次生短语
-  for (const reason of [CLOUD_HISTORY_EMPTY_REASON, CLOUD_HISTORY_NON_ARRAY_REASON, CLOUD_CONFIG_EMPTY_REASON]) {
-    expect(reason.split('已中止以避免覆盖云端数据').length).toBe(2);
-  }
-});
 
 describe('parseCloudHistoryForUpload', () => {
   it('null（HTTP 404）判为 absent —— 首次同步的正常路径，必须放行全量上传', () => {

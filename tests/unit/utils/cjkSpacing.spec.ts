@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { joinCjk, listServiceNames } from '@/utils/cjkSpacing';
+import { joinCjk } from '@/utils/cjkSpacing';
 
 describe('joinCjk', () => {
   it('中文与英文 / 数字交界补空格，中文之间、标点前后不补', () => {
@@ -15,13 +15,5 @@ describe('joinCjk', () => {
 
   it('空片段跳过', () => {
     expect(joinCjk('', 'A', '', '图')).toBe('A 图');
-  });
-});
-
-describe('listServiceNames', () => {
-  it('三个以内用顿号连起来，再多就说「A等 N 个图床」', () => {
-    expect(listServiceNames(['京东'])).toBe('京东');
-    expect(listServiceNames(['京东', 'GitHub', '微博'])).toBe('京东、GitHub、微博');
-    expect(listServiceNames(['GitHub', '京东', '微博', '七鱼'])).toBe('GitHub 等 4 个图床');
   });
 });

@@ -1,5 +1,5 @@
 // Toast 通知 Composable - 增强版
-// 画面与计时在 PnToaster / toastStore（右下角、最多 3 条）；这里保留去重、全局静默与旧的调用方式。
+// 画面与计时在 PnToaster / toastStore（右下角、最多 3 条）；这里保留去重与旧的调用方式。
 // 主窗口不在屏（隐藏到托盘 / 最小化）时，普通通知改发系统通知（appPresence）。
 
 import { pushToast, type ToastAction, type ToastKind } from '@/components/pn/toastStore';
@@ -8,13 +8,6 @@ import { isAppOnScreen, notifySystem } from '@/composables/appPresence';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Toast');
-
-// 全局静默开关（批量操作时抑制所有 Toast）
-let globalSuppressed = false;
-
-export function suppressToasts(suppress: boolean): void {
-  globalSuppressed = suppress;
-}
 
 // Toast去重机制
 const recentToasts = new Map<string, number>();
@@ -83,7 +76,6 @@ export function useToast() {
   type Severity = ToastKind;
 
   function addToast(severity: Severity, summary: string, detail?: string, life?: number): void {
-    if (globalSuppressed) return;
     if (isDuplicate(severity, summary, detail)) return;
     // 主窗口隐藏到托盘或最小化时，应用内通知没人看得到：改发系统通知（托盘、全局快捷键发起的上传靠它告知结果）
     if (!isAppOnScreen()) {
@@ -96,10 +88,9 @@ export function useToast() {
   /**
    * 带动作按钮的通知；不走去重（每次撤销 / 重试都是新的一次操作）。
    * 动作只能在应用里点，所以主窗口不在屏时也留在应用内
-   * @returns 通知 id；静默期间返回 null
+   * @returns 通知 id
    */
-  function withAction(severity: Severity, summary: string, detail: string | undefined, action: ToastAction, options: ToastActionOptions = {}): number | null {
-    if (globalSuppressed) return null;
+  function withAction(severity: Severity, summary: string, detail: string | undefined, action: ToastAction, options: ToastActionOptions = {}): number {
     return pushToast({ kind: severity, title: summary, desc: detail, action, ...options });
   }
 

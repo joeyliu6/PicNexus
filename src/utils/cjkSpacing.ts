@@ -18,9 +18,3 @@ export function joinCjk(...parts: string[]): string {
   }
   return out;
 }
-
-/** 列名字：三个以内用顿号连起来，再多就说「A等 N 个图床」 */
-export function listServiceNames(names: string[]): string {
-  if (names.length <= 3) return names.join('、');
-  return joinCjk(names[0], `等 ${names.length} 个图床`);
-}

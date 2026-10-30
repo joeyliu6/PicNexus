@@ -24,7 +24,7 @@ export function useUndoToast() {
         settled = true;
         resolve(proceed);
       };
-      const id = toast.withAction(kind, summary, undefined, {
+      toast.withAction(kind, summary, undefined, {
         label: '撤销',
         run: () => {
           settle(false);
@@ -36,8 +36,6 @@ export function useUndoToast() {
         deferred: kind === 'warn',
         onExpire: () => settle(true),
       });
-      // 全局静默期间通知发不出来：没有人能点撤销，按到时间处理
-      if (id === null) settle(true);
     });
 
   return { show };

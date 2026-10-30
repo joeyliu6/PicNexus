@@ -56,11 +56,6 @@ export function readHostValues(config: UserConfig, hostId: string): HostValues {
   return values;
 }
 
-/** 把一格的新值写回配置（返回新配置，不改入参） */
-export function writeHostValue(config: UserConfig, hostId: string, key: string, value: string): UserConfig {
-  return writeHostValues(config, hostId, { [key]: value });
-}
-
 /** 把几格新值写回配置；WebDAV 地址或公开地址一变，作废「明文 HTTP 已确认」（确认只对那个地址生效） */
 export function writeHostValues(config: UserConfig, hostId: string, patch: HostValues): UserConfig {
   const fields: Record<string, string> = { ...patch };

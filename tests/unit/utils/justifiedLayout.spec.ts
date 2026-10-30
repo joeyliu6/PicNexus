@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculateJustifiedLayout,
-  calculateTimelineLayout,
   updateGroupLayout,
   findFirstVisibleRowIndex,
   getVisibleRowRange,
@@ -10,6 +9,7 @@ import {
   type LayoutItem,
   type LayoutOptions,
   type TimelineLayoutOptions,
+  type TimelineLayoutResult,
 } from '@/utils/justifiedLayout';
 
 // ─── Helpers ──────────────────────────────────────────
@@ -28,6 +28,34 @@ const baseTimelineOptions: TimelineLayoutOptions = {
   headerHeight: 48,
   groupGap: 24,
 };
+
+/** updateGroupLayout 的起点：逐组排版，再按「头部 + 内容 + 组间距」纵向堆叠 */
+function stackGroups(
+  groups: Array<{ id: string; label: string; items: LayoutItem[] }>,
+  options: TimelineLayoutOptions,
+): TimelineLayoutResult {
+  const { headerHeight, groupGap, ...layoutOptions } = options;
+  const layout: TimelineLayoutResult = { groupLayouts: [], totalHeight: 0, itemPositionMap: new Map(), allRows: [] };
+  let y = 0;
+  for (const group of groups) {
+    const contentY = y + headerHeight;
+    const { rows, contentHeight } = calculateJustifiedLayout(group.items, layoutOptions);
+    for (const row of rows) {
+      row.y += contentY;
+      for (const item of row.items) {
+        item.y += contentY;
+        layout.itemPositionMap.set(item.id, { y: item.y, height: item.height, groupId: group.id });
+      }
+      layout.allRows.push({ groupId: group.id, row, globalRowIndex: layout.allRows.length });
+    }
+    layout.groupLayouts.push({
+      groupId: group.id, label: group.label, headerY: y, headerHeight, contentY, contentHeight, rows, itemCount: group.items.length,
+    });
+    y = contentY + contentHeight + groupGap;
+  }
+  layout.totalHeight = groups.length > 0 ? y - groupGap : 0;
+  return layout;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // calculateJustifiedLayout
@@ -101,95 +129,11 @@ describe('calculateJustifiedLayout', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// calculateTimelineLayout
-// ═══════════════════════════════════════════════════════════════
-
-describe('calculateTimelineLayout', () => {
-  it('空分组 → 总高度 0', () => {
-    const result = calculateTimelineLayout([], baseTimelineOptions);
-    expect(result.groupLayouts).toEqual([]);
-    expect(result.totalHeight).toBe(0);
-    expect(result.itemPositionMap.size).toBe(0);
-    expect(result.allRows).toEqual([]);
-  });
-
-  it('单分组单图 → 头部 + 图片', () => {
-    const result = calculateTimelineLayout(
-      [{ id: 'g1', label: '2024-01-01', items: [makeItem('a', 1.5)] }],
-      baseTimelineOptions,
-    );
-    expect(result.groupLayouts).toHaveLength(1);
-    const g = result.groupLayouts[0];
-    expect(g.groupId).toBe('g1');
-    expect(g.label).toBe('2024-01-01');
-    expect(g.headerY).toBe(0);
-    expect(g.contentY).toBe(baseTimelineOptions.headerHeight);
-    expect(g.itemCount).toBe(1);
-  });
-
-  it('多分组垂直堆叠 + groupGap 间隔', () => {
-    const result = calculateTimelineLayout(
-      [
-        { id: 'g1', label: 'd1', items: [makeItem('a', 1), makeItem('b', 1)] },
-        { id: 'g2', label: 'd2', items: [makeItem('c', 1)] },
-      ],
-      baseTimelineOptions,
-    );
-    expect(result.groupLayouts).toHaveLength(2);
-    const [g1, g2] = result.groupLayouts;
-    // g2 的 headerY 应该 = g1.contentY + g1.contentHeight + groupGap
-    expect(g2.headerY).toBeCloseTo(
-      g1.contentY + g1.contentHeight + baseTimelineOptions.groupGap,
-      0,
-    );
-  });
-
-  it('itemPositionMap 填充每一张图', () => {
-    const result = calculateTimelineLayout(
-      [
-        { id: 'g1', label: 'd1', items: [makeItem('a', 1), makeItem('b', 1)] },
-        { id: 'g2', label: 'd2', items: [makeItem('c', 1)] },
-      ],
-      baseTimelineOptions,
-    );
-    expect(result.itemPositionMap.size).toBe(3);
-    expect(result.itemPositionMap.get('a')?.groupId).toBe('g1');
-    expect(result.itemPositionMap.get('c')?.groupId).toBe('g2');
-  });
-
-  it('allRows 按顺序累加 globalRowIndex', () => {
-    const result = calculateTimelineLayout(
-      [
-        { id: 'g1', label: 'd1', items: Array.from({ length: 4 }, (_, i) => makeItem(`a${i}`, 1)) },
-        { id: 'g2', label: 'd2', items: Array.from({ length: 4 }, (_, i) => makeItem(`b${i}`, 1)) },
-      ],
-      baseTimelineOptions,
-    );
-    const indices = result.allRows.map(r => r.globalRowIndex);
-    expect(indices).toEqual(indices.slice().sort((a, b) => a - b));
-    expect(indices[0]).toBe(0);
-  });
-
-  it('totalHeight 不含最后一组的 groupGap', () => {
-    const result = calculateTimelineLayout(
-      [
-        { id: 'g1', label: 'd1', items: [makeItem('a', 1)] },
-        { id: 'g2', label: 'd2', items: [makeItem('b', 1)] },
-      ],
-      baseTimelineOptions,
-    );
-    const last = result.groupLayouts[result.groupLayouts.length - 1];
-    // totalHeight 应该约等于 last.contentY + last.contentHeight（最后一个 gap 被减去）
-    expect(result.totalHeight).toBeCloseTo(last.contentY + last.contentHeight, 0);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
 // updateGroupLayout
 // ═══════════════════════════════════════════════════════════════
 
 describe('updateGroupLayout', () => {
-  const initial = () => calculateTimelineLayout(
+  const initial = () => stackGroups(
     [
       { id: 'g1', label: 'd1', items: [makeItem('a', 1), makeItem('b', 1)] },
       { id: 'g2', label: 'd2', items: [makeItem('c', 1), makeItem('d', 1)] },
@@ -227,7 +171,7 @@ describe('updateGroupLayout', () => {
   });
 
   it('高度减少 → 后续分组 y 上移', () => {
-    const layout = calculateTimelineLayout(
+    const layout = stackGroups(
       [
         { id: 'g1', label: 'd1', items: Array.from({ length: 8 }, (_, i) => makeItem(`a${i}`, 1)) },
         { id: 'g2', label: 'd2', items: [makeItem('z', 1)] },
