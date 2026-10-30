@@ -3,7 +3,6 @@ import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { IUploader } from '@/uploaders/base/IUploader';
 import type {
   ConnectionTestResult,
-  ProgressCallback,
   UploadResult,
   ValidationResult,
 } from '@/uploaders/base/types';
@@ -172,9 +171,3 @@ export function createMockUploader(overrides?: MockUploaderOverrides): IUploader
     ),
   };
 }
-
-export function createMockProgressCallback(): ProgressCallback & ReturnType<typeof vi.fn> {
-  return vi.fn();
-}
-
-export const createMockUploadResult = createUploadResult;

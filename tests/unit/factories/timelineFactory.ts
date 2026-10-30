@@ -53,13 +53,3 @@ export function createPhotoGroup(overrides: Partial<PhotoGroup> = {}): PhotoGrou
     aspectRatioSum: overrides.aspectRatioSum,
   };
 }
-
-/**
- * 按 (year, month, day) 三元组批量造分组。
- * 顺序原样保留——时间轴约定 groups 按时间降序，跳转逻辑依赖这个顺序取「月最新一天」。
- */
-export function createPhotoGroups(
-  specs: Array<{ year: number; month: number; day: number; items?: ImageMeta[] }>,
-): PhotoGroup[] {
-  return specs.map(spec => createPhotoGroup(spec));
-}

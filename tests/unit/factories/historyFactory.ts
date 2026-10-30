@@ -102,17 +102,3 @@ export function createHistoryItem(overrides: Partial<HistoryItem> = {}): History
     migrationSkip: overrides.migrationSkip,
   };
 }
-
-export function createHistoryItems(
-  count: number,
-  overrides:
-    | Partial<HistoryItem>
-    | ((index: number) => Partial<HistoryItem>) = {},
-): HistoryItem[] {
-  return Array.from({ length: count }, (_, index) => {
-    const itemOverrides = typeof overrides === 'function' ? overrides(index) : overrides;
-    return createHistoryItem(itemOverrides);
-  });
-}
-
-export const createMockHistoryItem = createHistoryItem;

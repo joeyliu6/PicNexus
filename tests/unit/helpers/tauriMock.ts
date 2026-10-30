@@ -243,10 +243,6 @@ export function mockInvokeResponse(command: string, response: InvokeResponse): v
   });
 }
 
-export function mockInvokeError(command: string, error: unknown): void {
-  mockInvokeResponse(command, error instanceof Error ? error : new Error(String(error)));
-}
-
 export function resetInvokeMock(): void {
   getInvokeMock().mockReset();
 }
@@ -521,25 +517,4 @@ export function getRelaunchMock() {
 
 export function getExitMock() {
   return vi.mocked(exit);
-}
-
-export function emitProgressEvent(
-  handler: (event: { payload: Record<string, unknown> }) => void,
-  id: string,
-  progress: number,
-  total: number,
-  step?: string,
-  stepIndex?: number,
-  totalSteps?: number,
-): void {
-  handler({
-    payload: {
-      id,
-      progress,
-      total,
-      step,
-      step_index: stepIndex,
-      total_steps: totalSteps,
-    },
-  });
 }
