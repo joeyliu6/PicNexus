@@ -25,7 +25,7 @@ export const AUTO_CHECK_OPTIONS = [
   { value: '0', label: '关闭' },
 ] as const;
 
-export function autoCheckLabel(settings: LinkHealthConfig['autoCheck']): string {
+function autoCheckLabel(settings: LinkHealthConfig['autoCheck']): string {
   if (!settings.enabled) return '已关闭';
   return settings.intervalDays === 1 ? '每天' : `每 ${settings.intervalDays} 天`;
 }

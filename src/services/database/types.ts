@@ -95,4 +95,4 @@ export interface SyncLogEntry {
   profileName?: string;
 }
 
-export type { HistoryItem, ServiceType };
+export type { ServiceType };

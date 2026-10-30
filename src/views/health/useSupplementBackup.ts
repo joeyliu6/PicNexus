@@ -27,7 +27,7 @@ export const BACKUP_SECONDS_PER_IMAGE = 0.9;
 /** 每传成功这么多张广播一次（图库等视图重查一次，不逐张刷） */
 const NOTIFY_EVERY = 20;
 
-export type BackupPhase = 'idle' | 'running' | 'paused' | 'done';
+type BackupPhase = 'idle' | 'running' | 'paused' | 'done';
 
 const state = reactive({
   phase: 'idle' as BackupPhase,

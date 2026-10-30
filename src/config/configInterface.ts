@@ -31,7 +31,7 @@ export type ThemeMode = 'light' | 'dark' | 'auto';
 /**
  * 主题配置接口
  */
-export interface ThemeConfig {
+interface ThemeConfig {
   /** 当前主题模式 */
   mode: ThemeMode;
 
@@ -46,7 +46,7 @@ export interface ThemeConfig {
 /**
  * Google Analytics 配置接口
  */
-export interface AnalyticsConfig {
+interface AnalyticsConfig {
   /** 是否启用 Analytics 追踪 */
   enabled: boolean;
 }
@@ -56,7 +56,7 @@ export interface AnalyticsConfig {
  * - direct: 直接返回原始链接
  * - baidu-proxy: 使用百度代理（仅微博支持）
  */
-export type WeiboProxyMode = 'direct' | 'baidu-proxy';
+type WeiboProxyMode = 'direct' | 'baidu-proxy';
 
 /**
  * 链接前缀单项
@@ -113,11 +113,11 @@ export function cloneDefaultPrefixes(): LinkPrefixItem[] {
 /**
  * 应用行为配置
  */
-export interface AutoUpdateConfig {
+interface AutoUpdateConfig {
   enabled: boolean;
 }
 
-export interface AppBehaviorConfig {
+interface AppBehaviorConfig {
   /** 开机自启动 */
   autoStart: boolean;
   /** 启动时最小化到托盘 */

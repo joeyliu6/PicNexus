@@ -23,7 +23,7 @@ export function findWebdav(config: UserConfig, hostId: string): WebDAVStoragePro
   return config.webdav_profiles?.find((p) => p.id === id);
 }
 
-export function findCustomS3(config: UserConfig, hostId: string): CustomS3Profile | undefined {
+function findCustomS3(config: UserConfig, hostId: string): CustomS3Profile | undefined {
   const id = getCustomS3ProfileId(hostId);
   return config.custom_s3_profiles?.find((p) => p.id === id);
 }

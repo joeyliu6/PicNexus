@@ -7,7 +7,7 @@
 import { useEventListener } from '@vueuse/core';
 
 /** 这一下按键是给输入法的（正在选字，或刚用它上屏） */
-export function isImeKeystroke(event: KeyboardEvent): boolean {
+function isImeKeystroke(event: KeyboardEvent): boolean {
   return event.isComposing || event.keyCode === 229;
 }
 

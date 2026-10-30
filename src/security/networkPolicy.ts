@@ -57,7 +57,7 @@ export interface NetworkPolicyOptions {
   allowConfirmedHttp?: boolean;
 }
 
-export function parseHttpUrl(rawUrl: string, label = '地址'): URL {
+function parseHttpUrl(rawUrl: string, label = '地址'): URL {
   try {
     return new URL(rawUrl.trim());
   } catch {
@@ -290,7 +290,7 @@ export function safeImageUrl(
  * 链路本地 / 组播 / 未指定地址：任何放行策略下都拒绝
  * 含云元数据地址 169.254.169.254 —— 放行它只会平白扩大 SSRF 面
  */
-export function isAlwaysBlockedHost(hostname: string): boolean {
+function isAlwaysBlockedHost(hostname: string): boolean {
   const host = normalizeHost(hostname);
   if (!host) return true;
 

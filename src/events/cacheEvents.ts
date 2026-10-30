@@ -58,7 +58,7 @@ export const WINDOW_SESSION_ID = Math.random().toString(36).slice(2, 10);
  * await emitCacheEvent('history-deleted', { ids: ['id1', 'id2'] });
  * ```
  */
-export async function emitCacheEvent(
+async function emitCacheEvent(
   type: CacheEventType,
   data?: HistoryEventData | unknown
 ): Promise<void> {

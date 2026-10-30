@@ -14,7 +14,7 @@ import { useSettingsConfig } from './useSettingsConfig';
 
 const log = createLogger('EditorCards');
 
-export type ObsidianState = 'off' | 'checking' | 'ok' | 'portBusy' | 'notPicnexus' | 'down';
+type ObsidianState = 'off' | 'checking' | 'ok' | 'portBusy' | 'notPicnexus' | 'down';
 
 export interface CliPathStatus {
   supported: boolean;

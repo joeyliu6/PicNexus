@@ -3,7 +3,7 @@
 
 import { markdownAlt } from './linkFormatter';
 
-export type LinkSegmentKind = 'url' | 'name' | 'syntax';
+type LinkSegmentKind = 'url' | 'name' | 'syntax';
 
 export interface LinkSegment {
   kind: LinkSegmentKind;

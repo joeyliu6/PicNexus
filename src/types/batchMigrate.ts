@@ -5,7 +5,7 @@
 /**
  * 跳过的原因：目标上本来就有 / 停止或中止时还没轮到 / 抢救模式下已不需要 / 处理前记录被删了
  */
-export type MigrateSkipReason = 'already-there' | 'not-attempted' | 'not-needed' | 'deleted';
+type MigrateSkipReason = 'already-there' | 'not-attempted' | 'not-needed' | 'deleted';
 
 /**
  * 单次失败的技术细节

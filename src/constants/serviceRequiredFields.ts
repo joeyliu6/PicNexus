@@ -59,7 +59,7 @@ export const WEBDAV_REQUIRED_FIELDS = ['url', 'username', 'passwordEncrypted', '
  *
  * 详见 `docs/audits/upyun-audit-2026-08-19.md`。
  */
-export const REST_CHAIN_REQUIRED_FIELDS: Partial<Record<ServiceType, string[]>> = {
+const REST_CHAIN_REQUIRED_FIELDS: Partial<Record<ServiceType, string[]>> = {
   upyun: ['operator', 'password', 'bucket', 'publicDomain'],
 };
 

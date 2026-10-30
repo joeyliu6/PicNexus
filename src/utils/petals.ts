@@ -14,7 +14,7 @@ export const CLASSIC_PETAL_PATHS = [
 
 export const MAX_PETALS = 8;
 
-export interface PetalShape {
+interface PetalShape {
   d: string;
   /** SVG transform；经典四瓣为空 */
   transform?: string;

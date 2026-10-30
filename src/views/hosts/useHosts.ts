@@ -31,10 +31,10 @@ import { LanHttpConsentNeeded, useHostTest } from './useHostTest';
 const log = createLogger('Hosts');
 
 /** 右侧显示什么：已添加图床的详情 / 添加图床目录 / 未连接图床的连接表单 */
-export type HostsPane = 'detail' | 'catalog' | 'connect';
+type HostsPane = 'detail' | 'catalog' | 'connect';
 
 /** 连接表单的草稿（还没写进配置） */
-export interface ConnectDraft {
+interface ConnectDraft {
   /** 目录里点的那一种（内置图床 id，或 webdav / s3） */
   descriptorId: string;
   /** 测试时用的 id：内置图床就是它自己；多份图床是新 profile 的复合 id */
@@ -44,7 +44,7 @@ export interface ConnectDraft {
 }
 
 /** P12 的文案（HostsScreen.dc.html dialog=http） */
-export const HTTP_CONSENT_COPY = {
+const HTTP_CONSENT_COPY = {
   header: '允许通过 HTTP 访问此地址？',
   message: 'HTTP 不加密，图片与凭证将以明文传输。此设置仅对以下地址生效，适用于局域网环境。',
   acceptLabel: '允许 HTTP',

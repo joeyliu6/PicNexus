@@ -10,9 +10,9 @@ export type CopyStatus = 'ok' | 'gone' | 'denied' | 'timeout' | 'limited' | 'unc
 /** 失效原因（筛选与行上那句话） */
 export type DeadReason = 'gone' | 'denied' | 'timeout';
 /** 一张图：尚未检测 / 正常 / 可能受限 / 失效但能改用备份 / 失效且无可用备份 */
-export type ImageState = 'unchecked' | 'ok' | 'limited' | 'fixable' | 'unfixable';
+type ImageState = 'unchecked' | 'ok' | 'limited' | 'fixable' | 'unfixable';
 
-export interface HealthCopy {
+interface HealthCopy {
   host: string;
   status: CopyStatus;
   /** 最近一次检测的响应时间（毫秒） */

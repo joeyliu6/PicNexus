@@ -3,7 +3,7 @@
 import { DropdownMenuItemIndicator, DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'reka-ui';
 import PnIcon from './PnIcon.vue';
 
-export interface PnMenuRadioOption<V extends string> {
+interface PnMenuRadioOption<V extends string> {
   value: V;
   label: string;
   description?: string;

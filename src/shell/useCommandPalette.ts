@@ -16,7 +16,7 @@ import type { NavigatePayload } from './navigatePayload';
 
 const log = createLogger('CommandPalette');
 
-export type CommandRun =
+type CommandRun =
   | { kind: 'image'; item: HistoryItem }
   | { kind: 'page'; path: string }
   | { kind: 'action'; action: ActionId }

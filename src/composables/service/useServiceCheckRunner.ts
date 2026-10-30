@@ -4,9 +4,9 @@ import type { BatchTestProgress } from '@/types/batchTest';
 import type { ServiceCheckMode, ServiceCheckSession, ServiceCheckSummarySnapshot } from '@/types/serviceCheck';
 import type { ServiceHealthStatus } from '@/types/serviceHealth';
 
-export const MAX_SERVICE_CHECK_CONCURRENCY = 3;
+const MAX_SERVICE_CHECK_CONCURRENCY = 3;
 
-export interface ServiceCheckTask {
+interface ServiceCheckTask {
   serviceId: string;
   label: string;
   run: () => Promise<void>;

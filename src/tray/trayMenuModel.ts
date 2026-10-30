@@ -60,7 +60,7 @@ export type TrayRow =
   | { kind: 'submenu'; text: string; items: TrayRow[] };
 
 /** 「复制为」每种格式长什么样（设计稿用等宽字，原生菜单只能用菜单字体） */
-export const FORMAT_SAMPLES: Record<Exclude<LinkFormat, 'custom'>, string> = {
+const FORMAT_SAMPLES: Record<Exclude<LinkFormat, 'custom'>, string> = {
   url: 'https://…',
   markdown: '![](…)',
   html: '<img src="…">',
@@ -68,13 +68,13 @@ export const FORMAT_SAMPLES: Record<Exclude<LinkFormat, 'custom'>, string> = {
 };
 
 /** 与 src-tauri/src/commands/tray.rs 兜底菜单的两项一致（前端菜单画好之前用的是那一份） */
-export const OPEN_LABEL = '打开 PicNexus';
-export const QUIT_LABEL = '退出 PicNexus';
+const OPEN_LABEL = '打开 PicNexus';
+const QUIT_LABEL = '退出 PicNexus';
 
 /** 状态行里的文件名超过这么多字从中间省略 */
-export const SUBJECT_MAX_CHARS = 24;
+const SUBJECT_MAX_CHARS = 24;
 /** 图床原因（非登录类）超过这么多字截断 */
-export const HOST_DETAIL_MAX_CHARS = 16;
+const HOST_DETAIL_MAX_CHARS = 16;
 
 const SEPARATOR: TrayRow = { kind: 'separator' };
 

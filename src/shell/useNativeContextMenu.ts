@@ -14,7 +14,7 @@ function inTextBox(el: Element): boolean {
 }
 
 /** 浏览器自己的右键菜单留不留：输入框里、选中的字上留着，其余地方不弹 */
-export function keepsNativeMenu(target: EventTarget | null, selection: Selection | null): boolean {
+function keepsNativeMenu(target: EventTarget | null, selection: Selection | null): boolean {
   if (!(target instanceof Element)) return false;
   if (inTextBox(target)) return true;
   return !!selection && !selection.isCollapsed && selection.toString().trim() !== '' && selection.containsNode(target, true);

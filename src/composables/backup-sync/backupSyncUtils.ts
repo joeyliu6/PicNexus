@@ -136,7 +136,7 @@ export type CloudHistoryPayload =
  * 下面三条中止原因（记录为空 / 记录不是数组 / 配置为空）都拼这一句，
  * 确保几处「已中止…」措辞不会各写各的跑偏。
  */
-export const CLOUD_DATA_ABORT_MARKER = '已中止以避免覆盖云端数据';
+const CLOUD_DATA_ABORT_MARKER = '已中止以避免覆盖云端数据';
 
 /** 云端 history.json 为 0 字节时的中止原因；措辞刻意避开「文件不存在」/`404`/`not found`
  * （isWebDAVNotFoundError 按子串匹配，命中会把中止当「首次同步」吞掉），并给出唯一逃生舱。 */
@@ -144,7 +144,7 @@ export const CLOUD_HISTORY_EMPTY_REASON =
   `云端历史文件为空，${CLOUD_DATA_ABORT_MARKER}；如确定云端没有数据，请用「⋯ › 用本机覆盖云端…」`;
 
 /** 云端 history.json 是合法 JSON 但不是数组时的中止原因 */
-export const CLOUD_HISTORY_NON_ARRAY_REASON =
+const CLOUD_HISTORY_NON_ARRAY_REASON =
   `云端历史数据格式错误：期望数组格式，${CLOUD_DATA_ABORT_MARKER}`;
 
 /** 云端 settings.json 为 0 字节时的中止原因（ConfigSync 用；逃生舱是「上传到云端」） */

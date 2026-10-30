@@ -14,7 +14,7 @@ import type { TrayIconOpacities } from './trayProgress';
 const log = createLogger('NativeTray');
 
 /** 与 src-tauri/src/commands/tray.rs 的 TRAY_ID 一致 */
-export const TRAY_ID = 'main-tray';
+const TRAY_ID = 'main-tray';
 
 /**
  * 单色托盘图标的颜色（TrayWindow.dc.html 的 barIconStrong）：浅色任务栏上深色、深色任务栏上白色。

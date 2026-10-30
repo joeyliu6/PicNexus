@@ -44,7 +44,7 @@ interface R2SuccessPayload {
 /**
  * 上传进度事件的判别联合类型
  */
-export type UploadProgressEvent =
+type UploadProgressEvent =
   | { type: 'weibo_progress'; payload: number }
   | { type: 'r2_progress'; payload: number }
   | { type: 'weibo_success'; payload: WeiboSuccessPayload }

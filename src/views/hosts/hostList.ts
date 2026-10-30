@@ -49,7 +49,7 @@ export function buildHostRows(hosts: readonly AddedHost[], testing: ReadonlySet<
   return rows.sort((a, b) => rank(a.row) - rank(b.row) || a.order - b.order).map((r) => r.row);
 }
 
-export interface CatalogItem {
+interface CatalogItem {
   /** 内置图床 id，或多份图床的模板 id（webdav / s3） */
   id: string;
   name: string;

@@ -1,6 +1,6 @@
 import type { LinkFormat } from './linkFormatter';
 
-export interface UploadFailedServiceSummary {
+interface UploadFailedServiceSummary {
   serviceName: string;
   count: number;
   /** 这个图床第一次失败的原因（通知里写在最前面） */
@@ -8,7 +8,7 @@ export interface UploadFailedServiceSummary {
 }
 
 /** 第一张整张失败的图：通知照它写「原因 + 处理办法」（交接说明第 9 节，与首页卡片、重试通知同一套说法） */
-export interface UploadFailureNote {
+interface UploadFailureNote {
   fileName: string;
   reason: string;
   advice: string;

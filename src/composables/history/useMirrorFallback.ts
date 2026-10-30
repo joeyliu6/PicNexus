@@ -29,7 +29,7 @@ import { getErrorMessage } from '@/types/errors';
 
 const log = createLogger('MirrorFallback');
 
-export type MirrorCheckState = 'valid' | 'invalid' | 'unchecked';
+type MirrorCheckState = 'valid' | 'invalid' | 'unchecked';
 
 export interface MirrorInfo {
   serviceId: string;

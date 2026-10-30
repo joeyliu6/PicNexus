@@ -27,7 +27,7 @@ interface CacheNode {
 }
 
 /** 缓存统计信息 */
-export interface CacheStats {
+interface CacheStats {
   size: number; // 当前缓存条数
   maxSize: number; // 最大缓存条数
   hitCount: number; // 命中次数

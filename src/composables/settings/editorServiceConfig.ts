@@ -7,7 +7,7 @@ import type { SettingsFormShape } from './settingsFormTypes';
 
 export const EDITOR_UNSUPPORTED_SERVICES: Set<ServerServiceType> = new Set(['qiyu', 'nami']);
 
-export const BUILTIN_EDITOR_SERVICE_IDS: ServerServiceType[] = [
+const BUILTIN_EDITOR_SERVICE_IDS: ServerServiceType[] = [
   'jd',
   'qiyu',
   'r2',

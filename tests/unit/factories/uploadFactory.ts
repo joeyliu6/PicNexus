@@ -23,7 +23,7 @@ export function resetUploadFactorySequence(): void {
   uploadSequence = 0;
 }
 
-export function createUploadResult(
+function createUploadResult(
   overrides: Partial<UploadResult> = {},
 ): UploadResult {
   const serviceId = overrides.serviceId ?? 'jd';

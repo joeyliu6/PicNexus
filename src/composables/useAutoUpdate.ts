@@ -9,7 +9,7 @@ const log = createLogger('AutoUpdate');
 // plugin-updater 默认无超时（reqwest 默认无 request timeout），不显式传会无限 pending。
 const CHECK_TIMEOUT_MS = 30_000;
 
-export type UpdateStatus =
+type UpdateStatus =
   | 'idle'
   | 'checking'
   | 'available'
@@ -21,7 +21,7 @@ export type UpdateStatus =
   | 'install-pending'
   | 'error';
 
-export interface UpdateInfo {
+interface UpdateInfo {
   version: string;
   date: string;
   body: string;

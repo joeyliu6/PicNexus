@@ -19,7 +19,7 @@ const log = createLogger('HealthDocs');
  * 备份目录名。必须与 Rust 侧 `src-tauri/src/commands/md_scanner.rs` 的 `BACKUP_DIR_NAME` 一致
  * （`scripts/check-cross-language-constants.mjs` 守着）：扫描靠它跳过备份目录。
  */
-export const BACKUP_DIR_NAME = '.picnexus-backup';
+const BACKUP_DIR_NAME = '.picnexus-backup';
 
 /** 每个文档文件夹保留最近几次修复的备份 */
 const KEEP_BACKUPS = 5;

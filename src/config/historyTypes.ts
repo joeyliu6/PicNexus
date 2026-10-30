@@ -128,7 +128,7 @@ export interface ImageMetadata {
  * 服务可用性检测状态
  * 用于持久化保存服务检测结果，实现智能检测策略
  */
-export interface ServiceCheckStatus {
+interface ServiceCheckStatus {
   /** 上次检测时间戳 */
   lastCheckTime: number | null;
   /** 上次检测结果 */

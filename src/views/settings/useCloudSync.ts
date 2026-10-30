@@ -63,7 +63,7 @@ export function describeSync(result: { uploaded: number; downloaded: number; con
 }
 
 /** 失败的那句：原因 + 处理办法；云端已经合并进本机、只是回传失败时说清本机已经变了 */
-export function describeFailure(error: unknown): string {
+function describeFailure(error: unknown): string {
   const reason = error instanceof Error ? error.message : String(error);
   if (error instanceof SyncFailure && error.partial) return `同步未完成：云端改动已合并到本机，回传失败（${reason}）`;
   return `同步失败：${reason}`;

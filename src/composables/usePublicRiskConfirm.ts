@@ -6,7 +6,7 @@ import { useConfigManager } from '@/composables/useConfig';
 import { useConfirm } from '@/composables/useConfirm';
 import { readFreshConfig } from '@/store/instances';
 
-export const PUBLIC_RISK_COPY = {
+const PUBLIC_RISK_COPY = {
   header: '启用公共图床？',
   message: '此类图床为非官方的第三方平台适配，可能违反平台规则或随时失效，相关风险由你自行承担。是否继续？',
   acceptLabel: '我已了解并继续',

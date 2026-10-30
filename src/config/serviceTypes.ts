@@ -37,7 +37,7 @@ export function makeWebDAVId(profileId: string): string {
  * 需要风险确认的非官方公共图床服务
  * GitHub / SM.MS / Imgur 使用平台提供的公开 API，不纳入强确认。
  */
-export const PUBLIC_RISK_SERVICES: ServiceType[] = ['jd', 'qiyu', 'weibo', 'zhihu', 'nowcoder', 'nami', 'bilibili', 'chaoxing'];
+const PUBLIC_RISK_SERVICES: ServiceType[] = ['jd', 'qiyu', 'weibo', 'zhihu', 'nowcoder', 'nami', 'bilibili', 'chaoxing'];
 
 export function isPublicRiskService(serviceId: string): serviceId is ServiceType {
   return (PUBLIC_RISK_SERVICES as string[]).includes(serviceId);
@@ -46,7 +46,7 @@ export function isPublicRiskService(serviceId: string): serviceId is ServiceType
 /**
  * 基础服务配置接口
  */
-export interface BaseServiceConfig {
+interface BaseServiceConfig {
   /** 服务是否启用 */
   enabled: boolean;
 }
@@ -228,7 +228,7 @@ export interface GithubCdnConfig {
 /**
  * 默认 GitHub CDN 提供商列表
  */
-export const DEFAULT_CDN_TEMPLATE = '{domain}/gh/{owner}/{repo}@{branch}/{path}';
+const DEFAULT_CDN_TEMPLATE = '{domain}/gh/{owner}/{repo}@{branch}/{path}';
 
 export const DEFAULT_GITHUB_CDN_LIST: GithubCdnProvider[] = [
   { name: 'jsDelivr', url: 'https://cdn.jsdelivr.net', template: DEFAULT_CDN_TEMPLATE }

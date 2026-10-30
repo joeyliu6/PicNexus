@@ -20,7 +20,7 @@ export interface ScannedFolder {
 }
 
 /** 文档里的一处引用 */
-export interface DocRef {
+interface DocRef {
   folder: string;
   path: string;
   name: string;
@@ -81,7 +81,7 @@ export function buildDocIndex(folders: readonly ScannedFolder[], images: readonl
  * 这张图在文档里该换成哪一份：复制时使用的那份可访问就用它；它失效、能修就用改用的那份；都不行返回 undefined。
  * 修复会把「复制时使用」切过去，所以两种情况最后都是「修复后复制时使用的那份」。
  */
-export function replacementHost(image: HealthImage): string | undefined {
+function replacementHost(image: HealthImage): string | undefined {
   if (image.copies[0]?.status === 'ok') return image.copyHost;
   return image.state === 'fixable' ? image.fixTo : undefined;
 }

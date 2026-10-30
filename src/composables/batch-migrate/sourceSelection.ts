@@ -8,7 +8,7 @@ export interface MigrateSourceCandidate {
   order: number;
 }
 
-export interface RecoverableLinkInfo {
+interface RecoverableLinkInfo {
   problemServiceIds: string[];
   validSources: MigrateSourceCandidate[];
   preferredSource: MigrateSourceCandidate;

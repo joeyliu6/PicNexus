@@ -17,7 +17,7 @@ const TYPE_EXEMPT = ['.petals__count', '.upload-calendar__weekday', '.host-icon_
 /** 绿色小圆点只许出现在：通知的 ✓、图床页「测试连接」刚通过的结果标签（P07，设计稿画了，不是常驻状态） */
 const GREEN_ALLOWED = ['.pn-toast', '.host-head__pill--ok'];
 
-export async function designRuleViolations(page: Page): Promise<string[]> {
+async function designRuleViolations(page: Page): Promise<string[]> {
   return page.evaluate(({ typeExempt, greenAllowed }) => {
     const problems: string[] = [];
     const FONT_SIZES = new Set([11, 12, 13, 15, 17, 20]);

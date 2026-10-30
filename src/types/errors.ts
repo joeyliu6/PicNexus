@@ -22,14 +22,14 @@ export type AppErrorType =
 /**
  * 基础错误数据结构（只有 message）
  */
-export interface SimpleErrorData {
+interface SimpleErrorData {
   message: string;
 }
 
 /**
  * 上传错误数据结构
  */
-export interface UploadErrorData {
+interface UploadErrorData {
   service: string;
   code: number | null;
   message: string;
@@ -38,7 +38,7 @@ export interface UploadErrorData {
 /**
  * 服务不可用错误数据结构
  */
-export interface ServiceUnavailableErrorData {
+interface ServiceUnavailableErrorData {
   service: string;
   message: string;
 }

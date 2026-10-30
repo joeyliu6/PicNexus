@@ -29,7 +29,7 @@ export const SERVICE_DISPLAY_NAMES: Record<ServiceType, string> = {
  * 用于错误文案去前缀。当 uploader 内部包装错误时（如 R2Error 的 `R2 上传失败: xxx`），
  * 正则需要知道该图床可能出现的所有写法才能正确剥壳。
  */
-export const SERVICE_NAME_ALIASES: Partial<Record<ServiceType, string[]>> = {
+const SERVICE_NAME_ALIASES: Partial<Record<ServiceType, string[]>> = {
   r2: ['R2', 'Cloudflare', 'Cloudflare R2'],
   tencent: ['腾讯', 'Tencent', 'Tencent COS'],
   aliyun: ['阿里', 'Aliyun', 'OSS'],

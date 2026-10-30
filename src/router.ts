@@ -6,7 +6,7 @@ import HealthView from '@/views/health/HealthView.vue';
 import HostsView from '@/views/hosts/HostsView.vue';
 import SettingsView from '@/views/settings/SettingsView.vue';
 
-export const routes: RouteRecordRaw[] = [
+const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/home' },
   { path: '/home', component: HomeView, meta: { pageKey: 'home' } },
   { path: '/gallery', component: GalleryView, meta: { pageKey: 'gallery' } },

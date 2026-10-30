@@ -9,7 +9,7 @@ import { createLogger } from '@/utils/logger';
 const log = createLogger('SidebarCollapse');
 
 /** design-tokens.json size.navRailBreakpoint */
-export const NAV_RAIL_BREAKPOINT = 1000;
+const NAV_RAIL_BREAKPOINT = 1000;
 const STORAGE_KEY = 'picnexus-sidebar-collapsed';
 
 function readStored(): boolean {

@@ -6,7 +6,7 @@ import {
 } from 'reka-ui';
 import PnIcon from './PnIcon.vue';
 
-export interface PnSelectOption<V extends string> {
+interface PnSelectOption<V extends string> {
   value: V;
   label: string;
   hint?: string;

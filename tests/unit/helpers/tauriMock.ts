@@ -415,7 +415,7 @@ export function getDialogOpenMock() {
   return vi.mocked(dialogOpen);
 }
 
-export function getDialogSaveMock() {
+function getDialogSaveMock() {
   return vi.mocked(dialogSave);
 }
 
@@ -438,7 +438,7 @@ export function getPathMocks() {
   };
 }
 
-export function getCurrentWebviewMock() {
+function getCurrentWebviewMock() {
   return vi.mocked(getCurrentWebview);
 }
 

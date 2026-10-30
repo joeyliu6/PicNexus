@@ -29,7 +29,7 @@ const SHOW_ANIMATION_DURATION = 250;
 /** = --pn-dur-expressive × 0.7 */
 const HIDE_ANIMATION_DURATION = 175;
 /** = --pn-dur-standard */
-export const ZOOM_ANIMATION_DURATION = 200;
+const ZOOM_ANIMATION_DURATION = 200;
 /**
  * 快启慢停。开场和关场都用它。
  *
@@ -52,7 +52,7 @@ const MAX_LOAD_RETRIES = 1;
 const FULL_IMAGE_WAITING_CLASS = 'is-waiting-full-image';
 const FULL_IMAGE_READY_CLASS = 'is-full-image-ready';
 
-export type PhotoSwipeCloseTargetMode = 'auto' | 'preview' | 'thumb' | 'fade';
+type PhotoSwipeCloseTargetMode = 'auto' | 'preview' | 'thumb' | 'fade';
 
 export interface PhotoSwipeBridgeOptions {
   /** 灯箱是否可见 */

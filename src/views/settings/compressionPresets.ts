@@ -7,7 +7,7 @@ import { formatFileSize } from '@/utils/formatters';
 export const MAX_PRESETS = 5;
 
 /** 「小于 100 KB 不压缩」：整 MB 写成「2 MB」，其余按全应用的文件大小写法 */
-export function formatSkipSize(kb: number): string {
+function formatSkipSize(kb: number): string {
   if (kb >= 1024 && kb % 1024 === 0) return `${kb / 1024} MB`;
   return formatFileSize(kb * 1024);
 }
