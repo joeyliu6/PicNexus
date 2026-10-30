@@ -183,7 +183,6 @@ const APP_COMMANDS: &[&str] = &[
 
 ```
 src/uploaders/myservice/
-├── index.ts
 ├── MyServiceUploader.ts
 └── MyServiceError.ts  (可选)
 ```
@@ -271,22 +270,15 @@ export class MyServiceUploader implements IUploader {
 }
 ```
 
-### 2.3 导出
-
-```typescript
-// src/uploaders/myservice/index.ts
-export { MyServiceUploader } from './MyServiceUploader';
-```
-
 ---
 
 ## 步骤 3: 注册上传器
 
-在 `src/uploaders/index.ts` 中注册：
+在 `src/uploaders/index.ts` 中注册（直接从类文件导入，图床目录下不建 `index.ts`）：
 
 ```typescript
 import { UploaderFactory } from './base/UploaderFactory';
-import { MyServiceUploader } from './myservice';
+import { MyServiceUploader } from './myservice/MyServiceUploader';
 
 export function initializeUploaders(): void {
   // ...existing registrations...
