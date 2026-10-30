@@ -97,11 +97,6 @@ pub async fn check_qiyu_available(app: tauri::AppHandle) -> bool {
     }
 }
 
-#[tauri::command]
-pub async fn fetch_qiyu_token(app: tauri::AppHandle) -> Result<QiyuToken, AppError> {
-    fetch_qiyu_token_internal(&app).await
-}
-
 pub async fn fetch_qiyu_token_internal(_app: &tauri::AppHandle) -> Result<QiyuToken, AppError> {
     log::debug!("[QiyuToken] starting sidecar");
 

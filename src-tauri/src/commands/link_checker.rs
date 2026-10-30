@@ -1405,122 +1405,6 @@ fn cleanup_old_temp_files() {
     }
 }
 
-/// 从 URL 下载图片到临时目录
-///
-/// 用于重新上传功能：从有效图床下载图片，然后重新上传到失效图床
-///
-/// 安全限制：
-/// - 最大文件大小：50MB
-/// - 自动清理超过1小时的旧临时文件
-#[tauri::command]
-pub async fn download_image_from_url(
-    url: String,
-    _http_client: tauri::State<'_, crate::HttpClient>,
-) -> Result<String, AppError> {
-    log::info!("[下载图片] 开始下载: {}", safe_url(&url));
-
-    // 派发一次过期临时文件清理（带节流，后台执行），防止磁盘空间耗尽
-    schedule_temp_cleanup();
-
-    let validated_url = validate_fetch_url(url.trim()).await?;
-    let http_client = safe_no_redirect_client()?;
-
-    // 发送 GET 请求下载图片
-    let response = http_client
-        .get(validated_url.as_str())
-        .timeout(std::time::Duration::from_secs(30)) // 30秒超时
-        .send()
-        .await
-        .map_err(|e| {
-            log::error!("[下载图片] 请求失败: {}", e);
-            AppError::network(format!("下载失败: {}", e))
-        })?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        log::error!("[下载图片] HTTP错误: {}", status);
-        return Err(AppError::network(format!(
-            "下载失败: HTTP {}",
-            status.as_u16()
-        )));
-    }
-
-    let content_type = response
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-    let mime = content_type_mime(&content_type);
-    if !content_type.is_empty() && !mime.starts_with("image/") {
-        return Err(AppError::validation(format!(
-            "URL 指向的不是图片（Content-Type: {}）",
-            content_type
-        )));
-    }
-
-    // 预检查 Content-Length（如果服务器提供）
-    if let Some(content_length) = response.content_length() {
-        if content_length as usize > MAX_DOWNLOAD_SIZE {
-            log::warn!(
-                "[下载图片] 文件过大: {} bytes (最大 {} bytes)",
-                content_length,
-                MAX_DOWNLOAD_SIZE
-            );
-            return Err(AppError::validation(format!(
-                "文件过大: {} MB (最大 {} MB)",
-                content_length / 1024 / 1024,
-                MAX_DOWNLOAD_SIZE / 1024 / 1024
-            )));
-        }
-    }
-
-    // 读取响应内容
-    let bytes = response.bytes().await.map_err(|e| {
-        log::error!("[下载图片] 读取内容失败: {}", e);
-        AppError::network(format!("读取内容失败: {}", e))
-    })?;
-
-    // 实际大小检查（防止服务器返回错误的 Content-Length）
-    if bytes.len() > MAX_DOWNLOAD_SIZE {
-        log::warn!(
-            "[下载图片] 文件过大: {} bytes (最大 {} bytes)",
-            bytes.len(),
-            MAX_DOWNLOAD_SIZE
-        );
-        return Err(AppError::validation(format!(
-            "文件过大: {} MB (最大 {} MB)",
-            bytes.len() / 1024 / 1024,
-            MAX_DOWNLOAD_SIZE / 1024 / 1024
-        )));
-    }
-
-    log::debug!("[下载图片] 下载成功，大小: {} bytes", bytes.len());
-    let ext = infer_downloaded_image_extension(&bytes, &content_type, validated_url.as_str())?;
-    validate_downloaded_image_payload(&bytes, ext)?;
-
-    // 创建临时文件
-    let temp_dir = std::env::temp_dir();
-    let file_name = format!(
-        "{}{}.{}",
-        TEMP_FILE_PREFIX,
-        chrono::Local::now().timestamp_nanos_opt().unwrap_or(0),
-        ext
-    );
-    let temp_path = temp_dir.join(file_name);
-
-    // 写入文件
-    std::fs::write(&temp_path, &bytes).map_err(|e| {
-        log::error!("[下载图片] 写入文件失败: {}", e);
-        AppError::file_io(format!("写入文件失败: {}", e))
-    })?;
-
-    let path_str = temp_path.to_string_lossy().to_string();
-    log::info!("[下载图片] 已保存到: {}", safe_path(&path_str));
-
-    Ok(path_str)
-}
-
 /// URL 下载结果
 #[derive(Debug, Serialize)]
 pub struct UrlDownloadResult {
@@ -1713,11 +1597,10 @@ fn infer_downloaded_image_extension<'a>(
     Ok(from_url)
 }
 
-/// 从 URL 下载图片到临时目录（通用版）
+/// 从 URL 下载图片到临时目录（从 URL 下载、粘贴图片链接、补充备份共用）
 ///
-/// 相比 `download_image_from_url`，增加了：
 /// - Content-Type 校验（确认为图片）
-/// - 根据 MIME 类型自动推断扩展名
+/// - 按文件内容、Content-Type、URL 依次推断扩展名
 /// - 返回结构化结果（路径、类型、大小）
 #[tauri::command]
 pub async fn download_url_image(
@@ -1765,8 +1648,8 @@ pub async fn download_url_image(
         .unwrap_or("")
         .to_string();
 
-    // 校验是否为图片：判据与 is_suspicious_image_response / download_image_from_url
-    // 共用 content_type_mime()，避免三处各写一份大小写与参数的处理规则后互相漂移
+    // 校验是否为图片：判据与 is_suspicious_image_response 共用 content_type_mime()，
+    // 避免两处各写一份大小写与参数的处理规则后互相漂移
     let is_image = content_type_mime(&content_type).starts_with("image/");
     if !content_type.is_empty() && !is_image {
         log::warn!("[URL下载] 非图片类型: {}", content_type);
