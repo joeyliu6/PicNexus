@@ -76,16 +76,6 @@
 
 **当前处置**：AI 部分已完成，等维护者那部分
 
-### [ ] 阶段 11 之前就没人用的导出函数
-
-- **来源**：2026-10-19 阶段 11 清死代码时发现，不是这次改动造成的，按「不顺手改范围外的文件」没删
-- **清单**：`makeCopyBadgeKey`、`supportsCookieAutoFetch`、`getAllCookieProviders`、`PRIVATE_SERVICES`、`PUBLIC_SERVICES`、`PUBLIC_SERVICE_RISK_TOOLTIP`、`sanitizeConfig`、`getErrorType`、`isNetworkError`、`getUploadErrorService`、`getUploadErrorCode`、`getErrorHint`、`extractMetaFromHistoryItem`、`formatTime`、`findUnknownPlaceholders`、`resetCachedSyncDeviceIdForTests`（全项目除定义处外没有任何引用）
-- **另有**：`src/constants/toastMessages.ts` 里 30 条没人用的通知模板（2026-10-30 循环打磨时数出来，knip 查不到对象属性）：`cloudStorage`、`hint` 两组整组，`upload` 的 success / partialSuccess / retrying / retrySuccess / retryFailed / queueCleared / completedCleared / noRetryNeeded，`auth` 的 tokenValid / configValid / cookieValid / testFailed / serviceAvailable / serviceUnavailable，`common` 的 copyFailed / noData，`config.saveSuccess`、`history.noLink`、`clipboard.pasteFailed`；其中有旧文件管理器的文案（「移动功能开发中」等）
-- **要做的**：用 `/kill-dead-code` 逐条确认后删除
-- **优先级**：低
-
-**当前处置**：待处理
-
 ### [ ] 卸载 PrimeVue 后 CSP 的 `dangerousDisableAssetCspModification` 还要不要
 
 - **来源**：2026-10-19 阶段 11；这条配置是为 PrimeVue 运行时插入的 `<style>` 加的（[tauri-csp-nonce-inline-styles.md](./reference/troubleshooting/tauri-csp-nonce-inline-styles.md)）
@@ -294,6 +284,10 @@
 ## 已完成
 
 更早完成的条目原样搬到了 [archive/TODO-done.md](./archive/TODO-done.md)，按标题搜。
+
+### [x] 阶段 11 之前就没人用的导出函数
+
+2026-10-30 连同全仓扫出的其余死代码一起删掉（含没人用的 HTTP 插件与权限），删了什么、留了什么见 [dead-code-cleanup-2026-10-30.md](./audits/dead-code-cleanup-2026-10-30.md)；以后重扫按 [dead-code-scan.md](./reference/guides/dead-code-scan.md)。
 
 ### [x] 图床凭证框没有单测
 
