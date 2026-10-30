@@ -2,22 +2,9 @@
  * 通用格式化工具函数
  */
 
-const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
 /** 张数、条数：千分位（「12,483」，交接说明 9） */
 export function formatCount(n: number): string {
   return n.toLocaleString('zh-CN');
-}
-
-/** 格式化时间戳为本地日期时间字符串 */
-export function formatTime(timestamp: number): string {
-  return dateFormatter.format(new Date(timestamp));
 }
 
 /**

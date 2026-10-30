@@ -6,7 +6,7 @@
 //   historyTypes.ts     — 历史记录、元数据、同步状态等类型
 //   configInterface.ts  — UserConfig 主接口及其依赖的小型接口
 //   defaults.ts         — DEFAULT_CONFIG 常量和 getActivePrefix 函数
-//   validators.ts       — 验证、清洗函数
+//   validators.ts       — 配置与历史记录的格式校验
 
 export * from './serviceTypes';
 export * from './compressionTypes';

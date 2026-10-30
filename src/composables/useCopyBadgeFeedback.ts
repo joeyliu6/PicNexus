@@ -2,10 +2,6 @@ import { computed, onScopeDispose, ref, type Ref } from 'vue';
 
 const DEFAULT_HOLD_MS = 1200;
 
-export function makeCopyBadgeKey(...parts: Array<string | number | null | undefined>): string {
-  return parts.map((part) => String(part ?? '')).join(':');
-}
-
 export function useCopyBadgeFeedback(holdMs = DEFAULT_HOLD_MS) {
   const copiedKey = ref<string | null>(null);
   let timer: ReturnType<typeof setTimeout> | null = null;

@@ -34,7 +34,3 @@ export async function getSyncDeviceId(): Promise<string> {
     return cachedDeviceId;
   }
 }
-
-export function resetCachedSyncDeviceIdForTests(): void {
-  cachedDeviceId = null;
-}

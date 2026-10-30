@@ -83,28 +83,8 @@ export interface MirrorService {
 }
 
 /**
- * 从 HistoryItem 提取元数据
- */
-export function extractMetaFromHistoryItem(item: HistoryItem): ImageMeta {
-  const mirrorServices = extractMirrorServices(item.results, item.primaryService);
-  const primary = mirrorServices[0];
-
-  return {
-    id: item.id,
-    timestamp: item.timestamp,
-    localFileName: item.localFileName || '',
-    aspectRatio: item.aspectRatio || 1.0,
-    primaryService: item.primaryService as ServiceType,
-    primaryUrl: primary?.url || item.generatedLink,
-    primaryFileKey: primary?.fileKey,
-    mirrorServices: mirrorServices.length > 0 ? mirrorServices : undefined,
-    isFavorited: item.isFavorited ?? false,
-  };
-}
-
-/**
  * 从 results 数组抽出所有成功镜像，主服务排在首位
- * 供 HistoryItem 和底层 rowToImageMeta 共用
+ * 供数据库行转 ImageMeta 时使用（HistoryDatabase、TimelineQueryService）
  */
 export function extractMirrorServices(
   results: HistoryItem['results'] | undefined,

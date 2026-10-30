@@ -176,15 +176,6 @@ export function getCookieProvider(serviceId: string): CookieProvider | undefined
 }
 
 /**
- * 检查服务是否支持自动获取 Cookie
- * @param serviceId 服务标识
- * @returns 是否支持
- */
-export function supportsCookieAutoFetch(serviceId: string): boolean {
-  return serviceId in COOKIE_PROVIDERS;
-}
-
-/**
  * 验证 Cookie 是否满足要求
  * @param cookie Cookie 字符串
  * @param validation 验证规则
@@ -224,12 +215,4 @@ export function validateCookie(cookie: string, validation?: CookieValidation): b
   }
 
   return true;
-}
-
-/**
- * 获取所有支持自动获取 Cookie 的服务列表
- * @returns 服务配置数组
- */
-export function getAllCookieProviders(): CookieProvider[] {
-  return Object.values(COOKIE_PROVIDERS);
 }

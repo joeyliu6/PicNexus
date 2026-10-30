@@ -5,12 +5,6 @@
  */
 export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing' | 'smms' | 'github' | 'imgur' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun';
 
-/**
- * 私有存储服务列表（内置）
- * 用户需要提供自己的存储凭证，数据存储在用户自己的账户中
- */
-export const PRIVATE_SERVICES: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
-
 // ==================== 自定义 S3 复合 ID 工具函数 ====================
 
 export function isCustomS3Id(id: string): boolean {
@@ -40,18 +34,10 @@ export function makeWebDAVId(profileId: string): string {
 }
 
 /**
- * 公共图床服务列表
- * 使用公共平台的存储服务
- */
-export const PUBLIC_SERVICES: ServiceType[] = ['weibo', 'zhihu', 'nami', 'qiyu', 'jd', 'nowcoder', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur'];
-
-/**
  * 需要风险确认的非官方公共图床服务
  * GitHub / SM.MS / Imgur 使用平台提供的公开 API，不纳入强确认。
  */
 export const PUBLIC_RISK_SERVICES: ServiceType[] = ['jd', 'qiyu', 'weibo', 'zhihu', 'nowcoder', 'nami', 'bilibili', 'chaoxing'];
-
-export const PUBLIC_SERVICE_RISK_TOOLTIP = '公共图床为非官方适配，稳定性与可用性不作保证，可能因平台规则或接口变化而失效。请自行评估风险后启用。';
 
 export function isPublicRiskService(serviceId: string): serviceId is ServiceType {
   return (PUBLIC_RISK_SERVICES as string[]).includes(serviceId);
