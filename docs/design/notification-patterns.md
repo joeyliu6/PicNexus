@@ -78,4 +78,4 @@ if (!kept) restorePreset();
 
 ## 6. 代码在哪
 
-`src/composables/useToast.ts`（通知、系统通知改道、去重、`suppressToasts` 批量静默）、`src/components/pn/toastStore.ts`（队列与计时）、`PnToaster.vue`（画面）、`src/composables/useUndoToast.ts`、`src/composables/useConfirm.ts` + `src/components/pn/confirmStore.ts` + `PnConfirmHost.vue`、`src/composables/appPresence.ts`（主窗口在不在屏）、`src/constants/toastMessages.ts`（复用的通知文案）。
+`src/composables/useToast.ts`（通知、系统通知改道、去重）、`src/components/pn/toastStore.ts`（队列与计时）、`PnToaster.vue`（画面）、`src/composables/useUndoToast.ts`、`src/composables/useConfirm.ts` + `src/components/pn/confirmStore.ts` + `PnConfirmHost.vue`、`src/composables/appPresence.ts`（主窗口在不在屏）、`src/constants/toastMessages.ts`（复用的通知文案）。

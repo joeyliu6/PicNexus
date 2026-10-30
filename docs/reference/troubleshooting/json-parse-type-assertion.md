@@ -38,17 +38,15 @@ const config = parsed;
 ## 类型守卫函数示例
 
 ```typescript
-export function isValidHistoryItem(obj: unknown): obj is HistoryItem {
+export function isValidUserConfig(obj: unknown): obj is UserConfig {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
     return false;
   }
 
-  const item = obj as Record<string, unknown>;
+  const config = obj as Record<string, unknown>;
 
-  // 检查必需字段
-  if (typeof item.id !== 'string') return false;
-  if (typeof item.timestamp !== 'number') return false;
-  if (typeof item.localFileName !== 'string') return false;
+  // 必须包含 UserConfig 的必要字段
+  if (!Array.isArray(config.enabledServices)) return false;
   // ...
 
   return true;
@@ -65,16 +63,13 @@ if (!Array.isArray(items)) {
 }
 // items[0].id 可能是 undefined，运行时崩溃
 
-// ✅ 正确：验证数组 + 验证每个元素
-const parsed = JSON.parse(content);
+// ✅ 正确：验证数组 + 逐条验证，只断言验证过的元素（不合格的跳过并计数）
+const parsed: unknown = JSON.parse(content);
 if (!Array.isArray(parsed)) {
   throw new Error('期望数组');
 }
-const invalidIndex = parsed.findIndex(item => !isValidHistoryItem(item));
-if (invalidIndex !== -1) {
-  throw new Error(`第 ${invalidIndex + 1} 条记录格式无效`);
-}
-const items = parsed as HistoryItem[];
+const items = parsed.filter(isImportableHistoryItem) as HistoryItem[];
+const skipped = parsed.length - items.length;
 ```
 
 ## 适用场景
@@ -87,5 +82,5 @@ const items = parsed as HistoryItem[];
 
 ## 相关文件
 
-- `src/config/validators.ts` - `isValidUserConfig`、`isValidHistoryItem`、`isImportableHistoryItem`（经 `src/config/types.ts` 的 `export *` 转发，外部按 `config/types` 引入）
+- `src/config/validators.ts` - `isValidUserConfig`、`isImportableHistoryItem`（经 `src/config/types.ts` 的 `export *` 转发，外部按 `config/types` 引入）
 - `src/composables/backup-sync/backupFiles.ts` - 导入文件时认出配置还是记录（`parseBackupFile` 用 `isValidUserConfig`）；历史导入的判定权在 `src/services/database/ImportExportService.ts`
