@@ -48,11 +48,10 @@ mocked E2E 通过 `tests/e2e/vite.config.ts` 把 Tauri API alias 到 `tests/e2e/
 
 | helper | 用法 |
 |--------|------|
-| `tests/unit/helpers/vueMount.ts` | 组件测试优先用 `mountWithDefaults` / `shallowMountWithDefaults`。它内置 `v-tooltip` 测试替身、`Teleport` stub、`Transition` 配置；查 `data-testid` 用 `findByTestId` |
-| `tests/unit/helpers/wait.ts` | 异步刷新优先用 `flushPromisesAndTicks`、`flushTicks`；定时器用 `useFakeTimers`、`advanceTimersByTime`、`runPendingTimers` |
-| `tests/unit/helpers/tauriMock.ts` | 普通 Tauri API mock 统一用这里的 `setupInvokeResponses`、`setupInvokeHandler`、`mockInvokeResponse`、`mockInvokeError`、`resetTauriMocks`、`get*Mock`；剪贴板场景用 `getClipboardMocks()` 拿 `writeText` / `readText` / `writeImage` / `readImage` 的 mock（独立的 `clipboardMock.ts` 已于 2026-09-09 删除） |
-| `tests/unit/factories` | 需要结构化业务对象时优先用工厂：`createConfig`、`createHistoryItem`、`createQueueItem`、`createMockUploader`、`createLinkCheckRow` 等 |
-| `tests/unit/fixtures` | 多个测试共享的固定数据用 fixtures：`historyRows`、`favoriteHistoryRows`、`linkCheckRows`、`selectedLinkCheckRows`、`imageUrls` |
+| `tests/unit/helpers/vueMount.ts` | 组件测试优先用 `mountWithDefaults`：`Teleport` 就地渲染，`Transition` 照常 |
+| `tests/unit/helpers/wait.ts` | 异步刷新用 `flushPromisesAndTicks`；定时器直接用 vitest 的 `vi.useFakeTimers()` / `vi.advanceTimersByTimeAsync()` |
+| `tests/unit/helpers/tauriMock.ts` | 普通 Tauri API mock 统一用这里的 `setupInvokeResponses`、`setupInvokeHandler`、`mockInvokeResponse`、`resetTauriMocks`、`get*Mock`；剪贴板场景用 `getClipboardMocks()` 拿 `writeText` / `readText` / `writeImage` / `readImage` 的 mock |
+| `tests/unit/factories` | 需要结构化业务对象时优先用工厂：`createConfig`、`createHistoryItem`、`createQueueItem`、`createMockUploader` 等 |
 
 推荐模式：
 
@@ -69,7 +68,7 @@ import { createQueueItem } from '../../factories';
 
 普通 Tauri API 使用统一 `tauriMock`。包括 `invoke`、`event`、`path`、`fs`、`dialog`、`shell`、`http`、`updater`、`process` 等，测试里只配置行为，不重复写整段 `vi.mock('@tauri-apps/...')`。
 
-clipboard 使用 `clipboardMock`。剪贴板读写错误、文本返回、写入断言都走剪贴板 helper，避免和普通 `invoke` mock 混在一起。
+剪贴板用 `tauriMock` 的 `getClipboardMocks()`。剪贴板读写错误、文本返回、写入断言都走它，避免和普通 `invoke` mock 混在一起。
 
 `plugin-sql` 这类需要状态化数据库替身的测试可以本地 mock，但必须写注释说明原因。当前例子：
 
