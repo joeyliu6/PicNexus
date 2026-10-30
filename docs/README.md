@@ -59,6 +59,7 @@ docs/
 | 遇到 bug | [reference/troubleshooting/](./reference/troubleshooting/) |
 | 查 API 接口 | [reference/api/](./reference/api/) |
 | 新增图床 | [reference/guides/add-new-uploader.md](./reference/guides/add-new-uploader.md) |
+| 扫死代码 | [reference/guides/dead-code-scan.md](./reference/guides/dead-code-scan.md) |
 | 安装 Obsidian 插件 | [reference/guides/obsidian-plugin-installation.md](./reference/guides/obsidian-plugin-installation.md) |
 
 > **flows/ vs reference/guides/ 的区别**：
