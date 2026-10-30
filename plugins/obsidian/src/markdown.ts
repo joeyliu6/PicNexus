@@ -6,11 +6,11 @@ export interface TextRange {
 /** 占位符的起始标记；同时充当 {@link findPlaceholderRange} 的匹配边界 */
 const PLACEHOLDER_PREFIX = '⏳';
 
-export function escapeMarkdownText(value: string): string {
+function escapeMarkdownText(value: string): string {
   return value.replace(/([\\[\]])/g, '\\$1');
 }
 
-export function escapeMarkdownUrl(value: string): string {
+function escapeMarkdownUrl(value: string): string {
   return value.replace(/([\\()])/g, '\\$1');
 }
 
