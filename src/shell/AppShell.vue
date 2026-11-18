@@ -24,6 +24,7 @@ import { useRecentUploads } from '@/composables/history/useRecentUploads';
 import { createLogger } from '@/utils/logger';
 import { installAutoCheck } from '@/views/health/autoCheck';
 import { installEditorSync } from '@/composables/settings/editorSync';
+import { installExternalUploads } from '@/composables/history/externalUploads';
 import { installClipboardWatch } from '@/composables/upload/clipboardWatch';
 import { installHealthBadge } from '@/views/health/healthBadge';
 import { setUpdateInstallGate } from '@/composables/useAutoUpdate';
@@ -59,6 +60,8 @@ onMounted(async () => {
   disposers.push(installHealthBadge(), installAutoCheck());
   // 编辑器服务（Typora / Obsidian / CLI）的图床凭证：跟着配置走，不必先打开设置页
   disposers.push(installEditorSync());
+  // 命令行 / Typora / 编辑器服务传的图：收进历史记录（issue #7）
+  disposers.push(installExternalUploads());
   // 自动上传剪贴板：开关跟着配置走，后台发现新图片就照「粘贴上传」传
   disposers.push(installClipboardWatch(upload));
   // 主窗口在不在屏（决定通知走应用内还是系统通知）；托盘原生菜单与图标（交接说明 8.6）

@@ -27,6 +27,20 @@ const failures = [];
 
 const PAIRS = [
   {
+    name: 'EXTERNAL_UPLOAD_EVENT',
+    why: '编辑器服务传完一张后 Rust 发的事件名，前端按这个名字把它收进历史记录。名字一分叉，Obsidian 传的图要等切回窗口才出现在历史里，也不报错',
+    sources: [
+      {
+        file: 'src-tauri/src/external_uploads.rs',
+        pattern: /const\s+EXTERNAL_UPLOAD_EVENT\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/composables/history/externalUploads.ts',
+        pattern: /const\s+EXTERNAL_UPLOAD_EVENT\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'CLIPBOARD_IMAGE_EVENT',
     why: '自动上传剪贴板：Rust 后台发现新图片时发的事件名，前端按这个名字听。名字一分叉，开关开着却什么都不传，也不报错',
     sources: [
