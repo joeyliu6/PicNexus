@@ -57,6 +57,7 @@
 | useHostTest | 测试连接（按接入方式：Cookie / Token / GitHub / 对象存储走 `probe_s3_storage` / WebDAV 走 `test_webdav_storage`）；结果只留本次会话，已连接的写健康状态 | `src/views/hosts/useHostTest.ts` |
 | `hostCatalog.ts` / `hostList.ts` / `hostConfig.ts` / `hostTestText.ts`（模块） | 纯函数：图床目录与字段描述；左栏排序、问题短标签、目录分组；配置读写、连接 / 移除 / 撤销快照、旧版单份自定义 S3 迁移；测试结果的说法 | `src/views/hosts/` |
 | editorSync | 编辑器服务（Typora / Obsidian / CLI）的凭证同步：启动时与每次配置变化从配置拼出凭证下发，排队执行 | `src/composables/settings/editorSync.ts` |
+| `externalUploads.ts`（模块） | 命令行 / Typora / 编辑器服务传的图收进历史记录：`installExternalUploads()` 装在外壳里，启动、窗口拿到焦点、`external-uploads://recorded` 时调 `drainExternalUploads()`；`resolveServiceId` 把 `webdav` / `custom_s3` 按编辑器设置补成完整编号 | `src/composables/history/externalUploads.ts` |
 | useAnalytics | GA4 P0 生命周期统计 + 在线心跳 | `src/composables/useAnalytics.ts` |
 | useMirrorFallback | 图库详情的备份管理（改用这一份 / 移除这条链接 / 单条重新检测）；`switchPrimary` 返回是否真的换了（已是这一份、写库失败都是 false） | `src/composables/history/useMirrorFallback.ts` |
 | `imageDisplay.ts`（模块） | 不同比例图片怎么占格、怎么画（G13）：`displayKind` / `layoutRatio` / `displayTag`、`imageFormat` / `mayBeTransparent` / `isAnimatedFormat`、灯箱用的 `isLongRatio` | `src/utils/imageDisplay.ts` |

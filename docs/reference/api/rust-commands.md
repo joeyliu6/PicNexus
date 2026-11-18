@@ -49,6 +49,8 @@
 | | `check_editor_server_status` | 从 Rust 侧探测 `http://127.0.0.1:<port>/status`，返回原始 JSON 文本<br/>`/status` 故意不带 CORS 许可（防任意网页探测本机是否在跑 PicNexus），设置页 webview 与该端口不同源，前端 `fetch` 必被浏览器拦截；Rust 发起的请求不受 CORS 约束 |
 | | `check_port_free` | 检测端口是否可用 |
 | | `save_cli_config` | 写入 `{app_data_dir}/cli-config.json`（Typora profile + CLI services 表），供无 GUI 的 CLI / Typora 子进程读取<br/>内容用系统钥匙串主密钥做 AES-256-GCM 加密（`PNXCLI1:` 前缀），钥匙串不可用时降级明文并告警<br/>返回 `{ encrypted: bool }`，`false` 表示本次是明文降级，前端须提示用户 |
+| | `list_external_uploads` | 列出命令行 / Typora / 编辑器服务传成功、还没写进历史库的记录（用户数据目录 `pending-uploads/`，按时间先后），返回 `ExternalUpload[]`；读不了的坏文件记日志后删掉。流程见 [history-flow.md](../../flows/history-flow.md#软件外的上传) |
+| | `remove_external_uploads` | `ids: string[]`：删掉已经写进历史库的那几条；只含数字和 `-` 以外的 id 直接跳过 |
 | | `get_executable_path` | 返回当前可执行文件绝对路径（Typora 自定义命令配置提示用） |
 | **密钥管理** | `get_or_create_secure_key` | 读取（或首次生成）配置加密主密钥，Base64 的 32 字节 AES-256 密钥<br/>非便携版存系统钥匙串，便携版存 exe 旁的 `secure-key` 文件 |
 | | `set_secure_key` | 覆盖主密钥（备份密码模式下前端用口令派生密钥轮转）<br/>轮转前会先用旧密钥解出 `cli-config.json` 并在换钥后重新加密，否则 CLI/Typora/Obsidian 三条链路会集体解不开配置 |

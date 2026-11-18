@@ -122,10 +122,26 @@ flowchart TD
 
 | 事件 | 网格（useTimelineDayPagination） | 列表（useGalleryList） | 模块 stats（useHistory） |
 |------|------|------|------|
-| `history-updated`（上传、重试、补充备份、改用、重新检测、撤销移除） | `reloadAll(ids)`：重读按天汇总；张数变了或装着这些 id 的已加载天、第一屏里新出现的天先重读，读好再与新汇总一起换上（旧格子留到那一刻，不退回骨架）；其余没读过的天照旧是骨架 | 屏幕上的那几页（和第一页）重读，读好连同总数原地换上 | 防抖 300ms 后重查 |
+| `history-updated`（上传、重试、补充备份、改用、重新检测、撤销移除、收进软件外的上传） | `reloadAll(ids)`：重读按天汇总；张数变了或装着这些 id 的已加载天、第一屏里新出现的天先重读，读好再与新汇总一起换上（旧格子留到那一刻，不退回骨架）；其余没读过的天照旧是骨架 | 屏幕上的那几页（和第一页）重读，读好连同总数原地换上 | 防抖 300ms 后重查 |
 | `history-deleted` | `removeItemsByIds` 增量去掉；有 id 不在已加载的天里时兜底 `reloadAll` | 同上：屏幕上的那几页重读后原地换 | 本窗口删的已就地扣减，跳过；别的窗口删的按 ids 扣减 |
 | `history-cleared` | `reloadAll` | 同上 | 清零 |
 | 点星标 | 不重查，格子上的星标跟着 favoriteSet 变 | 同左 | favoriteSet 乐观更新，写盘失败回滚 |
+
+---
+
+## 软件外的上传
+
+命令行（`picnexus --service <id>`、`--profile typora`）和编辑器服务（Obsidian 插件、PicGo 兼容的 `/upload`、`/upload/file`）走 Rust 链路，传完不经过前端的 `useHistorySaver`。它们的记录走一个收件箱：
+
+1. Rust 每传成功一张，`ExternalUploadSink::record` 趁图片还在时读好尺寸，在用户数据目录的 `pending-uploads/` 写一个 `<id>.json`（先写 `.tmp` 再改名）。
+2. 前端 `installExternalUploads`（`AppShell` 装）在三个时机收件：启动时、窗口拿到焦点时、编辑器服务发 `external-uploads://recorded` 时。命令行是单独的进程，通知不到开着的主界面，所以靠切回窗口那一下。
+3. `drainExternalUploads` 用 `list_external_uploads` 取出全部记录，逐条 `insertOrIgnore`（记录 ID 是 `external-<收件箱 id>`，重复收到会被忽略），发 `history-updated`，再用 `remove_external_uploads` 删掉写成功的那几条；写失败的留着下次再收。
+
+- **图床编号**：`--service` 给的是完整编号，原样记。Typora 配置档和编辑器服务只知道图床类型：WebDAV / 自定义 S3 记成 `webdav` / `custom_s3`，收件时按设置里 Typora / Obsidian 用的图床补成 `webdav:<档案>`（`resolveServiceId`）；设置已经换成别的图床就保留原样。
+- **没有的字段**：这条链路只拿得到链接，`fileKey` 为空；`/upload/file` 只收到图片内容，`filePath` 不写。
+- **不做**：命令行直接写历史库。表结构只由前端的 `SchemaManager.ts` 维护，Rust 再抄一份就要两边同步改。
+
+> **关键源文件**：`src-tauri/src/external_uploads.rs`、`src-tauri/src/commands/external_uploads.rs`、`src/composables/history/externalUploads.ts`
 
 ---
 
@@ -165,6 +181,7 @@ flowchart TD
 | 打开详情后顶部几行不见了 | 网格变窄重排时滚动锚点在最顶上也去补偿了：`useScrollAnchor` 在 `scrollTop` 为 0 时应不动 | 图 1 网格 |
 | GIF 格子一片空白 | 停在第一帧时原图要 `display: none`：只隐藏不让位，画第一帧的 canvas 被挤到格子外面（`GalleryTile`） | 图 1 网格 |
 | Tab 进不了网格 / 方向键走了焦点没跟 | 网格只有一格 `tabindex=0`（`GalleryGrid` 的 `tabStopId`）；走到的格子还没画出来时由 `focusTile` 等它出现再给焦点 | 图 1 网格 |
+| 命令行 / Typora / Obsidian 传的图不在图库里 | 主界面还没收件（没打开过、没切回窗口），或用户数据目录的 `pending-uploads/` 里有写不进库的记录（看日志 `[ExternalUploads]`） | 软件外的上传 |
 | 重新检测后格子上的 ⚠ 没变 | 检测结果写回后没带 id 广播 `history-updated`，或那一天不在已加载的天里 | 记录变化表第 1 行 |
 
 ---

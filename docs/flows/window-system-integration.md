@@ -123,7 +123,7 @@ flowchart TD
 
 Obsidian 插件 ID 为 `picnexus`，手动安装目录为 `<vault>/.obsidian/plugins/picnexus/`。插件只连接 `http://127.0.0.1:<port>`，端口必须和桌面端设置一致；发布与上架流程见 [Obsidian 插件发布指南](../reference/guides/obsidian-plugin-release.md)。
 
-> **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/commands/cli_config.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`
+> **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/commands/cli_config.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`;传成功的图怎么进历史见 [history-flow.md「软件外的上传」](./history-flow.md#软件外的上传)
 
 ```mermaid
 flowchart TD
@@ -152,8 +152,9 @@ flowchart TD
     G1 --> H[HTTP 请求 → 图床 API]
     G2 --> H
     H --> I{成功?}
-    I -- 是 JSON 模式 --> I1[stdout:<br/>{url, width, height}]
-    I -- 是 普通模式 --> I2[stdout: url]
+    I -- 是 --> R[记进 pending-uploads/<br/>主界面收件后进历史]
+    R -- JSON 模式 --> I1[stdout:<br/>{url, width, height}]
+    R -- 普通模式 --> I2[stdout: url]
     I -- 否 --> I3[stderr: 错误<br/>exit 1]
 
     I1 & I2 --> Z[exit 0]
@@ -162,7 +163,7 @@ flowchart TD
     D5 --> GUI[tauri::Builder 正常启动]
 
     %% 特点
-    note1[⚠️ 每次 CLI 上传都是<br/>独立进程,无单实例守护<br/>与 GUI 实例不通信]:::noteStyle
+    note1[⚠️ 每次 CLI 上传都是<br/>独立进程,无单实例守护<br/>与 GUI 实例不通信<br/>历史靠主界面启动 / 切回窗口时收件]:::noteStyle
     D3 -.-> note1
 
     style A fill:#e3f2fd,stroke:#1976d2

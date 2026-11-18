@@ -201,6 +201,7 @@ flowchart LR
 | `navigate-to` | `string` 或 `{view, tab?, section?}` | 托盘菜单(主窗口前端发) / macOS 菜单栏 / 前端跳转 | `src/shell/useAppNavigation.ts`（路径映射见 `navigatePayload.ts`） |
 | `tray-pointer-enter` | `{taskbarLight: boolean \| null}` | `commands/tray.rs`(鼠标在托盘图标上,最多每 0.8 秒一次) | `src/tray/installTray.ts`(重看剪贴板与任务栏深浅) |
 | `tray-clipboard-changed` | 无 | `commands/tray.rs`(Windows 剪贴板序号变了) | `src/tray/installTray.ts` |
+| `external-uploads://recorded` | 无 | `external_uploads.rs`(编辑器服务传成功一张) | `src/composables/history/externalUploads.ts`(收进历史记录) |
 | `main-window-presence-changed` | 无 | `commands/tray.rs` 打开主窗口 / `main.rs` 关到托盘 | `src/composables/appPresence.ts`(重判在不在屏) |
 
 ```mermaid
