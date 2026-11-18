@@ -20,7 +20,7 @@ const WEEKDAYS = ['一', '', '三', '', '五', '', ''];
 
 const root = ref<HTMLElement | null>(null);
 const focusKey = ref<string | null>(null);
-const tip = ref<{ text: string; x: number; y: number } | null>(null);
+const tip = ref<{ key: string; text: string; x: number; y: number } | null>(null);
 
 /** 能点的格子：这一年里、今天及以前（未来的格子透明，不能点） */
 const cells = computed(() => props.calendar.weeks.flat().filter((c): c is CalendarCell => c !== null && !c.future));
@@ -53,7 +53,7 @@ function showTip(cell: CalendarCell, el: HTMLElement): void {
   const box = root.value?.getBoundingClientRect();
   const r = el.getBoundingClientRect();
   if (!box) return;
-  tip.value = { text: describe(cell), x: r.left - box.left + r.width / 2, y: r.top - box.top };
+  tip.value = { key: cell.key, text: describe(cell), x: r.left - box.left + r.width / 2, y: r.top - box.top };
   void nextTick(keepTipInside);
 }
 
@@ -75,6 +75,11 @@ function keepTipInside(): void {
 function onFocus(cell: CalendarCell, el: HTMLElement): void {
   focusKey.value = cell.key;
   if (el.matches(':focus-visible')) showTip(cell, el);
+}
+
+/** 只收这一格自己的气泡：点另一格时旧格先失焦，这时气泡已经是鼠标指着的新格的，不能一起收掉 */
+function onBlur(cell: CalendarCell): void {
+  if (tip.value?.key === cell.key) tip.value = null;
 }
 
 function cellClass(cell: CalendarCell): Record<string, boolean> {
@@ -132,7 +137,7 @@ watch(() => props.calendar.year, () => { focusKey.value = null; tip.value = null
               :aria-pressed="cell.key === picked"
               @mouseenter="showTip(cell, $event.currentTarget as HTMLElement)"
               @focus="onFocus(cell, $event.currentTarget as HTMLElement)"
-              @blur="tip = null"
+              @blur="onBlur(cell)"
               @keydown="onKey($event, cell)"
               @click="emit('pick', cell.key)"
             />

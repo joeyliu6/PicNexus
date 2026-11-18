@@ -202,6 +202,20 @@ test('the calendar tooltip stays inside the calendar at the first and last colum
   }
 });
 
+// 界面验收：点完一格再点另一格，鼠标还指着新格子，气泡不能消失（旧格失焦曾把新格的气泡一起收掉）
+test('clicking a second day keeps the tooltip of the day under the mouse', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await openHealth(page);
+  await page.getByRole('radio', { name: '2023' }).click();
+  const calendar = page.locator('.upload-calendar');
+  // 正在淡出的气泡还留在页面上、文字也还在，只认没在离场的那个
+  const tip = calendar.locator('.upload-calendar__tip:not(.upload-calendar__tip-leave-active)');
+  await calendar.getByRole('button', { name: /^2023年5月21日/ }).click();
+  await expect(tip).toContainText('2023年5月21日');
+  await calendar.getByRole('button', { name: /^2023年5月22日/ }).click();
+  await expect(tip).toContainText('2023年5月22日');
+});
+
 // 待拍板 ⑥（选 A）：全部正常、只有「可能受限」的图时，状态栏写了张数，也要能看到是哪几张
 test('a limited-only page offers the list of limited images', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 });
