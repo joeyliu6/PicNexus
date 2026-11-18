@@ -135,6 +135,8 @@
     "allow-cleanup-owned-temp-file",
     "allow-allow-user-path",
     "allow-get-image-metadata",
+    "allow-list-external-uploads",
+    "allow-remove-external-uploads",
     "allow-compress-image",
     "allow-cleanup-compressed-files",
     "allow-strip-exif-only",

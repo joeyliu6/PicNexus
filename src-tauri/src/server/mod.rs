@@ -3,6 +3,7 @@
 // 监听 127.0.0.1:{port}，提供 POST /upload 接口
 // 兼容 Typora、Obsidian 等编辑器的图片上传
 
+mod service_info;
 pub mod upload_handler;
 
 use axum::{
@@ -18,12 +19,16 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
+use crate::external_uploads::ExternalUploadSink;
+
 pub use upload_handler::ServerUploadConfig;
 
 #[derive(Clone)]
 pub struct ServerRuntimeState {
     pub upload_config: Arc<Mutex<Option<ServerUploadConfig>>>,
     pub auth_token: Arc<Mutex<Option<String>>>,
+    /// 传成功的图记到这里，主界面再写进历史记录；测试里不需要时为 None
+    pub external_uploads: Option<ExternalUploadSink>,
 }
 
 fn build_router(state: ServerRuntimeState) -> Router {
@@ -71,10 +76,12 @@ pub async fn run_server(
     listener: TcpListener,
     upload_config: Arc<Mutex<Option<ServerUploadConfig>>>,
     auth_token: Arc<Mutex<Option<String>>>,
+    external_uploads: ExternalUploadSink,
 ) -> Result<(), String> {
     let state = ServerRuntimeState {
         upload_config,
         auth_token,
+        external_uploads: Some(external_uploads),
     };
     let app = build_router(state);
 
@@ -94,7 +101,7 @@ pub async fn is_port_free(port: u16) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use axum::{
         body::Body,
@@ -106,6 +113,7 @@ mod tests {
         ServerRuntimeState {
             upload_config: Arc::new(Mutex::new(None)),
             auth_token: Arc::new(Mutex::new(Some("test-token".to_string()))),
+            external_uploads: None,
         }
     }
 
@@ -162,16 +170,16 @@ mod tests {
 
     /// 假 WebDAV 服务端收到的一次请求
     #[derive(Debug, Clone)]
-    struct CapturedRequest {
+    pub(crate) struct CapturedRequest {
         method: String,
         path: String,
         authorization: Option<String>,
         body_len: usize,
     }
 
-    type RequestLog = Arc<std::sync::Mutex<Vec<CapturedRequest>>>;
+    pub(crate) type RequestLog = Arc<std::sync::Mutex<Vec<CapturedRequest>>>;
 
-    fn tiny_png() -> Vec<u8> {
+    pub(crate) fn tiny_png() -> Vec<u8> {
         let image = image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 0]));
         let mut cursor = std::io::Cursor::new(Vec::new());
         image
@@ -181,7 +189,7 @@ mod tests {
     }
 
     /// 起一个照单全收的假 WebDAV 服务端，把每次请求记进日志
-    async fn spawn_fake_webdav() -> (String, RequestLog, tokio::task::JoinHandle<()>) {
+    pub(crate) async fn spawn_fake_webdav() -> (String, RequestLog, tokio::task::JoinHandle<()>) {
         use axum::{extract::State as AxumState, routing::any};
 
         let log: RequestLog = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -221,20 +229,25 @@ mod tests {
         (format!("http://{}", addr), log, handle)
     }
 
+    pub(crate) fn fake_webdav_config(endpoint: &str) -> ServerUploadConfig {
+        ServerUploadConfig::Webdav {
+            url: endpoint.to_string(),
+            username: "u".to_string(),
+            password: "p".to_string(),
+            remote_path: "pics".to_string(),
+            public_domain: endpoint.to_string(),
+            public_url_template: "{domain}/{path}".to_string(),
+            // 回环地址由 url_policy 无条件放行，不需要用户确认明文 HTTP
+            lan_http_confirmed: false,
+            unique_file_name: true,
+        }
+    }
+
     fn webdav_state(endpoint: &str) -> ServerRuntimeState {
         ServerRuntimeState {
-            upload_config: Arc::new(Mutex::new(Some(ServerUploadConfig::Webdav {
-                url: endpoint.to_string(),
-                username: "u".to_string(),
-                password: "p".to_string(),
-                remote_path: "pics".to_string(),
-                public_domain: endpoint.to_string(),
-                public_url_template: "{domain}/{path}".to_string(),
-                // 回环地址由 url_policy 无条件放行，不需要用户确认明文 HTTP
-                lan_http_confirmed: false,
-                unique_file_name: true,
-            }))),
+            upload_config: Arc::new(Mutex::new(Some(fake_webdav_config(endpoint)))),
             auth_token: Arc::new(Mutex::new(Some("test-token".to_string()))),
+            external_uploads: None,
         }
     }
 
@@ -359,5 +372,79 @@ mod tests {
             "请求被拒了却还是打到了 WebDAV 服务端: {:?}",
             captured
         );
+    }
+
+    // ==================== 传成功的图要进历史记录（issue #7） ====================
+
+    fn recording_state(endpoint: &str, data_dir: &std::path::Path) -> ServerRuntimeState {
+        ServerRuntimeState {
+            external_uploads: Some(ExternalUploadSink::new(data_dir.to_path_buf(), None)),
+            ..webdav_state(endpoint)
+        }
+    }
+
+    /// Obsidian 的 /upload/file：只有图片内容，没有本机路径
+    #[tokio::test]
+    async fn file_upload_is_recorded_for_history() {
+        let (endpoint, _log, server) = spawn_fake_webdav().await;
+        let data_dir = crate::external_uploads::tests::temp_data_dir("server-file");
+
+        let response = build_router(recording_state(&endpoint, &data_dir))
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/upload/file")
+                    .header(header::CONTENT_TYPE, "image/png")
+                    .header("X-Filename", ENCODED_NAME)
+                    .body(Body::from(tiny_png()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let json = read_json(response).await;
+        server.abort();
+
+        let entries = crate::external_uploads::list_entries(&data_dir).unwrap();
+        let _ = std::fs::remove_dir_all(&data_dir);
+        assert_eq!(entries.len(), 1, "传成功了却没记下来，历史里会缺这张");
+        let entry = &entries[0];
+        assert_eq!(entry.url, json["result"][0].as_str().unwrap());
+        assert_eq!(entry.service_id, "webdav");
+        assert_eq!(entry.source, crate::external_uploads::UploadSource::Editor);
+        assert_eq!(entry.file_name, "我的 图.png");
+        assert_eq!(entry.file_path, None, "临时文件的路径不能当成原图路径存");
+        assert_eq!((entry.metadata.width, entry.metadata.height), (1, 1), "尺寸要趁临时文件还在时读");
+    }
+
+    /// Typora 式的 /upload：传的是本机路径
+    #[tokio::test]
+    async fn path_upload_is_recorded_for_history() {
+        let (endpoint, _log, server) = spawn_fake_webdav().await;
+        let data_dir = crate::external_uploads::tests::temp_data_dir("server-path");
+        std::fs::create_dir_all(&data_dir).unwrap();
+        let image = data_dir.join("截图.png");
+        std::fs::write(&image, tiny_png()).unwrap();
+        let body = serde_json::json!({ "list": [image.to_string_lossy()] }).to_string();
+
+        let response = build_router(recording_state(&endpoint, &data_dir))
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/upload")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let json = read_json(response).await;
+        server.abort();
+
+        let entries = crate::external_uploads::list_entries(&data_dir).unwrap();
+        let _ = std::fs::remove_dir_all(&data_dir);
+        assert_eq!(json["success"], true, "上传失败了，message: {}", json["message"]);
+        assert_eq!(entries.len(), 1, "传成功了却没记下来，历史里会缺这张");
+        assert_eq!(entries[0].file_name, "截图.png");
+        assert_eq!(entries[0].file_path.as_deref(), Some(image.to_string_lossy().as_ref()));
     }
 }

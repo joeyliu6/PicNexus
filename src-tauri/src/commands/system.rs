@@ -3,6 +3,7 @@
 // 编辑器兼容 Server 的状态查询与配置下发
 
 use crate::error::AppError;
+use crate::external_uploads::ExternalUploadSink;
 use crate::portable;
 use crate::server;
 use crate::{HttpClient, ServerState};
@@ -74,6 +75,7 @@ pub async fn check_editor_server_status(
 ///   传 null 时清空配置（Server 收到请求会提示未配置图床）
 #[tauri::command]
 pub async fn update_server_config(
+    app: tauri::AppHandle,
     state: tauri::State<'_, ServerState>,
     enabled: bool,
     port: u16,
@@ -130,8 +132,9 @@ pub async fn update_server_config(
 
         let config_arc = Arc::clone(&state.upload_config);
         let auth_token_arc = Arc::clone(&state.auth_token);
+        let sink = ExternalUploadSink::new(portable::user_data_dir(&app)?, Some(app.clone()));
         let task = tokio::task::spawn(async move {
-            if let Err(e) = server::run_server(listener, config_arc, auth_token_arc).await {
+            if let Err(e) = server::run_server(listener, config_arc, auth_token_arc, sink).await {
                 log::error!("[Server] 运行失败: {}", e);
             }
         });

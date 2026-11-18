@@ -10,6 +10,7 @@ mod browser_menu;
 mod cli;
 mod commands;
 mod error;
+mod external_uploads;
 mod log_utils;
 mod portable;
 mod secure_key;
@@ -214,6 +215,8 @@ fn main() {
             commands::user_files::cleanup_owned_temp_file,
             commands::user_files::allow_user_path,
             commands::image_meta::get_image_metadata,
+            commands::external_uploads::list_external_uploads,
+            commands::external_uploads::remove_external_uploads,
             commands::image_compress::compress_image,
             commands::image_compress::cleanup_compressed_files,
             commands::image_compress::strip_exif_only,

@@ -9,6 +9,7 @@ pub mod chaoxing;
 pub mod cli_path;
 pub mod cli_config;
 pub mod cookie_login;
+pub mod external_uploads;
 pub mod clipboard;
 pub mod clipboard_watch;
 pub mod github;

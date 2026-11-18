@@ -700,6 +700,7 @@ pub async fn handle_upload(
         match upload_validated_file(canonical.to_str().unwrap_or(path), &config).await {
             Ok(url) => {
                 log::info!("[Server] ✓ 上传成功: {}", safe_url(&url));
+                record_external_upload(&state, &canonical, Some(path), &config, &url);
                 urls.push(url);
             }
             Err(e) => {
@@ -741,7 +742,7 @@ pub async fn handle_status(State(state): State<ServerRuntimeState>) -> Json<Stat
         let config_guard = state.upload_config.lock().await;
         match config_guard.as_ref() {
             Some(cfg) => {
-                let (id, name) = get_service_info(cfg);
+                let (id, name) = cfg.service_info();
                 (Some(id.to_string()), Some(name.to_string()), true)
             }
             None => (None, None, false),
@@ -757,27 +758,10 @@ pub async fn handle_status(State(state): State<ServerRuntimeState>) -> Json<Stat
     })
 }
 
-fn get_service_info(config: &ServerUploadConfig) -> (&str, &str) {
-    match config {
-        ServerUploadConfig::Jd => ("jd", "京东图床"),
-        ServerUploadConfig::Github { .. } => ("github", "GitHub"),
-        ServerUploadConfig::Smms { .. } => ("smms", "SM.MS"),
-        ServerUploadConfig::Imgur { .. } => ("imgur", "Imgur"),
-        ServerUploadConfig::Weibo { .. } => ("weibo", "微博"),
-        ServerUploadConfig::Bilibili { .. } => ("bilibili", "哔哩哔哩"),
-        ServerUploadConfig::Nowcoder { .. } => ("nowcoder", "牛客"),
-        ServerUploadConfig::Chaoxing { .. } => ("chaoxing", "超星"),
-        ServerUploadConfig::Zhihu { .. } => ("zhihu", "知乎"),
-        ServerUploadConfig::R2 { .. } => ("r2", "Cloudflare R2"),
-        ServerUploadConfig::Tencent { .. } => ("tencent", "腾讯云 COS"),
-        ServerUploadConfig::Aliyun { .. } => ("aliyun", "阿里云 OSS"),
-        ServerUploadConfig::Qiniu { .. } => ("qiniu", "七牛云"),
-        ServerUploadConfig::Upyun { .. } => ("upyun", "又拍云"),
-        ServerUploadConfig::CustomS3 { .. } => ("custom_s3", "自定义 S3"),
-        ServerUploadConfig::Webdav { .. } => ("webdav", "WebDAV"),
-        ServerUploadConfig::Nami { .. } => ("nami", "纳米图床"),
-        ServerUploadConfig::Qiyu => ("qiyu", "七鱼图床"),
-    }
+/// 记进「待入库」收件箱并通知主界面写进历史记录（issue #7）
+fn record_external_upload(state: &ServerRuntimeState, image: &std::path::Path, file_path: Option<&str>, config: &ServerUploadConfig, url: &str) {
+    let Some(sink) = &state.external_uploads else { return };
+    sink.record(image, file_path, crate::external_uploads::UploadSource::Editor, config.service_info().0, url);
 }
 
 // ==================== 文件内容上传端点 ====================
@@ -895,6 +879,8 @@ pub async fn handle_file_upload(
     // Why: body 已经过 validate_image_bytes，且临时文件扩展名是按检测结果生成的，
     // 无需再让下游把刚写下去的文件重新读一遍做同样的校验。
     let result = upload_validated_file(temp_path.to_str().unwrap_or(""), &cfg).await;
+    // 只收到图片内容，本机没有原图路径；尺寸要趁临时文件还在时读
+    if let Ok(url) = &result { record_external_upload(&state, &temp_path, None, &cfg, url); }
 
     // 清理失败不影响上传结果，但也不该静默——临时目录漏了会一直堆在 %TEMP% 里，
     // 没有日志的话下次排查磁盘占用完全没有线索。
@@ -2193,7 +2179,7 @@ async fn server_upload_upyun(
 #[cfg(test)]
 mod tests {
     use super::{
-        get_service_info, object_content_type, request_has_browser_origin,
+        object_content_type, request_has_browser_origin,
         request_has_valid_server_token, unique_upload_temp_dir, validate_https_url,
         validate_image_bytes, validate_image_file, DetectedImageKind, ServerUploadConfig,
         MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
@@ -2462,22 +2448,6 @@ mod tests {
             }
             other => panic!("expected webdav config, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn webdav_service_info_uses_generic_label() {
-        let config = ServerUploadConfig::Webdav {
-            url: "https://dav.example.com/dav".to_string(),
-            username: "user".to_string(),
-            password: "pw".to_string(),
-            remote_path: "/images/".to_string(),
-            public_domain: "https://cdn.example.com".to_string(),
-            public_url_template: "{domain}/{path}".to_string(),
-            lan_http_confirmed: false,
-            unique_file_name: true,
-        };
-
-        assert_eq!(get_service_info(&config), ("webdav", "WebDAV"));
     }
 
     #[test]

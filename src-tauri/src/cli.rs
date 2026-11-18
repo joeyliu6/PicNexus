@@ -8,6 +8,7 @@
 // Typora 自定义命令模式：
 //   picnexus.exe --profile typora /path/to/img.jpg
 
+use crate::external_uploads::{ExternalUploadSink, UploadSource};
 use crate::portable;
 use crate::secure_key;
 use crate::server::upload_handler::{upload_single_file, ServerUploadConfig};
@@ -284,36 +285,10 @@ fn parse_cli_config_json(config_json: &str) -> Result<LoadedCliConfig, String> {
     Ok(LoadedCliConfig::Legacy(legacy))
 }
 
-fn service_id_for_config(config: &ServerUploadConfig) -> &'static str {
-    match config {
-        ServerUploadConfig::Jd => "jd",
-        ServerUploadConfig::Github { .. } => "github",
-        ServerUploadConfig::Smms { .. } => "smms",
-        ServerUploadConfig::Imgur { .. } => "imgur",
-        ServerUploadConfig::Weibo { .. } => "weibo",
-        ServerUploadConfig::Bilibili { .. } => "bilibili",
-        ServerUploadConfig::Nowcoder { .. } => "nowcoder",
-        ServerUploadConfig::Chaoxing { .. } => "chaoxing",
-        ServerUploadConfig::Zhihu { .. } => "zhihu",
-        ServerUploadConfig::R2 { .. } => "r2",
-        ServerUploadConfig::Tencent { .. } => "tencent",
-        ServerUploadConfig::Aliyun { .. } => "aliyun",
-        ServerUploadConfig::Qiniu { .. } => "qiniu",
-        ServerUploadConfig::Upyun { .. } => "upyun",
-        ServerUploadConfig::CustomS3 { .. } => "custom_s3",
-        // Why 不是真的复合 ID：这个函数只服务"旧版单图床 cli-config.json"的兼容读取
-        // （`save_cli_config` 早就只写 Multi 格式了），WebDAV 从来没有过旧版单图床配置，
-        // 这条分支纯粹是为了让 match 穷尽——和 CustomS3 的处理方式一致。
-        ServerUploadConfig::Webdav { .. } => "webdav",
-        ServerUploadConfig::Nami { .. } => "nami",
-        ServerUploadConfig::Qiyu => "qiyu",
-    }
-}
-
 fn available_services(config: &LoadedCliConfig) -> Vec<String> {
     let mut services = match config {
         LoadedCliConfig::Multi(config) => config.services.keys().cloned().collect::<Vec<_>>(),
-        LoadedCliConfig::Legacy(config) => vec![service_id_for_config(config).to_string()],
+        LoadedCliConfig::Legacy(config) => vec![config.service_info().0.to_string()],
     };
     services.sort();
     services
@@ -383,7 +358,7 @@ fn resolve_upload_config(
                     })
                 }
                 LoadedCliConfig::Legacy(config) => {
-                    if service_id == service_id_for_config(config) {
+                    if service_id == config.service_info().0 {
                         Ok(config.clone())
                     } else {
                         Err(format!(
@@ -415,6 +390,20 @@ fn format_upload_failure_message(
     )
 }
 
+/// 上传一张，成功就记进「待入库」收件箱，下次打开主界面时写进历史记录（issue #7）
+async fn upload_and_record(
+    file_path: &str,
+    config: &ServerUploadConfig,
+    sink: &ExternalUploadSink,
+    source: UploadSource,
+    service_id: &str,
+) -> Result<String, String> {
+    let url = upload_single_file(file_path, config).await?;
+    let absolute = std::path::absolute(file_path).unwrap_or_else(|_| file_path.into());
+    sink.record(&absolute, Some(&absolute.to_string_lossy()), source, service_id, &url);
+    Ok(url)
+}
+
 /// CLI 上传模式主入口
 pub fn run_cli_upload(
     file_paths: Vec<String>,
@@ -434,13 +423,11 @@ pub fn run_cli_upload(
     };
 
     runtime.block_on(async {
-        let config_path = match get_app_data_dir() {
-            Some(dir) => dir.join("cli-config.json"),
-            None => {
-                eprintln!("[PicNexus] 无法确定应用数据目录");
-                std::process::exit(1);
-            }
+        let Some(data_dir) = get_app_data_dir() else {
+            eprintln!("[PicNexus] 无法确定应用数据目录");
+            std::process::exit(1);
         };
+        let config_path = data_dir.join("cli-config.json");
 
         if profile == CliProfile::Cli && service_id.is_none() {
             eprintln!(
@@ -485,9 +472,15 @@ pub fn run_cli_upload(
         let service_label = match profile {
             CliProfile::Cli => service_id
                 .as_deref()
-                .unwrap_or(service_id_for_config(&config)),
+                .unwrap_or(config.service_info().0),
             CliProfile::Typora => TYPORA_PROFILE,
         };
+        // 历史记录要的是图床编号：--service 给的是完整编号；Typora 配置档只知道图床类型
+        let (source, history_service_id) = match profile {
+            CliProfile::Cli => (UploadSource::Cli, service_label),
+            CliProfile::Typora => (UploadSource::Typora, config.service_info().0),
+        };
+        let sink = ExternalUploadSink::new(data_dir, None);
         let total = file_paths.len();
         let mut any_failed = false;
         let mut json_results: Vec<JsonFileResult> = Vec::new();
@@ -508,7 +501,7 @@ pub fn run_cli_upload(
                 );
             }
 
-            match upload_single_file(file_path, &config).await {
+            match upload_and_record(file_path, &config, &sink, source, history_service_id).await {
                 Ok(url) => {
                     if !json_output {
                         eprintln!("[PicNexus] ✓ 成功 ({}/{}): {}", idx + 1, total, file_name);
@@ -555,6 +548,37 @@ pub fn run_cli_upload(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// issue #7：命令行传成功的图，要记进「待入库」收件箱，主界面才能写进历史记录
+    #[tokio::test]
+    async fn successful_cli_upload_is_recorded_for_history() {
+        use crate::server::tests::{fake_webdav_config, spawn_fake_webdav, tiny_png};
+        let (endpoint, _log, server) = spawn_fake_webdav().await;
+        let data_dir = crate::external_uploads::tests::temp_data_dir("cli");
+        std::fs::create_dir_all(&data_dir).unwrap();
+        let image = data_dir.join("头像.png");
+        std::fs::write(&image, tiny_png()).unwrap();
+        let sink = ExternalUploadSink::new(data_dir.clone(), None);
+
+        let url = upload_and_record(
+            image.to_str().unwrap(),
+            &fake_webdav_config(&endpoint),
+            &sink,
+            UploadSource::Cli,
+            "webdav:profile-1",
+        )
+        .await
+        .expect("上传应当成功");
+        server.abort();
+
+        let entries = crate::external_uploads::list_entries(&data_dir).unwrap();
+        let _ = std::fs::remove_dir_all(&data_dir);
+        assert_eq!(entries.len(), 1, "命令行传成功了却没记下来");
+        assert_eq!(entries[0].url, url);
+        assert_eq!(entries[0].service_id, "webdav:profile-1", "--service 给的完整编号要原样记下");
+        assert_eq!(entries[0].source, UploadSource::Cli);
+        assert_eq!(entries[0].file_name, "头像.png");
+    }
 
     fn temp_config_path(name: &str) -> std::path::PathBuf {
         let unique = std::time::SystemTime::now()

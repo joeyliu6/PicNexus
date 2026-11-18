@@ -6,7 +6,7 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 use crate::server::upload_handler::MAX_SERVER_UPLOAD_SIZE;
@@ -16,7 +16,7 @@ const SVG_METADATA_READ_LIMIT: usize = 256 * 1024;
 /// 图片元数据结构（简化版）
 /// 用于前端 Justified Layout 布局和历史记录存储
 /// 移除了 color_type 和 has_alpha 字段，因为实际使用中不需要
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ImageMetadata {
     /// 图片宽度（像素）
     pub width: u32,

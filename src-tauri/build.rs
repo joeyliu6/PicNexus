@@ -62,6 +62,8 @@ const APP_COMMANDS: &[&str] = &[
     "cleanup_owned_temp_file",
     "allow_user_path",
     "get_image_metadata",
+    "list_external_uploads",
+    "remove_external_uploads",
     "compress_image",
     "cleanup_compressed_files",
     "strip_exif_only",
